@@ -1,27 +1,27 @@
-import { useState, useEffect } from 'react';
-import axios from 'axios';
-import { GoogleLogin } from '@react-oauth/google';
-import { jwtDecode } from 'jwt-decode';
-import { FaGoogle, FaEnvelope, FaLock } from 'react-icons/fa';
-import { API_BASE_URL } from '../../config';
+import { useState, useEffect } from "react";
+import axios from "axios";
+import { GoogleLogin } from "@react-oauth/google";
+import { jwtDecode } from "jwt-decode";
+import { FaGoogle, FaEnvelope, FaLock } from "react-icons/fa";
+import { API_BASE_URL } from "../../config";
 
 const LoginForm = ({ userType, onLogin, switchToRegister }) => {
   const [formData, setFormData] = useState({
-    email: '',
-    password: '',
+    email: "",
+    password: "",
   });
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
 
   // Check for stored client email when the component mounts
   useEffect(() => {
     // If this is a client login and we have a stored email, use it
-    if (userType === 'client') {
-      const storedEmail = sessionStorage.getItem('tempClientEmail');
+    if (userType === "client") {
+      const storedEmail = sessionStorage.getItem("tempClientEmail");
       if (storedEmail) {
-        setFormData(prev => ({ ...prev, email: storedEmail }));
+        setFormData((prev) => ({ ...prev, email: storedEmail }));
         // Remove from storage after using it
-        sessionStorage.removeItem('tempClientEmail');
+        sessionStorage.removeItem("tempClientEmail");
       }
     }
   }, [userType]);
@@ -37,98 +37,113 @@ const LoginForm = ({ userType, onLogin, switchToRegister }) => {
     try {
       setLoading(true);
       const decoded = jwtDecode(credentialResponse.credential);
-      console.log('Google login success:', decoded);
-      console.log("google token",credentialResponse.credential);
+      console.log("Google login success:", decoded);
+      console.log("google token", credentialResponse.credential);
       let response; // <-- declare response here
       // This endpoint will handle both client and user types based on userType prop
-      if(userType === "client")
-      {
+      if (userType === "client") {
         const endpoint = `${API_BASE_URL}/${userType}/google-login`;
         response = await axios.post(endpoint, {
           token: credentialResponse.credential,
         });
-        console.log('Server response:', response.data);
+        console.log("Server response:", response.data);
       }
-      if(userType === "user")
-      {
+      if (userType === "user") {
         const endpoint = `${API_BASE_URL}/clients/CLI6781413BO1/mobile/${userType}/google-login`;
         response = await axios.post(endpoint, {
           token: credentialResponse.credential,
         });
-        console.log('Server response:', response.data);
+        console.log("Server response:", response.data);
       }
-      
+
       if (!response.data.success) {
-        throw new Error(response.data.message || 'Login failed');
+        throw new Error(response.data.message || "Login failed");
       }
 
       // Structure the data for the app to consume
       const loginData = {
-        token: response.data.jwt_token || response.token,
+        token: response.data.token, // FIXED: use the correct field
         role: userType,
-        name: response.data.user?.name || response.data.client?.name || decoded.name,
-        email: response.data.user?.email || response.data.client?.email || decoded.email,
-        clientId: response.data.clientId || decoded.clientId,
-        id: response.data?.id || response.client?.id || response.id
+        name:
+          response.data.user?.name ||
+          response.data.client?.name ||
+          decoded.name,
+        email:
+          response.data.user?.email ||
+          response.data.client?.email ||
+          decoded.email,
+        clientId: response.data.client?._id || response.data.client?.userId || response.data.clientId || decoded.clientId,
+        id: response.data?.id || response.data.client?.id || response.data.client?._id || response.id,
       };
 
       // Call the onLogin function with the properly structured data
       onLogin(loginData);
     } catch (err) {
-      console.error('Google login error:', err);
-      setError(err.response?.data?.message || 'Google login failed. Please try again.');
+      console.error("Google login error:", err);
+      setError(
+        err.response?.data?.message || "Google login failed. Please try again."
+      );
     } finally {
       setLoading(false);
     }
   };
 
   const handleGoogleError = () => {
-    console.error('Google Sign In failed');
-    setError('Google Sign In was unsuccessful. Please try again.');
+    console.error("Google Sign In failed");
+    setError("Google Sign In was unsuccessful. Please try again.");
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-    setError('');
+    setError("");
 
     try {
-      let endpoint = '';
-      
+      let endpoint = "";
+
       switch (userType) {
-        case 'user':
-          endpoint = 'user/login';
+        case "user":
+          endpoint = "user/login";
           break;
-        case 'client':
-          endpoint = 'client/login';
+        case "client":
+          endpoint = "client/login";
           break;
         default:
-          throw new Error('Invalid user type');
+          throw new Error("Invalid user type");
       }
 
-      const response = await axios.post(`${API_BASE_URL}/${endpoint}`, formData);
-      
+      const response = await axios.post(
+        `${API_BASE_URL}/${endpoint}`,
+        formData
+      );
+
       if (!response.data.success) {
-        throw new Error(response.data.message || 'Login failed');
+        throw new Error(response.data.message || "Login failed");
       }
-      console.log(response)
+      console.log(response);
       // Structure the data properly before calling onLogin
       const loginData = {
         token: response.data.token,
         role: userType,
         name: response.data.user?.name || response.data.client?.name,
         email: response.data.user?.email || response.data.client?.email,
-        clientId: response.data.client?.userId || response.data.user?.clientId,
+        clientId:
+          response.data.client?._id ||
+          response.data.client?.userId ||
+          response.data.user?.clientId,
         mobileNo: response.data.client?.mobileNo,
         address: response.data.client?.address,
-        id: response.data.user?._id || response.data.client?._id
+        id: response.data.user?._id || response.data.client?._id,
       };
 
       // Call the onLogin function with the properly structured data
       onLogin(loginData);
     } catch (err) {
-      console.error('Login error:', err);
-      const errorMessage = err.response?.data?.message || err.message || 'Login failed. Please check your credentials.';
+      console.error("Login error:", err);
+      const errorMessage =
+        err.response?.data?.message ||
+        err.message ||
+        "Login failed. Please check your credentials.";
       setError(`Error: ${errorMessage}`);
     } finally {
       setLoading(false);
@@ -141,7 +156,9 @@ const LoginForm = ({ userType, onLogin, switchToRegister }) => {
       <div className="flex flex-col items-center mb-6">
         <div className="mb-4 w-full">
           <p className="text-center text-gray-600 mb-4">
-            Sign in to {userType === 'user' ? 'User Account' : 'Business Account'} with Google
+            Sign in to{" "}
+            {userType === "user" ? "User Account" : "Business Account"} with
+            Google
           </p>
           <div className="flex justify-center">
             <GoogleLogin
@@ -206,13 +223,31 @@ const LoginForm = ({ userType, onLogin, switchToRegister }) => {
           >
             {loading ? (
               <span className="flex items-center">
-                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                <svg
+                  className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  ></circle>
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  ></path>
                 </svg>
                 Logging in...
               </span>
-            ) : 'Log In'}
+            ) : (
+              "Log In"
+            )}
           </button>
           <button
             type="button"
@@ -227,4 +262,4 @@ const LoginForm = ({ userType, onLogin, switchToRegister }) => {
   );
 };
 
-export default LoginForm; 
+export default LoginForm;
