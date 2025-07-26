@@ -29,21 +29,14 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
 
   // Initialize currentClient from sessionStorage if not provided via props
   useEffect(() => {
-    console.log("ClientDashboard: Initializing currentClient");
-    console.log("propClientId:", propClientId);
-    console.log("currentClient:", currentClient);
-
     if (!currentClient || currentClient === "") {
       const sessionClientData = sessionStorage.getItem("clientData");
-      console.log("sessionClientData:", sessionClientData);
 
       if (sessionClientData) {
         try {
           const parsedData = JSON.parse(sessionClientData);
-          console.log("parsedData:", parsedData);
 
           if (parsedData.clientId) {
-            console.log("Setting currentClient to:", parsedData.clientId);
             setCurrentClient(parsedData.clientId);
           } else {
             console.log("No clientId found in parsedData");
@@ -59,21 +52,15 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
 
   useEffect(() => {
     const token = sessionStorage.getItem("clienttoken");
-    console.log("Checking approval status for client:", currentClient);
-    console.log("Token exists:", !!token);
-
     if (token && currentClient) {
       fetch(`${API_BASE_URL}/client/profile`, {
         headers: { Authorization: `Bearer ${token}` },
       })
         .then((res) => res.json())
         .then((data) => {
-          console.log("Profile API response:", data);
           // The backend returns data wrapped in a 'data' property
           const isApproved = data.data?.isApproved;
           const isProfileCompleted = data.data?.isprofileCompleted;
-          console.log("isApproved value:", isApproved);
-          console.log("isProfileCompleted value:", isProfileCompleted);
           setIsApproved(isApproved);
           setIsProfileCompleted(isProfileCompleted);
         })
@@ -245,26 +232,18 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
     return <div>Please log in as a client to view your dashboard.</div>;
   }
 
-  console.log("Current isApproved state:", isApproved);
-  console.log("Current isProfileCompleted state:", isProfileCompleted);
-  console.log("isApproved === false:", isApproved === false);
-  console.log("isApproved === null:", isApproved === null);
-
   // Show loading while fetching data
   if (isApproved === null || isProfileCompleted === null) {
-    console.log("Showing Loading...");
     return <div>Loading...</div>;
   }
 
   // If not approved and profile not completed, show approval form
   if (isApproved === false && isProfileCompleted === false) {
-    console.log("Showing ApprovalForm");
     return <ApprovalForm />;
   }
 
   // If not approved but profile is completed, show under review page
   if (isApproved === false && isProfileCompleted === true) {
-    console.log("Showing Under Review page");
     return (
       <div className="min-h-screen bg-gray-50 py-10 px-4 font-sans">
         <div className="max-w-xl mx-auto bg-white rounded-2xl shadow-lg overflow-hidden">
