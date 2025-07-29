@@ -266,7 +266,7 @@ const ApprovalFormDetails = ({ clientId, onClose, onApprove }) => {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-500 mb-1">
-                  isProfileCompleted
+                  Profile Completed
                 </label>
                 <p className="text-lg font-medium text-gray-900">
                   {clientData.isProfileCompleted ? "true" : "false"}

@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { API_BASE_URL } from '../../../config';
+import React, { useEffect, useState } from "react";
+import { API_BASE_URL } from "../../../config";
 
 const InboundSettings = ({ clientId }) => {
   const [settings, setSettings] = useState(null);
@@ -8,34 +8,38 @@ const InboundSettings = ({ clientId }) => {
 
   useEffect(() => {
     fetch(`${API_BASE_URL}/client/inbound/settings?clientId=${clientId}`)
-      .then(res => res.json())
-      .then(data => {
+      .then((res) => res.json())
+      .then((data) => {
         setSettings(data);
         setForm(data || {});
       });
   }, [clientId]);
 
-  const handleChange = e => {
+  const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
   const handleSave = async () => {
-    const res = await fetch(`${API_BASE_URL}/client/client/inbound/settings?clientId=${clientId}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form)
-    });
+    const res = await fetch(
+      `${API_BASE_URL}/client/client/inbound/settings?clientId=${clientId}`,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      }
+    );
     const data = await res.json();
     setSettings(data);
     setEdit(false);
   };
 
-  if (!settings && !edit) return (
-    <div className="flex items-center justify-center py-12">
-      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-      <span className="ml-3 text-gray-600">Loading...</span>
-    </div>
-  );
+  if (!settings && !edit)
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <span className="ml-3 text-gray-600">Loading...</span>
+      </div>
+    );
 
   return (
     <div className="space-y-6">
@@ -44,13 +48,13 @@ const InboundSettings = ({ clientId }) => {
         <div>
           {edit ? (
             <div className="flex space-x-3">
-              <button 
+              <button
                 onClick={handleSave}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                className="bg-black hover:bg-gray-800 text-white px-4 py-2 rounded-lg font-medium transition-colors"
               >
                 Save Changes
               </button>
-              <button 
+              <button
                 onClick={() => {
                   setEdit(false);
                   setForm(settings || {});
@@ -61,9 +65,9 @@ const InboundSettings = ({ clientId }) => {
               </button>
             </div>
           ) : (
-            <button 
+            <button
               onClick={() => setEdit(true)}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+              className="bg-black hover:bg-gray-800 text-white px-4 py-2 rounded-lg font-medium transition-colors"
             >
               Edit Settings
             </button>
@@ -75,31 +79,35 @@ const InboundSettings = ({ clientId }) => {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Agent Name */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Agent Name</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Agent Name
+            </label>
             {edit ? (
-              <input 
-                name="agentName" 
-                value={form.agentName || ''} 
+              <input
+                name="agentName"
+                value={form.agentName || ""}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors"
                 placeholder="Enter agent name"
               />
             ) : (
               <div className="px-3 py-2 bg-gray-50 rounded-lg text-gray-900">
-                {settings?.agentName || 'Not set'}
+                {settings?.agentName || "Not set"}
               </div>
             )}
           </div>
 
           {/* Voice */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Voice</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Voice
+            </label>
             {edit ? (
-              <select 
-                name="voice" 
-                value={form.voice || ''} 
+              <select
+                name="voice"
+                value={form.voice || ""}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors"
               >
                 <option value="">Select Voice</option>
                 <option value="sarvam">Sarvam</option>
@@ -107,43 +115,47 @@ const InboundSettings = ({ clientId }) => {
               </select>
             ) : (
               <div className="px-3 py-2 bg-gray-50 rounded-lg text-gray-900">
-                {settings?.voice || 'Not selected'}
+                {settings?.voice || "Not selected"}
               </div>
             )}
           </div>
 
           {/* DID Number */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">DID Number</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              DID Number
+            </label>
             {edit ? (
-              <input 
-                name="didNumber" 
-                value={form.didNumber || ''} 
+              <input
+                name="didNumber"
+                value={form.didNumber || ""}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors"
                 placeholder="Enter DID number"
               />
             ) : (
               <div className="px-3 py-2 bg-gray-50 rounded-lg text-gray-900">
-                {settings?.didNumber || 'Not set'}
+                {settings?.didNumber || "Not set"}
               </div>
             )}
           </div>
 
           {/* First Message */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">First Message</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              First Message
+            </label>
             {edit ? (
-              <input 
-                name="firstMessage" 
-                value={form.firstMessage || ''} 
+              <input
+                name="firstMessage"
+                value={form.firstMessage || ""}
                 onChange={handleChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
                 placeholder="Enter first message"
               />
             ) : (
               <div className="px-3 py-2 bg-gray-50 rounded-lg text-gray-900">
-                {settings?.firstMessage || 'Not set'}
+                {settings?.firstMessage || "Not set"}
               </div>
             )}
           </div>
@@ -151,11 +163,13 @@ const InboundSettings = ({ clientId }) => {
 
         {/* Knowledge - Full Width */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Knowledge</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Knowledge
+          </label>
           {edit ? (
-            <textarea 
-              name="knowledgeText" 
-              value={form.knowledgeText || ''} 
+            <textarea
+              name="knowledgeText"
+              value={form.knowledgeText || ""}
               onChange={handleChange}
               rows={6}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors resize-vertical"
@@ -163,7 +177,7 @@ const InboundSettings = ({ clientId }) => {
             />
           ) : (
             <div className="px-3 py-2 bg-gray-50 rounded-lg text-gray-900 min-h-[120px] whitespace-pre-wrap">
-              {settings?.knowledgeText || 'No knowledge base content'}
+              {settings?.knowledgeText || "No knowledge base content"}
             </div>
           )}
         </div>

@@ -1,6 +1,15 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import {
+  FiLink,
+  FiSend,
+  FiLogOut,
+  FiTrendingUp,
+  FiUsers,
+  FiEye,
+  FiInfo,
+} from "react-icons/fi";
 import AgentForm from "./components/AgentForm";
 import AgentList from "./components/AgentList";
 import ApiKeyManager from "./components/ApiKeyManager";
@@ -8,7 +17,7 @@ import ClientSelector from "./components/ClientSelector";
 import InBoundSection from "./components/InBoundSection";
 import OutboundSection from "./components/OutboundSection";
 import ApprovalForm from "./components/ApprovalForm";
-import "./ClientDashboard.css";
+import PerformanceKPIs from "./components/PerformanceKPIs";
 import { API_BASE_URL } from "../../config";
 
 function ClientDashboard({ onLogout, clientId: propClientId }) {
@@ -131,20 +140,221 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
 
   const renderMainContent = () => {
     switch (activeSection) {
+      case "about":
+        return (
+          <div className="h-full flex flex-col">
+            <div className="bg-white border-b border-gray-200 px-8 py-6">
+              <h2 className="text-3xl font-bold text-gray-900 mb-4">
+               About Us
+              </h2>
+              <p className="text-gray-600 text-lg">
+                Welcome to your AiTota Dashboard
+              </p>
+            </div>
+
+            <div className="flex-1 p-8 overflow-y-auto">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {/* Project Information */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                  <h3 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                    <FiEye className="w-5 h-5 text-blue-600" />
+                    About AiTota
+                  </h3>
+                  <div className="space-y-4 text-gray-700">
+                    <p>
+                      <strong>AiTota</strong> is a comprehensive AI-powered
+                      business management platform that helps you:
+                    </p>
+                    <ul className="list-disc list-inside space-y-2 ml-4">
+                      <li>
+                        Create and manage AI agents for customer interactions
+                      </li>
+                      <li>Handle inbound and outbound communications</li>
+                      <li>Track performance metrics and KPIs</li>
+                      <li>Automate customer service and lead generation</li>
+                      <li>Monitor call logs and conversation analytics</li>
+                    </ul>
+                  </div>
+                </div>
+
+                {/* Quick Stats */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                  <h3 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                    <FiTrendingUp className="w-5 h-5 text-green-600" />
+                    Quick Stats
+                  </h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="text-center p-4 bg-blue-50 rounded-lg">
+                      <div className="text-2xl font-bold text-blue-600">
+                        {agents.length}
+                      </div>
+                      <div className="text-sm text-gray-600">Active Agents</div>
+                    </div>
+                    <div className="text-center p-4 bg-green-50 rounded-lg">
+                      <div className="text-2xl font-bold text-green-600">0</div>
+                      <div className="text-sm text-gray-600">Total Calls</div>
+                    </div>
+                    <div className="text-center p-4 bg-purple-50 rounded-lg">
+                      <div className="text-2xl font-bold text-purple-600">
+                        0
+                      </div>
+                      <div className="text-sm text-gray-600">
+                        Leads Generated
+                      </div>
+                    </div>
+                    <div className="text-center p-4 bg-orange-50 rounded-lg">
+                      <div className="text-2xl font-bold text-orange-600">
+                        0
+                      </div>
+                      <div className="text-sm text-gray-600">Campaigns</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Features AboutUs */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                  <h3 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                    <FiUsers className="w-5 h-5 text-indigo-600" />
+                    Platform Features
+                  </h3>
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                      <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                      <span className="text-gray-700">AI Agent Management</span>
+                    </div>
+                    <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                      <span className="text-gray-700">
+                        Inbound Call Handling
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                      <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
+                      <span className="text-gray-700">Outbound Campaigns</span>
+                    </div>
+                    <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                      <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
+                      <span className="text-gray-700">
+                        Performance Analytics
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                      <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                      <span className="text-gray-700">Lead Management</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Getting Started */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                  <h3 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                    <FiLink className="w-5 h-5 text-emerald-600" />
+                    Getting Started
+                  </h3>
+                  <div className="space-y-3">
+                    <div className="flex items-start gap-3">
+                      <div className="w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-bold">
+                        1
+                      </div>
+                      <div>
+                        <div className="font-medium text-gray-900">
+                          Create Your First Agent
+                        </div>
+                        <div className="text-sm text-gray-600">
+                          Set up an AI agent to handle customer interactions
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <div className="w-6 h-6 bg-green-600 text-white rounded-full flex items-center justify-center text-sm font-bold">
+                        2
+                      </div>
+                      <div>
+                        <div className="font-medium text-gray-900">
+                          Configure Inbound Settings
+                        </div>
+                        <div className="text-sm text-gray-600">
+                          Set up call handling and routing rules
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <div className="w-6 h-6 bg-purple-600 text-white rounded-full flex items-center justify-center text-sm font-bold">
+                        3
+                      </div>
+                      <div>
+                        <div className="font-medium text-gray-900">
+                          Launch Outbound Campaigns
+                        </div>
+                        <div className="text-sm text-gray-600">
+                          Start automated outreach campaigns
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <div className="w-6 h-6 bg-orange-600 text-white rounded-full flex items-center justify-center text-sm font-bold">
+                        4
+                      </div>
+                      <div>
+                        <div className="font-medium text-gray-900">
+                          Monitor Performance
+                        </div>
+                        <div className="text-sm text-gray-600">
+                          Track KPIs and optimize your campaigns
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+
       case "agents":
         return (
-          <div className="agents-content">
-            <div className="agents-header">
-              <h2>AI Agents</h2>
-              <nav className="sub-nav-tabs">
+          <div className="h-full flex flex-col">
+            <div className="bg-white border-b border-gray-200 px-8 py-6">
+              <h2 className="text-3xl font-bold text-gray-900 mb-4">
+                AI Agents
+              </h2>
+              <nav className="flex gap-2 justify-between items-center">
+                <div className="flex gap-2">
+                  <button
+                    className={`px-5 py-3 text-sm font-medium rounded-md transition-all ${
+                      activeTab === "list"
+                        ? "bg-black text-white"
+                        : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                    }`}
+                    onClick={() => setActiveTab("list")}
+                  >
+                    Agents ({agents.length})
+                  </button>
+
+                  <button
+                    className={`px-5 py-3 text-sm font-medium rounded-md transition-all ${
+                      activeTab === "api-keys"
+                        ? "bg-black text-white"
+                        : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                    }`}
+                    onClick={() => setActiveTab("api-keys")}
+                  >
+                    API Keys
+                  </button>
+                  <button
+                    className={`px-5 py-3 text-sm font-medium rounded-md transition-all ${
+                      activeTab === "settings"
+                        ? "bg-black text-white"
+                        : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                    }`}
+                    onClick={() => setActiveTab("settings")}
+                  >
+                    Settings
+                  </button>
+                </div>
+
                 <button
-                  className={activeTab === "list" ? "active" : ""}
-                  onClick={() => setActiveTab("list")}
-                >
-                  Agent List ({agents.length})
-                </button>
-                <button
-                  className={activeTab === "form" ? "active" : ""}
+                  className="px-5 py-3 text-sm font-medium rounded-md transition-all bg-black text-white hover:bg-gray-800"
                   onClick={() => {
                     setActiveTab("form");
                     setEditingAgent(null);
@@ -152,22 +362,10 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
                 >
                   Create Agent
                 </button>
-                <button
-                  className={activeTab === "api-keys" ? "active" : ""}
-                  onClick={() => setActiveTab("api-keys")}
-                >
-                  API Keys
-                </button>
-                <button
-                  className={activeTab === "settings" ? "active" : ""}
-                  onClick={() => setActiveTab("settings")}
-                >
-                  Settings
-                </button>
               </nav>
             </div>
 
-            <div className="agents-body">
+            <div className="flex-1 p-8 overflow-y-auto">
               {activeTab === "list" && (
                 <AgentList
                   agents={agents}
@@ -202,6 +400,9 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
             </div>
           </div>
         );
+
+      case "performance":
+        return <PerformanceKPIs />;
 
       case "bond":
         return <InBoundSection clientId={currentClient} />;
@@ -248,11 +449,11 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
       <div className="min-h-screen bg-gray-50 py-10 px-4 font-sans">
         <div className="max-w-xl mx-auto bg-white rounded-2xl shadow-lg overflow-hidden">
           {/* Header */}
-          <div className="bg-gradient-to-r from-yellow-400 to-yellow-600 p-8 text-center">
+          <div className="bg-gradient-to-r from-gray-800 to-black p-8 text-center">
             <h1 className="m-0 text-3xl font-bold text-white tracking-tight">
               Application Under Review
             </h1>
-            <p className="mt-2 text-lg text-yellow-100 opacity-90">
+            <p className="mt-2 text-lg text-gray-300 opacity-90">
               Thank you for submitting your application
             </p>
           </div>
@@ -268,11 +469,11 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
               is currently reviewing it. This process typically takes 2-3
               business days.
             </p>
-            <div className="bg-yellow-50 border border-yellow-300 rounded-lg p-4 mt-6">
-              <div className="text-sm font-semibold text-yellow-800 mb-2">
+            <div className="bg-gray-50 border border-gray-300 rounded-lg p-4 mt-6">
+              <div className="text-sm font-semibold text-gray-800 mb-2">
                 What happens next?
               </div>
-              <ul className="text-sm text-yellow-800 text-left list-disc pl-5 m-0">
+              <ul className="text-sm text-gray-700 text-left list-disc pl-5 m-0">
                 <li>Our team will review your business information</li>
                 <li>We'll verify your documents and credentials</li>
                 <li>You'll receive an email notification once approved</li>
@@ -286,59 +487,98 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
   }
 
   return (
-    <div className="App">
-      <div className="app-layout">
+    <div className="h-screen font-sans bg-gray-50">
+      <div className="flex h-full">
         {/* Sidebar */}
-        <aside className="sidebar">
-          <div className="sidebar-header">
-            <h1>AI Manager</h1>
-            <div className="client-info">
-              <span className="client-label">Client:</span>
-              <span className="client-name">{currentClient}</span>
+        <aside className="w-64 bg-gradient-to-b from-gray-900 to-black text-white flex flex-col shadow-lg">
+          <div className="p-6 border-b border-gray-700">
+            <h1 className="text-2xl font-bold text-white mb-3">AI Manager</h1>
+            <div className="flex flex-col gap-1">
+              <span className="text-xs text-gray-400 uppercase tracking-wider">
+                Client:
+              </span>
+              <span className="text-sm text-gray-300 font-semibold">
+                {currentClient}
+              </span>
             </div>
           </div>
 
-          <nav className="sidebar-nav">
+          <nav className="flex-1 py-4">
             <button
-              className={`sidebar-item ${
-                activeSection === "agents" ? "active" : ""
+              className={`flex items-center w-full px-6 py-4 text-left transition-all duration-200 gap-3 ${
+                activeSection === "performance"
+                  ? "bg-black text-white border-r-4 border-white"
+                  : "text-gray-300 hover:bg-gray-800 hover:text-white"
+              }`}
+              onClick={() => handleSectionChange("performance")}
+            >
+              <FiTrendingUp className="text-xl w-6 text-center" />
+              <span className="flex-1 font-medium">Performance</span>
+            </button>
+
+            <button
+              className={`flex items-center w-full px-6 py-4 text-left transition-all duration-200 gap-3 ${
+                activeSection === "agents"
+                  ? "bg-black text-white border-r-4 border-white"
+                  : "text-gray-300 hover:bg-gray-800 hover:text-white"
               }`}
               onClick={() => handleSectionChange("agents")}
             >
-              <span className="sidebar-icon">🤖</span>
-              <span className="sidebar-label">Agents</span>
-              <span className="sidebar-count">{agents.length}</span>
+              <FiUsers className="text-xl w-6 text-center" />
+              <span className="flex-1 font-medium">Agents</span>
             </button>
 
             <button
-              className={`sidebar-item ${
-                activeSection === "bond" ? "active" : ""
+              className={`flex items-center w-full px-6 py-4 text-left transition-all duration-200 gap-3 ${
+                activeSection === "bond"
+                  ? "bg-black text-white border-r-4 border-white"
+                  : "text-gray-300 hover:bg-gray-800 hover:text-white"
               }`}
               onClick={() => handleSectionChange("bond")}
             >
-              <span className="sidebar-icon">🔗</span>
-              <span className="sidebar-label">InBuond</span>
+              <FiLink className="text-xl w-6 text-center" />
+              <span className="flex-1 font-medium">InBound</span>
             </button>
 
             <button
-              className={`sidebar-item ${
-                activeSection === "outbound" ? "active" : ""
+              className={`flex items-center w-full px-6 py-4 text-left transition-all duration-200 gap-3 ${
+                activeSection === "outbound"
+                  ? "bg-black text-white border-r-4 border-white"
+                  : "text-gray-300 hover:bg-gray-800 hover:text-white"
               }`}
               onClick={() => handleSectionChange("outbound")}
             >
-              <span className="sidebar-icon">📤</span>
-              <span className="sidebar-label">Outbound</span>
+              <FiSend className="text-xl w-6 text-center" />
+              <span className="flex-1 font-medium">Outbound</span>
             </button>
           </nav>
-          <div style={{ marginTop: "auto", padding: "1rem" }}>
-            <button className="sidebar-item logout-btn" onClick={onLogout}>
-              <span className="sidebar-icon">🚪</span> Logout
+
+          <div className="p-4">
+          <button
+              className={`flex items-center w-full px-6 py-4 text-left transition-all duration-200 gap-3 ${
+                activeSection === "about"
+                  ? "bg-black text-white border-r-4 border-white"
+                  : "text-gray-300 hover:bg-gray-800 hover:text-white"
+              }`}
+              onClick={() => handleSectionChange("about")}
+            >
+              <FiInfo className="text-xl w-6 text-center" />
+              <span className="flex-1 font-medium">About Us</span>
+            </button>
+            <button
+              className="flex items-center w-full px-6 py-4 text-left transition-all duration-200 gap-3 text-gray-300 hover:bg-gray-800 hover:text-white rounded"
+              onClick={onLogout}
+            >
+              <FiLogOut className="text-xl w-6 text-center" />
+              <span className="flex-1 font-medium">Logout</span>
             </button>
           </div>
         </aside>
 
         {/* Main Content */}
-        <main className="main-content">{renderMainContent()}</main>
+        <main className="flex-1 flex flex-col overflow-hidden bg-white">
+          {renderMainContent()}
+        </main>
       </div>
     </div>
   );

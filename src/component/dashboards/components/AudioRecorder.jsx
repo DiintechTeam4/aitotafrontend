@@ -1,8 +1,9 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef } from "react";
+import { FiTrash2 } from "react-icons/fi";
 
 const AudioRecorder = ({ onAudioRecorded }) => {
   const [isRecording, setIsRecording] = useState(false);
-  const [audioURL, setAudioURL] = useState('');
+  const [audioURL, setAudioURL] = useState("");
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
 
@@ -17,20 +18,22 @@ const AudioRecorder = ({ onAudioRecorded }) => {
       };
 
       mediaRecorderRef.current.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
+        const audioBlob = new Blob(audioChunksRef.current, {
+          type: "audio/wav",
+        });
         const audioUrl = URL.createObjectURL(audioBlob);
         setAudioURL(audioUrl);
         onAudioRecorded(audioBlob);
-        
+
         // Stop all tracks to release microphone
-        stream.getTracks().forEach(track => track.stop());
+        stream.getTracks().forEach((track) => track.stop());
       };
 
       mediaRecorderRef.current.start();
       setIsRecording(true);
     } catch (error) {
-      console.error('Error accessing microphone:', error);
-      alert('Error accessing microphone. Please check permissions.');
+      console.error("Error accessing microphone:", error);
+      alert("Error accessing microphone. Please check permissions.");
     }
   };
 
@@ -42,51 +45,52 @@ const AudioRecorder = ({ onAudioRecorded }) => {
   };
 
   const clearRecording = () => {
-    setAudioURL('');
+    setAudioURL("");
     onAudioRecorded(null);
   };
 
   return (
-    <div className="audio-recorder">
-      <div className="recorder-controls">
+    <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 bg-gray-50">
+      <div className="flex gap-2 justify-center mb-4">
         {!isRecording ? (
-          <button 
-            type="button" 
+          <button
+            type="button"
             onClick={startRecording}
-            className="btn-record"
+            className="px-4 py-2 border-none rounded cursor-pointer text-sm transition-all bg-green-500 text-white hover:bg-green-600"
           >
             🎤 Start Recording
           </button>
         ) : (
-          <button 
-            type="button" 
+          <button
+            type="button"
             onClick={stopRecording}
-            className="btn-stop"
+            className="px-4 py-2 border-none rounded cursor-pointer text-sm transition-all bg-red-500 text-white hover:bg-red-600"
           >
             ⏹️ Stop Recording
           </button>
         )}
-        
+
         {audioURL && (
-          <button 
-            type="button" 
+          <button
+            type="button"
             onClick={clearRecording}
-            className="btn-clear"
+            className="px-4 py-2 border-none rounded cursor-pointer text-sm transition-all bg-gray-500 text-white hover:bg-gray-600 flex items-center gap-2"
           >
-            🗑️ Clear
+            <FiTrash2 />
+            Clear
           </button>
         )}
       </div>
 
       {isRecording && (
-        <div className="recording-indicator">
-          <span className="recording-dot"></span>
+        <div className="flex items-center justify-center gap-2 text-red-500 font-bold mb-4">
+          <span className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></span>
           Recording...
         </div>
       )}
 
       {audioURL && (
-        <div className="audio-preview">
+        <div className="mt-4 text-center">
           <audio controls src={audioURL}>
             Your browser does not support the audio element.
           </audio>

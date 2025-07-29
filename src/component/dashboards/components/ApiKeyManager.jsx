@@ -1,68 +1,73 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
+import { useState, useEffect } from "react";
+import { FiTrash2 } from "react-icons/fi";
 
 const ApiKeyManager = ({ clientId }) => {
-  const [apiKeys, setApiKeys] = useState([])
-  const [providers, setProviders] = useState({})
-  const [isLoading, setIsLoading] = useState(true)
-  const [editingProvider, setEditingProvider] = useState(null)
+  const [apiKeys, setApiKeys] = useState([]);
+  const [providers, setProviders] = useState({});
+  const [isLoading, setIsLoading] = useState(true);
+  const [editingProvider, setEditingProvider] = useState(null);
   const [formData, setFormData] = useState({
     key: "",
     keyName: "",
     description: "",
     configuration: {},
-  })
-  const [testResults, setTestResults] = useState({})
+  });
+  const [testResults, setTestResults] = useState({});
 
   useEffect(() => {
-    fetchApiKeys()
-    fetchProviders()
-  }, [clientId])
+    fetchApiKeys();
+    fetchProviders();
+  }, [clientId]);
 
   const fetchApiKeys = async () => {
     try {
-      const response = await fetch(`http://localhost:4000/api/v1/client/api-keys?clientId=${clientId}`)
-      const data = await response.json()
+      const response = await fetch(
+        `http://localhost:4000/api/v1/client/api-keys?clientId=${clientId}`
+      );
+      const data = await response.json();
 
       if (data.success) {
-        setApiKeys(data.data)
+        setApiKeys(data.data);
       }
     } catch (error) {
-      console.error("Error fetching API keys:", error)
+      console.error("Error fetching API keys:", error);
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   const fetchProviders = async () => {
     try {
-      const response = await fetch("http://localhost:4000/api/v1/client/providers")
-      const data = await response.json()
+      const response = await fetch(
+        "http://localhost:4000/api/v1/client/providers"
+      );
+      const data = await response.json();
 
       if (data.success) {
-        setProviders(data.data)
+        setProviders(data.data);
       }
     } catch (error) {
-      console.error("Error fetching providers:", error)
+      console.error("Error fetching providers:", error);
     }
-  }
+  };
 
   const handleEdit = (provider) => {
-    const existingKey = apiKeys.find((key) => key.provider === provider)
-    setEditingProvider(provider)
+    const existingKey = apiKeys.find((key) => key.provider === provider);
+    setEditingProvider(provider);
     setFormData({
       key: "",
       keyName: existingKey?.keyName || providers[provider]?.name || "",
       description: existingKey?.metadata?.description || "",
       configuration: existingKey?.configuration || {},
-    })
-  }
+    });
+  };
 
   const handleSave = async () => {
     if (!formData.key.trim()) {
-      alert("API key is required")
-      return
+      alert("API key is required");
+      return;
     }
 
     try {
@@ -74,43 +79,52 @@ const ApiKeyManager = ({ clientId }) => {
             "Content-Type": "application/json",
           },
           body: JSON.stringify(formData),
-        },
-      )
+        }
+      );
 
-      const result = await response.json()
+      const result = await response.json();
 
       if (result.success) {
-        alert(result.message)
-        setEditingProvider(null)
-        setFormData({ key: "", keyName: "", description: "", configuration: {} })
-        fetchApiKeys()
+        alert(result.message);
+        setEditingProvider(null);
+        setFormData({
+          key: "",
+          keyName: "",
+          description: "",
+          configuration: {},
+        });
+        fetchApiKeys();
       } else {
-        alert(`Error: ${result.error}`)
+        alert(`Error: ${result.error}`);
       }
     } catch (error) {
-      console.error("Error saving API key:", error)
-      alert("Failed to save API key")
+      console.error("Error saving API key:", error);
+      alert("Failed to save API key");
     }
-  }
+  };
 
   const handleTest = async (provider, key) => {
     if (!key.trim()) {
-      alert("Please enter an API key to test")
-      return
+      alert("Please enter an API key to test");
+      return;
     }
 
-    setTestResults((prev) => ({ ...prev, [provider]: { testing: true } }))
+    setTestResults((prev) => ({ ...prev, [provider]: { testing: true } }));
 
     try {
-      const response = await fetch(`http://localhost:4000/api/v1/client/api-keys/${provider}/test?clientId=${clientId}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ key, configuration: formData.configuration }),
-      })
+      const response = await fetch(
+        `http://localhost:4000/api/v1/client/api-keys/${provider}/test?clientId=${clientId}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ key }),
+        }
+      );
 
-      const result = await response.json()
+      const result = await response.json();
+
       setTestResults((prev) => ({
         ...prev,
         [provider]: {
@@ -118,198 +132,268 @@ const ApiKeyManager = ({ clientId }) => {
           success: result.success,
           message: result.message || result.error,
         },
-      }))
+      }));
     } catch (error) {
-      console.error("Error testing API key:", error)
+      console.error("Error testing API key:", error);
       setTestResults((prev) => ({
         ...prev,
         [provider]: {
           testing: false,
           success: false,
-          message: "Test failed: " + error.message,
+          message: "Network error occurred",
         },
-      }))
+      }));
     }
-  }
+  };
 
   const handleDelete = async (provider) => {
-    if (!window.confirm(`Are you sure you want to delete the ${providers[provider]?.name} API key?`)) {
-      return
+    if (
+      !window.confirm(
+        `Are you sure you want to delete the API key for ${provider}?`
+      )
+    ) {
+      return;
     }
 
     try {
-      const response = await fetch(`http://localhost:4000/api/v1/client/api-keys/${provider}?clientId=${clientId}`, {
-        method: "DELETE",
-      })
+      const response = await fetch(
+        `http://localhost:4000/api/v1/client/api-keys/${provider}?clientId=${clientId}`,
+        {
+          method: "DELETE",
+        }
+      );
 
-      const result = await response.json()
+      const result = await response.json();
 
       if (result.success) {
-        alert(result.message)
-        fetchApiKeys()
+        alert("API key deleted successfully");
+        fetchApiKeys();
       } else {
-        alert(`Error: ${result.error}`)
+        alert(`Error: ${result.error}`);
       }
     } catch (error) {
-      console.error("Error deleting API key:", error)
-      alert("Failed to delete API key")
+      console.error("Error deleting API key:", error);
+      alert("Failed to delete API key");
     }
-  }
+  };
 
   const getProviderStatus = (provider) => {
-    const apiKey = apiKeys.find((key) => key.provider === provider)
-    return apiKey ? "configured" : "not-configured"
-  }
+    const key = apiKeys.find((k) => k.provider === provider);
+    return key ? "configured" : "not-configured";
+  };
 
   const getProviderIcon = (provider) => {
     const icons = {
-      openai: "🤖",
-      deepgram: "🎙️",
-      sarvam: "🔊",
-      elevenlabs: "🎵",
-      google_cloud: "🌐",
-      azure_speech: "☁️",
-      twilio: "📞",
-      vonage: "📱",
-    }
-    return icons[provider] || "🔑"
-  }
+      openai: "AI",
+      anthropic: "🧠",
+      google: "🔍",
+      azure: "☁️",
+      aws: "⚡",
+      default: "🔑",
+    };
+    return icons[provider] || icons.default;
+  };
 
   if (isLoading) {
     return (
-      <div className="api-key-manager loading">
-        <div className="spinner"></div>
+      <div className="bg-white rounded-lg p-8 shadow-lg flex flex-col items-center justify-center min-h-[300px]">
+        <div className="w-10 h-10 border-4 border-gray-200 border-t-indigo-500 rounded-full animate-spin mb-4"></div>
         <p>Loading API keys...</p>
       </div>
-    )
+    );
   }
 
   return (
-    <div className="api-key-manager">
-      <div className="manager-header">
-        <h2>API Key Management</h2>
-        <p>Configure your API keys for different services. Keys are encrypted and stored securely.</p>
+    <div className="bg-white rounded-lg p-8 shadow-lg">
+      <div className="mb-8 pb-4 border-b-2 border-indigo-500">
+        <h2 className="text-gray-800 mb-2">API Key Management</h2>
+        <p className="text-gray-600 text-sm">
+          Configure API keys for different AI service providers to enable voice
+          synthesis and other features.
+        </p>
       </div>
 
-      <div className="providers-grid">
-        {Object.entries(providers).map(([provider, config]) => {
-          const status = getProviderStatus(provider)
-          const apiKey = apiKeys.find((key) => key.provider === provider)
-          const testResult = testResults[provider]
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+        {Object.keys(providers).map((provider) => {
+          const status = getProviderStatus(provider);
+          const key = apiKeys.find((k) => k.provider === provider);
+          const providerInfo = providers[provider];
 
           return (
-            <div key={provider} className={`provider-card ${status}`}>
-              <div className="provider-header">
-                <div className="provider-info">
-                  <span className="provider-icon">{getProviderIcon(provider)}</span>
+            <div
+              key={provider}
+              className={`border rounded-lg p-6 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg ${
+                status === "configured"
+                  ? "border-green-500 bg-green-50"
+                  : "border-red-500 bg-orange-50"
+              }`}
+            >
+              <div className="flex justify-between items-start mb-4">
+                <div className="flex gap-3 items-start">
+                  <span className="text-2xl">{getProviderIcon(provider)}</span>
                   <div>
-                    <h3>{config.name}</h3>
-                    <p>{config.description}</p>
+                    <h3 className="m-0 mb-1 text-gray-800 text-lg">
+                      {providerInfo.name}
+                    </h3>
+                    <p className="m-0 text-gray-600 text-sm leading-relaxed">
+                      {providerInfo.description}
+                    </p>
                   </div>
                 </div>
-                <div className={`status-badge ${status}`}>
-                  {status === "configured" ? "✅ Configured" : "❌ Not Configured"}
+                <div
+                  className={`px-2 py-1 rounded text-xs font-bold whitespace-nowrap ${
+                    status === "configured"
+                      ? "bg-green-100 text-green-800"
+                      : "bg-red-100 text-red-800"
+                  }`}
+                >
+                  {status === "configured" ? "Configured" : "Not Configured"}
                 </div>
               </div>
 
-              {apiKey && (
-                <div className="key-info">
-                  <div className="key-details">
-                    <strong>Key:</strong> {apiKey.keyPreview}
+              {key && (
+                <div className="my-4 p-3 bg-white rounded border border-gray-200">
+                  <div className="text-sm leading-relaxed text-gray-600">
+                    <strong>Key Name:</strong> {key.keyName}
                     <br />
-                    <strong>Last Used:</strong>{" "}
-                    {apiKey.usage.lastUsed ? new Date(apiKey.usage.lastUsed).toLocaleDateString() : "Never"}
-                    <br />
-                    <strong>Usage:</strong> {apiKey.usage.totalRequests} requests
+                    <strong>Added:</strong>{" "}
+                    {new Date(key.createdAt).toLocaleDateString()}
+                    {key.metadata?.description && (
+                      <>
+                        <br />
+                        <strong>Description:</strong> {key.metadata.description}
+                      </>
+                    )}
                   </div>
                 </div>
               )}
 
-              <div className="provider-actions">
-                <button onClick={() => handleEdit(provider)} className="btn-edit">
-                  {status === "configured" ? "Update" : "Configure"}
+              <div className="flex gap-2 mt-4">
+                <button
+                  onClick={() => handleEdit(provider)}
+                  className="px-4 py-2 bg-green-500 text-white text-sm rounded hover:bg-green-600 transition-colors"
+                >
+                  {key ? "Edit" : "Configure"}
                 </button>
-                {status === "configured" && (
-                  <button onClick={() => handleDelete(provider)} className="btn-delete">
-                    Delete
+                {key && (
+                  <button
+                    onClick={() => handleDelete(provider)}
+                    className="bg-none border-none text-xl cursor-pointer p-1 rounded transition-colors hover:bg-red-100"
+                  >
+                    <FiTrash2 className="w-4 h-4" />
                   </button>
                 )}
               </div>
             </div>
-          )
+          );
         })}
       </div>
 
+      {/* Edit Modal */}
       {editingProvider && (
-        <div className="modal-overlay">
-          <div className="modal">
-            <div className="modal-header">
-              <h3>Configure {providers[editingProvider]?.name}</h3>
-              <button onClick={() => setEditingProvider(null)} className="btn-close">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg w-11/12 max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl">
+            <div className="flex justify-between items-center p-6 border-b border-gray-200">
+              <h3 className="m-0 text-gray-800">
+                Configure {providers[editingProvider]?.name}
+              </h3>
+              <button
+                onClick={() => setEditingProvider(null)}
+                className="bg-none border-none text-2xl cursor-pointer text-gray-500 hover:text-gray-700 p-0 w-8 h-8 flex items-center justify-center"
+              >
                 ×
               </button>
             </div>
 
-            <div className="modal-body">
-              <div className="form-group">
-                <label>API Key *</label>
+            <div className="p-6">
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  API Key
+                </label>
                 <input
                   type="password"
                   value={formData.key}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, key: e.target.value }))}
-                  placeholder={`Enter your ${providers[editingProvider]?.name} API key`}
+                  onChange={(e) =>
+                    setFormData({ ...formData, key: e.target.value })
+                  }
+                  placeholder="Enter your API key"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
                 />
-                <small>Format: {providers[editingProvider]?.keyFormat}</small>
               </div>
 
-              <div className="form-group">
-                <label>Key Name</label>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Key Name
+                </label>
                 <input
                   type="text"
                   value={formData.keyName}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, keyName: e.target.value }))}
-                  placeholder="Optional name for this key"
+                  onChange={(e) =>
+                    setFormData({ ...formData, keyName: e.target.value })
+                  }
+                  placeholder="Give this key a name"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
                 />
               </div>
 
-              <div className="form-group">
-                <label>Description</label>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Description
+                </label>
                 <textarea
                   value={formData.description}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
+                  onChange={(e) =>
+                    setFormData({ ...formData, description: e.target.value })
+                  }
                   placeholder="Optional description"
-                  rows="2"
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors resize-vertical"
                 />
               </div>
 
-              {testResults[editingProvider] && (
-                <div className={`test-result ${testResults[editingProvider].success ? "success" : "error"}`}>
-                  {testResults[editingProvider].testing ? (
-                    <div className="testing">
-                      <div className="spinner small"></div>
-                      Testing API key...
-                    </div>
-                  ) : (
-                    <div>
-                      {testResults[editingProvider].success ? "✅" : "❌"} {testResults[editingProvider].message}
-                    </div>
-                  )}
+              {/* Test Result */}
+              {testResults[editingProvider] &&
+                !testResults[editingProvider].testing && (
+                  <div
+                    className={`my-4 p-3 rounded text-sm ${
+                      testResults[editingProvider].success
+                        ? "bg-green-100 text-green-800 border border-green-300"
+                        : "bg-red-100 text-red-800 border border-red-300"
+                    }`}
+                  >
+                    {testResults[editingProvider].message}
+                  </div>
+                )}
+
+              {/* Testing Indicator */}
+              {testResults[editingProvider]?.testing && (
+                <div className="flex items-center gap-2 my-4">
+                  <div className="w-5 h-5 border-2 border-gray-200 border-t-indigo-500 rounded-full animate-spin"></div>
+                  <span>Testing API key...</span>
                 </div>
               )}
             </div>
 
-            <div className="modal-footer">
+            <div className="flex gap-4 justify-end p-6 border-t border-gray-200">
               <button
                 onClick={() => handleTest(editingProvider, formData.key)}
-                className="btn-test"
-                disabled={!formData.key.trim() || testResults[editingProvider]?.testing}
+                disabled={
+                  !formData.key.trim() || testResults[editingProvider]?.testing
+                }
+                className="px-4 py-2 bg-black text-white text-sm rounded hover:bg-gray-800 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
               >
-                {testResults[editingProvider]?.testing ? "Testing..." : "Test Key"}
+                Test Key
               </button>
-              <button onClick={() => setEditingProvider(null)} className="btn-secondary">
+              <button
+                onClick={() => setEditingProvider(null)}
+                className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors"
+              >
                 Cancel
               </button>
-              <button onClick={handleSave} className="btn-primary">
+              <button
+                onClick={handleSave}
+                className="px-4 py-2 bg-indigo-500 text-white rounded hover:bg-indigo-600 transition-colors"
+              >
                 Save
               </button>
             </div>
@@ -317,7 +401,7 @@ const ApiKeyManager = ({ clientId }) => {
         </div>
       )}
     </div>
-  )
-}
+  );
+};
 
-export default ApiKeyManager
+export default ApiKeyManager;
