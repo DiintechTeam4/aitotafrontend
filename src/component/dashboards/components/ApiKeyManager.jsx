@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { FiTrash2 } from "react-icons/fi";
+import { API_BASE_URL } from "../../../config";
 
 const ApiKeyManager = ({ clientId }) => {
   const [apiKeys, setApiKeys] = useState([]);
@@ -23,9 +24,11 @@ const ApiKeyManager = ({ clientId }) => {
 
   const fetchApiKeys = async () => {
     try {
-      const response = await fetch(
-        `http://localhost:4000/api/v1/client/api-keys?clientId=${clientId}`
-      );
+      const response = await fetch(`${API_BASE_URL}/client/api-keys`, {
+        headers: {
+          Authorization: `Bearer ${sessionStorage.getItem("clienttoken")}`,
+        },
+      });
       const data = await response.json();
 
       if (data.success) {
@@ -40,9 +43,11 @@ const ApiKeyManager = ({ clientId }) => {
 
   const fetchProviders = async () => {
     try {
-      const response = await fetch(
-        "http://localhost:4000/api/v1/client/providers"
-      );
+      const response = await fetch(`${API_BASE_URL}/client/providers`, {
+        headers: {
+          Authorization: `Bearer ${sessionStorage.getItem("clienttoken")}`,
+        },
+      });
       const data = await response.json();
 
       if (data.success) {
@@ -72,11 +77,12 @@ const ApiKeyManager = ({ clientId }) => {
 
     try {
       const response = await fetch(
-        `http://localhost:4000/api/v1/client/api-keys/${editingProvider}?clientId=${clientId}`,
+        `${API_BASE_URL}/client/api-keys/${editingProvider}`,
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            Authorization: `Bearer ${sessionStorage.getItem("clienttoken")}`,
           },
           body: JSON.stringify(formData),
         }
@@ -113,11 +119,12 @@ const ApiKeyManager = ({ clientId }) => {
 
     try {
       const response = await fetch(
-        `http://localhost:4000/api/v1/client/api-keys/${provider}/test?clientId=${clientId}`,
+        `${API_BASE_URL}/client/api-keys/${provider}/test`,
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            Authorization: `Bearer ${sessionStorage.getItem("clienttoken")}`,
           },
           body: JSON.stringify({ key }),
         }
@@ -157,9 +164,12 @@ const ApiKeyManager = ({ clientId }) => {
 
     try {
       const response = await fetch(
-        `http://localhost:4000/api/v1/client/api-keys/${provider}?clientId=${clientId}`,
+        `${API_BASE_URL}/client/api-keys/${provider}`,
         {
           method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${sessionStorage.getItem("clienttoken")}`,
+          },
         }
       );
 

@@ -67,7 +67,12 @@ const AgentForm = ({ agent, onSave, onCancel, clientId }) => {
   const fetchAudio = async (agentId) => {
     try {
       const response = await fetch(
-        `http://localhost:4000/api/v1/client/agents/${agentId}/audio?clientId=${clientId}`
+        `${API_BASE_URL}client/agents/${agentId}/audio?clientId=${clientId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${sessionStorage.getItem("clienttoken")}`,
+          },
+        }
       );
       if (response.ok) {
         const audioBlob = await response.blob();
@@ -218,6 +223,7 @@ const AgentForm = ({ agent, onSave, onCancel, clientId }) => {
         method,
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${sessionStorage.getItem("clienttoken")}`,
         },
         body: JSON.stringify(payload),
       });
