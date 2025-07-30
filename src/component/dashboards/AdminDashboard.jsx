@@ -187,7 +187,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                 }));
                 
                 // Redirect to client dashboard
-                window.location.href = '/auth/dashboard';
+                window.location.href = 'https://aitotafrontend.vercel.app/auth/dashboard';
               </script>
             </head>
             <body>
