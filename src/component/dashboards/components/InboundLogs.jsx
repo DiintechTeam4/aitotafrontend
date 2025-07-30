@@ -18,18 +18,72 @@ const statusTextColors = {
 
 const InboundLogs = ({ clientId }) => {
   const [logs, setLogs] = useState([]);
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(true);
+
   useEffect(() => {
-    fetch(`${API_BASE_URL}/client/inbound/logs`,)
-      .then((res) => res.json())
-      .then(setLogs);
+    const fetchLogs = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const response = await fetch(
+          `${API_BASE_URL}/client/inbound/logs`,
+          {
+            headers: {
+              Authorization: `Bearer ${sessionStorage.getItem("clienttoken")}`,
+            },
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const result = await response.json();
+
+        if (result.success && result.data) {
+          setLogs(result.data);
+        } else {
+          throw new Error(result.error || "Failed to fetch logs data");
+        }
+      } catch (err) {
+        console.error("Error fetching logs:", err);
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchLogs();
   }, [clientId]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-black"></div>
+        <span className="ml-3 text-gray-600">Loading...</span>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="text-red-600">
+          <p className="font-medium">Error loading logs:</p>
+          <p className="text-sm">{error}</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
       <h3 className="text-xl font-semibold text-gray-900">
         Logs / Conversation
       </h3>
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">

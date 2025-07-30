@@ -25,7 +25,12 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
   const playAudio = async (agentId) => {
     try {
       const response = await fetch(
-        `${API_BASE_URL}/client/agents/${agentId}/audio?clientId=${clientId}`
+        `${API_BASE_URL}/client/agents/${agentId}/audio?clientId=${clientId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${sessionStorage.getItem("clienttoken")}`,
+          },
+        }
       );
       if (response.ok) {
         const audioBlob = await response.blob();
@@ -65,9 +70,12 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
     onDelete(agentId);
   };
 
+  // Ensure agents is always an array
+  const agentsArray = Array.isArray(agents) ? agents : [];
+
   return (
     <div className="w-full">
-      {agents.length === 0 ? (
+      {agentsArray.length === 0 ? (
         <div className="text-center py-16 px-8 bg-gradient-to-br from-gray-50 to-white rounded-xl shadow-sm border border-gray-100">
           <div className="max-w-md mx-auto">
             <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -83,7 +91,7 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {agents.map((agent) => (
+          {agentsArray.map((agent) => (
             <div
               key={agent._id}
               className="group bg-white rounded-xl shadow-sm border border-gray-100 hover:shadow-lg hover:border-gray-300 transition-all duration-300 overflow-hidden"

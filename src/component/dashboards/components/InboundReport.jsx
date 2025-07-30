@@ -10,23 +10,73 @@ import { API_BASE_URL } from "../../../config";
 
 const InboundReport = ({ clientId }) => {
   const [report, setReport] = useState(null);
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(true);
+
   useEffect(() => {
-    fetch(`${API_BASE_URL}/client/inbound/report`, {
-      headers: {
-        Authorization: `Bearer ${sessionStorage.getItem("clienttoken")}`,
-      },
-    })
-      .then((res) => res.json())
-      .then(setReport);
+    const fetchReport = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const response = await fetch(
+          `${API_BASE_URL}/client/inbound/report`,
+          {
+            headers: {
+              Authorization: `Bearer ${sessionStorage.getItem("clienttoken")}`,
+            },
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const result = await response.json();
+
+        if (result.success && result.data) {
+          setReport(result.data);
+        } else {
+          throw new Error(result.error || "Failed to fetch report data");
+        }
+      } catch (err) {
+        console.error("Error fetching report:", err);
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchReport();
   }, [clientId]);
 
-  if (!report)
+  if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-black"></div>
         <span className="ml-3 text-gray-600">Loading...</span>
       </div>
     );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="text-red-600">
+          <p className="font-medium">Error loading report:</p>
+          <p className="text-sm">{error}</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!report) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="text-gray-600">No report data available</div>
+      </div>
+    );
+  }
 
   const stats = [
     {

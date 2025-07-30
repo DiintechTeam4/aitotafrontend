@@ -17,17 +17,9 @@ const PerformanceKPIs = () => {
   const [endDate, setEndDate] = useState("2025-07-30");
 
   const kpis = [
+    
     {
       id: 1,
-      title: "Total Businesses",
-      value: "0",
-      timeFrame: "Last 7 days",
-      color: "blue",
-      icon: <FiUsers className="w-4 h-4" />,
-      removable: false,
-    },
-    {
-      id: 2,
       title: "Total Calls Made",
       value: "0",
       timeFrame: "Last 7 days",
@@ -36,7 +28,7 @@ const PerformanceKPIs = () => {
       removable: false,
     },
     {
-      id: 3,
+      id: 2,
       title: "Total Emails",
       value: "0",
       timeFrame: "Last 7 days",
@@ -45,7 +37,7 @@ const PerformanceKPIs = () => {
       removable: true,
     },
     {
-      id: 4,
+      id: 3,
       title: "Total AI Assistant",
       value: "0",
       timeFrame: "Last 7 days",
@@ -54,7 +46,7 @@ const PerformanceKPIs = () => {
       removable: false,
     },
     {
-      id: 5,
+      id: 4,
       title: "Total Campaign",
       value: "0",
       timeFrame: "Last 7 days",
@@ -63,7 +55,7 @@ const PerformanceKPIs = () => {
       removable: false,
     },
     {
-      id: 7,
+      id: 5,
       title: "Total Call Duration",
       value: "00s",
       timeFrame: "Last 7 days",

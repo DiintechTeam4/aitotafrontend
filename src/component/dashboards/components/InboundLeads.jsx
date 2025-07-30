@@ -3,32 +3,83 @@ import { FiFileText, FiMessageCircle, FiPhone } from "react-icons/fi";
 import { API_BASE_URL } from "../../../config";
 
 const statusLabels = {
-  veryInterested: "Very Interested",
-  medium: "Medium",
-  notInterested: "Not Interested",
+  vvi: "Very Interested",
+  maybe: "Maybe",
+  notConnected: "Not connected",
 };
 
 const statusColors = {
-  veryInterested: "bg-green-100 text-green-800",
-  medium: "bg-yellow-100 text-yellow-800",
-  notInterested: "bg-red-100 text-red-800",
+  vvi: "bg-green-100 text-green-800",
+  maybe: "bg-yellow-100 text-yellow-800",
+  notConnected: "bg-red-100 text-red-800",
 };
 
 const InboundLeads = ({ clientId }) => {
   const [leads, setLeads] = useState(null);
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(true);
+
   useEffect(() => {
-    fetch(`${API_BASE_URL}/client/inbound/leads?clientId=${clientId}`)
-      .then((res) => res.json())
-      .then(setLeads);
+    const fetchLeads = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const response = await fetch(`${API_BASE_URL}/client/inbound/leads`, {
+          headers: {
+            Authorization: `Bearer ${sessionStorage.getItem("clienttoken")}`,
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const result = await response.json();
+
+        if (result.success && result.data) {
+          setLeads(result.data);
+        } else {
+          throw new Error(result.error || "Failed to fetch leads data");
+        }
+      } catch (err) {
+        console.error("Error fetching leads:", err);
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchLeads();
   }, [clientId]);
 
-  if (!leads)
+  if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-black"></div>
         <span className="ml-3 text-gray-600">Loading...</span>
       </div>
     );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="text-red-600">
+          <p className="font-medium">Error loading leads:</p>
+          <p className="text-sm">{error}</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!leads) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="text-gray-600">No leads data available</div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

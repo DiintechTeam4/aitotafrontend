@@ -5,14 +5,40 @@ const InboundSettings = ({ clientId }) => {
   const [settings, setSettings] = useState(null);
   const [edit, setEdit] = useState(false);
   const [form, setForm] = useState({});
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`${API_BASE_URL}/client/inbound/settings?clientId=${clientId}`)
-      .then((res) => res.json())
-      .then((data) => {
+    const fetchSettings = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const response = await fetch(
+          `${API_BASE_URL}/client/inbound/settings`,
+          {
+            headers: {
+              Authorization: `Bearer ${sessionStorage.getItem("clienttoken")}`,
+            },
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
         setSettings(data);
         setForm(data || {});
-      });
+      } catch (err) {
+        console.error("Error fetching settings:", err);
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchSettings();
   }, [clientId]);
 
   const handleChange = (e) => {
@@ -20,26 +46,53 @@ const InboundSettings = ({ clientId }) => {
   };
 
   const handleSave = async () => {
-    const res = await fetch(
-      `${API_BASE_URL}/client/client/inbound/settings?clientId=${clientId}`,
-      {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+    try {
+      setError(null);
+
+      const response = await fetch(
+        `${API_BASE_URL}/client/inbound/settings`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${sessionStorage.getItem("clienttoken")}`,
+          },
+          body: JSON.stringify(form),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
-    );
-    const data = await res.json();
-    setSettings(data);
-    setEdit(false);
+
+      const data = await response.json();
+      setSettings(data);
+      setEdit(false);
+    } catch (err) {
+      console.error("Error saving settings:", err);
+      setError(err.message);
+    }
   };
 
-  if (!settings && !edit)
+  if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
         <span className="ml-3 text-gray-600">Loading...</span>
       </div>
     );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="text-red-600">
+          <p className="font-medium">Error loading settings:</p>
+          <p className="text-sm">{error}</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

@@ -87,12 +87,22 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
   const fetchAgents = async () => {
     try {
       const response = await fetch(
-        `${API_BASE_URL}/client/agents?clientId=${currentClient}`
+        `${API_BASE_URL}/client/agents?clientId=${currentClient}`,
+        {
+          headers: {
+            Authorization: `Bearer ${sessionStorage.getItem("clienttoken")}`,
+          },
+        }
       );
-      const data = await response.json();
-      setAgents(data);
+      const result = await response.json();
+      if (result.success && result.data) {
+        setAgents(result.data);
+      } else {
+        setAgents([]);
+      }
     } catch (error) {
       console.error("Error fetching agents:", error);
+      setAgents([]);
     }
   };
 
@@ -145,7 +155,7 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
           <div className="h-full flex flex-col">
             <div className="bg-white border-b border-gray-200 px-8 py-6">
               <h2 className="text-3xl font-bold text-gray-900 mb-4">
-               About Us
+                About Us
               </h2>
               <p className="text-gray-600 text-lg">
                 Welcome to your AiTota Dashboard
@@ -405,7 +415,11 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
         return <PerformanceKPIs />;
 
       case "bond":
-        return <InBoundSection clientId={currentClient} />;
+        return (
+          <div className="h-full p-8">
+            <InBoundSection clientId={currentClient} />
+          </div>
+        );
 
       case "outbound":
         return <OutboundSection clientId={currentClient} />;
@@ -554,7 +568,7 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
           </nav>
 
           <div className="p-4">
-          <button
+            <button
               className={`flex items-center w-full px-6 py-4 text-left transition-all duration-200 gap-3 ${
                 activeSection === "about"
                   ? "bg-black text-white border-r-4 border-white"
@@ -576,7 +590,7 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
         </aside>
 
         {/* Main Content */}
-        <main className="flex-1 flex flex-col overflow-hidden bg-white">
+        <main className="flex-1 flex flex-col bg-white">
           {renderMainContent()}
         </main>
       </div>

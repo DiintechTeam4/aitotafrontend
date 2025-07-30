@@ -33,9 +33,9 @@ const InBoundSection = ({ clientId }) => {
   ];
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+    <div className="h-full flex flex-col bg-white rounded-lg shadow-sm border border-gray-200">
       {/* Tab Navigation */}
-      <div className="border-b border-gray-200">
+      <div className="border-b border-gray-200 flex-shrink-0">
         <nav className="flex space-x-8 px-6" aria-label="Tabs">
           {tabs.map((tab) => (
             <button
@@ -55,7 +55,7 @@ const InBoundSection = ({ clientId }) => {
       </div>
 
       {/* Tab Content */}
-      <div className="p-6">
+      <div className="flex-1 overflow-y-auto p-6">
         {activeTab === "report" && <InboundReport clientId={clientId} />}
         {activeTab === "logs" && <InboundLogs clientId={clientId} />}
         {activeTab === "leads" && <InboundLeads clientId={clientId} />}
