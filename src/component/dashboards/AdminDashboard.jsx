@@ -297,6 +297,7 @@ const AdminDashboard = ({ user, onLogout }) => {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("admintoken")}`,
         },
         body: JSON.stringify({
           ...newClient,

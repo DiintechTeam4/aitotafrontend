@@ -72,12 +72,55 @@ const ApprovalFormDetails = ({ clientId, onClose, onApprove }) => {
       );
 
       if (!profileResponse.ok) {
-        const errorData = await profileResponse.json();
-        throw new Error(errorData.message || "Failed to fetch client profile");
-      }
+        // Profile not found, get client data from admin endpoint
+        const clientResponse = await fetch(
+          `${API_BASE_URL}/admin/getclientbyid/${clientId}`,
+          {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${adminToken}`,
+              "Content-Type": "application/json",
+            },
+          }
+        );
 
-      const data = await profileResponse.json();
-      setClientData(data.profile); // Use the profile object from the response
+        if (!clientResponse.ok) {
+          throw new Error("Failed to fetch client data");
+        }
+
+        const clientData = await clientResponse.json();
+
+        if (clientData.success && clientData.data) {
+          const client = clientData.data;
+
+          // Check if it's a Google user
+          if (client.isGoogleUser === true) {
+            setError("No profile found for Google user");
+            setClientData(null);
+          } else {
+            // Use client model data for non-Google users
+            console.log("Client model data received:", client);
+            console.log("Client isApproved value:", client.isApproved);
+            console.log(
+              "Client isprofileCompleted value:",
+              client.isprofileCompleted
+            );
+            setClientData(client);
+          }
+        } else {
+          throw new Error("Invalid client data received");
+        }
+      } else {
+        // Profile found, use it
+        const data = await profileResponse.json();
+        console.log("Profile data received:", data.profile);
+        console.log("Profile isApproved value:", data.profile?.isApproved);
+        console.log(
+          "Profile isprofileCompleted value:",
+          data.profile?.isprofileCompleted
+        );
+        setClientData(data.profile); // Use the profile object from the response
+      }
     } catch (err) {
       console.error("Error fetching client profile:", err);
       setError(err.message || "Failed to fetch client profile");
@@ -146,7 +189,7 @@ const ApprovalFormDetails = ({ clientId, onClose, onApprove }) => {
         <div className="text-center max-w-md mx-auto p-6">
           <div className="text-red-500 text-6xl mb-4">⚠️</div>
           <h2 className="text-xl font-semibold text-gray-800 mb-2">
-            Error Loading Profile
+            No Profile Found
           </h2>
           <p className="text-gray-600 mb-4">{error}</p>
           <button
@@ -190,65 +233,114 @@ const ApprovalFormDetails = ({ clientId, onClose, onApprove }) => {
         {clientData && (
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Name */}
               <div>
                 <label className="block text-sm font-medium text-gray-500 mb-1">
-                  address
+                  Name
                 </label>
                 <p className="text-lg font-medium text-gray-900">
-                  {clientData.address || "Not provided"}
+                  {clientData.name || clientData.contactName || "Not provided"}
                 </p>
               </div>
+
+              {/* Business Name */}
               <div>
                 <label className="block text-sm font-medium text-gray-500 mb-1">
-                  annualTurnover
-                </label>
-                <p className="text-lg font-medium text-gray-900">
-                  {clientData.annualTurnover || "Not provided"}
-                </p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-500 mb-1">
-                  businessName
+                  Business Name
                 </label>
                 <p className="text-lg font-medium text-gray-900">
                   {clientData.businessName || "Not provided"}
                 </p>
               </div>
+
+              {/* Mobile Number */}
               <div>
                 <label className="block text-sm font-medium text-gray-500 mb-1">
-                  businessType
+                  Mobile Number
                 </label>
                 <p className="text-lg font-medium text-gray-900">
-                  {clientData.businessType || "Not provided"}
+                  {clientData.mobileNo ||
+                    clientData.contactNumber ||
+                    "Not provided"}
                 </p>
               </div>
+
+              {/* GST Number */}
               <div>
                 <label className="block text-sm font-medium text-gray-500 mb-1">
-                  clientId
+                  GST Number
                 </label>
                 <p className="text-lg font-medium text-gray-900">
-                  {clientData.clientId || "Not provided"}
+                  {clientData.gstNo || clientData.gst || "Not provided"}
                 </p>
               </div>
+
+              {/* PAN Number */}
               <div>
                 <label className="block text-sm font-medium text-gray-500 mb-1">
-                  contactName
+                  PAN Number
                 </label>
                 <p className="text-lg font-medium text-gray-900">
-                  {clientData.contactName || "Not provided"}
+                  {clientData.panNo || clientData.pancard || "Not provided"}
                 </p>
               </div>
+
+              {/* Address */}
               <div>
                 <label className="block text-sm font-medium text-gray-500 mb-1">
-                  contactNumber
+                  Address
                 </label>
                 <p className="text-lg font-medium text-gray-900">
-                  {clientData.contactNumber || "Not provided"}
+                  {clientData.address || "Not provided"}
                 </p>
               </div>
+
+              {/* City */}
               <div>
                 <label className="block text-sm font-medium text-gray-500 mb-1">
-                  createdAt
+                  City
+                </label>
+                <p className="text-lg font-medium text-gray-900">
+                  {clientData.city || "Not provided"}
+                </p>
+              </div>
+
+              {/* Pincode */}
+              <div>
+                <label className="block text-sm font-medium text-gray-500 mb-1">
+                  Pincode
+                </label>
+                <p className="text-lg font-medium text-gray-900">
+                  {clientData.pincode || "Not provided"}
+                </p>
+              </div>
+
+              {/* Website */}
+              <div>
+                <label className="block text-sm font-medium text-gray-500 mb-1">
+                  Website
+                </label>
+                <p className="text-lg font-medium text-gray-900">
+                  {clientData.websiteUrl ||
+                    clientData.website ||
+                    "Not provided"}
+                </p>
+              </div>
+
+              {/* User ID */}
+              <div>
+                <label className="block text-sm font-medium text-gray-500 mb-1">
+                  User ID
+                </label>
+                <p className="text-lg font-medium text-gray-900">
+                  {clientData.userId || clientData.clientId || "Not provided"}
+                </p>
+              </div>
+
+              {/* Created At */}
+              <div>
+                <label className="block text-sm font-medium text-gray-500 mb-1">
+                  Created At
                 </label>
                 <p className="text-lg font-medium text-gray-900">
                   {clientData.createdAt
@@ -256,48 +348,25 @@ const ApprovalFormDetails = ({ clientId, onClose, onApprove }) => {
                     : "Not provided"}
                 </p>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-500 mb-1">
-                  gst
-                </label>
-                <p className="text-lg font-medium text-gray-900">
-                  {clientData.gst || "Not provided"}
-                </p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-500 mb-1">
-                  Profile Completed
-                </label>
-                <p className="text-lg font-medium text-gray-900">
-                  {clientData.isProfileCompleted ? "true" : "false"}
-                </p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-500 mb-1">
-                  pancard
-                </label>
-                <p className="text-lg font-medium text-gray-900">
-                  {clientData.pancard || "Not provided"}
-                </p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-500 mb-1">
-                  updatedAt
-                </label>
-                <p className="text-lg font-medium text-gray-900">
-                  {clientData.updatedAt
-                    ? new Date(clientData.updatedAt).toLocaleString()
-                    : "Not provided"}
-                </p>
-              </div>
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-500 mb-1">
-                  website
-                </label>
-                <p className="text-lg font-medium text-gray-900">
-                  {clientData.website || "Not provided"}
-                </p>
-              </div>
+
+              {/* Business Logo URL */}
+              {clientData.businessLogoUrl && (
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-500 mb-1">
+                    Business Logo
+                  </label>
+                  <div className="flex items-center space-x-3">
+                    {clientData.businessLogoUrl && (
+                      <img
+                        src={clientData.businessLogoUrl}
+                        alt="Business Logo"
+                        className="w-16 h-16 object-cover rounded-md border"
+                      />
+                    )}
+                    <p className="text-sm text-gray-600">Logo URL available</p>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -306,30 +375,34 @@ const ApprovalFormDetails = ({ clientId, onClose, onApprove }) => {
             Review Decision
           </h2>
           <div className="flex justify-end space-x-4">
-            <button
-              onClick={onClose}
-              className="px-6 py-3 bg-gray-500 text-white rounded-md hover:bg-gray-600 transition-colors flex items-center"
-            >
-              <FaX className="mr-2" />
-              Reject
-            </button>
-            <button
-              onClick={handleApprove}
-              disabled={approving}
-              className="px-6 py-3 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors flex items-center disabled:opacity-50"
-            >
-              {approving ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                  Approving...
-                </>
-              ) : (
-                <>
-                  <FaCheck className="mr-2" />
-                  Approve Client
-                </>
-              )}
-            </button>
+            {clientData?.isApproved ? (
+              // Show Already Approved button when client is approved
+              <button
+                disabled
+                className="px-6 py-3 bg-green-500 text-white rounded-md flex items-center cursor-not-allowed"
+              >
+                Already Approved
+              </button>
+            ) : (
+              // Show Approve button when conditions are not met
+              <button
+                onClick={handleApprove}
+                disabled={approving}
+                className="px-6 py-3 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors flex items-center disabled:opacity-50"
+              >
+                {approving ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Approving...
+                  </>
+                ) : (
+                  <>
+                    <FaCheck className="mr-2" />
+                    Approve Client
+                  </>
+                )}
+              </button>
+            )}
           </div>
         </div>
       </div>
