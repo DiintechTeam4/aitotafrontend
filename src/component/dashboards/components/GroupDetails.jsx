@@ -1,5 +1,13 @@
 import { useState, useEffect } from "react";
-import { FiX, FiPlus, FiUser, FiPhone, FiMail, FiTrash2 } from "react-icons/fi";
+import {
+  FiX,
+  FiPlus,
+  FiUser,
+  FiPhone,
+  FiMail,
+  FiTrash2,
+  FiChevronDown,
+} from "react-icons/fi";
 
 function GroupDetails({ groupId, onBack }) {
   const [group, setGroup] = useState(null);
@@ -12,6 +20,10 @@ function GroupDetails({ groupId, onBack }) {
     phone: "",
     email: "",
   });
+  const [agents, setAgents] = useState([]);
+  const [selectedAgentIds, setSelectedAgentIds] = useState([]);
+  const [showAgentDropdown, setShowAgentDropdown] = useState(false);
+  const [loadingAgents, setLoadingAgents] = useState(false);
 
   // API base URL
   const API_BASE = "http://localhost:4000/api/v1/client";
@@ -52,7 +64,22 @@ function GroupDetails({ groupId, onBack }) {
 
   useEffect(() => {
     fetchGroupDetails();
+    fetchAgents();
   }, [groupId]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (showAgentDropdown && !event.target.closest(".agent-dropdown")) {
+        setShowAgentDropdown(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [showAgentDropdown]);
 
   const fetchGroupDetails = async () => {
     try {
@@ -95,6 +122,33 @@ function GroupDetails({ groupId, onBack }) {
       setContacts([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchAgents = async () => {
+    try {
+      setLoadingAgents(true);
+      const token = sessionStorage.getItem("clienttoken");
+
+      const response = await fetch(`${API_BASE}/agents`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      const result = await response.json();
+      if (result.success) {
+        setAgents(result.data || []);
+      } else {
+        console.error("Failed to fetch agents:", result.error);
+        setAgents([]);
+      }
+    } catch (error) {
+      console.error("Error fetching agents:", error);
+      setAgents([]);
+    } finally {
+      setLoadingAgents(false);
     }
   };
 
@@ -181,6 +235,45 @@ function GroupDetails({ groupId, onBack }) {
       } finally {
         setLoading(false);
       }
+    }
+  };
+
+  const handleAgentSelection = (agentId) => {
+    setSelectedAgentIds((prev) => {
+      if (prev.includes(agentId)) {
+        return prev.filter((id) => id !== agentId);
+      } else {
+        return [...prev, agentId];
+      }
+    });
+  };
+
+  const handleSaveAgentIds = async () => {
+    try {
+      const token = sessionStorage.getItem("clienttoken");
+
+      const response = await fetch(`${API_BASE}/groups/${groupId}`, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          agentIds: selectedAgentIds,
+        }),
+      });
+
+      const result = await response.json();
+      if (result.success) {
+        alert("Agent IDs saved successfully!");
+        setShowAgentDropdown(false);
+      } else {
+        console.error("Failed to save agent IDs:", result.error);
+        alert("Failed to save agent IDs: " + result.error);
+      }
+    } catch (error) {
+      console.error("Error saving agent IDs:", error);
+      alert("Error saving agent IDs");
     }
   };
 
@@ -292,6 +385,94 @@ function GroupDetails({ groupId, onBack }) {
         <div className="flex justify-between items-center mb-6">
           <h3 className="text-xl font-semibold text-gray-800">Contacts</h3>
           <div className="flex gap-3">
+            {/* Agent Selection Dropdown */}
+            <div className="relative agent-dropdown">
+              <button
+                onClick={() => setShowAgentDropdown(!showAgentDropdown)}
+                className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors flex items-center gap-2"
+                disabled={loadingAgents}
+              >
+                <FiPlus className="text-sm" />
+                {loadingAgents ? "Loading..." : "Add Agents"}
+                <FiChevronDown className="text-sm" />
+              </button>
+
+              {showAgentDropdown && (
+                <div className="absolute right-0 mt-2 w-80 bg-white border border-gray-200 rounded-lg shadow-lg z-10 max-h-96 overflow-y-auto">
+                  <div className="p-4 border-b border-gray-200">
+                    <h4 className="font-semibold text-gray-800 mb-2">
+                      Select Agents
+                    </h4>
+                    <p className="text-sm text-gray-600">
+                      Choose agents to assign to this group
+                    </p>
+                  </div>
+
+                  <div className="p-4">
+                    {agents.length === 0 ? (
+                      <div className="text-center py-4 text-gray-500">
+                        {loadingAgents
+                          ? "Loading agents..."
+                          : "No agents available"}
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {agents.map((agent) => (
+                          <label
+                            key={agent._id}
+                            className="flex items-center space-x-3 p-2 hover:bg-gray-50 rounded cursor-pointer"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={selectedAgentIds.includes(agent._id)}
+                              onChange={() => handleAgentSelection(agent._id)}
+                              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            />
+                            <div className="flex-1">
+                              <div className="font-medium text-gray-800">
+                                {agent.agentName}
+                              </div>
+                              <div className="text-sm text-gray-500">
+                                {agent.description}
+                              </div>
+                            </div>
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {agents.length > 0 && (
+                    <div className="p-4 border-t border-gray-200 bg-gray-50">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-600">
+                          {selectedAgentIds.length} agent(s) selected
+                        </span>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => {
+                              setSelectedAgentIds([]);
+                              setShowAgentDropdown(false);
+                            }}
+                            className="px-3 py-1 text-sm bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            onClick={handleSaveAgentIds}
+                            className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                            disabled={selectedAgentIds.length === 0}
+                          >
+                            Save ({selectedAgentIds.length})
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
             <button
               onClick={() => setShowAddContactForm(true)}
               className="px-4 py-2 bg-black text-white rounded hover:bg-gray-800 transition-colors flex items-center gap-2"

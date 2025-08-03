@@ -15,7 +15,7 @@ const InboundSettings = ({ clientId }) => {
         setError(null);
 
         const response = await fetch(
-          `${API_BASE_URL}/client/inbound/settings`,
+          `${API_BASE_URL}/client/agents`,
           {
             headers: {
               Authorization: `Bearer ${sessionStorage.getItem("clienttoken")}`,
@@ -50,7 +50,7 @@ const InboundSettings = ({ clientId }) => {
       setError(null);
 
       const response = await fetch(
-        `${API_BASE_URL}/client/inbound/settings`,
+        `${API_BASE_URL}/client/agents`,
         {
           method: "PUT",
           headers: {

@@ -9,6 +9,7 @@ const LoginForm = ({ userType, onLogin, switchToRegister }) => {
   const [formData, setFormData] = useState({
     email: "",
     password: "",
+    clientEmail: "",
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -40,40 +41,29 @@ const LoginForm = ({ userType, onLogin, switchToRegister }) => {
       console.log("Google login success:", decoded);
       console.log("google token", credentialResponse.credential);
       let response; // <-- declare response here
-      // This endpoint will handle both client and user types based on userType prop
-      if (userType === "client") {
-        const endpoint = `${API_BASE_URL}/${userType}/google-login`;
-        response = await axios.post(endpoint, {
-          token: credentialResponse.credential,
-        });
-        console.log("Server response:", response.data);
-      }
-      if (userType === "user") {
-        const endpoint = `${API_BASE_URL}/clients/CLI6781413BO1/mobile/${userType}/google-login`;
-        response = await axios.post(endpoint, {
-          token: credentialResponse.credential,
-        });
-        console.log("Server response:", response.data);
-      }
+      // Use single endpoint for all Google logins - backend will auto-detect user type
+      const endpoint = `${API_BASE_URL}/client/google-login`;
+      response = await axios.post(endpoint, {
+        token: credentialResponse.credential,
+      });
+      console.log("Server response:", response.data);
 
       if (!response.data.success) {
         throw new Error(response.data.message || "Login failed");
       }
 
-      // Structure the data for the app to consume
+      // Structure the data for the app to consume - backend auto-detects user type
       const loginData = {
-        token: response.data.token, // FIXED: use the correct field
-        role: userType,
-        name:
-          response.data.user?.name ||
-          response.data.client?.name ||
-          decoded.name,
-        email:
-          response.data.user?.email ||
-          response.data.client?.email ||
-          decoded.email,
-        clientId: response.data.client?._id || response.data.client?.userId || response.data.clientId || decoded.clientId,
-        id: response.data?.id || response.data.client?.id || response.data.client?._id || response.id,
+        token: response.data.token,
+        role: response.data.userType, // Use the userType from backend response
+        name: response.data.name,
+        email: response.data.email,
+        clientId: response.data.id,
+        clientEmail: response.data.client?.email,
+        mobileNo: response.data.mobileNumber || response.data.mobileNo,
+        id: response.data.id,
+        isApproved: response.data.isApproved,
+        isprofileCompleted: response.data.isprofileCompleted,
       };
 
       // Call the onLogin function with the properly structured data
@@ -108,13 +98,22 @@ const LoginForm = ({ userType, onLogin, switchToRegister }) => {
         case "client":
           endpoint = "client/login";
           break;
+        case "HumanAgent":
+          endpoint = "client/human-agent/login";
+          break;
         default:
           throw new Error("Invalid user type");
       }
 
+      // For human agent login, we need to send email and clientEmail
+      const requestData =
+        userType === "HumanAgent"
+          ? { email: formData.email, clientEmail: formData.clientEmail }
+          : formData;
+
       const response = await axios.post(
         `${API_BASE_URL}/${endpoint}`,
-        formData
+        requestData
       );
 
       if (!response.data.success) {
@@ -125,15 +124,33 @@ const LoginForm = ({ userType, onLogin, switchToRegister }) => {
       const loginData = {
         token: response.data.token,
         role: userType,
-        name: response.data.user?.name || response.data.client?.name,
-        email: response.data.user?.email || response.data.client?.email,
+        name:
+          userType === "HumanAgent"
+            ? response.data.humanAgent?.humanAgentName
+            : response.data.user?.name || response.data.client?.name,
+        email:
+          userType === "HumanAgent"
+            ? response.data.humanAgent?.email
+            : response.data.user?.email || response.data.client?.email,
         clientId:
-          response.data.client?._id ||
-          response.data.client?.userId ||
-          response.data.user?.clientId,
-        mobileNo: response.data.client?.mobileNo,
+          userType === "HumanAgent"
+            ? response.data.humanAgent?.clientId
+            : response.data.client?._id ||
+              response.data.client?.userId ||
+              response.data.user?.clientId,
+        mobileNo:
+          userType === "HumanAgent"
+            ? response.data.humanAgent?.mobileNumber
+            : response.data.client?.mobileNo,
+        clientEmail:
+          userType === "HumanAgent"
+            ? response.data.client?.email
+            : response.data.client?.email,
         address: response.data.client?.address,
-        id: response.data.user?._id || response.data.client?._id,
+        id:
+          userType === "HumanAgent"
+            ? response.data.humanAgent?._id
+            : response.data.user?._id || response.data.client?._id,
       };
 
       // Call the onLogin function with the properly structured data
@@ -153,32 +170,59 @@ const LoginForm = ({ userType, onLogin, switchToRegister }) => {
   return (
     <div className="space-y-6">
       {/* Google Sign In Button */}
-      <div className="flex flex-col items-center mb-6">
-        <div className="mb-4 w-full">
-          <p className="text-center text-gray-600 mb-4">
-            Sign in to{" "}
-            {userType === "user" ? "User Account" : "Business Account"} with
-            Google
-          </p>
-          <div className="flex justify-center">
-            <GoogleLogin
-              onSuccess={handleGoogleSuccess}
-              onError={handleGoogleError}
-              useOneTap
-              text="signin_with"
-              theme="filled_blue"
-              shape="rectangular"
-              size="large"
-              logo_alignment="center"
-            />
+      {userType === "HumanAgent" ? (
+        <div className="flex flex-col items-center mb-6">
+          <div className="mb-4 w-full">
+            <p className="text-center text-gray-600 mb-4">
+              Sign in to Human Agent Account with Google
+            </p>
+            <div className="flex justify-center">
+              <GoogleLogin
+                onSuccess={handleGoogleSuccess}
+                onError={handleGoogleError}
+                useOneTap
+                text="signin_with"
+                theme="filled_blue"
+                shape="rectangular"
+                size="large"
+                logo_alignment="center"
+              />
+            </div>
+          </div>
+          <div className="w-full flex items-center justify-center my-4">
+            <div className="flex-1 border-t border-gray-300"></div>
+            <span className="px-4 text-gray-500 text-sm">OR</span>
+            <div className="flex-1 border-t border-gray-300"></div>
           </div>
         </div>
-        <div className="w-full flex items-center justify-center my-4">
-          <div className="flex-1 border-t border-gray-300"></div>
-          <span className="px-4 text-gray-500 text-sm">OR</span>
-          <div className="flex-1 border-t border-gray-300"></div>
+      ) : (
+        <div className="flex flex-col items-center mb-6">
+          <div className="mb-4 w-full">
+            <p className="text-center text-gray-600 mb-4">
+              Sign in to{" "}
+              {userType === "user" ? "User Account" : "Business Account"} with
+              Google
+            </p>
+            <div className="flex justify-center">
+              <GoogleLogin
+                onSuccess={handleGoogleSuccess}
+                onError={handleGoogleError}
+                useOneTap
+                text="signin_with"
+                theme="filled_blue"
+                shape="rectangular"
+                size="large"
+                logo_alignment="center"
+              />
+            </div>
+          </div>
+          <div className="w-full flex items-center justify-center my-4">
+            <div className="flex-1 border-t border-gray-300"></div>
+            <span className="px-4 text-gray-500 text-sm">OR</span>
+            <div className="flex-1 border-t border-gray-300"></div>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Regular Login Form */}
       <form onSubmit={handleSubmit}>
@@ -195,19 +239,39 @@ const LoginForm = ({ userType, onLogin, switchToRegister }) => {
             className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
           />
         </div>
-        <div className="mb-6">
-          <label className="block text-gray-700 text-sm font-bold mb-2 flex items-center">
-            <FaLock className="mr-2" /> Password
-          </label>
-          <input
-            type="password"
-            name="password"
-            value={formData.password}
-            onChange={handleChange}
-            required
-            className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-          />
-        </div>
+
+        {userType === "HumanAgent" && (
+          <div className="mb-4">
+            <label className="block text-gray-700 text-sm font-bold mb-2 flex items-center">
+              <FaEnvelope className="mr-2" /> Client Email
+            </label>
+            <input
+              type="email"
+              name="clientEmail"
+              value={formData.clientEmail}
+              onChange={handleChange}
+              required
+              placeholder="Enter your Client's Email"
+              className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+            />
+          </div>
+        )}
+
+        {userType !== "HumanAgent" && (
+          <div className="mb-6">
+            <label className="block text-gray-700 text-sm font-bold mb-2 flex items-center">
+              <FaLock className="mr-2" /> Password
+            </label>
+            <input
+              type="password"
+              name="password"
+              value={formData.password}
+              onChange={handleChange}
+              required
+              className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+            />
+          </div>
+        )}
 
         {error && (
           <div className="mb-4 p-2 bg-red-100 border border-red-400 text-red-700 rounded">
@@ -254,7 +318,9 @@ const LoginForm = ({ userType, onLogin, switchToRegister }) => {
             onClick={switchToRegister}
             className="inline-block align-baseline font-bold text-sm text-blue-500 hover:text-blue-800"
           >
-            Don't have an account? Register
+            {userType === "HumanAgent"
+              ? "Contact your administrator to register your email"
+              : "Don't have an account? Register"}
           </button>
         </div>
       </form>

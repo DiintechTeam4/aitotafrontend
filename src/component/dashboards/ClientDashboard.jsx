@@ -9,6 +9,8 @@ import {
   FiUsers,
   FiEye,
   FiInfo,
+  FiUserX,
+  FiUserCheck,
 } from "react-icons/fi";
 import AgentForm from "./components/AgentForm";
 import AgentList from "./components/AgentList";
@@ -16,6 +18,7 @@ import ApiKeyManager from "./components/ApiKeyManager";
 import ClientSelector from "./components/ClientSelector";
 import InBoundSection from "./components/InBoundSection";
 import OutboundSection from "./components/OutboundSection";
+import HumanAgents from './components/HumanAgents';
 import ApprovalForm from "./components/ApprovalForm";
 import PerformanceKPIs from "./components/PerformanceKPIs";
 import { API_BASE_URL } from "../../config";
@@ -424,6 +427,9 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
       case "outbound":
         return <OutboundSection clientId={currentClient} />;
 
+      case "human_agent":
+        return <HumanAgents />;
+
       default:
         return <div>Select a section from the sidebar</div>;
     }
@@ -539,7 +545,7 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
               onClick={() => handleSectionChange("agents")}
             >
               <FiUsers className="text-xl w-6 text-center" />
-              <span className="flex-1 font-medium">Agents</span>
+              <span className="flex-1 font-medium">AI Agents</span>
             </button>
 
             <button
@@ -564,6 +570,18 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
             >
               <FiSend className="text-xl w-6 text-center" />
               <span className="flex-1 font-medium">Outbound</span>
+            </button>
+
+            <button
+              className={`flex items-center w-full px-6 py-4 text-left transition-all duration-200 gap-3 ${
+                activeSection === "human_agent"
+                  ? "bg-black text-white border-r-4 border-white"
+                  : "text-gray-300 hover:bg-gray-800 hover:text-white"
+              }`}
+              onClick={() => handleSectionChange("human_agent")}
+            >
+              <FiUserCheck className="text-xl w-6 text-center" />
+              <span className="flex-1 font-medium">Human Agent</span>
             </button>
           </nav>
 

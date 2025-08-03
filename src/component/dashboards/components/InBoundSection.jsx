@@ -21,13 +21,13 @@ const InBoundSection = ({ clientId }) => {
     },
     {
       id: "logs",
-      label: "Logs/Conversation",
+      label: "Conversation",
       icon: <FiMessageSquare className="w-4 h-4" />,
     },
     { id: "leads", label: "Leads", icon: <FiUsers className="w-4 h-4" /> },
     {
       id: "settings",
-      label: "Settings",
+      label: "AI Agent Settings",
       icon: <FiSettings className="w-4 h-4" />,
     },
   ];

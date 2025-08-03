@@ -59,68 +59,84 @@ const ApprovalFormDetails = ({ clientId, onClose, onApprove }) => {
         throw new Error("No client token received");
       }
 
-      // Now use the client token to fetch the client profile
-      const profileResponse = await fetch(
-        `${API_BASE_URL}/auth/client/profile/${clientId}`,
+      // Get client data from admin endpoint (contains isApproved and isprofileCompleted flags)
+      const clientResponse = await fetch(
+        `${API_BASE_URL}/admin/getclientbyid/${clientId}`,
         {
           method: "GET",
           headers: {
-            Authorization: `Bearer ${clientToken}`,
+            Authorization: `Bearer ${adminToken}`,
             "Content-Type": "application/json",
           },
         }
       );
 
-      if (!profileResponse.ok) {
-        // Profile not found, get client data from admin endpoint
-        const clientResponse = await fetch(
-          `${API_BASE_URL}/admin/getclientbyid/${clientId}`,
+      if (!clientResponse.ok) {
+        throw new Error("Failed to fetch client data");
+      }
+
+      const clientDataResult = await clientResponse.json();
+
+      if (!clientDataResult.success || !clientDataResult.data) {
+        throw new Error("Invalid client data received");
+      }
+
+      const client = clientDataResult.data;
+      console.log("Client model data received:", client);
+      console.log("Client isApproved value:", client.isApproved);
+      console.log(
+        "Client isprofileCompleted value:",
+        client.isprofileCompleted
+      );
+
+      // Try to get profile data if it exists
+      let profileData = null;
+      try {
+        const profileResponse = await fetch(
+          `${API_BASE_URL}/auth/client/profile/${clientId}`,
           {
             method: "GET",
             headers: {
-              Authorization: `Bearer ${adminToken}`,
+              Authorization: `Bearer ${clientToken}`,
               "Content-Type": "application/json",
             },
           }
         );
 
-        if (!clientResponse.ok) {
-          throw new Error("Failed to fetch client data");
+        if (profileResponse.ok) {
+          const profileResult = await profileResponse.json();
+          profileData = profileResult.profile;
+          console.log("Profile data received:", profileData);
         }
-
-        const clientData = await clientResponse.json();
-
-        if (clientData.success && clientData.data) {
-          const client = clientData.data;
-
-          // Check if it's a Google user
-          if (client.isGoogleUser === true) {
-            setError("No profile found for Google user");
-            setClientData(null);
-          } else {
-            // Use client model data for non-Google users
-            console.log("Client model data received:", client);
-            console.log("Client isApproved value:", client.isApproved);
-            console.log(
-              "Client isprofileCompleted value:",
-              client.isprofileCompleted
-            );
-            setClientData(client);
-          }
-        } else {
-          throw new Error("Invalid client data received");
-        }
-      } else {
-        // Profile found, use it
-        const data = await profileResponse.json();
-        console.log("Profile data received:", data.profile);
-        console.log("Profile isApproved value:", data.profile?.isApproved);
+      } catch (profileError) {
         console.log(
-          "Profile isprofileCompleted value:",
-          data.profile?.isprofileCompleted
+          "Profile not found or error fetching profile:",
+          profileError.message
         );
-        setClientData(data.profile); // Use the profile object from the response
       }
+
+      // Combine client and profile data
+      const combinedData = {
+        // Client model data (contains approval flags)
+        ...client,
+        // Profile data (if exists)
+        ...(profileData && {
+          businessName: profileData.businessName || client.businessName,
+          contactName: profileData.contactName || client.name,
+          contactNumber: profileData.contactNumber || client.mobileNo,
+          pancard: profileData.pancard || client.panNo,
+          gst: profileData.gst || client.gstNo,
+          website: profileData.website || client.websiteUrl,
+          address: profileData.address || client.address,
+          city: profileData.city || client.city,
+          pincode: profileData.pincode || client.pincode,
+          state: profileData.state,
+          businessType: profileData.businessType,
+          annualTurnover: profileData.annualTurnover,
+        }),
+      };
+
+      setClientData(combinedData);
     } catch (err) {
       console.error("Error fetching client profile:", err);
       setError(err.message || "Failed to fetch client profile");

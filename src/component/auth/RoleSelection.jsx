@@ -2,12 +2,12 @@ import React from 'react';
 
 const RoleSelection = ({ onRoleSelect }) => {
   const roles = [
-    // {
-    //   id: 'user',
-    //   name: 'User',
-    //   description: 'User access (requires Client User ID, will be linked to a business)',
-    //   icon: '👤',
-    // },
+    {
+      id: 'HumanAgent',
+      name: 'Human Agent',
+      description: 'Human Agent access (requires Client User ID, will be linked to a business)',
+      icon: '👤',
+    },
     {
       id: 'client',
       name: 'Client',

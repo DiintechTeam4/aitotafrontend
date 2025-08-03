@@ -29,7 +29,7 @@ const VoiceSynthesizer = ({
         `${API_BASE_URL}/client/voice/synthesize?clientId=${clientId}`,
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json" , Authorization: `Bearer ${sessionStorage.getItem("clienttoken")}`},
           body: JSON.stringify({ text, language, speaker }),
         }
       );

@@ -324,7 +324,7 @@ const RegisterForm = ({ userType, onSuccess, switchToLogin }) => {
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {userType === 'user' && renderUserFields()}
-        {/* {userType === 'admin' && renderAdminFields()} */}
+        {userType === 'HumanAgent' && renderHumanAgentFields()}
         {userType === 'client' && renderClientFields()}
 
         {error && (

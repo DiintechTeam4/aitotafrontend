@@ -3,6 +3,7 @@ import { Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import AuthLayout from "./component/auth/AuthLayout";
 import UserDashboard from "./component/dashboards/UserDashboard";
 import ClientDashboard from "./component/dashboards/ClientDashboard";
+import HumanAgentDashboard from "./component/dashboards/HumanAgentDashboard";
 
 const User = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -37,9 +38,13 @@ const User = () => {
           setUserRole(parsedData.role);
 
           // Navigate based on role
+          console.log("Initializing auth with role:", parsedData.role);
           if (parsedData.role === "client") {
             navigate("/auth/dashboard");
           } else if (parsedData.role === "user") {
+            navigate("/auth/dashboard");
+          } else if (parsedData.role === "humanAgent") {
+            console.log("HumanAgent detected, navigating to dashboard");
             navigate("/auth/dashboard");
           }
         } catch (error) {
@@ -62,6 +67,7 @@ const User = () => {
     sessionStorage.removeItem("clienttoken");
     localStorage.removeItem("userData");
     sessionStorage.removeItem("userData");
+    sessionStorage.removeItem("clientData");
     setIsAuthenticated(false);
     setUserRole(null);
     setIsLoading(false);
@@ -80,6 +86,21 @@ const User = () => {
           name: loginData.name,
           email: loginData.email,
           clientId: loginData.clientId || loginData.id || loginData._id, // Add fallbacks for clientId
+        })
+      );
+    } else if (loginData.role === "HumanAgent") {
+      console.log("Storing HumanAgent data in localStorage:", loginData);
+      localStorage.setItem("usertoken", loginData.token);
+      localStorage.setItem(
+        "userData",
+        JSON.stringify({
+          role: loginData.role,
+          name: loginData.name,
+          email: loginData.email,
+          clientId: loginData.clientId,
+          clientEmail: loginData.clientEmail,
+          mobileNo: loginData.mobileNo,
+          id: loginData.id,
         })
       );
     } else {
@@ -130,23 +151,87 @@ const User = () => {
         {isAuthenticated ? (
           <>
             {userRole === "user" && (
-              <Route
-                path="/dashboard"
-                element={<UserDashboard onLogout={handleLogout} />}
-              />
+              <>
+                <Route
+                  path="/dashboard"
+                  element={<UserDashboard onLogout={handleLogout} />}
+                />
+                <Route
+                  path="/auth/dashboard"
+                  element={<UserDashboard onLogout={handleLogout} />}
+                />
+              </>
             )}
             {userRole === "client" && (
-              <Route
-                path="/dashboard"
-                element={
-                  <ClientDashboard
-                    onLogout={handleLogout}
-                    clientId={
-                      JSON.parse(sessionStorage.getItem("clientData"))?.clientId
-                    }
-                  />
-                }
-              />
+              <>
+                <Route
+                  path="/dashboard"
+                  element={
+                    <ClientDashboard
+                      onLogout={handleLogout}
+                      clientId={
+                        JSON.parse(sessionStorage.getItem("clientData"))
+                          ?.clientId
+                      }
+                    />
+                  }
+                />
+                <Route
+                  path="/auth/dashboard"
+                  element={
+                    <ClientDashboard
+                      onLogout={handleLogout}
+                      clientId={
+                        JSON.parse(sessionStorage.getItem("clientData"))
+                          ?.clientId
+                      }
+                    />
+                  }
+                />
+              </>
+            )}
+            {(userRole === "HumanAgent" || userRole === "humanAgent") && (
+              <>
+                <Route
+                  path="/dashboard"
+                  element={
+                    <HumanAgentDashboard
+                      onLogout={handleLogout}
+                      userData={
+                        JSON.parse(localStorage.getItem("userData")) ||
+                        JSON.parse(sessionStorage.getItem("userData"))
+                      }
+                    />
+                  }
+                />
+                <Route
+                  path="/auth/dashboard"
+                  element={
+                    <HumanAgentDashboard
+                      onLogout={handleLogout}
+                      userData={(() => {
+                        const localData = localStorage.getItem("userData");
+                        console.log(
+                          "HumanAgentDashboard - localStorage data:",
+                          localData
+                        );
+
+                        if (localData) {
+                          const parsedData = JSON.parse(localData);
+                          console.log(
+                            "HumanAgentDashboard - parsed data:",
+                            parsedData
+                          );
+                          return parsedData;
+                        } else {
+                          console.error("No userData found in localStorage!");
+                          return null;
+                        }
+                      })()}
+                    />
+                  }
+                />
+              </>
             )}
           </>
         ) : (

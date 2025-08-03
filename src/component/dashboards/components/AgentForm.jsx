@@ -20,6 +20,8 @@ const AgentForm = ({ agent, onSave, onCancel, clientId }) => {
     voiceSelection: "abhilash",
     accountSid: "",
     serviceProvider: "",
+    callerId: "",
+    X_API_KEY: "",
     audioBase64: "",
   });
 
@@ -53,6 +55,8 @@ const AgentForm = ({ agent, onSave, onCancel, clientId }) => {
         voiceSelection: agent.voiceSelection || "abhilash",
         accountSid: agent.accountSid || "",
         serviceProvider: agent.serviceProvider || "",
+        callerId: agent.callerId || "",
+        X_API_KEY: agent.X_API_KEY || "",
         audioBase64: agent.audioBase64 || "",
       });
 
@@ -367,7 +371,7 @@ const AgentForm = ({ agent, onSave, onCancel, clientId }) => {
           htmlFor="category"
           className="block mb-2 font-semibold text-gray-700"
         >
-          Category
+          Expert Category
         </label>
         <select
           id="category"
@@ -376,7 +380,7 @@ const AgentForm = ({ agent, onSave, onCancel, clientId }) => {
           onChange={handleInputChange}
           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
         >
-          <option value="">Select Category</option>
+          <option value="">Select Expert Category</option>
           <option value="customer-service">Customer Service</option>
           <option value="sales">Sales</option>
           <option value="support">Technical Support</option>
@@ -604,6 +608,42 @@ const AgentForm = ({ agent, onSave, onCancel, clientId }) => {
             <option value="vonage">Vonage</option>
             <option value="aws">AWS Connect</option>
           </select>
+        </div>
+
+        <div>
+          <label
+            htmlFor="callerId"
+            className="block mb-2 font-semibold text-gray-700"
+          >
+            Caller ID
+          </label>
+          <input
+            type="text"
+            id="callerId"
+            name="callerId"
+            value={formData.callerId}
+            onChange={handleInputChange}
+            placeholder="Enter caller ID (phone number)"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors"
+          />
+        </div>
+
+        <div>
+          <label
+            htmlFor="X_API_KEY"
+            className="block mb-2 font-semibold text-gray-700"
+          >
+            X API Key
+          </label>
+          <input
+            type="password"
+            id="X_API_KEY"
+            name="X_API_KEY"
+            value={formData.X_API_KEY}
+            onChange={handleInputChange}
+            placeholder="Enter X API Key"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors"
+          />
         </div>
       </div>
     </div>

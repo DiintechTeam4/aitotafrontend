@@ -22,6 +22,7 @@ import {
   FaClipboardList,
 } from "react-icons/fa";
 import ApprovalFormDetails from "./components/ApprovalFormDetails";
+import HumanAgentManagement from "./components/HumanAgentManagement";
 
 const AdminDashboard = ({ user, onLogout }) => {
   const navigate = useNavigate();
@@ -58,6 +59,11 @@ const AdminDashboard = ({ user, onLogout }) => {
   const [businessLogoKey, setBusinessLogoKey] = useState("");
   const [showApprovalModal, setShowApprovalModal] = useState(false);
   const [reviewClientId, setReviewClientId] = useState(null);
+  const [showHumanAgentModal, setShowHumanAgentModal] = useState(false);
+  const [selectedClientForHumanAgent, setSelectedClientForHumanAgent] =
+    useState(null);
+  const [clientTokenForHumanAgent, setClientTokenForHumanAgent] =
+    useState(null);
 
   // Check if screen is mobile and handle resize events
   useEffect(() => {
@@ -389,6 +395,50 @@ const AdminDashboard = ({ user, onLogout }) => {
     }
   };
 
+  // Open Human Agent Management
+  const openHumanAgentManagement = async (clientId, clientName) => {
+    try {
+      setLoadingClientId(clientId);
+      console.log("Opening Human Agent Management for:", clientId);
+
+      // Get admin token from localStorage
+      const adminToken = localStorage.getItem("admintoken");
+      if (!adminToken) {
+        alert("Admin token not found. Please login again.");
+        return;
+      }
+
+      // Get client token first
+      const response = await fetch(
+        `${API_BASE_URL}/admin/get-client-token/${clientId}`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${adminToken}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to get client token");
+      }
+
+      const data = await response.json();
+      const clientToken = data.token;
+
+      // Set the client info and token for HumanAgent management
+      setSelectedClientForHumanAgent({ id: clientId, name: clientName });
+      setClientTokenForHumanAgent(clientToken);
+      setShowHumanAgentModal(true);
+      setLoadingClientId(null);
+    } catch (error) {
+      console.error("Error opening Human Agent Management:", error);
+      alert("Failed to open Human Agent Management. Please try again.");
+      setLoadingClientId(null);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Add Client Modal */}
@@ -635,6 +685,21 @@ const AdminDashboard = ({ user, onLogout }) => {
           onApprove={handleApproveClient}
         />
       )}
+
+      {/* Human Agent Management Modal */}
+      {showHumanAgentModal &&
+        selectedClientForHumanAgent &&
+        clientTokenForHumanAgent && (
+          <HumanAgentManagement
+            clientId={selectedClientForHumanAgent.id}
+            clientToken={clientTokenForHumanAgent}
+            onClose={() => {
+              setShowHumanAgentModal(false);
+              setSelectedClientForHumanAgent(null);
+              setClientTokenForHumanAgent(null);
+            }}
+          />
+        )}
 
       {/* Overlay for mobile when sidebar is open */}
       {isMobile && isSidebarOpen && (
@@ -957,7 +1022,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                                 <p>PAN: {client.panNo}</p>
                               </div>
                             </td>
-                            <td className="px-6 py-6 text-sm font-medium flex space-x-4 align-middle">
+                            <td className="px-6 py-6 text-sm font-medium flex flex-col space-y-2 align-middle">
                               <button
                                 onClick={() =>
                                   openClientLogin(
@@ -981,8 +1046,22 @@ const AdminDashboard = ({ user, onLogout }) => {
                                   ? "Logged In"
                                   : "Authenticate"}
                               </button>
+                              <button
+                                onClick={() =>
+                                  openHumanAgentManagement(
+                                    client._id,
+                                    client.name
+                                  )
+                                }
+                                disabled={loadingClientId === client._id}
+                                className="text-white px-4 py-2 rounded-md transition-colors align-middle bg-red-600 capitalize disabled:opacity-50"
+                              >
+                                {loadingClientId === client._id
+                                  ? "Loading..."
+                                  : "setting"}
+                              </button>
                             </td>
-                            <td className="px-6 py-6 text-sm font-medium align-middle text-center">
+                            <td className="px-6 py-6 text-sm font-medium align-middle text-center ">
                               <button
                                 className="w-28 px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600"
                                 onClick={() => {
