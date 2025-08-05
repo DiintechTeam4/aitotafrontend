@@ -93,7 +93,7 @@ const ApprovalFormDetails = ({ clientId, onClose, onApprove }) => {
       let profileData = null;
       try {
         const profileResponse = await fetch(
-          `${API_BASE_URL}/auth/client/profile/${clientId}`,
+          `${API_BASE_URL}/auth/client/profile/client/${clientId}`,
           {
             method: "GET",
             headers: {

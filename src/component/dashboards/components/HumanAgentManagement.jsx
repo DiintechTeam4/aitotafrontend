@@ -11,8 +11,10 @@ const HumanAgentManagement = ({ clientId, clientToken, onClose }) => {
     name: "",
     email: "",
     contactNumber: "",
-    did: "",
+    selectedAgents: [], // Array to store multiple selected agents
+    role: "executive",
   });
+  const [availableAgents, setAvailableAgents] = useState([]);
 
   // Fetch human agents
   const fetchHumanAgents = async () => {
@@ -31,12 +33,34 @@ const HumanAgentManagement = ({ clientId, clientToken, onClose }) => {
       }
 
       const data = await response.json();
+      console.log("Human agents data:", data.data);
       setHumanAgents(data.data || []);
     } catch (error) {
       console.error("Error fetching human agents:", error);
       alert("Failed to fetch human agents");
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Fetch available agents for dropdown
+  const fetchAvailableAgents = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/client/agents`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${clientToken}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log("Available agents data:", data.data);
+        setAvailableAgents(data.data || []);
+      }
+    } catch (error) {
+      console.error("Error fetching available agents:", error);
     }
   };
 
@@ -53,7 +77,8 @@ const HumanAgentManagement = ({ clientId, clientToken, onClose }) => {
           humanAgentName: formData.name,
           email: formData.email,
           mobileNumber: formData.contactNumber,
-          did: formData.did,
+          agentIds: formData.selectedAgents, // Use selectedAgents array
+          role: formData.role,
         };
 
         const response = await fetch(
@@ -80,7 +105,8 @@ const HumanAgentManagement = ({ clientId, clientToken, onClose }) => {
           humanAgentName: formData.name,
           email: formData.email,
           mobileNumber: formData.contactNumber,
-          did: formData.did,
+          agentIds: formData.selectedAgents, // Use selectedAgents array
+          role: formData.role,
           isprofileCompleted: false,
           isApproved: true,
         };
@@ -104,16 +130,14 @@ const HumanAgentManagement = ({ clientId, clientToken, onClose }) => {
 
         const humanAgentResult = await humanAgentResponse.json();
         const humanAgentId = humanAgentResult.data._id;
+        const humangAgentRole = humanAgentResult.data.role;
 
-        // Create minimal profile with required fields
+        // Create minimal profile with required fields only
         const profileData = {
           businessName: formData.name,
-          businessType: "Sub Admin", // Default business type
           contactNumber: formData.contactNumber,
+          role: humangAgentRole,
           contactName: formData.name, // Use same name as contact name
-          pincode: "000000", // Default pincode
-          city: "Not Specified", // Default city
-          state: "Not Specified", // Default state
           humanAgentId: humanAgentId, // Use human agent ID instead of client ID
         };
 
@@ -134,7 +158,7 @@ const HumanAgentManagement = ({ clientId, clientToken, onClose }) => {
           throw new Error(errorData.message || "Failed to create profile");
         }
 
-        alert("Human agent and profile created successfully");
+        alert("Sales staff profile created successfully");
       }
 
       // Reset form and refresh list
@@ -142,7 +166,8 @@ const HumanAgentManagement = ({ clientId, clientToken, onClose }) => {
         name: "",
         email: "",
         contactNumber: "",
-        did: "",
+        selectedAgents: [], // Reset to empty array
+        role: "executive",
       });
       setEditingAgent(null);
       setShowForm(false);
@@ -157,7 +182,7 @@ const HumanAgentManagement = ({ clientId, clientToken, onClose }) => {
 
   // Delete human agent
   const handleDelete = async (agentId) => {
-    if (!window.confirm("Are you sure you want to delete this human agent?")) {
+    if (!window.confirm("Are you sure you want to delete this sales staff?")) {
       return;
     }
 
@@ -175,14 +200,14 @@ const HumanAgentManagement = ({ clientId, clientToken, onClose }) => {
       );
 
       if (!response.ok) {
-        throw new Error("Failed to delete human agent");
+        throw new Error("Failed to delete sales staff");
       }
 
-      alert("Human agent deleted successfully");
+      alert("Sales staff and associated profile deleted successfully");
       await fetchHumanAgents();
     } catch (error) {
       console.error("Error deleting human agent:", error);
-      alert("Failed to delete human agent");
+      alert("Failed to delete sales staff");
     } finally {
       setLoading(false);
     }
@@ -195,7 +220,8 @@ const HumanAgentManagement = ({ clientId, clientToken, onClose }) => {
       name: agent.humanAgentName,
       email: agent.email,
       contactNumber: agent.mobileNumber || "",
-      did: agent.did || "",
+      selectedAgents: agent.agentIds || [], // Use agentIds array
+      role: agent.role || "executive",
     });
     setShowForm(true);
   };
@@ -206,7 +232,8 @@ const HumanAgentManagement = ({ clientId, clientToken, onClose }) => {
       name: "",
       email: "",
       contactNumber: "",
-      did: "",
+      selectedAgents: [], // Reset to empty array
+      role: "executive",
     });
     setEditingAgent(null);
     setShowForm(false);
@@ -214,6 +241,7 @@ const HumanAgentManagement = ({ clientId, clientToken, onClose }) => {
 
   useEffect(() => {
     fetchHumanAgents();
+    fetchAvailableAgents();
   }, [clientId, clientToken]);
 
   return (
@@ -223,7 +251,7 @@ const HumanAgentManagement = ({ clientId, clientToken, onClose }) => {
           <div className="px-6 py-4 border-b border-gray-200">
             <div className="flex justify-between items-center">
               <h2 className="text-2xl font-bold text-gray-800">
-                Human Agent Management
+                Sales Staff Management
               </h2>
               {onClose && (
                 <button
@@ -245,7 +273,7 @@ const HumanAgentManagement = ({ clientId, clientToken, onClose }) => {
                   className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition-colors flex items-center"
                 >
                   <FiPlus className="w-4 h-4 mr-2" />
-                  Add Human Agent
+                  Add Sales Staff
                 </button>
               </div>
             )}
@@ -254,10 +282,30 @@ const HumanAgentManagement = ({ clientId, clientToken, onClose }) => {
             {showForm && (
               <div className="mb-6 p-6 border border-gray-200 rounded-lg bg-gray-50">
                 <h3 className="text-lg font-semibold mb-4">
-                  {editingAgent ? "Edit Human Agent" : "Add New Human Agent"}
+                  {editingAgent ? "Edit Sales Staff" : "Add New Sales Staff"}
                 </h3>
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Role *
+                      </label>
+                      <select
+                        value={formData.role}
+                        onChange={(e) =>
+                          setFormData({ ...formData, role: e.target.value })
+                        }
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        required
+                      >
+                        <option value="executive">Executive</option>
+                        <option value="team leads">Team Leads</option>
+                        <option value="deputy manager">Deputy Manager</option>
+                        <option value="deputy director">Deputy Director</option>
+                        <option value="manager">Manager</option>
+                        <option value="director">Director</option>
+                      </select>
+                    </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         Name *
@@ -288,6 +336,7 @@ const HumanAgentManagement = ({ clientId, clientToken, onClose }) => {
                         }
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                         required
+                        placeholder="Enter email"
                       />
                     </div>
                     <div>
@@ -308,20 +357,99 @@ const HumanAgentManagement = ({ clientId, clientToken, onClose }) => {
                         placeholder="Enter contact number"
                       />
                     </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        DID *
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Select Agents *
                       </label>
-                      <input
-                        type="text"
-                        value={formData.did}
-                        onChange={(e) =>
-                          setFormData({ ...formData, did: e.target.value })
-                        }
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        required
-                        placeholder="Enter DID"
-                      />
+                      <div className="border border-gray-300 rounded-md p-3 max-h-48 overflow-y-auto bg-white">
+                        {availableAgents.length === 0 ? (
+                          <p className="text-gray-500 text-sm">
+                            No agents available
+                          </p>
+                        ) : (
+                          <div className="grid grid-cols-2 gap-2">
+                            {availableAgents.map((agent) => (
+                              <label
+                                key={agent._id}
+                                className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-2 rounded transition-colors border border-transparent hover:border-gray-200"
+                              >
+                                <input
+                                  type="checkbox"
+                                  value={agent._id}
+                                  checked={formData.selectedAgents.includes(
+                                    agent._id
+                                  )}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setFormData({
+                                        ...formData,
+                                        selectedAgents: [
+                                          ...formData.selectedAgents,
+                                          agent._id,
+                                        ],
+                                      });
+                                    } else {
+                                      setFormData({
+                                        ...formData,
+                                        selectedAgents:
+                                          formData.selectedAgents.filter(
+                                            (id) => id !== agent._id
+                                          ),
+                                      });
+                                    }
+                                  }}
+                                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded flex-shrink-0"
+                                />
+                                <span className="text-sm text-gray-700 truncate">
+                                  {agent.name || agent.agentName}
+                                </span>
+                              </label>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      {formData.selectedAgents.length > 0 && (
+                        <div className="mt-2">
+                          <p className="text-xs text-gray-600 mb-1">
+                            Selected ({formData.selectedAgents.length}):
+                          </p>
+                          <div className="flex flex-wrap gap-1">
+                            {formData.selectedAgents.map((agentId) => {
+                              const agent = availableAgents.find(
+                                (a) => a._id === agentId
+                              );
+                              return (
+                                <span
+                                  key={agentId}
+                                  className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
+                                >
+                                  {agent
+                                    ? agent.name || agent.agentName
+                                    : agentId}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setFormData({
+                                        ...formData,
+                                        selectedAgents:
+                                          formData.selectedAgents.filter(
+                                            (id) => id !== agentId
+                                          ),
+                                      });
+                                    }}
+                                    className="ml-1 text-blue-600 hover:text-blue-800"
+                                  >
+                                    ×
+                                  </button>
+                                </span>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -353,7 +481,7 @@ const HumanAgentManagement = ({ clientId, clientToken, onClose }) => {
             <div>
               <h3 className="text-lg font-semibold mb-4 flex items-center">
                 <FiUser className="w-5 h-5 mr-2 text-blue-600" />
-                Human Agents
+                Sales Staff
               </h3>
               {loading ? (
                 <div className="text-center py-8">
@@ -363,9 +491,9 @@ const HumanAgentManagement = ({ clientId, clientToken, onClose }) => {
               ) : humanAgents.length === 0 ? (
                 <div className="text-center py-8 text-gray-500">
                   <FiUser className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-                  <p>No human agents found</p>
+                  <p>No Sales staff found</p>
                   <p className="text-sm">
-                    Click "Add Human Agent" to get started
+                    Click "Add Sales Staff" to get started
                   </p>
                 </div>
               ) : (
@@ -383,7 +511,10 @@ const HumanAgentManagement = ({ clientId, clientToken, onClose }) => {
                           Mobile Number
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          DID
+                          Selected Agents
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Role
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Profile Status
@@ -411,8 +542,56 @@ const HumanAgentManagement = ({ clientId, clientToken, onClose }) => {
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                             {agent.mobileNumber || "N/A"}
                           </td>
+                          <td className="px-6 py-4 text-sm text-gray-500">
+                            {(() => {
+                              if (
+                                !agent.agentIds ||
+                                agent.agentIds.length === 0
+                              ) {
+                                return "N/A";
+                              }
+
+                              // If availableAgents is not loaded yet, show loading
+                              if (availableAgents.length === 0) {
+                                return "Loading agents...";
+                              }
+
+                              const selectedAgentNames = agent.agentIds.map(
+                                (agentId) => {
+                                  // Handle case where agentId might be an object
+                                  const actualAgentId =
+                                    typeof agentId === "object"
+                                      ? agentId._id || agentId.id
+                                      : agentId;
+
+                                  const selectedAgent = availableAgents.find(
+                                    (a) => a._id === actualAgentId
+                                  );
+
+                                  if (selectedAgent) {
+                                    return (
+                                      selectedAgent.name ||
+                                      selectedAgent.agentName ||
+                                      "Unknown Agent"
+                                    );
+                                  } else {
+                                    // If agent not found, show the ID or a fallback
+                                    return typeof agentId === "object"
+                                      ? agentId.name ||
+                                          agentId.agentName ||
+                                          "Unknown Agent"
+                                      : `Agent ID: ${actualAgentId}`;
+                                  }
+                                }
+                              );
+
+                              return selectedAgentNames.join(", ");
+                            })()}
+                          </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {agent.did || "N/A"}
+                            <span className="capitalize">
+                              {agent.role || "N/A"}
+                            </span>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <span

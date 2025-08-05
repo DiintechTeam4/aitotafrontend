@@ -581,7 +581,7 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
               onClick={() => handleSectionChange("human_agent")}
             >
               <FiUserCheck className="text-xl w-6 text-center" />
-              <span className="flex-1 font-medium">Human Agent</span>
+              <span className="flex-1 font-medium">Sales Staff</span>
             </button>
           </nav>
 
