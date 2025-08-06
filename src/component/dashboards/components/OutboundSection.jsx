@@ -13,7 +13,7 @@ function OutboundSection({ tenantId }) {
   // New states for campaigns
   const [campaigns, setCampaigns] = useState([]);
   const [showAddCampaignForm, setShowAddCampaignForm] = useState(false);
-
+console.log(API_BASE_URL)
   // Form states
   const [groupForm, setGroupForm] = useState({ name: "", description: "" });
   const [campaignForm, setCampaignForm] = useState({
