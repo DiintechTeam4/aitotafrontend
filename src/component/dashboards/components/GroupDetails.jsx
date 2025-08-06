@@ -27,10 +27,10 @@ function GroupDetails({ groupId, onBack }) {
   const [callResults, setCallResults] = useState([])
   const [clientData, setClientData] = useState(null)
 import { API_BASE_URL } from "../../../config";
-
+console.log(API_BASE_URL)
   // API base URL
 const API_BASE = `${API_BASE_URL}/client`
-
+console.log(API_BASE)
   // Dummy contacts data for demonstration
   const dummyContacts = [
     {
