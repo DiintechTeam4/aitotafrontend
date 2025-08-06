@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { FiX, FiEye } from "react-icons/fi";
 import GroupDetails from "./GroupDetails";
 import CampaignDetails from "./CampaignDetails";
+import { API_BASE_URL } from "../../../config";
 
 function OutboundSection({ tenantId }) {
   // Original states
@@ -30,7 +31,7 @@ function OutboundSection({ tenantId }) {
   const [selectedCampaignId, setSelectedCampaignId] = useState(null);
 
   // API base URL
-  const API_BASE = "http://localhost:4000/api/v1/client";
+  const API_BASE = API_BASE_URL;
 
   useEffect(() => {
     fetchGroups();
