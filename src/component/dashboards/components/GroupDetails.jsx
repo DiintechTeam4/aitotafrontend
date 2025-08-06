@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { FiX, FiPlus, FiUser, FiPhone, FiMail, FiTrash2, FiPlay, FiPause, FiSkipForward } from "react-icons/fi"
+import { API_BASE_URL } from "../../../config";
 
 
 function GroupDetails({ groupId, onBack }) {
@@ -26,7 +27,6 @@ function GroupDetails({ groupId, onBack }) {
   const [currentContactIndex, setCurrentContactIndex] = useState(0)
   const [callResults, setCallResults] = useState([])
   const [clientData, setClientData] = useState(null)
-import { API_BASE_URL } from "../../../config";
 console.log(API_BASE_URL)
   // API base URL
 const API_BASE = `${API_BASE_URL}/client`
