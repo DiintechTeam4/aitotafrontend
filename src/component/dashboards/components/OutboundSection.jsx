@@ -31,7 +31,7 @@ console.log(API_BASE_URL)
   const [selectedCampaignId, setSelectedCampaignId] = useState(null);
 
   // API base URL
-  const API_BASE = API_BASE_URL;
+  const API_BASE = `${API_BASE_URL}/client`;
 
   useEffect(() => {
     fetchGroups();
