@@ -8,7 +8,7 @@ function CampaignDetails({ campaignId, onBack }) {
   const [loading, setLoading] = useState(false);
   const [addingGroups, setAddingGroups] = useState(false);
   const { API_BASE_URL } = require("../../../config");
-
+  console.log(API_BASE_URL)
   // API base URL
   const API_BASE = API_BASE_URL;
 
