@@ -7,9 +7,10 @@ function CampaignDetails({ campaignId, onBack }) {
   const [selectedGroups, setSelectedGroups] = useState([]);
   const [loading, setLoading] = useState(false);
   const [addingGroups, setAddingGroups] = useState(false);
+  const { API_BASE_URL } = require("../../../config");
 
   // API base URL
-  const API_BASE = "http://localhost:4000/api/v1/client";
+  const API_BASE = API_BASE_URL;
 
   useEffect(() => {
     fetchCampaignDetails();

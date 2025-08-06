@@ -260,19 +260,36 @@ const AgentForm = ({ agent, onSave, onCancel, clientId }) => {
       {startingMessages.map((msg, idx) => (
         <div
           key={idx}
-          className="p-4 border border-gray-200 rounded-lg bg-white"
+          className="p-2 border border-gray-200 rounded-lg bg-white mb-2"
         >
-          <label className="block mb-2 font-semibold text-gray-700">
-            Message {idx + 1}
-          </label>
-          <textarea
-            value={msg.text}
-            onChange={(e) => handleStartingMessageChange(idx, e.target.value)}
-            rows="2"
-            required
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
-          />
-          <div className="mt-4">
+          <div className="flex items-center mb-1">
+            <input
+              type="radio"
+              name="defaultStartingMessage"
+              checked={defaultStartingMessageIndex === idx}
+              onChange={() => setDefaultStartingMessageIndex(idx)}
+              className="mr-2"
+            />
+            <span className="text-xs text-gray-600">Set as default</span>
+            {startingMessages.length > 1 && (
+              <button
+                type="button"
+                onClick={() => removeStartingMessage(idx)}
+                className="ml-auto px-2 py-0.5 bg-red-500 text-white text-xs rounded hover:bg-red-600 transition-colors"
+              >
+                Remove
+              </button>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <textarea
+              value={msg.text}
+              onChange={(e) => handleStartingMessageChange(idx, e.target.value)}
+              rows="1"
+              required
+              className="flex-1 px-2 py-1 border border-gray-300 rounded focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 text-sm resize-none"
+              placeholder={`Message ${idx + 1}`}
+            />
             <VoiceSynthesizer
               text={msg.text}
               language={formData.language || "en"}
@@ -290,28 +307,7 @@ const AgentForm = ({ agent, onSave, onCancel, clientId }) => {
               clientId={clientId}
             />
             {msg.audioBase64 && (
-              <span className="text-green-600 ml-2">Audio ready</span>
-            )}
-          </div>
-          <div className="mt-4">
-            <label className="flex items-center">
-              <input
-                type="radio"
-                name="defaultStartingMessage"
-                checked={defaultStartingMessageIndex === idx}
-                onChange={() => setDefaultStartingMessageIndex(idx)}
-                className="mr-2"
-              />
-              Set as default
-            </label>
-            {startingMessages.length > 1 && (
-              <button
-                type="button"
-                onClick={() => removeStartingMessage(idx)}
-                className="ml-4 px-3 py-1 bg-red-500 text-white text-sm rounded hover:bg-red-600 transition-colors"
-              >
-                Remove
-              </button>
+              <span className="text-green-600 text-xs ml-1">Audio ready</span>
             )}
           </div>
         </div>
@@ -561,13 +557,13 @@ const AgentForm = ({ agent, onSave, onCancel, clientId }) => {
         </div>
 
         <div>
-        <label
-          htmlFor="callingNumber"
-          className="block mb-2 font-semibold text-gray-700"
-        >
-          Calling Number
-        </label>
-        <input
+          <label
+            htmlFor="callingNumber"
+            className="block mb-2 font-semibold text-gray-700"
+          >
+            Calling Number
+          </label>
+          <input
             type="text"
             id="callingNumber"
             name="callingNumber"

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { FiVolume2, FiTrash2 } from "react-icons/fi";
 import { API_BASE_URL } from "../../../config";
 
@@ -14,6 +14,7 @@ const VoiceSynthesizer = ({
   const [isGenerating, setIsGenerating] = useState(false);
   const [audioUrl, setAudioUrl] = useState("");
   const [error, setError] = useState("");
+  const audioRef = useRef(null);
 
   const generateAudio = async () => {
     if (!text || !text.trim()) {
@@ -29,7 +30,10 @@ const VoiceSynthesizer = ({
         `${API_BASE_URL}/client/voice/synthesize?clientId=${clientId}`,
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" , Authorization: `Bearer ${sessionStorage.getItem("clienttoken")}`},
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${sessionStorage.getItem("clienttoken")}`,
+          },
           body: JSON.stringify({ text, language, speaker }),
         }
       );
@@ -77,6 +81,12 @@ const VoiceSynthesizer = ({
       onAudioGenerated(null, null, null);
     }
   };
+
+  useEffect(() => {
+    if (audioUrl && audioRef.current) {
+      audioRef.current.play();
+    }
+  }, [audioUrl]);
 
   return (
     <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 bg-gray-50">
@@ -127,12 +137,8 @@ const VoiceSynthesizer = ({
       )}
 
       {audioUrl && (
-        <div className="mt-4 text-center">
-          <div className="flex items-center justify-center gap-2 text-green-600 mb-2 font-bold">
-            <span className="success-icon">✅</span>
-            Audio generated successfully
-          </div>
-          <audio controls src={audioUrl}>
+        <div className="mt-2 text-center">
+          <audio ref={audioRef} controls src={audioUrl}>
             Your browser does not support the audio element.
           </audio>
         </div>
