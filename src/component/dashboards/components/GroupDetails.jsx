@@ -26,9 +26,10 @@ function GroupDetails({ groupId, onBack }) {
   const [currentContactIndex, setCurrentContactIndex] = useState(0)
   const [callResults, setCallResults] = useState([])
   const [clientData, setClientData] = useState(null)
+import { API_BASE_URL } from "../../../config";
 
   // API base URL
-  const API_BASE = "https://aitota-back.onrender.com/api/v1/client"
+const API_BASE = `${API_BASE_URL}/client`
 
   // Dummy contacts data for demonstration
   const dummyContacts = [
