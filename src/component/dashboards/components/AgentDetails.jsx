@@ -126,26 +126,79 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
     setCallStage("input");
   };
 
-  const initiateCall = () => {
+  const makeAIDialCall = async (targetPhoneNumber, agentCallerId, agentApiKey, clientUuid) => {
+    try {
+      const token = sessionStorage.getItem("clienttoken");
+      if (!token) {
+        throw new Error("Client token not found. Please log in.");
+      }
+
+      const callPayload = {
+        transaction_id: "CTI_BOT_DIAL",
+        phone_num: targetPhoneNumber.replace(/[^\d]/g, ""), // Remove non-digits
+        uniqueid: `aidial-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, // Generate a unique ID
+        callerid: agentCallerId,
+        uuid: clientUuid,
+        custom_param: {
+          agentId: agent._id,
+          agentName: agent.agentName,
+          // Add any other custom parameters relevant to the call
+        },
+        resFormat: 3,
+      };
+
+      console.log("Sending AI Dial request with payload:", callPayload);
+      console.log("Using API Key:", agentApiKey);
+
+      const response = await fetch(`${API_BASE_URL}/client/proxy/clicktobot`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          apiKey: agentApiKey, // Use the agent's specific API key
+          payload: callPayload,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "Failed to initiate AI Dial call.");
+      }
+
+      console.log("AI Dial response:", result);
+      return { success: true, data: result.data };
+    } catch (error) {
+      console.error("Error making AI Dial call:", error);
+      return { success: false, error: error.message };
+    }
+  };
+
+  const initiateCall = async () => {
     if (phoneNumber.trim()) {
       setCallStage("connecting");
+      setCallMessages([]); // Clear previous messages
 
-      // Simulate connection process
-      setTimeout(() => {
+      const result = await makeAIDialCall(
+        phoneNumber,
+        agent.callerId,
+        agent.X_API_KEY,
+        clientId // Assuming clientId is passed as a prop
+      );
+
+      if (result.success) {
         setCallStage("connected");
         setIsCallConnected(true);
-        setCallMessages([
-          {
-            id: 1,
-            type: "ai",
-            message:
-              agent.firstMessage ||
-              "Hello! This is your AI assistant. How can I help you today?",
-            timestamp: new Date(),
-          },
-        ]);
-        startCallTimer();
-      }, 3000);
+        // No call messages needed for this simplified view
+        // startCallTimer(); // No need for timer if duration isn't displayed
+      } else {
+        setCallStage("input"); // Revert to input on failure
+        setIsCallConnected(false);
+        alert(`Failed to initiate call: ${result.error}`);
+        console.error("AI Dial initiation failed:", result.error);
+      }
     }
   };
 
@@ -179,6 +232,8 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
   };
 
   const endCall = () => {
+    // This function is no longer directly called by a button in the UI
+    // but kept for potential internal logic or future use.
     setIsCallConnected(false);
     setIsCallRecording(false);
     setCallMicLevel(0);
@@ -644,30 +699,6 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
                     </p>
                   </div>
                 </div>
-
-                {/* <div className="flex items-center gap-3 p-3 bg-white border border-gray-200 rounded-lg">
-                  <FiCalendar className="w-4 h-4 text-gray-600 flex-shrink-0" />
-                  <div>
-                    <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-                      Created
-                    </span>
-                    <p className="text-sm font-medium text-gray-800">
-                      {formatDate(agent.createdAt)}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3 p-3 bg-white border border-gray-200 rounded-lg">
-                  <FiClock className="w-4 h-4 text-gray-600 flex-shrink-0" />
-                  <div>
-                    <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-                      Last Updated
-                    </span>
-                    <p className="text-sm font-medium text-gray-800">
-                      {formatDate(agent.updatedAt)}
-                    </p>
-                  </div>
-                </div> */}
               </div>
             </div>
 
@@ -771,8 +802,7 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
                   <h3 className="text-lg font-semibold">
                     {callStage === "input" && "Enter Name and Phone Number"}
                     {callStage === "connecting" && "Connecting..."}
-                    {callStage === "connected" &&
-                      `Call in Progress - ${formatTime(callDuration)}`}
+                    {callStage === "connected" && "Call Connected"}
                   </h3>
                 </div>
                 <button
@@ -859,120 +889,23 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
               {callStage === "connected" && (
                 <div className="space-y-4">
                   {/* Call Status */}
-                  <div className="flex items-center justify-between p-4 bg-green-50 rounded-lg">
-                    <div className="flex items-center gap-3">
-                      <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
-                      <span className="text-green-700 font-medium">
-                        Connected
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <FiCheckCircle className="w-5 h-5 text-green-600" />
-                      <span className="text-green-700 font-medium">
-                        {formatTime(callDuration)}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Chat Messages */}
-                  <div className="h-64 overflow-y-auto border border-gray-200 rounded-lg p-4 space-y-3">
-                    {callMessages.map((msg) => (
-                      <div
-                        key={msg.id}
-                        className={`flex ${
-                          msg.type === "human" ? "justify-end" : "justify-start"
-                        }`}
-                      >
-                        <div
-                          className={`max-w-xs px-4 py-2 rounded-lg ${
-                            msg.type === "human"
-                              ? "bg-green-600 text-white"
-                              : "bg-gray-100 text-gray-800"
-                          }`}
-                        >
-                          <p className="text-sm">{msg.message}</p>
-                          <p className="text-xs opacity-70 mt-1">
-                            {msg.timestamp.toLocaleTimeString()}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                    <div ref={messagesEndRef} />
-                  </div>
-
-                  {/* Voice Recording Section */}
-                  <div className="flex items-center justify-center py-4">
+                  <div className="flex flex-col items-center justify-center py-12 space-y-6">
                     <div className="relative">
-                      <button
-                        onClick={
-                          isCallRecording
-                            ? stopCallRecording
-                            : startCallRecording
-                        }
-                        className={`w-16 h-16 rounded-full flex items-center justify-center transition-all duration-300 ${
-                          isCallRecording
-                            ? "bg-red-500 hover:bg-red-600 scale-110"
-                            : "bg-green-600 hover:bg-green-700"
-                        }`}
-                      >
-                        <FiMic className="w-6 h-6 text-white" />
-                      </button>
-
-                      {/* Mic Level Indicator */}
-                      {isCallRecording && (
-                        <div className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center animate-pulse">
-                          <div
-                            className="w-3 h-3 bg-white rounded-full"
-                            style={{
-                              transform: `scale(${
-                                0.5 + (callMicLevel / 100) * 0.5
-                              })`,
-                              transition: "transform 0.1s ease",
-                            }}
-                          />
-                        </div>
-                      )}
+                      <div className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center">
+                        <FiPhoneCall className="w-12 h-12 text-green-600" />
+                      </div>
+                      <div className="absolute -top-2 -right-2 w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
+                        <FiCheckCircle className="w-4 h-4 text-white" />
+                      </div>
+                    </div>
+                    <div className="text-center">
+                      <h4 className="text-2xl font-bold text-green-700 mb-2">
+                        Call Connected
+                      </h4>
+                      {/* Removed duration display */}
                     </div>
                   </div>
-
-                  {/* Message Input */}
-                  {/* <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={currentCallMessage}
-                      onChange={(e) => setCurrentCallMessage(e.target.value)}
-                      placeholder="Or type your message..."
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                      onKeyPress={(e) => e.key === "Enter" && sendCallMessage()}
-                    />
-                    <button
-                      onClick={sendCallMessage}
-                      disabled={!currentCallMessage.trim()}
-                      className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
-                    >
-                      <FiSend className="w-4 h-4" />
-                    </button>
-                  </div> */}
-
-                  {/* Call Status */}
-                  <div className="text-center">
-                    <p className="text-sm text-gray-600">
-                      {isCallRecording
-                        ? "Recording... Click to stop"
-                        : "Click the mic to start recording"}
-                    </p>
-                  </div>
-
-                  {/* Call Controls */}
-                  <div className="flex justify-center pt-4">
-                    <button
-                      onClick={endCall}
-                      className="px-8 py-3 bg-red-600 text-white rounded-full hover:bg-red-700 transition-colors flex items-center gap-2"
-                    >
-                      <FiPhone className="w-4 h-4 rotate-90" />
-                      End Call
-                    </button>
-                  </div>
+                  {/* Removed call messages display */}
                 </div>
               )}
             </div>
