@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { API_BASE_URL } from "../../../config";
 
 const ClientSelector = ({ currentClient, onClientChange }) => {
   const [clientInfo, setClientInfo] = useState(null);
@@ -21,7 +22,7 @@ const ClientSelector = ({ currentClient, onClientChange }) => {
   const fetchClientInfo = async () => {
     try {
       const response = await fetch(
-        `http://localhost:4000/api/v1/client?clientId=${currentClient}`
+        `${API_BASE_URL}/client?clientId=${currentClient}`
       );
       const data = await response.json();
       if (data.success) {
@@ -43,7 +44,7 @@ const ClientSelector = ({ currentClient, onClientChange }) => {
   const handleSave = async () => {
     try {
       const response = await fetch(
-        `http://localhost:4000/api/v1/client?clientId=${currentClient}`,
+        `${API_BASE_URL}/client?clientId=${currentClient}`,
         {
           method: "PUT",
           headers: {
