@@ -43,7 +43,11 @@ const User = () => {
             navigate("/auth/dashboard");
           } else if (parsedData.role === "user") {
             navigate("/auth/dashboard");
-          } else if (parsedData.role === "humanAgent") {
+          } else if (
+            parsedData.role === "humanAgent" ||
+            parsedData.role === "HumanAgent" ||
+            parsedData.role === "executive"
+          ) {
             console.log("HumanAgent detected, navigating to dashboard");
             navigate("/auth/dashboard");
           }
@@ -148,6 +152,11 @@ const User = () => {
           }
         />
 
+        <Route
+          path="/login"
+          element={<AuthLayout onLogin={handleAuthSuccess} />}
+        />
+
         {isAuthenticated ? (
           <>
             {userRole === "user" && (
@@ -190,7 +199,9 @@ const User = () => {
                 />
               </>
             )}
-            {(userRole === "HumanAgent" || userRole === "humanAgent") && (
+            {(userRole === "HumanAgent" ||
+              userRole === "humanAgent" ||
+              userRole === "executive") && (
               <>
                 <Route
                   path="/dashboard"
@@ -209,25 +220,10 @@ const User = () => {
                   element={
                     <HumanAgentDashboard
                       onLogout={handleLogout}
-                      userData={(() => {
-                        const localData = localStorage.getItem("userData");
-                        console.log(
-                          "HumanAgentDashboard - localStorage data:",
-                          localData
-                        );
-
-                        if (localData) {
-                          const parsedData = JSON.parse(localData);
-                          console.log(
-                            "HumanAgentDashboard - parsed data:",
-                            parsedData
-                          );
-                          return parsedData;
-                        } else {
-                          console.error("No userData found in localStorage!");
-                          return null;
-                        }
-                      })()}
+                      userData={
+                        JSON.parse(localStorage.getItem("userData")) ||
+                        JSON.parse(sessionStorage.getItem("userData"))
+                      }
                     />
                   }
                 />

@@ -45,6 +45,7 @@ const LoginForm = ({ userType, onLogin, switchToRegister }) => {
       const endpoint = `${API_BASE_URL}/client/google-login`;
       response = await axios.post(endpoint, {
         token: credentialResponse.credential,
+        ...(userType === "HumanAgent" ? { loginType: "humanAgent" } : {}),
       });
       console.log("Server response:", response.data);
 

@@ -19,11 +19,12 @@ const InboundReport = ({ clientId }) => {
         setLoading(true);
         setError(null);
 
+        const token = sessionStorage.getItem('clienttoken') || localStorage.getItem('usertoken');
         const response = await fetch(
           `${API_BASE_URL}/client/inbound/report`,
           {
             headers: {
-              Authorization: `Bearer ${sessionStorage.getItem("clienttoken")}`,
+              Authorization: `Bearer ${token}`,
             },
           }
         );

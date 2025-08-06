@@ -45,11 +45,15 @@ const InboundLeads = ({ clientId }) => {
         setLoading(true);
         setError(null);
 
-        const response = await fetch(`${API_BASE_URL}/client/inbound/leads`, {
-          headers: {
-            Authorization: `Bearer ${sessionStorage.getItem("clienttoken")}`,
-          },
-        });
+        const token = sessionStorage.getItem('clienttoken') || localStorage.getItem('usertoken');
+        const response = await fetch(
+          `${API_BASE_URL}/client/inbound/leads`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
 
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);

@@ -37,7 +37,7 @@ const AgentForm = ({ agent, onSave, onCancel, clientId }) => {
     { key: "personal", label: "Personal Information" },
     { key: "voice", label: "Voice Configuration" },
     { key: "system", label: "System Configuration" },
-    { key: "integration", label: "Integration Settings" },
+    { key: "integration", label: "Telephony Settings" },
   ];
 
   useEffect(() => {
@@ -52,6 +52,8 @@ const AgentForm = ({ agent, onSave, onCancel, clientId }) => {
         systemPrompt: agent.systemPrompt || "",
         sttSelection: agent.sttSelection || "google",
         ttsSelection: agent.ttsSelection || "sarvam",
+        callingNumber: agent.callingNumber || "",
+        callingType: agent.callingType || "both",
         voiceSelection: agent.voiceSelection || "abhilash",
         accountSid: agent.accountSid || "",
         serviceProvider: agent.serviceProvider || "",
@@ -536,6 +538,44 @@ const AgentForm = ({ agent, onSave, onCancel, clientId }) => {
             <option value="elevenlabs">ElevenLabs</option>
             <option value="azure">Azure Speech Services</option>
           </select>
+        </div>
+
+        <div>
+          <label
+            htmlFor="callingType"
+            className="block mb-2 font-semibold text-gray-700"
+          >
+            Calling Type
+          </label>
+          <select
+            id="CallingType"
+            name="CallingType"
+            value={formData.CallingType}
+            onChange={handleInputChange}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors"
+          >
+            <option value="inbound">Inbound</option>
+            <option value="outbound">Outbound</option>
+            <option value="both">Both</option>
+          </select>
+        </div>
+
+        <div>
+        <label
+          htmlFor="callingNumber"
+          className="block mb-2 font-semibold text-gray-700"
+        >
+          Calling Number
+        </label>
+        <input
+            type="text"
+            id="callingNumber"
+            name="callingNumber"
+            value={formData.callingNumber}
+            onChange={handleInputChange}
+            placeholder="Enter your Calling Number"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors"
+          />
         </div>
       </div>
 
