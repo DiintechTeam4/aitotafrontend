@@ -27,46 +27,60 @@ import { API_BASE_URL } from "../../../config";
 const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
   const [audioUrl, setAudioUrl] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [isListening, setIsListening] = useState(false);
   const [showCallModal, setShowCallModal] = useState(false);
   const [showVoiceChatModal, setShowVoiceChatModal] = useState(false);
   const [phoneNumber, setPhoneNumber] = useState("");
   const [contactName, setContactName] = useState("");
-  const [callStage, setCallStage] = useState("input"); // input, connecting, connected
+  const [callStage, setCallStage] = useState("input");
   const [voiceChatMessages, setVoiceChatMessages] = useState([]);
-  const [currentVoiceMessage, setCurrentVoiceMessage] = useState("");
-  const [isRecording, setIsRecording] = useState(false);
   const [micLevel, setMicLevel] = useState(0);
   const [callDuration, setCallDuration] = useState(0);
   const [isCallConnected, setIsCallConnected] = useState(false);
   const [callMessages, setCallMessages] = useState([]);
-  const [currentCallMessage, setCurrentCallMessage] = useState("");
   const [isCallRecording, setIsCallRecording] = useState(false);
   const [callMicLevel, setCallMicLevel] = useState(0);
 
-  const micIntervalRef = useRef(null);
-  const callTimerRef = useRef(null);
-  const callMicIntervalRef = useRef(null);
-  const messagesEndRef = useRef(null);
+  // WebSocket related states
+  const [wsConnection, setWsConnection] = useState(null);
+  const [wsConnectionStatus, setWsConnectionStatus] = useState('disconnected');
+  const [isAITalking, setIsAITalking] = useState(false);
+  const [streamSid, setStreamSid] = useState(null);
+  const [isAudioStreaming, setIsAudioStreaming] = useState(false);
 
-  // Audio context and analyzer for real microphone input
+  // Debug states
+  const [debugLogs, setDebugLogs] = useState([]);
+  const [audioStats, setAudioStats] = useState({
+    chunksRecorded: 0,
+    chunksSent: 0,
+    bytesProcessed: 0,
+    lastChunkTime: null,
+    streamingActive: false
+  });
+
+  // Audio context and processing refs
   const audioContextRef = useRef(null);
   const analyserRef = useRef(null);
   const microphoneRef = useRef(null);
   const dataArrayRef = useRef(null);
   const animationFrameRef = useRef(null);
+  const audioPlaybackContextRef = useRef(null);
+  const audioWorkletNodeRef = useRef(null);
+  const streamRef = useRef(null);
+  const isStreamingActiveRef = useRef(false);
+
+  const messagesEndRef = useRef(null);
+  const callTimerRef = useRef(null);
+
+  // Debug logging function
+  const addDebugLog = (message, type = 'info') => {
+    const timestamp = new Date().toLocaleTimeString();
+    const logEntry = { timestamp, message, type };
+    console.log(`[${type.toUpperCase()}] ${timestamp}: ${message}`);
+    setDebugLogs(prev => [...prev.slice(-19), logEntry]);
+  };
 
   const formatPersonality = (personality) => {
     return personality.charAt(0).toUpperCase() + personality.slice(1);
-  };
-
-  const formatDate = (dateString) => {
-    if (!dateString) return "Not available";
-    return new Date(dateString).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    });
   };
 
   const formatTime = (seconds) => {
@@ -75,6 +89,418 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
     return `${mins.toString().padStart(2, "0")}:${secs
       .toString()
       .padStart(2, "0")}`;
+  };
+
+  // WebSocket connection management
+  const connectToWebSocket = () => {
+    if (wsConnection && wsConnection.readyState === WebSocket.OPEN) {
+      addDebugLog('WebSocket already connected', 'info');
+      return;
+    }
+
+    setWsConnectionStatus('connecting');
+    addDebugLog('Attempting WebSocket connection...', 'info');
+    
+    const wsUrl = `wss://test.aitota.com/ws?clientId=${clientId}&agentId=${agent._id}`;
+    addDebugLog(`Connecting to: ${wsUrl}`, 'info');
+    
+    const ws = new WebSocket(wsUrl);
+    
+    ws.onopen = () => {
+      addDebugLog('WebSocket connected successfully', 'success');
+      setWsConnectionStatus('connected');
+      setWsConnection(ws);
+      
+      const streamId = `stream_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      setStreamSid(streamId);
+      
+      const startMessage = {
+        event: 'start',
+        streamSid: streamId,
+        start: {
+          accountSid: agent.accountSid || 'default_account',
+          streamSid: streamId,
+          from: clientId,
+          to: agent.callerId,
+          extraData: btoa(JSON.stringify({
+            agentId: agent._id,
+            agentName: agent.agentName,
+            clientId: clientId
+          }))
+        }
+      };
+      
+      addDebugLog(`Sending start message: ${JSON.stringify(startMessage)}`, 'info');
+      ws.send(JSON.stringify(startMessage));
+      
+      // Auto-start audio streaming once WebSocket is connected
+      setTimeout(() => {
+        startContinuousAudioStreaming();
+      }, 1000);
+    };
+    
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        addDebugLog(`Received WebSocket message: ${data.event}`, 'info');
+        handleWebSocketMessage(data);
+      } catch (error) {
+        addDebugLog(`Error parsing WebSocket message: ${error.message}`, 'error');
+      }
+    };
+    
+    ws.onerror = (error) => {
+      addDebugLog(`WebSocket error: ${error}`, 'error');
+      setWsConnectionStatus('disconnected');
+    };
+    
+    ws.onclose = (event) => {
+      addDebugLog(`WebSocket disconnected. Code: ${event.code}, Reason: ${event.reason}`, 'warning');
+      setWsConnectionStatus('disconnected');
+      setWsConnection(null);
+      setStreamSid(null);
+      stopContinuousAudioStreaming();
+    };
+  };
+
+  const handleWebSocketMessage = (data) => {
+    switch (data.event) {
+      case 'connected':
+        addDebugLog('WebSocket session connected', 'success');
+        break;
+        
+      case 'start':
+        addDebugLog(`Session started with streamSid: ${data.streamSid}`, 'success');
+        setStreamSid(data.streamSid);
+        break;
+        
+      case 'media':
+        if (data.media && data.media.payload) {
+          addDebugLog(`Received audio chunk: ${data.media.payload.length} chars`, 'info');
+          playAudioChunk(data.media.payload);
+        }
+        break;
+        
+      case 'stop':
+        addDebugLog('Session stopped by server', 'info');
+        break;
+        
+      default:
+        addDebugLog(`Unknown WebSocket event: ${data.event}`, 'warning');
+    }
+  };
+
+  const disconnectWebSocket = () => {
+    if (wsConnection) {
+      addDebugLog('Disconnecting WebSocket...', 'info');
+      wsConnection.send(JSON.stringify({
+        event: 'stop',
+        streamSid: streamSid
+      }));
+      
+      wsConnection.close();
+      setWsConnection(null);
+      setWsConnectionStatus('disconnected');
+      setStreamSid(null);
+    }
+    stopContinuousAudioStreaming();
+  };
+
+  // Continuous audio streaming
+  const startContinuousAudioStreaming = async () => {
+    try {
+      if (isStreamingActiveRef.current) {
+        addDebugLog('Audio streaming already active', 'warning');
+        return;
+      }
+
+      addDebugLog('Starting continuous audio streaming...', 'info');
+
+      // Request microphone permission
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          sampleRate: 8000,
+          channelCount: 1,
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: false
+        } 
+      });
+
+      streamRef.current = stream;
+      addDebugLog('Microphone access granted for continuous streaming', 'success');
+
+      // Create audio context
+      audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)({
+        sampleRate: 8000
+      });
+
+      addDebugLog(`Audio context created with sample rate: ${audioContextRef.current.sampleRate}`, 'info');
+      
+      const source = audioContextRef.current.createMediaStreamSource(stream);
+      
+      // Create analyzer for visual feedback
+      analyserRef.current = audioContextRef.current.createAnalyser();
+      analyserRef.current.fftSize = 256;
+      source.connect(analyserRef.current);
+      
+      // Try to use AudioWorkletNode (modern approach)
+      try {
+        await audioContextRef.current.audioWorklet.addModule('/audio-processor.js');
+        addDebugLog('AudioWorklet module loaded successfully', 'success');
+        
+        audioWorkletNodeRef.current = new AudioWorkletNode(audioContextRef.current, 'audio-processor');
+        
+        audioWorkletNodeRef.current.port.onmessage = (event) => {
+          if (event.data.type === 'audioData' && isStreamingActiveRef.current) {
+            processAudioData(event.data.data);
+          }
+        };
+        
+        // Activate the processor
+        audioWorkletNodeRef.current.port.postMessage({ type: 'activate' });
+        
+        source.connect(audioWorkletNodeRef.current);
+        audioWorkletNodeRef.current.connect(audioContextRef.current.destination);
+        
+        addDebugLog('AudioWorkletNode setup complete', 'success');
+        
+      } catch (workletError) {
+        addDebugLog(`AudioWorklet failed, falling back to ScriptProcessor: ${workletError.message}`, 'warning');
+        
+        // Fallback to ScriptProcessorNode with proper chunk size
+        const scriptProcessor = audioContextRef.current.createScriptProcessor(1024, 1, 1);
+        let sampleBuffer = [];
+        
+        scriptProcessor.onaudioprocess = (event) => {
+          if (!isStreamingActiveRef.current) return;
+          
+          const inputBuffer = event.inputBuffer;
+          const inputData = inputBuffer.getChannelData(0);
+          
+          // Accumulate samples
+          for (let i = 0; i < inputData.length; i++) {
+            sampleBuffer.push(inputData[i]);
+            
+            // When we have 80 samples (160 bytes), process them
+            if (sampleBuffer.length >= 80) {
+              const chunk = new Float32Array(sampleBuffer.splice(0, 80));
+              processAudioData(chunk);
+            }
+          }
+        };
+        
+        source.connect(scriptProcessor);
+        scriptProcessor.connect(audioContextRef.current.destination);
+        
+        microphoneRef.current = { stream, scriptProcessor };
+        addDebugLog('ScriptProcessor fallback setup complete', 'success');
+      }
+
+      isStreamingActiveRef.current = true;
+      setIsAudioStreaming(true);
+      
+      // Reset audio stats
+      setAudioStats({
+        chunksRecorded: 0,
+        chunksSent: 0,
+        bytesProcessed: 0,
+        lastChunkTime: null,
+        streamingActive: true
+      });
+      
+      // Start visual feedback
+      updateMicLevel();
+      
+      addDebugLog('Continuous audio streaming started successfully', 'success');
+      
+    } catch (error) {
+      addDebugLog(`Error starting continuous audio streaming: ${error.message}`, 'error');
+      isStreamingActiveRef.current = false;
+      setIsAudioStreaming(false);
+    }
+  };
+
+  const stopContinuousAudioStreaming = () => {
+    addDebugLog('Stopping continuous audio streaming...', 'info');
+    
+    isStreamingActiveRef.current = false;
+    setIsAudioStreaming(false);
+    setMicLevel(0);
+
+    // Stop animation frame
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+    }
+
+    // Stop microphone stream
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => {
+        track.stop();
+        addDebugLog('Microphone track stopped', 'info');
+      });
+      streamRef.current = null;
+    }
+
+    // Cleanup audio components
+    if (microphoneRef.current && microphoneRef.current.scriptProcessor) {
+      microphoneRef.current.scriptProcessor.disconnect();
+      addDebugLog('ScriptProcessor disconnected', 'info');
+    }
+
+    // Disconnect AudioWorkletNode
+    if (audioWorkletNodeRef.current) {
+      audioWorkletNodeRef.current.port.postMessage({ type: 'deactivate' });
+      audioWorkletNodeRef.current.disconnect();
+      audioWorkletNodeRef.current = null;
+      addDebugLog('AudioWorkletNode disconnected', 'info');
+    }
+
+    // Close audio context
+    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+      audioContextRef.current.close();
+      audioContextRef.current = null;
+      addDebugLog('Audio context closed', 'info');
+    }
+
+    // Reset refs
+    analyserRef.current = null;
+    microphoneRef.current = null;
+    dataArrayRef.current = null;
+
+    setAudioStats(prev => ({
+      ...prev,
+      streamingActive: false
+    }));
+
+    addDebugLog(`Continuous streaming stopped. Final stats: ${audioStats.chunksRecorded} chunks recorded, ${audioStats.chunksSent} chunks sent, ${audioStats.bytesProcessed} bytes processed`, 'success');
+  };
+
+  const processAudioData = (audioData) => {
+    if (!isStreamingActiveRef.current || !wsConnection || wsConnection.readyState !== WebSocket.OPEN) {
+      return;
+    }
+
+    try {
+      // Convert float32 to int16 (80 samples = 160 bytes)
+      const int16Array = new Int16Array(80);
+      for (let i = 0; i < 80; i++) {
+        int16Array[i] = Math.max(-32768, Math.min(32767, audioData[i] * 32768));
+      }
+      
+      // Convert to base64 using browser APIs
+      const bytes = new Uint8Array(int16Array.buffer); // This will be exactly 160 bytes
+      let binaryString = '';
+      for (let i = 0; i < bytes.length; i++) {
+        binaryString += String.fromCharCode(bytes[i]);
+      }
+      const base64Audio = btoa(binaryString);
+      
+      // Update stats
+      setAudioStats(prev => ({
+        chunksRecorded: prev.chunksRecorded + 1,
+        chunksSent: prev.chunksSent + 1,
+        bytesProcessed: prev.bytesProcessed + 160, // Always 160 bytes
+        lastChunkTime: new Date().toLocaleTimeString(),
+        streamingActive: true
+      }));
+      
+      // Send via WebSocket
+      const mediaMessage = {
+        event: 'media',
+        streamSid: streamSid,
+        media: {
+          payload: base64Audio
+        }
+      };
+      
+      wsConnection.send(JSON.stringify(mediaMessage));
+      
+      // Log every 50th chunk to avoid spam but show activity
+      if (audioStats.chunksSent % 50 === 0) {
+        addDebugLog(`Sent 160-byte audio chunk #${audioStats.chunksSent + 1}, base64 size: ${base64Audio.length} chars`, 'info');
+      }
+      
+    } catch (error) {
+      addDebugLog(`Error processing audio data: ${error.message}`, 'error');
+    }
+  };
+
+  const updateMicLevel = () => {
+    if (!isStreamingActiveRef.current || !analyserRef.current) return;
+
+    if (!dataArrayRef.current) {
+      dataArrayRef.current = new Uint8Array(analyserRef.current.frequencyBinCount);
+    }
+
+    analyserRef.current.getByteFrequencyData(dataArrayRef.current);
+
+    // Calculate average volume level
+    let sum = 0;
+    for (let i = 0; i < dataArrayRef.current.length; i++) {
+      sum += dataArrayRef.current[i];
+    }
+    const average = sum / dataArrayRef.current.length;
+
+    // Convert to percentage (0-100)
+    const level = Math.min(100, (average / 255) * 100 * 3);
+    setMicLevel(level);
+
+    animationFrameRef.current = requestAnimationFrame(updateMicLevel);
+  };
+
+  // Audio playback for AI responses
+  const playAudioChunk = async (base64Audio) => {
+    try {
+      addDebugLog(`Playing audio chunk: ${base64Audio.length} chars`, 'info');
+      
+      if (!audioPlaybackContextRef.current) {
+        audioPlaybackContextRef.current = new (window.AudioContext || window.webkitAudioContext)({
+          sampleRate: 8000
+        });
+        addDebugLog('Audio playback context created', 'info');
+      }
+
+      const audioContext = audioPlaybackContextRef.current;
+      
+      // Convert base64 to binary data using browser APIs
+      const binaryString = atob(base64Audio);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      
+      // Convert bytes to Int16Array (assuming the audio data is 16-bit PCM)
+      const int16Array = new Int16Array(bytes.buffer);
+      const float32Array = new Float32Array(int16Array.length);
+      
+      // Convert int16 to float32
+      for (let i = 0; i < int16Array.length; i++) {
+        float32Array[i] = int16Array[i] / 32768;
+      }
+      
+      // Create audio buffer
+      const buffer = audioContext.createBuffer(1, float32Array.length, 8000);
+      buffer.getChannelData(0).set(float32Array);
+      
+      // Play audio
+      const source = audioContext.createBufferSource();
+      source.buffer = buffer;
+      source.connect(audioContext.destination);
+      
+      source.onended = () => {
+        setIsAITalking(false);
+        addDebugLog('Audio playback ended', 'info');
+      };
+      
+      setIsAITalking(true);
+      source.start();
+      addDebugLog('Audio playback started', 'success');
+      
+    } catch (error) {
+      addDebugLog(`Error playing audio chunk: ${error.message}`, 'error');
+      setIsAITalking(false);
+    }
   };
 
   const playAudio = async () => {
@@ -108,17 +534,44 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
 
   const handleVoiceChat = () => {
     setShowVoiceChatModal(true);
-    // Add initial AI message
     setVoiceChatMessages([
       {
         id: 1,
         type: "ai",
-        message:
-          agent.firstMessage ||
-          "Hello! I'm here to help you. How can I assist you today?",
+        message: agent.firstMessage || "Hello! I'm here to help you. How can I assist you today?",
         timestamp: new Date(),
       },
     ]);
+    
+    // Clear debug logs
+    setDebugLogs([]);
+    addDebugLog('Voice chat modal opened', 'info');
+    
+    // Connect to WebSocket when opening voice chat
+    connectToWebSocket();
+  };
+
+  const closeVoiceChat = () => {
+    addDebugLog('Closing voice chat...', 'info');
+    setShowVoiceChatModal(false);
+    setVoiceChatMessages([]);
+    setMicLevel(0);
+    setIsAITalking(false);
+
+    // Stop continuous streaming
+    stopContinuousAudioStreaming();
+    
+    // Disconnect WebSocket
+    disconnectWebSocket();
+    
+    // Close audio playback context
+    if (audioPlaybackContextRef.current && audioPlaybackContextRef.current.state !== 'closed') {
+      audioPlaybackContextRef.current.close();
+      audioPlaybackContextRef.current = null;
+    }
+
+    // Clear debug logs
+    setDebugLogs([]);
   };
 
   const handleCall = () => {
@@ -135,20 +588,18 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
 
       const callPayload = {
         transaction_id: "CTI_BOT_DIAL",
-        phone_num: targetPhoneNumber.replace(/[^\d]/g, ""), // Remove non-digits
-        uniqueid: `aidial-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, // Generate a unique ID
+        phone_num: targetPhoneNumber.replace(/[^\d]/g, ""),
+        uniqueid: `aidial-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         callerid: agentCallerId,
         uuid: clientUuid,
         custom_param: {
           agentId: agent._id,
           agentName: agent.agentName,
-          // Add any other custom parameters relevant to the call
         },
         resFormat: 3,
       };
 
       console.log("Sending AI Dial request with payload:", callPayload);
-      console.log("Using API Key:", agentApiKey);
 
       const response = await fetch(`${API_BASE_URL}/client/proxy/clicktobot`, {
         method: "POST",
@@ -157,7 +608,7 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          apiKey: agentApiKey, // Use the agent's specific API key
+          apiKey: agentApiKey,
           payload: callPayload,
         }),
       });
@@ -179,38 +630,24 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
   const initiateCall = async () => {
     if (phoneNumber.trim()) {
       setCallStage("connecting");
-      setCallMessages([]); // Clear previous messages
+      setCallMessages([]);
 
       const result = await makeAIDialCall(
         phoneNumber,
         agent.callerId,
         agent.X_API_KEY,
-        clientId // Assuming clientId is passed as a prop
+        clientId
       );
 
       if (result.success) {
         setCallStage("connected");
         setIsCallConnected(true);
-        // No call messages needed for this simplified view
-        // startCallTimer(); // No need for timer if duration isn't displayed
       } else {
-        setCallStage("input"); // Revert to input on failure
+        setCallStage("input");
         setIsCallConnected(false);
         alert(`Failed to initiate call: ${result.error}`);
         console.error("AI Dial initiation failed:", result.error);
       }
-    }
-  };
-
-  const startCallTimer = () => {
-    callTimerRef.current = setInterval(() => {
-      setCallDuration((prev) => prev + 1);
-    }, 1000);
-  };
-
-  const stopCallTimer = () => {
-    if (callTimerRef.current) {
-      clearInterval(callTimerRef.current);
     }
   };
 
@@ -222,315 +659,11 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
     setIsCallConnected(false);
     setCallDuration(0);
     setCallMessages([]);
-    setCurrentCallMessage("");
     setIsCallRecording(false);
     setCallMicLevel(0);
-    stopCallTimer();
-    if (callMicIntervalRef.current) {
-      clearInterval(callMicIntervalRef.current);
+    if (callTimerRef.current) {
+      clearInterval(callTimerRef.current);
     }
-  };
-
-  const endCall = () => {
-    // This function is no longer directly called by a button in the UI
-    // but kept for potential internal logic or future use.
-    setIsCallConnected(false);
-    setIsCallRecording(false);
-    setCallMicLevel(0);
-    stopCallTimer();
-    if (callMicIntervalRef.current) {
-      clearInterval(callMicIntervalRef.current);
-    }
-    setTimeout(() => {
-      cancelCall();
-    }, 1000);
-  };
-
-  const startCallRecording = async () => {
-    try {
-      // Request microphone permission
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-
-      // Create audio context for call
-      const callAudioContext = new (window.AudioContext ||
-        window.webkitAudioContext)();
-      const callAnalyser = callAudioContext.createAnalyser();
-      const callMicrophone = callAudioContext.createMediaStreamSource(stream);
-
-      // Connect microphone to analyzer
-      callMicrophone.connect(callAnalyser);
-
-      // Configure analyzer
-      callAnalyser.fftSize = 256;
-      const bufferLength = callAnalyser.frequencyBinCount;
-      const callDataArray = new Uint8Array(bufferLength);
-
-      setIsCallRecording(true);
-
-      // Start analyzing microphone input for call
-      const updateCallMicLevel = () => {
-        if (!isCallRecording) return;
-
-        callAnalyser.getByteFrequencyData(callDataArray);
-
-        // Calculate average volume level
-        let sum = 0;
-        for (let i = 0; i < callDataArray.length; i++) {
-          sum += callDataArray[i];
-        }
-        const average = sum / callDataArray.length;
-
-        // Convert to percentage (0-100)
-        const level = Math.min(100, (average / 255) * 100 * 3); // Multiply by 3 for better sensitivity
-        setCallMicLevel(level);
-
-        callMicIntervalRef.current = requestAnimationFrame(updateCallMicLevel);
-      };
-
-      updateCallMicLevel();
-
-      // Store references for cleanup
-      callMicIntervalRef.current = {
-        audioContext: callAudioContext,
-        stream: stream,
-        animationFrame: callMicIntervalRef.current,
-      };
-    } catch (error) {
-      console.error("Error accessing microphone for call:", error);
-      alert("Unable to access microphone. Please check permissions.");
-      setIsCallRecording(false);
-    }
-  };
-
-  const stopCallRecording = () => {
-    setIsCallRecording(false);
-    setCallMicLevel(0);
-
-    // Stop animation frame
-    if (
-      callMicIntervalRef.current &&
-      callMicIntervalRef.current.animationFrame
-    ) {
-      cancelAnimationFrame(callMicIntervalRef.current.animationFrame);
-    }
-
-    // Stop microphone stream
-    if (callMicIntervalRef.current && callMicIntervalRef.current.stream) {
-      callMicIntervalRef.current.stream
-        .getTracks()
-        .forEach((track) => track.stop());
-    }
-
-    // Close audio context
-    if (callMicIntervalRef.current && callMicIntervalRef.current.audioContext) {
-      callMicIntervalRef.current.audioContext.close();
-    }
-
-    // Reset ref
-    callMicIntervalRef.current = null;
-
-    // Simulate processing and add message
-    setTimeout(() => {
-      const newMessage = {
-        id: callMessages.length + 1,
-        type: "human",
-        message: "Voice message sent during call",
-        timestamp: new Date(),
-      };
-      setCallMessages((prev) => [...prev, newMessage]);
-
-      // Simulate AI response
-      setTimeout(() => {
-        const aiResponse = {
-          id: callMessages.length + 2,
-          type: "ai",
-          message: "I heard your voice message. How can I assist you further?",
-          timestamp: new Date(),
-        };
-        setCallMessages((prev) => [...prev, aiResponse]);
-      }, 1000);
-    }, 1000);
-  };
-
-  const sendCallMessage = () => {
-    if (currentCallMessage.trim()) {
-      const newMessage = {
-        id: callMessages.length + 1,
-        type: "human",
-        message: currentCallMessage,
-        timestamp: new Date(),
-      };
-      setCallMessages((prev) => [...prev, newMessage]);
-      setCurrentCallMessage("");
-
-      // Simulate AI response
-      setTimeout(() => {
-        const aiResponse = {
-          id: callMessages.length + 2,
-          type: "ai",
-          message:
-            "I understand. Let me help you with that. Is there anything specific you'd like to know?",
-          timestamp: new Date(),
-        };
-        setCallMessages((prev) => [...prev, aiResponse]);
-      }, 1000);
-    }
-  };
-
-  const startVoiceRecording = async () => {
-    try {
-      // Request microphone permission
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-
-      // Create audio context
-      audioContextRef.current = new (window.AudioContext ||
-        window.webkitAudioContext)();
-      analyserRef.current = audioContextRef.current.createAnalyser();
-      microphoneRef.current =
-        audioContextRef.current.createMediaStreamSource(stream);
-
-      // Connect microphone to analyzer
-      microphoneRef.current.connect(analyserRef.current);
-
-      // Configure analyzer
-      analyserRef.current.fftSize = 256;
-      const bufferLength = analyserRef.current.frequencyBinCount;
-      dataArrayRef.current = new Uint8Array(bufferLength);
-
-      setIsRecording(true);
-
-      // Start analyzing microphone input
-      const updateMicLevel = () => {
-        if (!isRecording) return;
-
-        analyserRef.current.getByteFrequencyData(dataArrayRef.current);
-
-        // Calculate average volume level
-        let sum = 0;
-        for (let i = 0; i < dataArrayRef.current.length; i++) {
-          sum += dataArrayRef.current[i];
-        }
-        const average = sum / dataArrayRef.current.length;
-
-        // Convert to percentage (0-100)
-        const level = Math.min(100, (average / 255) * 100 * 3); // Multiply by 3 for better sensitivity
-        setMicLevel(level);
-
-        animationFrameRef.current = requestAnimationFrame(updateMicLevel);
-      };
-
-      updateMicLevel();
-    } catch (error) {
-      console.error("Error accessing microphone:", error);
-      alert("Unable to access microphone. Please check permissions.");
-      setIsRecording(false);
-    }
-  };
-
-  const stopVoiceRecording = () => {
-    setIsRecording(false);
-    setMicLevel(0);
-
-    // Stop animation frame
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
-    }
-
-    // Stop microphone stream
-    if (microphoneRef.current && microphoneRef.current.mediaStream) {
-      microphoneRef.current.mediaStream
-        .getTracks()
-        .forEach((track) => track.stop());
-    }
-
-    // Close audio context
-    if (audioContextRef.current) {
-      audioContextRef.current.close();
-      audioContextRef.current = null;
-    }
-
-    // Reset refs
-    analyserRef.current = null;
-    microphoneRef.current = null;
-    dataArrayRef.current = null;
-
-    // Simulate processing and add message
-    setTimeout(() => {
-      const newMessage = {
-        id: voiceChatMessages.length + 1,
-        type: "human",
-        message: "This is a voice message I just recorded.",
-        timestamp: new Date(),
-      };
-      setVoiceChatMessages((prev) => [...prev, newMessage]);
-
-      // Simulate AI response
-      setTimeout(() => {
-        const aiResponse = {
-          id: voiceChatMessages.length + 2,
-          type: "ai",
-          message: "I heard your voice message. How can I assist you further?",
-          timestamp: new Date(),
-        };
-        setVoiceChatMessages((prev) => [...prev, aiResponse]);
-      }, 1000);
-    }, 1000);
-  };
-
-  const sendVoiceMessage = () => {
-    if (currentVoiceMessage.trim()) {
-      const newMessage = {
-        id: voiceChatMessages.length + 1,
-        type: "human",
-        message: currentVoiceMessage,
-        timestamp: new Date(),
-      };
-      setVoiceChatMessages((prev) => [...prev, newMessage]);
-      setCurrentVoiceMessage("");
-
-      // Simulate AI response
-      setTimeout(() => {
-        const aiResponse = {
-          id: voiceChatMessages.length + 2,
-          type: "ai",
-          message:
-            "Thank you for your message. I'm here to help you with any questions or concerns.",
-          timestamp: new Date(),
-        };
-        setVoiceChatMessages((prev) => [...prev, aiResponse]);
-      }, 1000);
-    }
-  };
-
-  const closeVoiceChat = () => {
-    setShowVoiceChatModal(false);
-    setVoiceChatMessages([]);
-    setCurrentVoiceMessage("");
-    setIsRecording(false);
-    setMicLevel(0);
-
-    // Stop animation frame
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
-    }
-
-    // Stop microphone stream
-    if (microphoneRef.current && microphoneRef.current.mediaStream) {
-      microphoneRef.current.mediaStream
-        .getTracks()
-        .forEach((track) => track.stop());
-    }
-
-    // Close audio context
-    if (audioContextRef.current) {
-      audioContextRef.current.close();
-      audioContextRef.current = null;
-    }
-
-    // Reset refs
-    analyserRef.current = null;
-    microphoneRef.current = null;
-    dataArrayRef.current = null;
   };
 
   // Auto-scroll to bottom of messages
@@ -541,38 +674,16 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      // Cleanup voice chat microphone
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
-      if (microphoneRef.current && microphoneRef.current.mediaStream) {
-        microphoneRef.current.mediaStream
-          .getTracks()
-          .forEach((track) => track.stop());
-      }
-      if (audioContextRef.current) {
-        audioContextRef.current.close();
-      }
+      // Stop continuous streaming
+      stopContinuousAudioStreaming();
 
       // Cleanup call timer
       if (callTimerRef.current) {
         clearInterval(callTimerRef.current);
       }
 
-      // Cleanup call microphone
-      if (callMicIntervalRef.current) {
-        if (callMicIntervalRef.current.animationFrame) {
-          cancelAnimationFrame(callMicIntervalRef.current.animationFrame);
-        }
-        if (callMicIntervalRef.current.stream) {
-          callMicIntervalRef.current.stream
-            .getTracks()
-            .forEach((track) => track.stop());
-        }
-        if (callMicIntervalRef.current.audioContext) {
-          callMicIntervalRef.current.audioContext.close();
-        }
-      }
+      // Disconnect WebSocket
+      disconnectWebSocket();
     };
   }, []);
 
@@ -888,7 +999,6 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
 
               {callStage === "connected" && (
                 <div className="space-y-4">
-                  {/* Call Status */}
                   <div className="flex flex-col items-center justify-center py-12 space-y-6">
                     <div className="relative">
                       <div className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center">
@@ -902,10 +1012,8 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
                       <h4 className="text-2xl font-bold text-green-700 mb-2">
                         Call Connected
                       </h4>
-                      {/* Removed duration display */}
                     </div>
                   </div>
-                  {/* Removed call messages display */}
                 </div>
               )}
             </div>
@@ -916,7 +1024,7 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
       {/* Voice Chat Modal */}
       {showVoiceChatModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-60">
-          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-hidden">
+          <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-hidden">
             {/* Header */}
             <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4 text-white">
               <div className="flex justify-between items-center">
@@ -924,9 +1032,33 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
                   <h3 className="text-lg font-semibold">
                     AI Talk ({agent.agentName})
                   </h3>
-                  <p className="text-sm opacity-90">
-                    Conversation with AI Agent
-                  </p>
+                  <div className="flex items-center gap-4 text-sm opacity-90">
+                    <div className="flex items-center gap-1">
+                      {wsConnectionStatus === 'connected' ? (
+                        <>
+                          <FiWifi className="w-3 h-3" />
+                          <span className="text-green-200">Connected</span>
+                        </>
+                      ) : wsConnectionStatus === 'connecting' ? (
+                        <>
+                          <FiLoader className="w-3 h-3 animate-spin" />
+                          <span className="text-yellow-200">Connecting...</span>
+                        </>
+                      ) : (
+                        <>
+                          <FiWifiOff className="w-3 h-3" />
+                          <span className="text-red-200">Disconnected</span>
+                        </>
+                      )}
+                    </div>
+                    <div className="text-xs">
+                      {isAudioStreaming ? (
+                        <span className="text-green-200">🎤 Streaming: {audioStats.chunksRecorded} chunks (160 bytes each)</span>
+                      ) : (
+                        <span className="text-gray-300">🎤 Not streaming</span>
+                      )}
+                    </div>
+                  </div>
                 </div>
                 <button
                   onClick={closeVoiceChat}
@@ -938,90 +1070,118 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
             </div>
 
             {/* Content */}
-            <div className="p-6 space-y-4">
-              {/* Chat Messages */}
-              <div className="h-64 overflow-y-auto border border-gray-200 rounded-lg p-4 space-y-3">
-                {voiceChatMessages.map((msg) => (
-                  <div
-                    key={msg.id}
-                    className={`flex ${
-                      msg.type === "human" ? "justify-end" : "justify-start"
-                    }`}
-                  >
+            <div className="p-6 grid grid-cols-2 gap-6 h-[70vh]">
+              {/* Left Side - Chat Messages */}
+              <div className="space-y-4">
+                <h4 className="font-semibold text-gray-800">Conversation</h4>
+                <div className="h-48 overflow-y-auto border border-gray-200 rounded-lg p-4 space-y-3">
+                  {voiceChatMessages.map((msg) => (
                     <div
-                      className={`max-w-xs px-4 py-2 rounded-lg ${
-                        msg.type === "human"
-                          ? "bg-blue-600 text-white"
-                          : "bg-gray-100 text-gray-800"
+                      key={msg.id}
+                      className={`flex ${
+                        msg.type === "human" ? "justify-end" : "justify-start"
                       }`}
                     >
-                      <p className="text-sm">{msg.message}</p>
-                      <p className="text-xs opacity-70 mt-1">
-                        {msg.timestamp.toLocaleTimeString()}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-                <div ref={messagesEndRef} />
-              </div>
-
-              {/* Voice Recording Section */}
-              <div className="flex items-center justify-center py-4">
-                <div className="relative">
-                  <button
-                    onClick={
-                      isRecording ? stopVoiceRecording : startVoiceRecording
-                    }
-                    className={`w-16 h-16 rounded-full flex items-center justify-center transition-all duration-300 ${
-                      isRecording
-                        ? "bg-red-500 hover:bg-red-600 scale-110"
-                        : "bg-blue-600 hover:bg-blue-700"
-                    }`}
-                  >
-                    <FiMic className="w-6 h-6 text-white" />
-                  </button>
-
-                  {/* Mic Level Indicator */}
-                  {isRecording && (
-                    <div className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center animate-pulse">
                       <div
-                        className="w-3 h-3 bg-white rounded-full"
-                        style={{
-                          transform: `scale(${0.5 + (micLevel / 100) * 0.5})`,
-                          transition: "transform 0.1s ease",
-                        }}
-                      />
+                        className={`max-w-xs px-4 py-2 rounded-lg ${
+                          msg.type === "human"
+                            ? "bg-blue-600 text-white"
+                            : "bg-gray-100 text-gray-800"
+                        }`}
+                      >
+                        <p className="text-sm">{msg.message}</p>
+                        <p className="text-xs opacity-70 mt-1">
+                          {msg.timestamp.toLocaleTimeString()}
+                        </p>
+                      </div>
                     </div>
+                  ))}
+                  
+                  {/* AI Talking Indicator */}
+                  {isAITalking && (
+                    <div className="flex justify-start">
+                      <div className="bg-gray-100 text-gray-800 px-4 py-2 rounded-lg">
+                        <div className="flex items-center gap-2">
+                          <div className="flex space-x-1">
+                            <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"></div>
+                            <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
+                            <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+                          </div>
+                          <span className="text-sm">AI is speaking...</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  <div ref={messagesEndRef} />
+                </div>
+
+                {/* Audio Streaming Indicator */}
+                <div className="flex items-center justify-center py-4">
+                  <div className="relative">
+                    <div className={`w-16 h-16 rounded-full flex items-center justify-center transition-all duration-300 ${
+                      isAudioStreaming
+                        ? "bg-green-500 scale-110"
+                        : wsConnectionStatus === 'connected'
+                        ? "bg-blue-600"
+                        : "bg-gray-400"
+                    }`}>
+                      <FiMic className="w-6 h-6 text-white" />
+                    </div>
+
+                    {/* Mic Level Indicator */}
+                    {isAudioStreaming && (
+                      <div className="absolute -top-2 -right-2 w-6 h-6 bg-green-500 rounded-full flex items-center justify-center animate-pulse">
+                        <div
+                          className="w-3 h-3 bg-white rounded-full"
+                          style={{
+                            transform: `scale(${0.5 + (micLevel / 100) * 0.5})`,
+                            transition: "transform 0.1s ease",
+                          }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Status */}
+                <div className="text-center">
+                  <p className="text-sm text-gray-600">
+                    {wsConnectionStatus !== 'connected'
+                      ? "Connecting to voice service..."
+                      : isAudioStreaming
+                      ? "🎤 Continuously streaming 160-byte audio chunks"
+                      : "Waiting to start audio streaming..."}
+                  </p>
+                  {audioStats.lastChunkTime && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      Last chunk: {audioStats.lastChunkTime} | Total: {audioStats.bytesProcessed} bytes
+                    </p>
                   )}
                 </div>
               </div>
 
-              {/* Text Input */}
-              {/* <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={currentVoiceMessage}
-                  onChange={(e) => setCurrentVoiceMessage(e.target.value)}
-                  placeholder="Or type your message..."
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  onKeyPress={(e) => e.key === "Enter" && sendVoiceMessage()}
-                />
-                <button
-                  onClick={sendVoiceMessage}
-                  disabled={!currentVoiceMessage.trim()}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
-                >
-                  <FiSend className="w-4 h-4" />
-                </button>
-              </div> */}
-
-              {/* Status */}
-              <div className="text-center">
-                <p className="text-sm text-gray-600">
-                  {isRecording
-                    ? "Recording... Click to stop"
-                    : "Click the mic to start recording"}
-                </p>
+              {/* Right Side - Debug Logs */}
+              <div className="space-y-4">
+                <h4 className="font-semibold text-gray-800">Debug Logs</h4>
+                <div className="h-96 overflow-y-auto border border-gray-200 rounded-lg p-4 bg-gray-50 font-mono text-xs">
+                  {debugLogs.map((log, index) => (
+                    <div
+                      key={index}
+                      className={`mb-1 ${
+                        log.type === 'error' ? 'text-red-600' :
+                        log.type === 'success' ? 'text-green-600' :
+                        log.type === 'warning' ? 'text-yellow-600' :
+                        'text-gray-700'
+                      }`}
+                    >
+                      <span className="text-gray-500">[{log.timestamp}]</span> {log.message}
+                    </div>
+                  ))}
+                  {debugLogs.length === 0 && (
+                    <div className="text-gray-500 italic">Debug logs will appear here...</div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
