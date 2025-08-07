@@ -21,6 +21,7 @@ import {
   FiLoader,
   FiCheckCircle,
   FiAlertCircle,
+  FiArrowUpRight,
 } from "react-icons/fi";
 import { API_BASE_URL } from "../../../config";
 
@@ -32,7 +33,6 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [contactName, setContactName] = useState("");
   const [callStage, setCallStage] = useState("input");
-  const [voiceChatMessages, setVoiceChatMessages] = useState([]);
   const [micLevel, setMicLevel] = useState(0);
   const [callDuration, setCallDuration] = useState(0);
   const [isCallConnected, setIsCallConnected] = useState(false);
@@ -64,11 +64,20 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
   const dataArrayRef = useRef(null);
   const animationFrameRef = useRef(null);
   const audioPlaybackContextRef = useRef(null);
-  const audioWorkletNodeRef = useRef(null);
   const streamRef = useRef(null);
   const isStreamingActiveRef = useRef(false);
+  const processorNodeRef = useRef(null);
+  const wsConnectionRef = useRef(null);
+  const streamSidRef = useRef(null);
 
-  const messagesEndRef = useRef(null);
+  // Audio playback buffer refs
+  const audioBufferQueueRef = useRef([]);
+  const isPlayingRef = useRef(false);
+  const audioSourceRef = useRef(null);
+  const audioBufferRef = useRef(null);
+  const playbackStartTimeRef = useRef(0);
+  const nextPlayTimeRef = useRef(0);
+
   const callTimerRef = useRef(null);
 
   // Debug logging function
@@ -101,7 +110,8 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
     setWsConnectionStatus('connecting');
     addDebugLog('Attempting WebSocket connection...', 'info');
     
-    const wsUrl = `wss://test.aitota.com/ws?clientId=${clientId}&agentId=${agent._id}`;
+    // Use the correct WebSocket URL format that matches your server
+    const wsUrl = `wss://test.aitota.com/ws`;
     addDebugLog(`Connecting to: ${wsUrl}`, 'info');
     
     const ws = new WebSocket(wsUrl);
@@ -109,11 +119,12 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
     ws.onopen = () => {
       addDebugLog('WebSocket connected successfully', 'success');
       setWsConnectionStatus('connected');
-      setWsConnection(ws);
       
+      // Generate a unique stream ID
       const streamId = `stream_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       setStreamSid(streamId);
       
+      // Send the start message in the format expected by your server
       const startMessage = {
         event: 'start',
         streamSid: streamId,
@@ -125,7 +136,8 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
           extraData: btoa(JSON.stringify({
             agentId: agent._id,
             agentName: agent.agentName,
-            clientId: clientId
+            clientId: clientId,
+            CallDirection: "InDial" // This will be treated as inbound
           }))
         }
       };
@@ -133,10 +145,32 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
       addDebugLog(`Sending start message: ${JSON.stringify(startMessage)}`, 'info');
       ws.send(JSON.stringify(startMessage));
       
-      // Auto-start audio streaming once WebSocket is connected
+      // Set the WebSocket connection AFTER sending the start message
+      setWsConnection(ws);
+      wsConnectionRef.current = ws;
+      streamSidRef.current = streamId;
+      
+      // Start audio streaming after connection is established and start message sent
       setTimeout(() => {
         startContinuousAudioStreaming();
-      }, 1000);
+      }, 1000); // Increased delay to ensure WebSocket state is updated
+      
+      // Retry audio streaming start if it fails initially
+      setTimeout(() => {
+        if (!isStreamingActiveRef.current && wsConnectionRef.current && wsConnectionRef.current.readyState === WebSocket.OPEN) {
+          addDebugLog('Retrying audio streaming start...', 'info');
+          startContinuousAudioStreaming();
+        }
+      }, 3000);
+      
+      // Also trigger a manual audio context resume
+      setTimeout(() => {
+        if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
+          audioContextRef.current.resume().then(() => {
+            addDebugLog('Audio context manually resumed', 'success');
+          });
+        }
+      }, 1500);
     };
     
     ws.onmessage = (event) => {
@@ -158,7 +192,9 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
       addDebugLog(`WebSocket disconnected. Code: ${event.code}, Reason: ${event.reason}`, 'warning');
       setWsConnectionStatus('disconnected');
       setWsConnection(null);
+      wsConnectionRef.current = null;
       setStreamSid(null);
+      streamSidRef.current = null;
       stopContinuousAudioStreaming();
     };
   };
@@ -185,23 +221,29 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
         addDebugLog('Session stopped by server', 'info');
         break;
         
+      case 'error':
+        addDebugLog(`Server error: ${data.message || 'Unknown error'}`, 'error');
+        break;
+        
       default:
         addDebugLog(`Unknown WebSocket event: ${data.event}`, 'warning');
     }
   };
 
   const disconnectWebSocket = () => {
-    if (wsConnection) {
+    if (wsConnectionRef.current) {
       addDebugLog('Disconnecting WebSocket...', 'info');
-      wsConnection.send(JSON.stringify({
+      wsConnectionRef.current.send(JSON.stringify({
         event: 'stop',
-        streamSid: streamSid
+        streamSid: streamSidRef.current
       }));
       
-      wsConnection.close();
+      wsConnectionRef.current.close();
       setWsConnection(null);
+      wsConnectionRef.current = null;
       setWsConnectionStatus('disconnected');
       setStreamSid(null);
+      streamSidRef.current = null;
     }
     stopContinuousAudioStreaming();
   };
@@ -214,12 +256,23 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
         return;
       }
 
+      // Check if WebSocket is ready before starting audio streaming
+      if (!wsConnectionRef.current || wsConnectionRef.current.readyState !== WebSocket.OPEN) {
+        addDebugLog('WebSocket not ready, cannot start audio streaming', 'error');
+        return;
+      }
+
+      if (!streamSidRef.current) {
+        addDebugLog('No streamSid available, cannot start audio streaming', 'error');
+        return;
+      }
+
       addDebugLog('Starting continuous audio streaming...', 'info');
 
-      // Request microphone permission
+      // Request microphone permission with higher sample rate
       const stream = await navigator.mediaDevices.getUserMedia({ 
         audio: {
-          sampleRate: 8000,
+          sampleRate: 48000, // Use browser's native sample rate
           channelCount: 1,
           echoCancellation: true,
           noiseSuppression: true,
@@ -230,10 +283,13 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
       streamRef.current = stream;
       addDebugLog('Microphone access granted for continuous streaming', 'success');
 
-      // Create audio context
-      audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)({
-        sampleRate: 8000
-      });
+      // Create audio context with browser's default sample rate
+      audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
+
+      // Resume audio context if suspended
+      if (audioContextRef.current.state === 'suspended') {
+        await audioContextRef.current.resume();
+      }
 
       addDebugLog(`Audio context created with sample rate: ${audioContextRef.current.sampleRate}`, 'info');
       
@@ -244,59 +300,45 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
       analyserRef.current.fftSize = 256;
       source.connect(analyserRef.current);
       
-      // Try to use AudioWorkletNode (modern approach)
-      try {
-        await audioContextRef.current.audioWorklet.addModule('/audio-processor.js');
-        addDebugLog('AudioWorklet module loaded successfully', 'success');
+      // Use ScriptProcessorNode for reliable audio processing
+      const bufferSize = 4096; // Larger buffer for more stable processing
+      const scriptProcessor = audioContextRef.current.createScriptProcessor(bufferSize, 1, 1);
+      
+      let sampleBuffer = [];
+      const targetSampleRate = 8000; // Target sample rate for server
+      const downsampleRatio = audioContextRef.current.sampleRate / targetSampleRate;
+      let downsampleCounter = 0;
+      
+      scriptProcessor.onaudioprocess = (event) => {
+        if (!isStreamingActiveRef.current) {
+          return;
+        }
         
-        audioWorkletNodeRef.current = new AudioWorkletNode(audioContextRef.current, 'audio-processor');
+        const inputBuffer = event.inputBuffer;
+        const inputData = inputBuffer.getChannelData(0);
         
-        audioWorkletNodeRef.current.port.onmessage = (event) => {
-          if (event.data.type === 'audioData' && isStreamingActiveRef.current) {
-            processAudioData(event.data.data);
-          }
-        };
-        
-        // Activate the processor
-        audioWorkletNodeRef.current.port.postMessage({ type: 'activate' });
-        
-        source.connect(audioWorkletNodeRef.current);
-        audioWorkletNodeRef.current.connect(audioContextRef.current.destination);
-        
-        addDebugLog('AudioWorkletNode setup complete', 'success');
-        
-      } catch (workletError) {
-        addDebugLog(`AudioWorklet failed, falling back to ScriptProcessor: ${workletError.message}`, 'warning');
-        
-        // Fallback to ScriptProcessorNode with proper chunk size
-        const scriptProcessor = audioContextRef.current.createScriptProcessor(1024, 1, 1);
-        let sampleBuffer = [];
-        
-        scriptProcessor.onaudioprocess = (event) => {
-          if (!isStreamingActiveRef.current) return;
-          
-          const inputBuffer = event.inputBuffer;
-          const inputData = inputBuffer.getChannelData(0);
-          
-          // Accumulate samples
-          for (let i = 0; i < inputData.length; i++) {
+        // Downsample from browser's native sample rate to 8kHz
+        for (let i = 0; i < inputData.length; i++) {
+          downsampleCounter++;
+          if (downsampleCounter >= downsampleRatio) {
             sampleBuffer.push(inputData[i]);
+            downsampleCounter = 0;
             
-            // When we have 80 samples (160 bytes), process them
+            // When we have 80 samples (10ms at 8kHz), process them
             if (sampleBuffer.length >= 80) {
               const chunk = new Float32Array(sampleBuffer.splice(0, 80));
               processAudioData(chunk);
             }
           }
-        };
-        
-        source.connect(scriptProcessor);
-        scriptProcessor.connect(audioContextRef.current.destination);
-        
-        microphoneRef.current = { stream, scriptProcessor };
-        addDebugLog('ScriptProcessor fallback setup complete', 'success');
-      }
-
+        }
+      };
+      
+      source.connect(scriptProcessor);
+      scriptProcessor.connect(audioContextRef.current.destination);
+      
+      processorNodeRef.current = scriptProcessor;
+      microphoneRef.current = { stream, scriptProcessor };
+      
       isStreamingActiveRef.current = true;
       setIsAudioStreaming(true);
       
@@ -342,18 +384,11 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
       streamRef.current = null;
     }
 
-    // Cleanup audio components
-    if (microphoneRef.current && microphoneRef.current.scriptProcessor) {
-      microphoneRef.current.scriptProcessor.disconnect();
+    // Cleanup audio processor
+    if (processorNodeRef.current) {
+      processorNodeRef.current.disconnect();
+      processorNodeRef.current = null;
       addDebugLog('ScriptProcessor disconnected', 'info');
-    }
-
-    // Disconnect AudioWorkletNode
-    if (audioWorkletNodeRef.current) {
-      audioWorkletNodeRef.current.port.postMessage({ type: 'deactivate' });
-      audioWorkletNodeRef.current.disconnect();
-      audioWorkletNodeRef.current = null;
-      addDebugLog('AudioWorkletNode disconnected', 'info');
     }
 
     // Close audio context
@@ -377,10 +412,7 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
   };
 
   const processAudioData = (audioData) => {
-    if (!isStreamingActiveRef.current || !wsConnection || wsConnection.readyState !== WebSocket.OPEN) {
-      return;
-    }
-
+    // Always process audio data, regardless of WebSocket state initially
     try {
       // Convert float32 to int16 (80 samples = 160 bytes)
       const int16Array = new Int16Array(80);
@@ -388,37 +420,61 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
         int16Array[i] = Math.max(-32768, Math.min(32767, audioData[i] * 32768));
       }
       
-      // Convert to base64 using browser APIs
-      const bytes = new Uint8Array(int16Array.buffer); // This will be exactly 160 bytes
+      // Convert to base64
+      const bytes = new Uint8Array(int16Array.buffer);
       let binaryString = '';
       for (let i = 0; i < bytes.length; i++) {
         binaryString += String.fromCharCode(bytes[i]);
       }
       const base64Audio = btoa(binaryString);
       
-      // Update stats
+      // Get current WebSocket connection and streamSid from refs to avoid stale closures
+      const currentWs = wsConnectionRef.current;
+      const currentStreamSid = streamSidRef.current;
+      
+      // Update stats first (this will always happen)
       setAudioStats(prev => ({
         chunksRecorded: prev.chunksRecorded + 1,
-        chunksSent: prev.chunksSent + 1,
-        bytesProcessed: prev.bytesProcessed + 160, // Always 160 bytes
+        chunksSent: currentWs && currentWs.readyState === WebSocket.OPEN ? prev.chunksSent + 1 : prev.chunksSent,
+        bytesProcessed: prev.bytesProcessed + 160,
         lastChunkTime: new Date().toLocaleTimeString(),
         streamingActive: true
       }));
       
-      // Send via WebSocket
-      const mediaMessage = {
-        event: 'media',
-        streamSid: streamSid,
-        media: {
-          payload: base64Audio
+      // Send via WebSocket only if connection is ready
+      if (currentWs && currentWs.readyState === WebSocket.OPEN && currentStreamSid) {
+        const mediaMessage = {
+          event: 'media',
+          streamSid: currentStreamSid,
+          media: {
+            payload: base64Audio
+          }
+        };
+        
+        currentWs.send(JSON.stringify(mediaMessage));
+        
+        // Log every 25th chunk to show activity
+        setAudioStats(prev => {
+          if (prev.chunksSent % 25 === 0) {
+            addDebugLog(`Sent audio chunk #${prev.chunksSent + 1} (160 bytes, ${base64Audio.length} chars base64)`, 'info');
+          }
+          return prev;
+        });
+      } else {
+        // Log connection issues with more detail
+        if (!currentWs) {
+          addDebugLog('No WebSocket connection - audio chunk generated but not sent', 'warning');
+        } else if (currentWs.readyState !== WebSocket.OPEN) {
+          const stateNames = {
+            0: 'CONNECTING',
+            1: 'OPEN',
+            2: 'CLOSING',
+            3: 'CLOSED'
+          };
+          addDebugLog(`WebSocket not ready (state: ${stateNames[currentWs.readyState] || currentWs.readyState}) - audio chunk generated but not sent`, 'warning');
+        } else if (!currentStreamSid) {
+          addDebugLog('No streamSid - audio chunk generated but not sent', 'warning');
         }
-      };
-      
-      wsConnection.send(JSON.stringify(mediaMessage));
-      
-      // Log every 50th chunk to avoid spam but show activity
-      if (audioStats.chunksSent % 50 === 0) {
-        addDebugLog(`Sent 160-byte audio chunk #${audioStats.chunksSent + 1}, base64 size: ${base64Audio.length} chars`, 'info');
       }
       
     } catch (error) {
@@ -449,10 +505,10 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
     animationFrameRef.current = requestAnimationFrame(updateMicLevel);
   };
 
-  // Audio playback for AI responses
+  // Continuous audio playback for AI responses
   const playAudioChunk = async (base64Audio) => {
     try {
-      addDebugLog(`Playing audio chunk: ${base64Audio.length} chars`, 'info');
+      addDebugLog(`Received audio chunk: ${base64Audio.length} chars`, 'info');
       
       if (!audioPlaybackContextRef.current) {
         audioPlaybackContextRef.current = new (window.AudioContext || window.webkitAudioContext)({
@@ -463,14 +519,19 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
 
       const audioContext = audioPlaybackContextRef.current;
       
-      // Convert base64 to binary data using browser APIs
+      // Ensure audio context is running
+      if (audioContext.state === 'suspended') {
+        await audioContext.resume();
+      }
+      
+      // Convert base64 to binary data
       const binaryString = atob(base64Audio);
       const bytes = new Uint8Array(binaryString.length);
       for (let i = 0; i < binaryString.length; i++) {
         bytes[i] = binaryString.charCodeAt(i);
       }
       
-      // Convert bytes to Int16Array (assuming the audio data is 16-bit PCM)
+      // Convert bytes to Int16Array (assuming 16-bit PCM)
       const int16Array = new Int16Array(bytes.buffer);
       const float32Array = new Float32Array(int16Array.length);
       
@@ -479,28 +540,124 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
         float32Array[i] = int16Array[i] / 32768;
       }
       
+      // Add to buffer queue
+      audioBufferQueueRef.current.push({
+        data: float32Array,
+        timestamp: Date.now()
+      });
+      
+      // Limit buffer size to prevent memory issues (keep last 100 chunks = ~4 seconds)
+      if (audioBufferQueueRef.current.length > 100) {
+        audioBufferQueueRef.current = audioBufferQueueRef.current.slice(-100);
+        addDebugLog('Buffer queue trimmed to prevent memory overflow', 'info');
+      }
+      
+      // Start playback if not already playing
+      if (!isPlayingRef.current) {
+        startContinuousPlayback();
+      }
+      
+    } catch (error) {
+      addDebugLog(`Error processing audio chunk: ${error.message}`, 'error');
+    }
+  };
+
+  // Start continuous audio playback
+  const startContinuousPlayback = async () => {
+    if (isPlayingRef.current) return;
+    
+    try {
+      isPlayingRef.current = true;
+      setIsAITalking(true);
+      
+      const audioContext = audioPlaybackContextRef.current;
+      if (!audioContext) return;
+      
+      // Ensure audio context is running
+      if (audioContext.state === 'suspended') {
+        await audioContext.resume();
+      }
+      
+      // Initialize playback timing with a small delay to ensure smooth start
+      const startDelay = 0.1; // 100ms delay
+      playbackStartTimeRef.current = audioContext.currentTime + startDelay;
+      nextPlayTimeRef.current = audioContext.currentTime + startDelay;
+      
+      addDebugLog(`Starting continuous audio playback with ${startDelay}s delay`, 'success');
+      
+      // Start the playback loop
+      setTimeout(() => {
+        scheduleNextChunk();
+      }, startDelay * 150);
+      
+    } catch (error) {
+      addDebugLog(`Error starting continuous playback: ${error.message}`, 'error');
+      isPlayingRef.current = false;
+      setIsAITalking(false);
+    }
+  };
+
+  // Schedule the next audio chunk for playback
+  const scheduleNextChunk = () => {
+    if (!isPlayingRef.current || !audioPlaybackContextRef.current) return;
+    
+    const audioContext = audioPlaybackContextRef.current;
+    const queue = audioBufferQueueRef.current;
+    
+    if (queue.length === 0) {
+      // No more chunks, stop playback
+      isPlayingRef.current = false;
+      setIsAITalking(false);
+      addDebugLog('Audio playback queue empty, stopping', 'info');
+      return;
+    }
+    
+    // Process multiple chunks at once for better performance
+    const chunksToProcess = Math.min(queue.length, 5); // Process up to 5 chunks at once
+    let totalDuration = 0;
+    
+    for (let i = 0; i < chunksToProcess; i++) {
+      const chunk = queue.shift();
+      const float32Array = chunk.data;
+      
       // Create audio buffer
       const buffer = audioContext.createBuffer(1, float32Array.length, 8000);
       buffer.getChannelData(0).set(float32Array);
       
-      // Play audio
+      // Create and schedule audio source
       const source = audioContext.createBufferSource();
       source.buffer = buffer;
       source.connect(audioContext.destination);
       
-      source.onended = () => {
-        setIsAITalking(false);
-        addDebugLog('Audio playback ended', 'info');
-      };
+      // Schedule playback at the correct time
+      const chunkDuration = float32Array.length / 8000; // Duration in seconds
+      source.start(nextPlayTimeRef.current + totalDuration);
       
-      setIsAITalking(true);
-      source.start();
-      addDebugLog('Audio playback started', 'success');
-      
-    } catch (error) {
-      addDebugLog(`Error playing audio chunk: ${error.message}`, 'error');
-      setIsAITalking(false);
+      totalDuration += chunkDuration;
     }
+    
+    // Update next play time
+    nextPlayTimeRef.current += totalDuration;
+    
+    // Schedule next batch of chunks
+    const timeUntilNext = (nextPlayTimeRef.current - audioContext.currentTime) * 1000;
+    setTimeout(() => {
+      scheduleNextChunk();
+    }, Math.max(0, timeUntilNext - 20)); // 20ms buffer for batch processing
+    
+    // Log every 25th chunk (approximately every second)
+    if (queue.length % 25 === 0) {
+      addDebugLog(`Playing chunks, queue length: ${queue.length}, processed: ${chunksToProcess}`, 'info');
+    }
+  };
+
+  // Stop continuous audio playback
+  const stopContinuousPlayback = () => {
+    isPlayingRef.current = false;
+    setIsAITalking(false);
+    audioBufferQueueRef.current = [];
+    nextPlayTimeRef.current = 0;
+    addDebugLog('Continuous audio playback stopped', 'info');
   };
 
   const playAudio = async () => {
@@ -534,14 +691,6 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
 
   const handleVoiceChat = () => {
     setShowVoiceChatModal(true);
-    setVoiceChatMessages([
-      {
-        id: 1,
-        type: "ai",
-        message: agent.firstMessage || "Hello! I'm here to help you. How can I assist you today?",
-        timestamp: new Date(),
-      },
-    ]);
     
     // Clear debug logs
     setDebugLogs([]);
@@ -554,12 +703,14 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
   const closeVoiceChat = () => {
     addDebugLog('Closing voice chat...', 'info');
     setShowVoiceChatModal(false);
-    setVoiceChatMessages([]);
     setMicLevel(0);
     setIsAITalking(false);
 
     // Stop continuous streaming
     stopContinuousAudioStreaming();
+    
+    // Stop continuous playback
+    stopContinuousPlayback();
     
     // Disconnect WebSocket
     disconnectWebSocket();
@@ -667,15 +818,16 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
   };
 
   // Auto-scroll to bottom of messages
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [voiceChatMessages, callMessages]);
+  
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
       // Stop continuous streaming
       stopContinuousAudioStreaming();
+
+      // Stop continuous playback
+      stopContinuousPlayback();
 
       // Cleanup call timer
       if (callTimerRef.current) {
@@ -702,6 +854,39 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
               <p className="text-gray-300 text-sm mt-1">
                 Agent ID: {agent._id}
               </p>
+              {/* Audio Preview Section */}
+              <div className="flex items-center gap-4 pt-5">
+                <button
+                  onClick={isPlaying ? stopAudio : playAudio}
+                  className={`inline-flex  text-black items-center gap-2 px-6 py-3 text-sm font-medium rounded-lg transition-colors shadow-sm ${
+                    isPlaying
+                      ? "bg-black text-white hover:bg-gray-800 "
+                      : "bg-white text-black hover:bg-gray-200"
+                  }`}
+                >
+                  {isPlaying ? (
+                    <>
+                      <FiSquare className="w-4 h-4" />
+                      Stop Audio
+                    </>
+                  ) : (
+                    <>
+                      <FiVolume2 className="w-4 h-4" />
+                      Play Audio
+                    </>
+                  )}
+                </button>
+
+                {isPlaying && audioUrl && (
+                  <audio
+                    controls
+                    autoPlay
+                    src={audioUrl}
+                    onEnded={stopAudio}
+                    className="flex-1"
+                  />
+                )}
+              </div>
             </div>
             <button
               onClick={onClose}
@@ -788,7 +973,7 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
                 </div>
 
                 <div className="flex items-center gap-3 p-3 bg-white border border-gray-200 rounded-lg">
-                  <FiPhone className="w-4 h-4 text-gray-600 flex-shrink-0" />
+                  <FiMic className="w-4 h-4 text-gray-600 flex-shrink-0" />
                   <div>
                     <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">
                       Voice Selection
@@ -807,6 +992,30 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
                     </span>
                     <p className="text-sm font-medium text-gray-800">
                       {agent.language || "English"}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 p-3 bg-white border border-gray-200 rounded-lg">
+                  <FiArrowUpRight className="w-4 h-4 text-gray-600 flex-shrink-0" />
+                  <div>
+                    <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                      Calling Number
+                    </span>
+                    <p className="text-sm font-medium text-gray-800">
+                      {agent.callingNumber}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 p-3 bg-white border border-gray-200 rounded-lg">
+                  <FiPhone className="w-4 h-4 text-gray-600 flex-shrink-0" />
+                  <div>
+                    <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                      Calling type
+                    </span>
+                    <p className="text-sm font-medium text-gray-800">
+                      {agent.callingType}
                     </p>
                   </div>
                 </div>
@@ -838,53 +1047,14 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
                     <span className="text-xs font-small text-gray-500 uppercase tracking-wide">
                       Knowledge Base
                     </span>
-                    <p className="text-sm font-small text-gray-800">
-                      {agent.systemPrompt || "Not specified"}
-                    </p>
+                    <div className="text-sm font-small text-gray-800 max-h-40 overflow-y-auto pr-2">
+                      <p className="whitespace-pre-line line-clamp-7 overflow-auto">
+                        {agent.systemPrompt || "Not specified"}
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          </div>
-
-          {/* Audio Preview Section */}
-          <div className="bg-gray-50 rounded-lg p-4">
-            <h3 className="text-lg font-semibold text-gray-800 mb-3 flex items-center gap-2">
-              <FiVolume2 className="w-5 h-5" />
-              Voice Preview
-            </h3>
-
-            <div className="flex items-center gap-4">
-              <button
-                onClick={isPlaying ? stopAudio : playAudio}
-                className={`inline-flex items-center gap-2 px-6 py-3 text-sm font-medium rounded-lg transition-colors shadow-sm ${
-                  isPlaying
-                    ? "bg-red-600 text-white hover:bg-red-700"
-                    : "bg-black text-white hover:bg-gray-800"
-                }`}
-              >
-                {isPlaying ? (
-                  <>
-                    <FiSquare className="w-4 h-4" />
-                    Stop Audio
-                  </>
-                ) : (
-                  <>
-                    <FiVolume2 className="w-4 h-4" />
-                    Play Audio
-                  </>
-                )}
-              </button>
-
-              {isPlaying && audioUrl && (
-                <audio
-                  controls
-                  autoPlay
-                  src={audioUrl}
-                  onEnded={stopAudio}
-                  className="flex-1"
-                />
-              )}
             </div>
           </div>
 
@@ -1021,7 +1191,7 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
         </div>
       )}
 
-      {/* Voice Chat Modal */}
+      {/* Voice Chat Modal - Pure Voice-to-Voice Interface (from AgentDetails) */}
       {showVoiceChatModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-60">
           <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-hidden">
@@ -1030,7 +1200,7 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
               <div className="flex justify-between items-center">
                 <div>
                   <h3 className="text-lg font-semibold">
-                    AI Talk ({agent.agentName})
+                    Voice Chat with {agent.agentName}
                   </h3>
                   <div className="flex items-center gap-4 text-sm opacity-90">
                     <div className="flex items-center gap-1">
@@ -1053,9 +1223,12 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
                     </div>
                     <div className="text-xs">
                       {isAudioStreaming ? (
-                        <span className="text-green-200">🎤 Streaming: {audioStats.chunksRecorded} chunks (160 bytes each)</span>
+                        <span className="text-green-200">🎤 Active: {audioStats.chunksRecorded} chunks generated, {audioStats.chunksSent} sent</span>
                       ) : (
-                        <span className="text-gray-300">🎤 Not streaming</span>
+                        <span className="text-gray-300">🎤 Inactive</span>
+                      )}
+                      {isAITalking && (
+                        <span className="text-blue-200 ml-2">🔊 Buffer: {audioBufferQueueRef.current.length} chunks</span>
                       )}
                     </div>
                   </div>
@@ -1069,120 +1242,195 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
               </div>
             </div>
 
-            {/* Content */}
-            <div className="p-6 grid grid-cols-2 gap-6 h-[70vh]">
-              {/* Left Side - Chat Messages */}
-              <div className="space-y-4">
-                <h4 className="font-semibold text-gray-800">Conversation</h4>
-                <div className="h-48 overflow-y-auto border border-gray-200 rounded-lg p-4 space-y-3">
-                  {voiceChatMessages.map((msg) => (
-                    <div
-                      key={msg.id}
-                      className={`flex ${
-                        msg.type === "human" ? "justify-end" : "justify-start"
-                      }`}
-                    >
-                      <div
-                        className={`max-w-xs px-4 py-2 rounded-lg ${
-                          msg.type === "human"
-                            ? "bg-blue-600 text-white"
-                            : "bg-gray-100 text-gray-800"
-                        }`}
-                      >
-                        <p className="text-sm">{msg.message}</p>
-                        <p className="text-xs opacity-70 mt-1">
-                          {msg.timestamp.toLocaleTimeString()}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                  
-                  {/* AI Talking Indicator */}
-                  {isAITalking && (
-                    <div className="flex justify-start">
-                      <div className="bg-gray-100 text-gray-800 px-4 py-2 rounded-lg">
-                        <div className="flex items-center gap-2">
-                          <div className="flex space-x-1">
-                            <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"></div>
-                            <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
-                            <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
-                          </div>
-                          <span className="text-sm">AI is speaking...</span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                  
-                  <div ref={messagesEndRef} />
+            {/* Main Voice Interface */}
+            <div className="p-8 flex flex-col items-center justify-center min-h-[500px] space-y-8">
+              {/* Connection Status */}
+              <div className="text-center">
+                <div className={`text-lg font-semibold mb-2 ${
+                  wsConnectionStatus === 'connected' ? 'text-green-600' :
+                  wsConnectionStatus === 'connecting' ? 'text-yellow-600' :
+                  'text-red-600'
+                }`}>
+                  {wsConnectionStatus === 'connected' ? 'Voice Chat Active' :
+                   wsConnectionStatus === 'connecting' ? 'Connecting...' :
+                   'Connection Failed'}
+                </div>
+                <div className="text-gray-600 text-sm">
+                  {wsConnectionStatus === 'connected' 
+                    ? 'Speak naturally - the AI will respond in real-time'
+                    : wsConnectionStatus === 'connecting'
+                    ? 'Please wait while we establish the connection'
+                    : 'Check your connection and try again'
+                  }
+                </div>
+              </div>
+
+              {/* Large Microphone Visualization */}
+              <div className="relative">
+                {/* Main microphone circle */}
+                <div className={`w-32 h-32 rounded-full flex items-center justify-center transition-all duration-300 ${
+                  isAudioStreaming
+                    ? "bg-green-500 scale-110"
+                    : wsConnectionStatus === 'connected'
+                    ? "bg-blue-600"
+                    : "bg-gray-400"
+                }`}>
+                  <FiMic className="w-12 h-12 text-white" />
                 </div>
 
-                {/* Audio Streaming Indicator */}
-                <div className="flex items-center justify-center py-4">
-                  <div className="relative">
-                    <div className={`w-16 h-16 rounded-full flex items-center justify-center transition-all duration-300 ${
-                      isAudioStreaming
-                        ? "bg-green-500 scale-110"
-                        : wsConnectionStatus === 'connected'
-                        ? "bg-blue-600"
-                        : "bg-gray-400"
-                    }`}>
-                      <FiMic className="w-6 h-6 text-white" />
-                    </div>
+                {/* Microphone level indicator rings */}
+                {isAudioStreaming && (
+                  <>
+                    <div 
+                      className="absolute inset-0 rounded-full border-4 border-green-300 animate-ping"
+                      style={{
+                        animationDuration: '2s',
+                        opacity: Math.min(0.8, micLevel / 100)
+                      }}
+                    />
+                    <div 
+                      className="absolute inset-[-8px] rounded-full border-2 border-green-200 animate-pulse"
+                      style={{
+                        animationDuration: '1.5s',
+                        opacity: Math.min(0.6, micLevel / 100)
+                      }}
+                    />
+                  </>
+                )}
 
-                    {/* Mic Level Indicator */}
-                    {isAudioStreaming && (
-                      <div className="absolute -top-2 -right-2 w-6 h-6 bg-green-500 rounded-full flex items-center justify-center animate-pulse">
-                        <div
-                          className="w-3 h-3 bg-white rounded-full"
-                          style={{
-                            transform: `scale(${0.5 + (micLevel / 100) * 0.5})`,
-                            transition: "transform 0.1s ease",
-                          }}
-                        />
+                {/* AI Talking indicator */}
+                {isAITalking && (
+                  <div className="absolute -bottom-4 -right-4 bg-blue-500 text-white px-3 py-1 rounded-full text-sm flex items-center gap-1">
+                    <div className="flex space-x-1">
+                      <div className="w-1 h-3 bg-white rounded animate-pulse"></div>
+                      <div className="w-1 h-3 bg-white rounded animate-pulse" style={{animationDelay: '0.1s'}}></div>
+                      <div className="w-1 h-3 bg-white rounded animate-pulse" style={{animationDelay: '0.2s'}}></div>
+                    </div>
+                    <span className="ml-1">AI Speaking</span>
+                  </div>
+                )}
+
+                {/* Microphone level bar */}
+                {isAudioStreaming && (
+                  <div className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 w-24 h-2 bg-gray-200 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-green-500 transition-all duration-100 ease-out rounded-full"
+                      style={{ width: `${Math.min(100, micLevel)}%` }}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Status Messages */}
+              <div className="text-center space-y-2">
+                {wsConnectionStatus === 'connected' && isAudioStreaming ? (
+                  <div className="text-green-600 font-medium">
+                    🎤 Listening... Speak to the AI
+                  </div>
+                ) : wsConnectionStatus === 'connected' && !isAudioStreaming ? (
+                  <div className="text-blue-600 font-medium">
+                    🔄 Starting audio stream...
+                  </div>
+                ) : wsConnectionStatus === 'connecting' ? (
+                  <div className="text-yellow-600 font-medium">
+                    🔄 Establishing voice connection...
+                  </div>
+                ) : (
+                  <div className="text-red-600 font-medium">
+                    ❌ Connection failed
+                  </div>
+                )}
+                
+                {isAITalking && (
+                  <div className="text-blue-600">
+                    🔊 AI is responding...
+                  </div>
+                )}
+              </div>
+
+              {/* Manual Controls for Debugging */}
+              {wsConnectionStatus === 'connected' && (
+                <div className="flex gap-4 text-sm">
+                  {!isAudioStreaming ? (
+                    <button
+                      onClick={startContinuousAudioStreaming}
+                      className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                    >
+                      Start Audio Stream
+                    </button>
+                  ) : (
+                    <button
+                      onClick={stopContinuousAudioStreaming}
+                      className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                    >
+                      Stop Audio Stream
+                    </button>
+                  )}
+                  <button
+                    onClick={() => {
+                      if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
+                        audioContextRef.current.resume();
+                        addDebugLog('Manually resumed audio context', 'info');
+                      }
+                    }}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    Resume Audio Context
+                  </button>
+                </div>
+              )}
+
+              {/* Audio Stats */}
+              {isAudioStreaming && (
+                <div className="text-center text-xs text-gray-500 space-y-1">
+                  <div>
+                    <span className="font-medium">Audio Processing:</span> {audioStats.chunksRecorded} chunks generated | 
+                    <span className="font-medium text-green-600"> {audioStats.chunksSent} sent</span> | 
+                    {audioStats.bytesProcessed} bytes total
+                  </div>
+                  {audioStats.lastChunkTime && (
+                    <div>Last Activity: {audioStats.lastChunkTime}</div>
+                  )}
+                  <div className="text-xs text-blue-600">
+                    {audioStats.chunksRecorded > 0 && audioStats.chunksSent === 0 
+                      ? "⚠️ Generating audio but WebSocket not ready"
+                      : audioStats.chunksSent > 0 
+                      ? "✅ Successfully streaming to server"
+                      : "🔄 Initializing audio capture..."
+                    }
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Debug Panel (Collapsible) */}
+            <div className="border-t border-gray-200">
+              <details className="group">
+                <summary className="px-6 py-3 cursor-pointer text-sm font-medium text-gray-600 hover:text-gray-800 flex items-center gap-2">
+                  <span>Debug Logs</span>
+                  <span className="text-xs">({debugLogs.length} entries)</span>
+                </summary>
+                <div className="px-6 pb-4 max-h-48 overflow-y-auto bg-gray-50 border-t border-gray-100">
+                  <div className="font-mono text-xs space-y-1 pt-2">
+                    {debugLogs.map((log, index) => (
+                      <div
+                        key={index}
+                        className={`${
+                          log.type === 'error' ? 'text-red-600' :
+                          log.type === 'success' ? 'text-green-600' :
+                          log.type === 'warning' ? 'text-yellow-600' :
+                          'text-gray-700'
+                        }`}
+                      >
+                        <span className="text-gray-400">[{log.timestamp}]</span> {log.message}
                       </div>
+                    ))}
+                    {debugLogs.length === 0 && (
+                      <div className="text-gray-400 italic">Debug logs will appear here...</div>
                     )}
                   </div>
                 </div>
-
-                {/* Status */}
-                <div className="text-center">
-                  <p className="text-sm text-gray-600">
-                    {wsConnectionStatus !== 'connected'
-                      ? "Connecting to voice service..."
-                      : isAudioStreaming
-                      ? "🎤 Continuously streaming 160-byte audio chunks"
-                      : "Waiting to start audio streaming..."}
-                  </p>
-                  {audioStats.lastChunkTime && (
-                    <p className="text-xs text-gray-500 mt-1">
-                      Last chunk: {audioStats.lastChunkTime} | Total: {audioStats.bytesProcessed} bytes
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {/* Right Side - Debug Logs */}
-              <div className="space-y-4">
-                <h4 className="font-semibold text-gray-800">Debug Logs</h4>
-                <div className="h-96 overflow-y-auto border border-gray-200 rounded-lg p-4 bg-gray-50 font-mono text-xs">
-                  {debugLogs.map((log, index) => (
-                    <div
-                      key={index}
-                      className={`mb-1 ${
-                        log.type === 'error' ? 'text-red-600' :
-                        log.type === 'success' ? 'text-green-600' :
-                        log.type === 'warning' ? 'text-yellow-600' :
-                        'text-gray-700'
-                      }`}
-                    >
-                      <span className="text-gray-500">[{log.timestamp}]</span> {log.message}
-                    </div>
-                  ))}
-                  {debugLogs.length === 0 && (
-                    <div className="text-gray-500 italic">Debug logs will appear here...</div>
-                  )}
-                </div>
-              </div>
+              </details>
             </div>
           </div>
         </div>
