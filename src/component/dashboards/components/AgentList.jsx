@@ -19,9 +19,63 @@ import {
   FiLoader,
   FiCheckCircle,
   FiAlertCircle,
+  FiDownload,
 } from "react-icons/fi";
+import { QrCode } from 'lucide-react';
+
 import { API_BASE_URL } from "../../../config";
 import AgentDetails from "./AgentDetails";
+import QRCode from "qrcode";
+
+// QR Code Component
+const QRCodeDisplay = ({ value, size = 200, bgColor = "#fff", fgColor = "#000" }) => {
+  const [qrDataUrl, setQrDataUrl] = useState("");
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    if (!value) return;
+    QRCode.toDataURL(value, {
+      width: size,
+      margin: 2,
+      color: {
+        dark: fgColor,
+        light: bgColor,
+      },
+    })
+      .then(setQrDataUrl)
+      .catch((err) => setError(err.message));
+  }, [value, size, bgColor, fgColor]);
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center space-y-2">
+        <div className="flex flex-col items-center justify-center bg-gray-100 border-2 border-dashed border-gray-300 rounded p-4" style={{ width: size, height: size }}>
+          <div className="text-2xl mb-2">📱</div>
+          <div className="text-xs text-gray-600 text-center">QR Code Error</div>
+          <div className="text-xs text-red-500 mt-1">{error}</div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col items-center space-y-4">
+      {!qrDataUrl ? (
+        <div className="flex items-center justify-center bg-gray-100 border rounded animate-pulse" style={{ width: size, height: size }}>
+          <span className="text-xs text-gray-500">Generating QR...</span>
+        </div>
+      ) : (
+        <img
+          src={qrDataUrl || "/placeholder.svg"}
+          alt="QR Code"
+          width={size}
+          height={size}
+          className="border rounded-lg shadow-sm"
+        />
+      )}
+    </div>
+  );
+};
 
 const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
   const [audioUrl, setAudioUrl] = useState(null);
@@ -29,6 +83,10 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
   const [openMenuId, setOpenMenuId] = useState(null);
   const [selectedAgent, setSelectedAgent] = useState(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+
+  // QR Code Modal States
+  const [showQRModal, setShowQRModal] = useState(false);
+  const [selectedAgentForQR, setSelectedAgentForQR] = useState(null);
 
   // Voice Chat Modal States
   const [showVoiceChatModal, setShowVoiceChatModal] = useState(false);
@@ -72,6 +130,66 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
     return `${mins.toString().padStart(2, "0")}:${secs
       .toString()
       .padStart(2, "0")}`;
+  };
+
+  // Generate different colors for each agent
+  const getAgentColor = (index) => {
+    const colors = [
+      "from-blue-700 to-blue-900",
+      "from-purple-700 to-purple-900",
+      "from-green-700 to-green-900",
+      "from-red-700 to-red-900",
+      "from-yellow-700 to-yellow-900",
+      "from-pink-700 to-pink-900",
+      "from-indigo-700 to-indigo-900",
+      "from-teal-700 to-teal-900",
+      "from-orange-700 to-orange-900",
+      "from-cyan-700 to-cyan-900",
+    ];
+    return colors[index % colors.length];
+  };
+
+  // QR Code Functions
+  const handleShowQR = (agent) => {
+    setSelectedAgentForQR(agent);
+    setShowQRModal(true);
+    setOpenMenuId(null);
+  };
+
+  const closeQRModal = () => {
+    setShowQRModal(false);
+    setSelectedAgentForQR(null);
+  };
+
+  // Download QR Code function
+  const downloadQRCode = async () => {
+    if (!selectedAgentForQR) return;
+    
+    try {
+      const qrUrl = `${window.location.origin}/agent/${selectedAgentForQR._id}/talk`;
+      const qrDataUrl = await QRCode.toDataURL(qrUrl, {
+        width: 512,
+        margin: 2,
+        color: {
+          dark: "#000",
+          light: "#fff",
+        },
+      });
+      
+      // Create download link
+      const link = document.createElement('a');
+      link.download = `${selectedAgentForQR.agentName}-QR-Code.png`;
+      link.href = qrDataUrl;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      // Show success message
+      alert(`QR Code for ${selectedAgentForQR.agentName} downloaded successfully!`);
+    } catch (error) {
+      console.error('Error downloading QR code:', error);
+      alert('Failed to download QR code. Please try again.');
+    }
   };
 
   const playAudio = async (agentId) => {
@@ -577,19 +695,33 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {agentsArray.map((agent) => (
+          {agentsArray.map((agent, index) => (
             <div
               key={agent._id}
               className="group bg-white rounded-xl shadow-sm border border-gray-100 hover:shadow-lg hover:border-gray-300 transition-all duration-300 overflow-hidden cursor-pointer relative"
               onClick={() => handleViewDetails(agent)}
             >
               {/* Header */}
-              <div className="bg-gradient-to-r from-gray-800 to-black px-6 py-4">
+              <div
+                className={`bg-gradient-to-r ${getAgentColor(index)} px-6 py-4`}
+              >
                 <div className="flex justify-between items-center">
                   <h3 className="text-white font-semibold text-lg truncate capitalize">
                     {agent.agentName}
                   </h3>
                   <div className="flex items-center gap-1">
+                    {/* QR Code Button */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleShowQR(agent);
+                      }}
+                      className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                      title="Show QR Code"
+                    >
+                      <QrCode className="w-4 h-4" />
+                    </button>
+
                     {/* Voice Chat Button */}
                     <button
                       onClick={(e) => {
@@ -664,7 +796,7 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
                   <label className="block font-semibold text-gray-700">
                     Description
                   </label>
-                  <p className="text-gray-600 text-sm leading-relaxed italic">
+                  <p className="text-gray-600 text-sm leading-relaxed italic truncate overflow-hidden whitespace-nowrap">
                     "{agent.description}"
                   </p>
                 </div>
@@ -758,12 +890,77 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
         />
       )}
 
+      {/* QR Code Modal with Download Button */}
+      {showQRModal && selectedAgentForQR && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-60">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full mx-4 overflow-hidden">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-indigo-600 to-indigo-700 px-6 py-4 text-white">
+              <div className="flex justify-between items-center">
+                <div>
+                  <h3 className="text-lg font-semibold">
+                    QR Code - {selectedAgentForQR.agentName}
+                  </h3>
+                  <p className="text-sm opacity-90">
+                    {selectedAgentForQR.category}
+                  </p>
+                </div>
+                <button
+                  onClick={closeQRModal}
+                  className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                >
+                  <FiX className="w-6 h-6" />
+                </button>
+              </div>
+            </div>
+
+            {/* QR Code Content */}
+            <div className="p-8 text-center">
+              <div className="mb-6">
+                <QRCodeDisplay
+                  value={`${window.location.origin}/agent/${selectedAgentForQR._id}/talk`}
+                  size={250}
+                  bgColor="#fff"
+                  fgColor="#000"
+                />
+              </div>
+              
+              <div className="space-y-3">
+                <h4 className="text-sm font-semibold text-gray-800">
+                  Scan to Talk with AI Agent - {selectedAgentForQR.agentName}
+                </h4>
+                <p className="text-gray-600 text-sm">
+                  Scan this QR code with your mobile device to start a voice conversation with {selectedAgentForQR.agentName}
+                </p>
+              </div>
+
+              <div className="mt-6 pt-4 border-t border-gray-200 flex gap-3 justify-center">
+                <button
+                  onClick={downloadQRCode}
+                  className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                >
+                  <FiDownload className="w-4 h-4" />
+                  Download QR
+                </button>
+                <button
+                  onClick={closeQRModal}
+                  className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Agent Details Modal */}
       <AgentDetails
         agent={selectedAgent}
         isOpen={isDetailsOpen}
         onClose={closeDetails}
         clientId={clientId}
+        onEdit={onEdit}
       />
 
       {/* Voice Chat Modal */}

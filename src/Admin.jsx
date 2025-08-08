@@ -39,10 +39,10 @@ const Admin = () => {
           console.error("Error validating admin token:", error);
           clearAuth();
         }
+      }else{
+        setIsAuthenticated(false);
       }
-
       setIsLoading(false);
-      setIsAuthenticated(false);
     };
 
     initializeAuth();
