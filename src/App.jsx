@@ -5,6 +5,7 @@ import User from './User';
 import './App.css'
 import Superadmin from './Superadmin';
 import Home from './pages/Home';
+import Login from './pages/Login';
 import AgentMobileTalk from './component/dashboards/components/AgentMobileTalk';
 
 const App = () => {
@@ -21,6 +22,7 @@ const App = () => {
     <Router>
       <Routes>
         <Route path="/" element={<Home/>} />
+        <Route path="/login" element={<Login />} />
         <Route path="/auth/*" element={<User />} />
         <Route path="/admin/*" element={<Admin />} />
         <Route path="/superadmin/*" element={<Superadmin />} />

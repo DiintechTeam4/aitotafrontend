@@ -13,6 +13,9 @@ const getClientInfo = () => {
 const MAX_RECONNECT_ATTEMPTS = 5;
 const INITIAL_RECONNECT_DELAY = 1000;
 
+// Force use of ScriptProcessorNode for now to guarantee proper 8kHz downsampling for Deepgram
+const ENABLE_AUDIO_WORKLET = false;
+
 const AgentMobileTalkUI = ({ agent, clientId, onClose }) => {
   // --- State ---
   const [wsStatus, setWsStatus] = useState("disconnected");
@@ -41,6 +44,35 @@ const AgentMobileTalkUI = ({ agent, clientId, onClose }) => {
   
   // WebSocket related states (like AgentDetails)
   const [streamSid, setStreamSid] = useState(null);
+  
+  // Conversation states
+  const [conversation, setConversation] = useState([]);
+  const [showConversation, setShowConversation] = useState(false);
+  const [currentUserMessage, setCurrentUserMessage] = useState('');
+  const [currentAIResponse, setCurrentAIResponse] = useState('');
+  
+  // Server logs from backend (STT/LLM/TTS + errors)
+  const [serverLogs, setServerLogs] = useState([]);
+  const [showServerLogs, setShowServerLogs] = useState(false);
+
+  const addServerLog = (level, message, meta = {}) => {
+    const ts = new Date().toLocaleTimeString();
+    setServerLogs(prev => [...prev.slice(-199), { level, message, meta, ts }]);
+    if (level === 'error' || level === 'warning') {
+      setShowServerLogs(true);
+    }
+  };
+
+  // Add message to conversation
+  const addToConversation = (role, content, timestamp = new Date()) => {
+    const message = {
+      id: Date.now() + Math.random(),
+      role,
+      content,
+      timestamp
+    };
+    setConversation(prev => [...prev, message]);
+  };
   
   // --- Refs ---
   const wsRef = useRef(null);
@@ -91,7 +123,9 @@ const AgentMobileTalkUI = ({ agent, clientId, onClose }) => {
     setWsStatus("connecting");
     setIsConnecting(true);
     addDebugLog("Attempting WebSocket connection...", "info");
-    const wsUrl = `wss://test.aitota.com/ws`;
+    
+    // Connect to our local WebSocket server
+    const wsUrl = `ws://localhost:4000`;
     addDebugLog(`Connecting to: ${wsUrl}`, "info");
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
@@ -207,6 +241,8 @@ const AgentMobileTalkUI = ({ agent, clientId, onClose }) => {
         addDebugLog(`Session started with streamSid: ${data.streamSid}`, 'success');
         setStreamSid(data.streamSid);
         streamSidRef.current = data.streamSid;
+        // Clear conversation when starting new session
+        setConversation([]);
         break;
         
       case 'media':
@@ -214,6 +250,54 @@ const AgentMobileTalkUI = ({ agent, clientId, onClose }) => {
           addDebugLog(`Received audio chunk: ${data.media.payload.length} chars`, 'info');
           playAudioChunk(data.media.payload);
         }
+        break;
+        
+      case 'conversation':
+        // Handle conversation updates from server
+        if (data.userMessage) {
+          setCurrentUserMessage(data.userMessage);
+          addToConversation('user', data.userMessage);
+          addDebugLog(`User said: "${data.userMessage}"`, 'info');
+        }
+        if (data.aiResponse) {
+          setCurrentAIResponse(data.aiResponse);
+          addToConversation('assistant', data.aiResponse);
+          addDebugLog(`AI responded: "${data.aiResponse}"`, 'info');
+        }
+        break;
+
+      case 'transcript': {
+        // Live STT from Deepgram
+        const text = (data.text || '').trim();
+        if (text) {
+          setCurrentUserMessage(data.final ? text : `${text} …`);
+          if (data.final) {
+            addToConversation('user', text);
+          }
+        }
+        break;
+      }
+      
+      case 'log': {
+        const level = data.level || 'info';
+        const message = data.message || '';
+        const meta = data.meta || {};
+        addServerLog(level, message, meta);
+        // Mirror important logs into local debug for quick glance
+        const typeMap = { error: 'error', warning: 'warning', success: 'success', info: 'info' };
+        addDebugLog(`SERVER ${level.toUpperCase()}: ${message}${meta && Object.keys(meta).length ? ` | ${JSON.stringify(meta)}` : ''}`, typeMap[level] || 'info');
+        break;
+      }
+        
+      case 'redirect':
+        addDebugLog(`Redirect event: ${data.message}`, 'warning');
+        // Show redirect message to user
+        setCurrentAIResponse(data.message || 'Please visit our website to continue.');
+        addToConversation('system', data.message || 'Please visit our website to continue.');
+        // Optionally redirect to login page after a delay
+        setTimeout(() => {
+          window.location.href = '/login';
+        }, 5000);
         break;
         
       case 'stop':
@@ -334,21 +418,25 @@ const AgentMobileTalkUI = ({ agent, clientId, onClose }) => {
       // Resume audio context if suspended
       if (audioContextRef.current.state === 'suspended') {
         await audioContextRef.current.resume();
+        addDebugLog('Audio context resumed from suspended state', 'success');
       }
 
       addDebugLog(`Audio context created with sample rate: ${audioContextRef.current.sampleRate}`, 'info');
+      addDebugLog(`Audio context state: ${audioContextRef.current.state}`, 'info');
       
       const source = audioContextRef.current.createMediaStreamSource(stream);
+      addDebugLog('MediaStreamSource created successfully', 'info');
       
       // Create analyzer for visual feedback
       analyserRef.current = audioContextRef.current.createAnalyser();
       analyserRef.current.fftSize = 256;
       source.connect(analyserRef.current);
+      addDebugLog('Audio analyzer connected', 'info');
       
       // Try AudioWorklet
       let workletLoaded = false;
       try {
-        if (audioContextRef.current.audioWorklet) {
+        if (ENABLE_AUDIO_WORKLET && audioContextRef.current.audioWorklet) {
           await audioContextRef.current.audioWorklet.addModule("/audio-processor.js");
           const workletNode = new window.AudioWorkletNode(audioContextRef.current, "audio-processor");
           workletNode.port.onmessage = (event) => {
@@ -413,6 +501,12 @@ const AgentMobileTalkUI = ({ agent, clientId, onClose }) => {
         microphoneRef.current = { stream, scriptProcessor };
         
         addDebugLog('ScriptProcessor connected and ready for audio processing', 'success');
+        
+        // Force a test audio chunk to verify processing is working
+        setTimeout(() => {
+          addDebugLog('Testing audio processing pipeline...', 'info');
+          testAudioProcessing();
+        }, 2000);
       }
       
       isStreamingRef.current = true;
@@ -516,6 +610,13 @@ const AgentMobileTalkUI = ({ agent, clientId, onClose }) => {
     } catch (error) {
       addDebugLog(`Error processing audio data: ${error.message}`, 'error');
     }
+  };
+
+  // Test function to manually trigger audio processing (for debugging)
+  const testAudioProcessing = () => {
+    addDebugLog('Testing audio processing with dummy data...', 'info');
+    const dummyAudioData = new Float32Array(80).fill(0.1); // Create dummy audio data
+    processAudioData(dummyAudioData);
   };
 
   // Update mic level with speech detection (like AgentDetails)
@@ -628,41 +729,52 @@ const AgentMobileTalkUI = ({ agent, clientId, onClose }) => {
     try {
       addDebugLog(`Received audio chunk: ${base64Audio.length} chars`, 'info');
       if (!audioPlaybackContextRef.current) {
-        audioPlaybackContextRef.current = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 8000 });
+        audioPlaybackContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
         addDebugLog('Audio playback context created', 'info');
       }
       const audioContext = audioPlaybackContextRef.current;
       if (audioContext.state === 'suspended') {
         await audioContext.resume();
       }
-      // Convert base64 to binary data
+
+      // Convert base64 to ArrayBuffer
       const binaryString = atob(base64Audio);
       const bytes = new Uint8Array(binaryString.length);
-      for (let i = 0; i < binaryString.length; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
+      for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
+      const arrayBuffer = bytes.buffer;
+
+      // Try decoding as WAV/encoded audio first
+      let decodedBuffer = null;
+      try {
+        decodedBuffer = await audioContext.decodeAudioData(arrayBuffer.slice(0));
+      } catch (_) {
+        decodedBuffer = null;
       }
-      // Convert bytes to Int16Array (assuming 16-bit PCM)
-      const int16Array = new Int16Array(bytes.buffer);
-      const float32Array = new Float32Array(int16Array.length);
-      for (let i = 0; i < int16Array.length; i++) {
-        float32Array[i] = int16Array[i] / 32768;
+
+      if (decodedBuffer) {
+        // Queue decoded buffer
+        audioBufferQueueRef.current.push({ audioBuffer: decodedBuffer });
+      } else {
+        // Fallback: treat as raw 16-bit PCM @ 8kHz mono
+        const int16Array = new Int16Array(arrayBuffer);
+        const float32Array = new Float32Array(int16Array.length);
+        for (let i = 0; i < int16Array.length; i++) float32Array[i] = int16Array[i] / 32768;
+        const buffer = audioContext.createBuffer(1, float32Array.length, 8000);
+        buffer.getChannelData(0).set(float32Array);
+        audioBufferQueueRef.current.push({ audioBuffer: buffer });
       }
-      // Add to buffer queue
-      audioBufferQueueRef.current.push({ data: float32Array, timestamp: Date.now() });
+
       // Limit buffer size
       if (audioBufferQueueRef.current.length > 100) {
         audioBufferQueueRef.current = audioBufferQueueRef.current.slice(-100);
         addDebugLog('Buffer queue trimmed to prevent memory overflow', 'info');
       }
+
       // Start playback if not already playing
       if (!isPlayingRef.current) {
-        // Show "thinking" status if user had finished speaking
         if (userSpeechEnded) {
           setAiStatus('thinking');
-          // Short delay before showing "speaking"
-          setTimeout(() => {
-            setAiStatus('speaking');
-          }, 100);
+          setTimeout(() => setAiStatus('speaking'), 100);
         } else {
           setAiStatus('speaking');
         }
@@ -681,16 +793,13 @@ const AgentMobileTalkUI = ({ agent, clientId, onClose }) => {
       setAiStatus('speaking');
       const audioContext = audioPlaybackContextRef.current;
       if (!audioContext) return;
-      if (audioContext.state === 'suspended') {
-        await audioContext.resume();
-      }
-      const startDelay = 0.1;
+      if (audioContext.state === 'suspended') await audioContext.resume();
+
+      const startDelay = 0.05;
       playbackStartTimeRef.current = audioContext.currentTime + startDelay;
       nextPlayTimeRef.current = audioContext.currentTime + startDelay;
-      addDebugLog(`Starting continuous audio playback with ${startDelay}s delay`, 'success');
-      setTimeout(() => {
-        scheduleNextChunk();
-      }, startDelay * 150);
+      addDebugLog(`Starting continuous audio playback`, 'success');
+      setTimeout(() => scheduleNextChunk(), startDelay * 120);
     } catch (error) {
       addDebugLog(`Error starting continuous playback: ${error.message}`, 'error');
       isPlayingRef.current = false;
@@ -710,25 +819,22 @@ const AgentMobileTalkUI = ({ agent, clientId, onClose }) => {
       addDebugLog('Audio playback queue empty, stopping', 'info');
       return;
     }
-    const chunksToProcess = Math.min(queue.length, 5);
+
+    const chunksToProcess = Math.min(queue.length, 3);
     let totalDuration = 0;
     for (let i = 0; i < chunksToProcess; i++) {
-      const chunk = queue.shift();
-      const float32Array = chunk.data;
-      const buffer = audioContext.createBuffer(1, float32Array.length, 8000);
-      buffer.getChannelData(0).set(float32Array);
+      const { audioBuffer } = queue.shift();
       const source = audioContext.createBufferSource();
-      source.buffer = buffer;
+      source.buffer = audioBuffer;
       source.connect(audioContext.destination);
-      const chunkDuration = float32Array.length / 8000;
-      source.start(nextPlayTimeRef.current + totalDuration);
-      totalDuration += chunkDuration;
+      const when = nextPlayTimeRef.current + totalDuration;
+      source.start(when);
+      totalDuration += audioBuffer.duration;
     }
     nextPlayTimeRef.current += totalDuration;
+
     const timeUntilNext = (nextPlayTimeRef.current - audioContext.currentTime) * 1000;
-    setTimeout(() => {
-      scheduleNextChunk();
-    }, Math.max(0, timeUntilNext - 20));
+    setTimeout(() => scheduleNextChunk(), Math.max(10, timeUntilNext - 20));
   };
 
   // Stop continuous audio playback
@@ -904,33 +1010,78 @@ const AgentMobileTalkUI = ({ agent, clientId, onClose }) => {
               >
                 Resume Audio
               </button>
+              <button
+                onClick={testAudioProcessing}
+                className="px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-xs"
+              >
+                Test Audio
+              </button>
             </>
           )}
         </div>
       </div>
       {/* Audio Stats & Debug (collapsible) */}
+      
+
+      {/* Conversation Display */}
       <div className="px-4 pb-3">
-        <div className="flex items-center justify-between">
-          <div className="text-xs text-gray-500">
-            Audio: {audioStats.chunksRecorded} chunks | {audioStats.chunksSent} sent | {audioStats.bytesProcessed} bytes
-            {streamSid && <span className="ml-2 text-blue-600">| Stream: {streamSid.substring(0, 8)}...</span>}
-          </div>
-          <button className="text-xs text-blue-600 underline" onClick={() => setShowDebug((v) => !v)}>
-            {showDebug ? "Hide" : "Show"} Debug
+        <div className="w-full max-w-md mx-auto">
+          <button
+            onClick={() => setShowConversation(!showConversation)}
+            className="w-full px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium"
+          >
+            {showConversation ? 'Hide' : 'Show'} Conversation ({conversation.length} messages)
           </button>
+          
+          {showConversation && (
+            <div className="mt-4 max-h-64 overflow-y-auto bg-gray-50 rounded-lg p-3 space-y-3">
+              {conversation.length === 0 ? (
+                <div className="text-center text-gray-500 text-sm">
+                  No conversation yet. Start speaking to see the conversation here.
+                </div>
+              ) : (
+                conversation.map((message) => (
+                  <div
+                    key={message.id}
+                    className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                  >
+                    <div
+                      className={`max-w-xs px-3 py-2 rounded-lg text-sm ${
+                        message.role === 'user'
+                          ? 'bg-blue-500 text-white'
+                          : 'bg-white text-gray-800 border border-gray-200'
+                      }`}
+                    >
+                      <div className="font-medium text-xs mb-1">
+                        {message.role === 'user' ? 'You' : 'AI'}
+                      </div>
+                      <div>{message.content}</div>
+                      <div className="text-xs opacity-70 mt-1">
+                        {new Date(message.timestamp).toLocaleTimeString()}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
         </div>
-        {showDebug && (
-          <div className="mt-2 bg-gray-50 rounded p-2 max-h-32 overflow-y-auto text-xs font-mono">
-            {debugLogs.map((log, i) => (
-              <div key={i} className={
-                log.type === "error" ? "text-red-600" :
-                log.type === "success" ? "text-green-600" :
-                log.type === "warning" ? "text-yellow-600" : "text-gray-700"
-              }>
-                <span className="text-gray-400">[{log.ts}]</span> {log.msg}
+
+        {/* Current Message Display */}
+        {(currentUserMessage || currentAIResponse) && (
+          <div className="w-full max-w-md mx-auto space-y-2 mt-3">
+            {currentUserMessage && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <div className="text-xs font-medium text-blue-600 mb-1">You said:</div>
+                <div className="text-sm text-blue-800">{currentUserMessage}</div>
               </div>
-            ))}
-            {debugLogs.length === 0 && <div className="text-gray-400 italic">No debug logs yet.</div>}
+            )}
+            {currentAIResponse && (
+              <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                <div className="text-xs font-medium text-green-600 mb-1">AI responded:</div>
+                <div className="text-sm text-green-800">{currentAIResponse}</div>
+              </div>
+            )}
           </div>
         )}
       </div>

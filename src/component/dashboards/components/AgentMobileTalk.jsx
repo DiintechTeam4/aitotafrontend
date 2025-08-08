@@ -18,8 +18,9 @@ const AgentMobileTalk = () => {
       try {
         let response, data;
         if (clientToken) {
+          // Authenticated request
           response = await fetch(
-            `${API_BASE_URL}/client/agents`,
+            `${API_BASE_URL}/client/agents/${agentId}`,
             {
               headers: {
                 Authorization: `Bearer ${clientToken}`,
@@ -27,38 +28,27 @@ const AgentMobileTalk = () => {
             }
           );
           data = await response.json();
-          if (response.ok && data.success && Array.isArray(data.data)) {
-            const found = data.data.find((a) => a._id === agentId);
-            if (found) {
-              setAgent(found);
-              return;
-            } else {
-              setError("Agent not found");
-              return;
-            }
+          if (response.ok && data.success) {
+            setAgent(data.data);
+            return;
           } else {
             setError("Failed to fetch agent");
             return;
           }
         } else {
-          // No client token: try to fetch agent by ID (public route)
-          response = await fetch(`${API_BASE_URL}/client/agents`);
+          // Public request for mobile users
+          response = await fetch(`${API_BASE_URL}/client/agents/${agentId}/public`);
           data = await response.json();
-          if (response.ok && data.success && Array.isArray(data.data)) {
-            const found = data.data.find((a) => a._id === agentId);
-            if (found) {
-              setAgent(found);
-              return;
-            } else {
-              setError("Agent not found");
-              return;
-            }
+          if (response.ok && data.success) {
+            setAgent(data.data);
+            return;
           } else {
             setError("Failed to fetch agent");
             return;
           }
         }
       } catch (err) {
+        console.error("Error fetching agent:", err);
         setError("Error fetching agent");
       } finally {
         setLoading(false);
