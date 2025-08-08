@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import {
-  FiX,
+  FiArrowLeft,
   FiVolume2,
   FiSquare,
   FiUser,
@@ -22,10 +22,62 @@ import {
   FiCheckCircle,
   FiAlertCircle,
   FiArrowUpRight,
+  FiRefreshCw,
 } from "react-icons/fi";
 import { API_BASE_URL } from "../../../config";
+import QRCode from "qrcode";
 
-const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
+// Working QR Code Component (client-side QR generation)
+const WorkingQRCode = ({ value, size = 200, bgColor = "#fff", fgColor = "#000" }) => {
+  const [qrDataUrl, setQrDataUrl] = useState("");
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    if (!value) return;
+    QRCode.toDataURL(value, {
+      width: size,
+      margin: 2,
+      color: {
+        dark: fgColor,
+        light: bgColor,
+      },
+    })
+      .then(setQrDataUrl)
+      .catch((err) => setError(err.message));
+  }, [value, size, bgColor, fgColor]);
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center space-y-2">
+        <div className="flex flex-col items-center justify-center bg-gray-100 border-2 border-dashed border-gray-300 rounded p-4" style={{ width: size, height: size }}>
+          <div className="text-2xl mb-2">📱</div>
+          <div className="text-xs text-gray-600 text-center">QR Code Error</div>
+          <div className="text-xs text-red-500 mt-1">{error}</div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col items-center space-y-4">
+      {!qrDataUrl ? (
+        <div className="flex items-center justify-center bg-gray-100 border rounded animate-pulse" style={{ width: size, height: size }}>
+          <span className="text-xs text-gray-500">Generating QR...</span>
+        </div>
+      ) : (
+        <img
+          src={qrDataUrl || "/placeholder.svg"}
+          alt="QR Code"
+          width={size}
+          height={size}
+          className="border rounded-lg shadow-sm"
+        />
+      )}
+    </div>
+  );
+};
+
+const AgentDetails = ({ agent, isOpen, onClose, clientId, forceVoiceChatModal }) => {
   const [audioUrl, setAudioUrl] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [showCallModal, setShowCallModal] = useState(false);
@@ -46,6 +98,18 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
   const [isAITalking, setIsAITalking] = useState(false);
   const [streamSid, setStreamSid] = useState(null);
   const [isAudioStreaming, setIsAudioStreaming] = useState(false);
+  
+  // Reconnection states
+  const [reconnectAttempts, setReconnectAttempts] = useState(0);
+  const [maxReconnectAttempts] = useState(5);
+  const [reconnectDelay, setReconnectDelay] = useState(1000);
+  const [isReconnecting, setIsReconnecting] = useState(false);
+  const [lastDisconnectReason, setLastDisconnectReason] = useState('');
+  
+  // Speech detection states
+  const [isUserSpeaking, setIsUserSpeaking] = useState(false);
+  const [userSpeechEnded, setUserSpeechEnded] = useState(false);
+  const [aiStatus, setAiStatus] = useState('idle'); // 'idle', 'listening', 'thinking', 'speaking'
 
   // Debug states
   const [debugLogs, setDebugLogs] = useState([]);
@@ -70,6 +134,10 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
   const wsConnectionRef = useRef(null);
   const streamSidRef = useRef(null);
 
+  // Reconnection refs
+  const reconnectTimeoutRef = useRef(null);
+  const reconnectAttemptsRef = useRef(0);
+
   // Audio playback buffer refs
   const audioBufferQueueRef = useRef([]);
   const isPlayingRef = useRef(false);
@@ -77,6 +145,10 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
   const audioBufferRef = useRef(null);
   const playbackStartTimeRef = useRef(0);
   const nextPlayTimeRef = useRef(0);
+
+  // Speech detection refs
+  const silenceTimerRef = useRef(null);
+  const silenceStartTimeRef = useRef(null);
 
   const callTimerRef = useRef(null);
 
@@ -100,11 +172,25 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
       .padStart(2, "0")}`;
   };
 
-  // WebSocket connection management
-  const connectToWebSocket = () => {
+  // Enhanced WebSocket connection management with reconnection
+  const connectToWebSocket = (isReconnect = false) => {
     if (wsConnection && wsConnection.readyState === WebSocket.OPEN) {
       addDebugLog('WebSocket already connected', 'info');
       return;
+    }
+
+    // Clear any existing reconnection timeout
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
+    }
+
+    if (isReconnect) {
+      setIsReconnecting(true);
+      addDebugLog(`Reconnection attempt ${reconnectAttemptsRef.current + 1}/${maxReconnectAttempts}`, 'info');
+    } else {
+      setReconnectAttempts(0);
+      reconnectAttemptsRef.current = 0;
     }
 
     setWsConnectionStatus('connecting');
@@ -116,9 +202,24 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
     
     const ws = new WebSocket(wsUrl);
     
+    // Set connection timeout
+    const connectionTimeout = setTimeout(() => {
+      if (ws.readyState === WebSocket.CONNECTING) {
+        addDebugLog('WebSocket connection timeout', 'error');
+        ws.close();
+        handleConnectionFailure('Connection timeout');
+      }
+    }, 10000); // 10 second timeout
+    
     ws.onopen = () => {
+      clearTimeout(connectionTimeout);
       addDebugLog('WebSocket connected successfully', 'success');
       setWsConnectionStatus('connected');
+      setIsReconnecting(false);
+      setReconnectAttempts(0);
+      reconnectAttemptsRef.current = 0;
+      setReconnectDelay(1000); // Reset delay
+      setLastDisconnectReason('');
       
       // Generate a unique stream ID
       const streamId = `stream_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -153,7 +254,7 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
       // Start audio streaming after connection is established and start message sent
       setTimeout(() => {
         startContinuousAudioStreaming();
-      }, 1000); // Increased delay to ensure WebSocket state is updated
+      }, 1000);
       
       // Retry audio streaming start if it fails initially
       setTimeout(() => {
@@ -184,19 +285,74 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
     };
     
     ws.onerror = (error) => {
+      clearTimeout(connectionTimeout);
       addDebugLog(`WebSocket error: ${error}`, 'error');
       setWsConnectionStatus('disconnected');
+      setIsReconnecting(false);
     };
     
     ws.onclose = (event) => {
+      clearTimeout(connectionTimeout);
+      const reason = event.reason || `Code: ${event.code}`;
       addDebugLog(`WebSocket disconnected. Code: ${event.code}, Reason: ${event.reason}`, 'warning');
       setWsConnectionStatus('disconnected');
       setWsConnection(null);
       wsConnectionRef.current = null;
       setStreamSid(null);
       streamSidRef.current = null;
+      setLastDisconnectReason(reason);
       stopContinuousAudioStreaming();
+      
+      // Attempt reconnection if not manually closed
+      if (event.code !== 1000 && event.code !== 1001) { // Not normal closure
+        handleConnectionFailure(reason);
+      }
     };
+  };
+
+  // Handle connection failures and implement reconnection logic
+  const handleConnectionFailure = (reason) => {
+    setLastDisconnectReason(reason);
+    
+    if (reconnectAttemptsRef.current < maxReconnectAttempts) {
+      const delay = Math.min(reconnectDelay * Math.pow(2, reconnectAttemptsRef.current), 30000); // Max 30 seconds
+      
+      addDebugLog(`Connection failed: ${reason}. Reconnecting in ${delay/1000}s...`, 'warning');
+      
+      reconnectTimeoutRef.current = setTimeout(() => {
+        reconnectAttemptsRef.current++;
+        setReconnectAttempts(reconnectAttemptsRef.current);
+        connectToWebSocket(true);
+      }, delay);
+    } else {
+      addDebugLog(`Max reconnection attempts (${maxReconnectAttempts}) reached. Please reconnect manually.`, 'error');
+      setIsReconnecting(false);
+    }
+  };
+
+  // Manual reconnect function
+  const manualReconnect = () => {
+    addDebugLog('Manual reconnection initiated', 'info');
+    
+    // Reset reconnection state
+    setReconnectAttempts(0);
+    reconnectAttemptsRef.current = 0;
+    setReconnectDelay(1000);
+    setIsReconnecting(false);
+    
+    // Clear any existing timeout
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
+    }
+    
+    // Disconnect existing connection if any
+    if (wsConnectionRef.current) {
+      wsConnectionRef.current.close();
+    }
+    
+    // Start new connection
+    connectToWebSocket(false);
   };
 
   const handleWebSocketMessage = (data) => {
@@ -213,6 +369,10 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
       case 'media':
         if (data.media && data.media.payload) {
           addDebugLog(`Received audio chunk: ${data.media.payload.length} chars`, 'info');
+          
+          // Minimal receiving indicator - no state updates that could affect audio
+          addDebugLog(`Received audio chunk: ${data.media.payload.length} chars`, 'info');
+          
           playAudioChunk(data.media.payload);
         }
         break;
@@ -231,6 +391,16 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
   };
 
   const disconnectWebSocket = () => {
+    // Clear reconnection timeout
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
+    }
+    
+    setIsReconnecting(false);
+    setReconnectAttempts(0);
+    reconnectAttemptsRef.current = 0;
+    
     if (wsConnectionRef.current) {
       addDebugLog('Disconnecting WebSocket...', 'info');
       wsConnectionRef.current.send(JSON.stringify({
@@ -238,7 +408,7 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
         streamSid: streamSidRef.current
       }));
       
-      wsConnectionRef.current.close();
+      wsConnectionRef.current.close(1000, 'Manual disconnect'); // Normal closure
       setWsConnection(null);
       wsConnectionRef.current = null;
       setWsConnectionStatus('disconnected');
@@ -453,6 +623,11 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
         
         currentWs.send(JSON.stringify(mediaMessage));
         
+        // Minimal sending indicator - no state updates that could affect audio
+        if (audioStats.chunksSent % 25 === 0) {
+          addDebugLog(`Sent audio chunk #${audioStats.chunksSent + 1}`, 'info');
+        }
+        
         // Log every 25th chunk to show activity
         setAudioStats(prev => {
           if (prev.chunksSent % 25 === 0) {
@@ -501,6 +676,38 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
     // Convert to percentage (0-100)
     const level = Math.min(100, (average / 255) * 100 * 3);
     setMicLevel(level);
+
+    // Speech detection logic
+    const isSilent = level < 10; // Threshold for silence detection
+    
+    if (!isSilent) {
+      // User is speaking
+      if (!isUserSpeaking) {
+        setIsUserSpeaking(true);
+        setUserSpeechEnded(false);
+        setAiStatus('listening');
+      }
+
+      if (silenceTimerRef.current) {
+        clearTimeout(silenceTimerRef.current);
+        silenceTimerRef.current = null;
+      }
+    } else {
+      // User is silent – maybe between words or done
+      if (isUserSpeaking && !silenceTimerRef.current) {
+        silenceStartTimeRef.current = Date.now();
+
+        silenceTimerRef.current = setTimeout(() => {
+          const silenceDuration = Date.now() - silenceStartTimeRef.current;
+          if (silenceDuration > 1200) { // > 1.2s = user probably done
+            setUserSpeechEnded(true);
+            setIsUserSpeaking(false);
+            setAiStatus('idle');
+          }
+          silenceTimerRef.current = null;
+        }, 1200);
+      }
+    }
 
     animationFrameRef.current = requestAnimationFrame(updateMicLevel);
   };
@@ -554,6 +761,18 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
       
       // Start playback if not already playing
       if (!isPlayingRef.current) {
+        // Show "thinking" status if user had finished speaking
+        if (userSpeechEnded) {
+          setAiStatus('thinking');
+          
+          // Short delay before showing "speaking"
+          setTimeout(() => {
+            setAiStatus('speaking');
+          }, 100);
+        } else {
+          setAiStatus('speaking');
+        }
+        
         startContinuousPlayback();
       }
       
@@ -569,6 +788,7 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
     try {
       isPlayingRef.current = true;
       setIsAITalking(true);
+      setAiStatus('speaking');
       
       const audioContext = audioPlaybackContextRef.current;
       if (!audioContext) return;
@@ -608,6 +828,8 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
       // No more chunks, stop playback
       isPlayingRef.current = false;
       setIsAITalking(false);
+      setAiStatus('idle');
+      setUserSpeechEnded(false);
       addDebugLog('Audio playback queue empty, stopping', 'info');
       return;
     }
@@ -705,6 +927,17 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
     setShowVoiceChatModal(false);
     setMicLevel(0);
     setIsAITalking(false);
+
+    // Reset speech detection states
+    setIsUserSpeaking(false);
+    setUserSpeechEnded(false);
+    setAiStatus('idle');
+
+    // Clear speech detection timers
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
+    }
 
     // Stop continuous streaming
     stopContinuousAudioStreaming();
@@ -817,9 +1050,6 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
     }
   };
 
-  // Auto-scroll to bottom of messages
-  
-
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -828,6 +1058,18 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
 
       // Stop continuous playback
       stopContinuousPlayback();
+
+      // Clear speech detection timers
+      if (silenceTimerRef.current) {
+        clearTimeout(silenceTimerRef.current);
+        silenceTimerRef.current = null;
+      }
+
+      // Clear reconnection timeout
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
 
       // Cleanup call timer
       if (callTimerRef.current) {
@@ -841,66 +1083,483 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
 
   if (!isOpen || !agent) return null;
 
+  // Debug: Log API_BASE_URL and QR code value
+  // Use frontend origin for QR code
+  const qrUrlValue = `${window.location.origin}/agent/${agent?._id}/talk`;
+  console.log('QR Code Value:', qrUrlValue);
+
+  // If forceVoiceChatModal is true, always show only the voice chat modal
+  if (forceVoiceChatModal) {
+    if (!isOpen || !agent) return null;
+    return (
+      <div className="fixed inset-0 bg-white z-50">
+        {/* Voice Chat Modal - Pure Voice-to-Voice Interface (from AgentDetails) */}
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-60">
+          <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-hidden">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4 text-white">
+              <div className="flex justify-between items-center">
+                <div>
+                  <h3 className="text-lg font-semibold">
+                    Voice Chat with {agent.agentName}
+                  </h3>
+                  <div className="flex items-center gap-4 text-sm opacity-90">
+                    <div className="flex items-center gap-1">
+                      {wsConnectionStatus === 'connected' ? (
+                        <>
+                          <FiWifi className="w-3 h-3" />
+                          <span className="text-green-200">Connected</span>
+                        </>
+                      ) : wsConnectionStatus === 'connecting' ? (
+                        <>
+                          <FiLoader className="w-3 h-3 animate-spin" />
+                          <span className="text-yellow-200">Connecting...</span>
+                        </>
+                      ) : (
+                        <>
+                          <FiWifiOff className="w-3 h-3" />
+                          <span className="text-red-200">Disconnected</span>
+                        </>
+                      )}
+                    </div>
+                    <div className="text-xs">
+                      {isAudioStreaming ? (
+                        <span className="text-green-200">🎤 Active: {audioStats.chunksRecorded} chunks generated, {audioStats.chunksSent} sent</span>
+                      ) : (
+                        <span className="text-gray-300">🎤 Inactive</span>
+                      )}
+                      {isAITalking && (
+                        <span className="text-blue-200 ml-2">🔊 Buffer: {audioBufferQueueRef.current.length} chunks</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <button
+                  onClick={onClose}
+                  className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                >
+                  <FiArrowLeft className="w-6 h-6" />
+                </button>
+              </div>
+            </div>
+            {/* Main Voice Interface */}
+            <div className="p-8 flex flex-col items-center justify-center min-h-[500px] space-y-8">
+              {/* Connection Status */}
+              <div className="text-center">
+                <div className={`text-lg font-semibold mb-2 ${
+                  wsConnectionStatus === 'connected' ? 'text-green-600' :
+                  wsConnectionStatus === 'connecting' ? 'text-yellow-600' :
+                  'text-red-600'
+                }`}>
+                  {wsConnectionStatus === 'connected' ? 'Voice Chat Active' :
+                   wsConnectionStatus === 'connecting' ? 'Connecting...' :
+                   'Connection Failed'}
+                </div>
+                <div className="text-gray-600 text-sm">
+                  {wsConnectionStatus === 'connected' 
+                    ? 'Speak naturally - the AI will respond in real-time'
+                    : wsConnectionStatus === 'connecting'
+                    ? 'Please wait while we establish the connection'
+                    : 'Check your connection and try again'
+                  }
+                </div>
+                
+                {/* Show reconnection status */}
+                {isReconnecting && (
+                  <div className="text-yellow-600 text-sm mt-2">
+                    🔄 Reconnecting... (Attempt {reconnectAttempts}/{maxReconnectAttempts})
+                  </div>
+                )}
+                
+                {/* Show last disconnect reason */}
+                {wsConnectionStatus === 'disconnected' && lastDisconnectReason && (
+                  <div className="text-red-600 text-xs mt-1">
+                    Last disconnect: {lastDisconnectReason}
+                  </div>
+                )}
+              </div>
+
+              {/* Large Microphone Visualization */}
+              <div className="relative">
+                {/* Main microphone circle */}
+                <div className={`w-32 h-32 rounded-full flex items-center justify-center transition-all duration-300 ${
+                  isAudioStreaming
+                    ? "bg-green-500 scale-110"
+                    : wsConnectionStatus === 'connected'
+                    ? "bg-blue-600"
+                    : "bg-gray-400"
+                }`}>
+                  <FiMic className="w-12 h-12 text-white" />
+                </div>
+
+                {/* Microphone level indicator rings */}
+                {isAudioStreaming && (
+                  <>
+                    <div 
+                      className="absolute inset-0 rounded-full border-4 border-green-300 animate-ping"
+                      style={{
+                        animationDuration: '2s',
+                        opacity: Math.min(0.8, micLevel / 100)
+                      }}
+                    />
+                    <div 
+                      className="absolute inset-[-8px] rounded-full border-2 border-green-200 animate-pulse"
+                      style={{
+                        animationDuration: '1.5s',
+                        opacity: Math.min(0.6, micLevel / 100)
+                      }}
+                    />
+                  </>
+                )}
+
+                {/* Simple connection status indicator */}
+                {wsConnectionStatus === 'connected' && (
+                  <div className="absolute -top-2 -right-2 w-4 h-4 bg-green-500 rounded-full flex items-center justify-center">
+                    <div className="w-2 h-2 bg-white rounded-full"></div>
+                  </div>
+                )}
+
+                {/* AI Talking indicator */}
+                {isAITalking && (
+                  <div className="absolute -bottom-4 -right-4 bg-blue-500 text-white px-3 py-1 rounded-full text-sm flex items-center gap-1">
+                    <div className="flex space-x-1">
+                      <div className="w-1 h-3 bg-white rounded animate-pulse"></div>
+                      <div className="w-1 h-3 bg-white rounded animate-pulse" style={{animationDelay: '0.1s'}}></div>
+                      <div className="w-1 h-3 bg-white rounded animate-pulse" style={{animationDelay: '0.2s'}}></div>
+                    </div>
+                    <span className="ml-1">AI Speaking</span>
+                  </div>
+                )}
+
+                {/* Microphone level bar */}
+                {isAudioStreaming && (
+                  <div className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 w-24 h-2 bg-gray-200 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-green-500 transition-all duration-100 ease-out rounded-full"
+                      style={{ width: `${Math.min(100, micLevel)}%` }}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Status Messages */}
+              <div className="text-center space-y-2">
+                {wsConnectionStatus === 'connected' && isAudioStreaming ? (
+                  <div className="text-green-600 font-medium">
+                    🎤 Listening... Speak to the AI
+                  </div>
+                ) : wsConnectionStatus === 'connected' && !isAudioStreaming ? (
+                  <div className="text-blue-600 font-medium">
+                    🔄 Starting audio stream...
+                  </div>
+                ) : wsConnectionStatus === 'connecting' ? (
+                  <div className="text-yellow-600 font-medium">
+                    🔄 Establishing voice connection...
+                  </div>
+                ) : (
+                  <div className="text-red-600 font-medium">
+                    ❌ Connection failed
+                  </div>
+                )}
+                
+                {/* AI Status Messages */}
+                {aiStatus === 'listening' && (
+                  <div className="text-blue-600 font-medium">
+                    👂 AI is listening...
+                  </div>
+                )}
+                
+                {aiStatus === 'thinking' && (
+                  <div className="text-purple-600 font-medium">
+                    🤔 AI is thinking...
+                  </div>
+                )}
+                
+                {aiStatus === 'speaking' && (
+                  <div className="text-green-600 font-medium">
+                    🔊 AI is speaking...
+                  </div>
+                )}
+                
+                {aiStatus === 'idle' && isUserSpeaking && (
+                  <div className="text-yellow-600 font-medium">
+                    ⏳ Waiting for your question...
+                  </div>
+                )}
+
+                {/* Fallback for old isAITalking state */}
+                {isAITalking && aiStatus === 'idle' && (
+                  <div className="text-blue-600">
+                    🔊 AI is responding...
+                  </div>
+                )}
+              </div>
+
+              {/* Manual Controls for Debugging and Reconnection */}
+              <div className="flex flex-wrap gap-4 text-sm justify-center">
+                {wsConnectionStatus === 'disconnected' && !isReconnecting && (
+                  <button
+                    onClick={manualReconnect}
+                    className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 font-medium"
+                  >
+                    <FiRefreshCw className="w-4 h-4" />
+                    Reconnect
+                  </button>
+                )}
+                
+                {wsConnectionStatus === 'connected' && (
+                  <>
+                    {!isAudioStreaming ? (
+                      <button
+                        onClick={startContinuousAudioStreaming}
+                        className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                      >
+                        Start Audio Stream
+                      </button>
+                    ) : (
+                      <button
+                        onClick={stopContinuousAudioStreaming}
+                        className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                      >
+                        Stop Audio Stream
+                      </button>
+                    )}
+                    <button
+                      onClick={() => {
+                        if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
+                          audioContextRef.current.resume();
+                          addDebugLog('Manually resumed audio context', 'info');
+                        }
+                      }}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    >
+                      Resume Audio Context
+                    </button>
+                  </>
+                )}
+              </div>
+
+              {/* Audio Stats */}
+              {isAudioStreaming && (
+                <div className="text-center text-xs text-gray-500 space-y-1">
+                  <div>
+                    <span className="font-medium">Audio Processing:</span> {audioStats.chunksRecorded} chunks generated | 
+                    <span className="font-medium text-green-600"> {audioStats.chunksSent} sent</span> | 
+                    {audioStats.bytesProcessed} bytes total
+                  </div>
+                  {audioStats.lastChunkTime && (
+                    <div>Last Activity: {audioStats.lastChunkTime}</div>
+                  )}
+                  <div className="text-xs text-blue-600">
+                    {audioStats.chunksRecorded > 0 && audioStats.chunksSent === 0 
+                      ? "⚠️ Generating audio but WebSocket not ready"
+                      : audioStats.chunksSent > 0 
+                      ? "✅ Successfully streaming to server"
+                      : "🔄 Initializing audio capture..."
+                    }
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Debug Panel (Collapsible) */}
+            <div className="border-t border-gray-200">
+              <details className="group">
+                <summary className="px-3 py-2 cursor-pointer text-xs font-medium text-gray-600 hover:text-gray-800 flex items-center gap-2">
+                  <span>Debug Logs</span>
+                  <span className="text-xs">({debugLogs.length} entries)</span>
+                  {reconnectAttempts > 0 && (
+                    <span className="text-xs text-yellow-600">
+                      | Reconnect attempts: {reconnectAttempts}/{maxReconnectAttempts}
+                    </span>
+                  )}
+                </summary>
+                <div className="px-3 pb-2 max-h-32 overflow-y-auto bg-gray-50 border-t border-gray-100">
+                  <div className="font-mono text-xs space-y-1 pt-2">
+                    {debugLogs.map((log, index) => (
+                      <div
+                        key={index}
+                        className={`${
+                          log.type === 'error' ? 'text-red-600' :
+                          log.type === 'success' ? 'text-green-600' :
+                          log.type === 'warning' ? 'text-yellow-600' :
+                          'text-gray-700'
+                        }`}
+                      >
+                        <span className="text-gray-400">[{log.timestamp}]</span> {log.message}
+                      </div>
+                    ))}
+                    {debugLogs.length === 0 && (
+                      <div className="text-gray-400 italic">Debug logs will appear here...</div>
+                    )}
+                  </div>
+                </div>
+              </details>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="fixed inset-0 bg-white z-50 ml-64">
       <div className="h-full overflow-y-auto">
-        {/* Header */}
-        <div className="bg-gradient-to-r from-gray-800 to-black px-6 py-4">
-          <div className="flex justify-between items-center">
-            <div>
-              <h2 className="text-white font-bold text-2xl capitalize">
-                {agent.agentName}
-              </h2>
-              <p className="text-gray-300 text-sm mt-1">
-                Agent ID: {agent._id}
-              </p>
-              {/* Audio Preview Section */}
-              <div className="flex items-center gap-4 pt-5">
-                <button
-                  onClick={isPlaying ? stopAudio : playAudio}
-                  className={`inline-flex  text-black items-center gap-2 px-6 py-3 text-sm font-medium rounded-lg transition-colors shadow-sm ${
-                    isPlaying
-                      ? "bg-black text-white hover:bg-gray-800 "
-                      : "bg-white text-black hover:bg-gray-200"
-                  }`}
-                >
-                  {isPlaying ? (
-                    <>
-                      <FiSquare className="w-4 h-4" />
-                      Stop Audio
-                    </>
-                  ) : (
-                    <>
-                      <FiVolume2 className="w-4 h-4" />
-                      Play Audio
-                    </>
-                  )}
-                </button>
+        {/* Updated Header */}
+        <div className="bg-gradient-to-r from-gray-800 to-black px-6 py-2">
+          <div className="flex justify-between items-start">
+            {/* Left Side - Agent Information */}
+            <div className="flex items-start gap-4">
+              {/* Back Arrow */}
+              <button
+                onClick={onClose}
+                className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors mt-1"
+              >
+                <FiArrowLeft className="w-6 h-6" />
+              </button>
 
-                {isPlaying && audioUrl && (
-                  <audio
-                    controls
-                    autoPlay
-                    src={audioUrl}
-                    onEnded={stopAudio}
-                    className="flex-1"
-                  />
-                )}
+              {/* Agent Details */}
+              <div className="space-y-3">
+                {/* Agent Name */}
+                <div>
+                  <h2 className="text-white font-bold text-2xl capitalize">
+                    {agent.agentName}
+                  </h2>
+                </div>
+
+                {/* Agent ID */}
+                <div className="flex items-center gap-2">
+                  <FiUser className="w-4 h-4 text-gray-400" />
+                  <div>
+                    <span className="text-gray-400 text-xs uppercase tracking-wide mr-2">Agent ID:</span>
+                    <span className="text-gray-300 text-sm">
+                      {agent._id}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Category */}
+                <div className="flex items-center gap-2">
+                  <FiTag className="w-4 h-4 text-gray-400" />
+                  <div>
+                    <span className="text-gray-400 text-xs uppercase tracking-wide mr-2">Category:</span>
+                    <span className="text-gray-300 text-sm">
+                      {agent.category || "Not specified"}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Personality */}
+                <div className="flex items-center gap-2">
+                  <FiUser className="w-4 h-4 text-gray-400" />
+                  <div>
+                    <span className="text-gray-400 text-xs uppercase tracking-wide mr-2">Personality:</span>
+                    <span className="text-gray-300 text-sm">
+                      {formatPersonality(agent.personality)}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Play Audio Button */}
+                <div className="pt-2">
+                  <button
+                    onClick={isPlaying ? stopAudio : playAudio}
+                    className={`inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors shadow-sm ${
+                      isPlaying
+                        ? "bg-red-600 text-white hover:bg-red-700"
+                        : "bg-white text-black hover:bg-gray-200"
+                    }`}
+                  >
+                    {isPlaying ? (
+                      <>
+                        <FiSquare className="w-4 h-4" />
+                        Stop Audio
+                      </>
+                    ) : (
+                      <>
+                        <FiVolume2 className="w-4 h-4" />
+                        Play Audio
+                      </>
+                    )}
+                  </button>
+
+                  {isPlaying && audioUrl && (
+                    <div className="mt-3">
+                      <audio
+                        controls
+                        autoPlay
+                        src={audioUrl}
+                        onEnded={stopAudio}
+                        className="w-full max-w-sm"
+                      />
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
-            <button
-              onClick={onClose}
-              className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
-            >
-              <FiX className="w-6 h-6" />
-            </button>
+
+            {/* Right Side - AI Interaction */}
+            <div className="flex flex-col items-center gap-4 mx-12 my-4">
+              {/* AI Interaction Heading */}
+              <h3 className="text-white font-semibold text-lg">Interaction with {agent.agentName}</h3>
+              
+              {/* Action Buttons and QR Code */}
+              <div className="flex items-center gap-6 mx-10 my-4">
+                {/* AI Talk Button - Icon Only */}
+                <div className="">
+                <button
+                  onClick={handleVoiceChat}
+                  className="w-20 h-20 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm flex items-center justify-center"
+                  title="AI Talk"
+                >
+                  <FiMic className="w-8 h-8" />
+                </button>
+                <h1 className="text-white text-center my-3">Talk</h1>
+                </div>
+
+                {/* AI Dial Button - Icon Only */}
+                <div>
+                <button
+                  onClick={handleCall}
+                  className="w-20 h-20 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors shadow-sm flex items-center justify-center"
+                  title="AI Dial"
+                >
+                  <FiPhoneCall className="w-8 h-8" />
+                </button>
+                <h1 className="text-white text-center my-3">Dial</h1>
+                </div>
+                {/* QR Code - Direct Display */}
+                <div>
+                <div className="flex flex-col items-center">
+                  <WorkingQRCode
+                    value={qrUrlValue}
+                    size={80}
+                    bgColor="#fff"
+                    fgColor="#000"
+                  />
+                </div>
+                <h1 className="text-white text-center my-3">Scan QR</h1>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
         {/* Content */}
         <div className="p-6 space-y-6">
           <div className="flex justify-between gap-4">
-            {/* Description Section */}
+            {/* First Message Section (moved from header) */}
+            <div className="bg-gray-50 rounded-lg p-4 w-1/2">
+              <h3 className="text-lg font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                <FiMessageSquare className="w-5 h-5" />
+                First Message
+              </h3>
+              <p className="text-gray-700 leading-relaxed italic">
+                "{agent.firstMessage || "Not specified"}"
+              </p>
+            </div>
+
+            {/* Description Section (moved from left) */}
             <div className="bg-gray-50 rounded-lg p-4 w-1/2">
               <h3 className="text-lg font-semibold text-gray-800 mb-3 flex items-center gap-2">
                 <FiMessageSquare className="w-5 h-5" />
@@ -909,32 +1568,6 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
               <p className="text-gray-700 leading-relaxed italic">
                 "{agent.description}"
               </p>
-            </div>
-
-            {/* AI Interaction Section */}
-            <div className="bg-gray-50 rounded-lg p-4 w-1/2">
-              <h3 className="text-lg font-semibold text-gray-800 mb-3 flex items-center gap-2">
-                <FiUser className="w-5 h-5" />
-                AI Interaction
-              </h3>
-
-              <div className="flex items-center gap-4">
-                <button
-                  onClick={handleVoiceChat}
-                  className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
-                >
-                  <FiMic className="w-4 h-4" />
-                  AI Talk
-                </button>
-
-                <button
-                  onClick={handleCall}
-                  className="inline-flex items-center gap-2 px-6 py-3 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors shadow-sm"
-                >
-                  <FiPhoneCall className="w-4 h-4" />
-                  AI Dial
-                </button>
-              </div>
             </div>
           </div>
 
@@ -948,30 +1581,6 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
               </h3>
 
               <div className="space-y-3">
-                <div className="flex items-center gap-3 p-3 bg-white border border-gray-200 rounded-lg">
-                  <FiTag className="w-4 h-4 text-gray-600 flex-shrink-0" />
-                  <div>
-                    <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-                      Category
-                    </span>
-                    <p className="text-sm font-medium text-gray-800">
-                      {agent.category || "Not specified"}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3 p-3 bg-white border border-gray-200 rounded-lg">
-                  <FiUser className="w-4 h-4 text-gray-600 flex-shrink-0" />
-                  <div>
-                    <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-                      Personality
-                    </span>
-                    <p className="text-sm font-medium text-gray-800">
-                      {formatPersonality(agent.personality)}
-                    </p>
-                  </div>
-                </div>
-
                 <div className="flex items-center gap-3 p-3 bg-white border border-gray-200 rounded-lg">
                   <FiMic className="w-4 h-4 text-gray-600 flex-shrink-0" />
                   <div>
@@ -1034,17 +1643,6 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
                   <FiMessageSquare className="w-4 h-4 text-gray-600 flex-shrink-0" />
                   <div>
                     <span className="text-xs font-small text-gray-500 uppercase tracking-wide">
-                      First Message
-                    </span>
-                    <p className="text-sm font-small text-gray-800">
-                      {agent.firstMessage || "Not specified"}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 p-3 bg-white border border-gray-200 rounded-lg">
-                  <FiMessageSquare className="w-4 h-4 text-gray-600 flex-shrink-0" />
-                  <div>
-                    <span className="text-xs font-small text-gray-500 uppercase tracking-wide">
                       Knowledge Base
                     </span>
                     <div className="text-sm font-small text-gray-800 max-h-40 overflow-y-auto pr-2">
@@ -1090,7 +1688,7 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
                   onClick={cancelCall}
                   className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
                 >
-                  <FiX className="w-6 h-6" />
+                  <FiArrowLeft className="w-6 h-6" />
                 </button>
               </div>
             </div>
@@ -1237,7 +1835,7 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
                   onClick={closeVoiceChat}
                   className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
                 >
-                  <FiX className="w-6 h-6" />
+                  <FiArrowLeft className="w-6 h-6" />
                 </button>
               </div>
             </div>
@@ -1263,6 +1861,20 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
                     : 'Check your connection and try again'
                   }
                 </div>
+                
+                {/* Show reconnection status */}
+                {isReconnecting && (
+                  <div className="text-yellow-600 text-sm mt-2">
+                    🔄 Reconnecting... (Attempt {reconnectAttempts}/{maxReconnectAttempts})
+                  </div>
+                )}
+                
+                {/* Show last disconnect reason */}
+                {wsConnectionStatus === 'disconnected' && lastDisconnectReason && (
+                  <div className="text-red-600 text-xs mt-1">
+                    Last disconnect: {lastDisconnectReason}
+                  </div>
+                )}
               </div>
 
               {/* Large Microphone Visualization */}
@@ -1296,6 +1908,13 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
                       }}
                     />
                   </>
+                )}
+
+                {/* Simple connection status indicator */}
+                {wsConnectionStatus === 'connected' && (
+                  <div className="absolute -top-2 -right-2 w-4 h-4 bg-green-500 rounded-full flex items-center justify-center">
+                    <div className="w-2 h-2 bg-white rounded-full"></div>
+                  </div>
                 )}
 
                 {/* AI Talking indicator */}
@@ -1341,44 +1960,82 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
                   </div>
                 )}
                 
-                {isAITalking && (
+                {/* AI Status Messages */}
+                {aiStatus === 'listening' && (
+                  <div className="text-blue-600 font-medium">
+                    👂 AI is listening...
+                  </div>
+                )}
+                
+                {aiStatus === 'thinking' && (
+                  <div className="text-purple-600 font-medium">
+                    🤔 AI is thinking...
+                  </div>
+                )}
+                
+                {aiStatus === 'speaking' && (
+                  <div className="text-green-600 font-medium">
+                    🔊 AI is speaking...
+                  </div>
+                )}
+                
+                {aiStatus === 'idle' && isUserSpeaking && (
+                  <div className="text-yellow-600 font-medium">
+                    ⏳ Waiting for your question...
+                  </div>
+                )}
+
+                {/* Fallback for old isAITalking state */}
+                {isAITalking && aiStatus === 'idle' && (
                   <div className="text-blue-600">
                     🔊 AI is responding...
                   </div>
                 )}
               </div>
 
-              {/* Manual Controls for Debugging */}
-              {wsConnectionStatus === 'connected' && (
-                <div className="flex gap-4 text-sm">
-                  {!isAudioStreaming ? (
-                    <button
-                      onClick={startContinuousAudioStreaming}
-                      className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                    >
-                      Start Audio Stream
-                    </button>
-                  ) : (
-                    <button
-                      onClick={stopContinuousAudioStreaming}
-                      className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-                    >
-                      Stop Audio Stream
-                    </button>
-                  )}
+              {/* Manual Controls for Debugging and Reconnection */}
+              <div className="flex flex-wrap gap-4 text-sm justify-center">
+                {wsConnectionStatus === 'disconnected' && !isReconnecting && (
                   <button
-                    onClick={() => {
-                      if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
-                        audioContextRef.current.resume();
-                        addDebugLog('Manually resumed audio context', 'info');
-                      }
-                    }}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    onClick={manualReconnect}
+                    className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 font-medium"
                   >
-                    Resume Audio Context
+                    <FiRefreshCw className="w-4 h-4" />
+                    Reconnect
                   </button>
-                </div>
-              )}
+                )}
+                
+                {wsConnectionStatus === 'connected' && (
+                  <>
+                    {!isAudioStreaming ? (
+                      <button
+                        onClick={startContinuousAudioStreaming}
+                        className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                      >
+                        Start Audio Stream
+                      </button>
+                    ) : (
+                      <button
+                        onClick={stopContinuousAudioStreaming}
+                        className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                      >
+                        Stop Audio Stream
+                      </button>
+                    )}
+                    <button
+                      onClick={() => {
+                        if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
+                          audioContextRef.current.resume();
+                          addDebugLog('Manually resumed audio context', 'info');
+                        }
+                      }}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    >
+                      Resume Audio Context
+                    </button>
+                  </>
+                )}
+              </div>
 
               {/* Audio Stats */}
               {isAudioStreaming && (
@@ -1406,11 +2063,16 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId }) => {
             {/* Debug Panel (Collapsible) */}
             <div className="border-t border-gray-200">
               <details className="group">
-                <summary className="px-6 py-3 cursor-pointer text-sm font-medium text-gray-600 hover:text-gray-800 flex items-center gap-2">
+                <summary className="px-3 py-2 cursor-pointer text-xs font-medium text-gray-600 hover:text-gray-800 flex items-center gap-2">
                   <span>Debug Logs</span>
                   <span className="text-xs">({debugLogs.length} entries)</span>
+                  {reconnectAttempts > 0 && (
+                    <span className="text-xs text-yellow-600">
+                      | Reconnect attempts: {reconnectAttempts}/{maxReconnectAttempts}
+                    </span>
+                  )}
                 </summary>
-                <div className="px-6 pb-4 max-h-48 overflow-y-auto bg-gray-50 border-t border-gray-100">
+                <div className="px-3 pb-2 max-h-32 overflow-y-auto bg-gray-50 border-t border-gray-100">
                   <div className="font-mono text-xs space-y-1 pt-2">
                     {debugLogs.map((log, index) => (
                       <div

@@ -5,7 +5,7 @@ import User from './User';
 import './App.css'
 import Superadmin from './Superadmin';
 import Home from './pages/Home';
-
+import AgentMobileTalk from './component/dashboards/components/AgentMobileTalk';
 
 const App = () => {
   useEffect(() => {
@@ -17,7 +17,6 @@ const App = () => {
     console.log("Super Admin token:", superadmintoken);
   }, []);
 
-
   return (
     <Router>
       <Routes>
@@ -25,6 +24,7 @@ const App = () => {
         <Route path="/auth/*" element={<User />} />
         <Route path="/admin/*" element={<Admin />} />
         <Route path="/superadmin/*" element={<Superadmin />} />
+        <Route path="/agent/:agentId/talk" element={<AgentMobileTalk />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Router>
