@@ -11,6 +11,9 @@ import {
   FiInfo,
   FiUserX,
   FiUserCheck,
+  FiArrowDownLeft,
+  FiArrowUpRight,
+  FiBriefcase,
 } from "react-icons/fi";
 import AgentForm from "./components/AgentForm";
 import AgentList from "./components/AgentList";
@@ -21,6 +24,7 @@ import OutboundSection from "./components/OutboundSection";
 import HumanAgents from './components/HumanAgents';
 import ApprovalForm from "./components/ApprovalForm";
 import PerformanceKPIs from "./components/PerformanceKPIs";
+import MyBusiness from "./components/MyBusiness";
 import { API_BASE_URL } from "../../config";
 
 function ClientDashboard({ onLogout, clientId: propClientId }) {
@@ -430,6 +434,9 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
       case "human_agent":
         return <HumanAgents />;
 
+      case "mybusiness":
+         return <MyBusiness/>
+
       default:
         return <div>Select a section from the sidebar</div>;
     }
@@ -556,7 +563,7 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
               }`}
               onClick={() => handleSectionChange("bond")}
             >
-              <FiLink className="text-xl w-6 text-center" />
+              <FiArrowDownLeft className="text-xl w-6 text-center" />
               <span className="flex-1 font-medium">InBound</span>
             </button>
 
@@ -568,7 +575,7 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
               }`}
               onClick={() => handleSectionChange("outbound")}
             >
-              <FiSend className="text-xl w-6 text-center" />
+              <FiArrowUpRight className="text-xl w-6 text-center" />
               <span className="flex-1 font-medium">Outbound</span>
             </button>
 
@@ -582,6 +589,18 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
             >
               <FiUserCheck className="text-xl w-6 text-center" />
               <span className="flex-1 font-medium">Sales Staff</span>
+            </button>
+
+            <button
+              className={`flex items-center w-full px-6 py-4 text-left transition-all duration-200 gap-3 ${
+                activeSection === "mybusiness"
+                  ? "bg-black text-white border-r-4 border-white"
+                  : "text-gray-300 hover:bg-gray-800 hover:text-white"
+              }`}
+              onClick={() => handleSectionChange("mybusiness")}
+            >
+              <FiBriefcase className="text-xl w-6 text-center" />
+              <span className="flex-1 font-medium">My Business</span>
             </button>
           </nav>
 
