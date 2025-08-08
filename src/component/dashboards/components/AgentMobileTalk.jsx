@@ -29,7 +29,15 @@ const AgentMobileTalk = () => {
           );
           data = await response.json();
           if (response.ok && data.success) {
-            setAgent(data.data);
+            const agentObj = data.data;
+            try {
+              const clientRes = await fetch(`${API_BASE_URL}/client/public/${agentObj.clientId}`);
+              const clientJson = await clientRes.json();
+              if (clientRes.ok && clientJson.success) {
+                agentObj.__clientPublic = clientJson.data;
+              }
+            } catch {}
+            setAgent(agentObj);
             return;
           } else {
             setError("Failed to fetch agent");
@@ -40,7 +48,17 @@ const AgentMobileTalk = () => {
           response = await fetch(`${API_BASE_URL}/client/agents/${agentId}/public`);
           data = await response.json();
           if (response.ok && data.success) {
-            setAgent(data.data);
+            const agentObj = data.data;
+            // Try to fetch minimal client details for header
+            try {
+              const clientRes = await fetch(`${API_BASE_URL}/client/public/${agentObj.clientId}`);
+              const clientJson = await clientRes.json();
+              if (clientRes.ok && clientJson.success) {
+                // attach minimal client details to agent for UI header
+                agentObj.__clientPublic = clientJson.data;
+              }
+            } catch {}
+            setAgent(agentObj);
             return;
           } else {
             setError("Failed to fetch agent");
