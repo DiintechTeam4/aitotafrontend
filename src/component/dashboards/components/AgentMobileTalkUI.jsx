@@ -125,7 +125,7 @@ const AgentMobileTalkUI = ({ agent, clientId, onClose }) => {
     addDebugLog("Attempting WebSocket connection...", "info");
     
     // Connect to our local WebSocket server
-    const wsUrl = `ws://localhost:4000`;
+    const wsUrl = `ws://app.aitota.com`;
     addDebugLog(`Connecting to: ${wsUrl}`, "info");
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
@@ -866,7 +866,7 @@ const AgentMobileTalkUI = ({ agent, clientId, onClose }) => {
   }, []);
 
   // --- UI ---
-  const client = getClientInfo();
+  const client = agent?.__clientPublic || getClientInfo();
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-b from-blue-50 to-white">
       {/* Top: Client Details */}
