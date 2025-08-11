@@ -20,6 +20,8 @@ import {
   FiCheckCircle,
   FiAlertCircle,
   FiDownload,
+  FiEye,
+  FiEyeOff,
 } from "react-icons/fi";
 import { QrCode } from 'lucide-react';
 
@@ -83,6 +85,7 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
   const [openMenuId, setOpenMenuId] = useState(null);
   const [selectedAgent, setSelectedAgent] = useState(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const [agentStates, setAgentStates] = useState({});
 
   // QR Code Modal States
   const [showQRModal, setShowQRModal] = useState(false);
@@ -120,6 +123,20 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
   const dataArrayRef = useRef(null);
   const animationFrameRef = useRef(null);
 
+  // Initialize agent states
+  useEffect(() => {
+    if (agents && agents.length > 0) {
+      const initialStates = {};
+      agents.forEach(agent => {
+        initialStates[agent._id] = {
+          isActive: agent.isActive !== undefined ? agent.isActive : true,
+          isToggling: false
+        };
+      });
+      setAgentStates(initialStates);
+    }
+  }, [agents]);
+
   const formatPersonality = (personality) => {
     return personality.charAt(0).toUpperCase() + personality.slice(1);
   };
@@ -147,6 +164,74 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
       "from-cyan-700 to-cyan-900",
     ];
     return colors[index % colors.length];
+  };
+
+  // Toggle Active Status Function
+  const toggleActiveStatus = async (agent, e) => {
+    e.stopPropagation();
+    
+    const currentState = agentStates[agent._id];
+    if (currentState?.isToggling) return; // Prevent multiple requests
+
+    try {
+      // Set toggling state
+      setAgentStates(prev => ({
+        ...prev,
+        [agent._id]: {
+          ...prev[agent._id],
+          isToggling: true
+        }
+      }));
+
+      const newActiveStatus = !currentState?.isActive;
+      
+      const response = await fetch(
+        `${API_BASE_URL}/client/agents/${agent._id}/toggle-active?clientId=${clientId}`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${sessionStorage.getItem("clienttoken")}`,
+          },
+          body: JSON.stringify({
+            isActive: newActiveStatus
+          })
+        }
+      );
+
+      if (response.ok) {
+        const result = await response.json();
+        
+        // Update local state
+        setAgentStates(prev => ({
+          ...prev,
+          [agent._id]: {
+            isActive: newActiveStatus,
+            isToggling: false
+          }
+        }));
+
+        // Show success message
+        const statusText = newActiveStatus ? 'activated' : 'deactivated';
+        console.log(`Agent ${agent.agentName} ${statusText} successfully`);
+        
+      } else {
+        throw new Error(`Failed to toggle agent status: ${response.status}`);
+      }
+    } catch (error) {
+      console.error('Error toggling agent status:', error);
+      
+      // Reset toggling state on error
+      setAgentStates(prev => ({
+        ...prev,
+        [agent._id]: {
+          ...prev[agent._id],
+          isToggling: false
+        }
+      }));
+      
+      alert(`Failed to toggle agent status. Please try again.`);
+    }
   };
 
   // QR Code Functions
@@ -695,190 +780,256 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {agentsArray.map((agent, index) => (
-            <div
-              key={agent._id}
-              className="group bg-white rounded-xl shadow-sm border border-gray-100 hover:shadow-lg hover:border-gray-300 transition-all duration-300 overflow-hidden cursor-pointer relative"
-              onClick={() => handleViewDetails(agent)}
-            >
-              {/* Header */}
+          {agentsArray.map((agent, index) => {
+            const currentAgentState = agentStates[agent._id] || { isActive: true, isToggling: false };
+            const isActive = currentAgentState.isActive;
+            const isToggling = currentAgentState.isToggling;
+            
+            return (
               <div
-                className={`bg-gradient-to-r ${getAgentColor(index)} px-6 py-4`}
+                key={agent._id}
+                className={`group bg-white rounded-xl shadow-sm border border-gray-100 hover:shadow-lg hover:border-gray-300 transition-all duration-300 overflow-hidden cursor-pointer relative ${
+                  !isActive ? 'opacity-60' : ''
+                }`}
+                onClick={() => handleViewDetails(agent)}
               >
-                <div className="flex justify-between items-center">
-                  <h3 className="text-white font-semibold text-lg truncate capitalize">
-                    {agent.agentName}
-                  </h3>
-                  <div className="flex items-center gap-1">
-                    {/* QR Code Button */}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleShowQR(agent);
-                      }}
-                      className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
-                      title="Show QR Code"
-                    >
-                      <QrCode className="w-4 h-4" />
-                    </button>
+                {/* Active Status Indicator */}
+                <div className={`absolute top-2 left-2 w-3 h-3 rounded-full ${
+                  isActive ? 'bg-green-500' : 'bg-red-500'
+                } z-10`} 
+                title={isActive ? 'Agent is Active' : 'Agent is Inactive'}
+                />
 
-                    {/* Voice Chat Button */}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleVoiceChat(agent);
-                      }}
-                      className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
-                      title="AI Talk"
-                    >
-                      <FiMic className="w-4 h-4" />
-                    </button>
+                {/* Header */}
+                <div
+                  className={`bg-gradient-to-r ${getAgentColor(index)} px-6 py-4 ${
+                    !isActive ? 'grayscale' : ''
+                  }`}
+                >
+                  <div className="flex justify-between items-center">
+                    <h3 className="text-white font-semibold text-lg truncate capitalize">
+                      {agent.agentName}
+                    </h3>
+                    <div className="flex items-center gap-1">
+                      {/* Active/Inactive Toggle Button */}
+                      <button
+                        onClick={(e) => toggleActiveStatus(agent, e)}
+                        disabled={isToggling}
+                        className={`p-2 transition-colors rounded-lg ${
+                          isToggling 
+                            ? 'text-white/50 cursor-not-allowed' 
+                            : isActive
+                              ? 'text-green-300 hover:text-green-100 hover:bg-white/10'
+                              : 'text-red-300 hover:text-red-100 hover:bg-white/10'
+                        }`}
+                        title={isToggling ? 'Updating...' : isActive ? 'Deactivate Agent' : 'Activate Agent'}
+                      >
+                        {isToggling ? (
+                          <FiLoader className="w-4 h-4 animate-spin" />
+                        ) : isActive ? (
+                          <FiEye className="w-4 h-4" />
+                        ) : (
+                          <FiEyeOff className="w-4 h-4" />
+                        )}
+                      </button>
 
-                    {/* Call Button */}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleCall(agent);
-                      }}
-                      className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
-                      title="AI Dial"
-                    >
-                      <FiPhoneCall className="w-4 h-4" />
-                    </button>
-
-                    {/* More Options Button */}
-                    <div className="relative">
+                      {/* QR Code Button */}
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          toggleMenu(agent._id);
+                          handleShowQR(agent);
                         }}
-                        className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
-                        title="More options"
+                        disabled={!isActive}
+                        className={`p-2 rounded-lg transition-colors ${
+                          isActive 
+                            ? 'text-white/70 hover:text-white hover:bg-white/10'
+                            : 'text-white/30 cursor-not-allowed'
+                        }`}
+                        title={isActive ? "Show QR Code" : "Agent must be active to show QR"}
                       >
-                        <FiMoreVertical className="w-4 h-4" />
+                        <QrCode className="w-4 h-4" />
                       </button>
 
-                      {/* Dropdown Menu */}
-                      {openMenuId === agent._id && (
-                        <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-10">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleEdit(agent);
-                            }}
-                            className="w-full px-4 py-3 text-left text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-colors"
-                          >
-                            <FiEdit className="w-4 h-4" />
-                            Edit Agent
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDelete(agent._id);
-                            }}
-                            className="w-full px-4 py-3 text-left text-red-600 hover:bg-red-50 flex items-center gap-3 transition-colors"
-                          >
-                            <FiTrash2 className="w-4 h-4" />
-                            Delete Agent
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Content */}
-              <div className="p-6 space-y-3">
-                {/* Description */}
-                <div>
-                  <label className="block font-semibold text-gray-700">
-                    Description
-                  </label>
-                  <p className="text-gray-600 text-sm leading-relaxed italic truncate overflow-hidden whitespace-nowrap">
-                    "{agent.description}"
-                  </p>
-                </div>
-
-                {/* Agent Details */}
-                <div className="space-y-3">
-                  <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                    <FiTag className="w-4 h-4 text-gray-600 flex-shrink-0" />
-                    <div>
-                      <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-                        Category
-                      </span>
-                      <p className="text-sm font-medium text-gray-800">
-                        {agent.category || "Not specified"}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                    <FiUser className="w-4 h-4 text-gray-600 flex-shrink-0" />
-                    <div>
-                      <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-                        Personality
-                      </span>
-                      <p className="text-sm font-medium text-gray-800">
-                        {formatPersonality(agent.personality)}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* First Message Section */}
-                <div className="space-y-3">
-                  <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                    <FiMessageSquare className="w-4 h-4 text-gray-600 flex-shrink-0" />
-                    <div>
-                      <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-                        First Message
-                      </span>
-                      <p className="text-sm font-medium text-gray-800">
-                        {agent.firstMessage || "Not specified"}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-end">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        playAudio(agent._id);
-                      }}
-                      className="inline-flex items-center gap-2 px-6 py-2 bg-black text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors shadow-sm"
-                    >
-                      <FiVolume2 className="w-4 h-4" />
-                    </button>
-                  </div>
-
-                  {playingAgentId === agent._id && audioUrl && (
-                    <div className="mt-4 space-y-3">
-                      <audio
-                        controls
-                        autoPlay
-                        src={audioUrl}
-                        onEnded={stopAudio}
-                        className="w-full"
-                      />
+                      {/* Voice Chat Button */}
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          stopAudio();
+                          if (isActive) handleVoiceChat(agent);
                         }}
-                        className="inline-flex items-center gap-2 px-4 py-2 bg-gray-500 text-white text-sm font-medium rounded-lg hover:bg-gray-600 transition-colors"
+                        disabled={!isActive}
+                        className={`p-2 rounded-lg transition-colors ${
+                          isActive 
+                            ? 'text-white/70 hover:text-white hover:bg-white/10'
+                            : 'text-white/30 cursor-not-allowed'
+                        }`}
+                        title={isActive ? "AI Talk" : "Agent must be active for AI Talk"}
                       >
-                        <FiSquare className="w-4 h-4" />
-                        Stop
+                        <FiMic className="w-4 h-4" />
                       </button>
+
+                      {/* Call Button */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (isActive) handleCall(agent);
+                        }}
+                        disabled={!isActive}
+                        className={`p-2 rounded-lg transition-colors ${
+                          isActive 
+                            ? 'text-white/70 hover:text-white hover:bg-white/10'
+                            : 'text-white/30 cursor-not-allowed'
+                        }`}
+                        title={isActive ? "AI Dial" : "Agent must be active for AI Dial"}
+                      >
+                        <FiPhoneCall className="w-4 h-4" />
+                      </button>
+
+                      {/* More Options Button */}
+                      <div className="relative">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleMenu(agent._id);
+                          }}
+                          className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                          title="More options"
+                        >
+                          <FiMoreVertical className="w-4 h-4" />
+                        </button>
+
+                        {/* Dropdown Menu */}
+                        {openMenuId === agent._id && (
+                          <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-10">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleEdit(agent);
+                              }}
+                              className="w-full px-4 py-3 text-left text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-colors"
+                            >
+                              <FiEdit className="w-4 h-4" />
+                              Edit Agent
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDelete(agent._id);
+                              }}
+                              className="w-full px-4 py-3 text-left text-red-600 hover:bg-red-50 flex items-center gap-3 transition-colors"
+                            >
+                              <FiTrash2 className="w-4 h-4" />
+                              Delete Agent
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Content */}
+                <div className="p-6 space-y-3">
+                  {/* Active Status Banner */}
+                  {!isActive && (
+                    <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <FiAlertCircle className="w-4 h-4 text-red-600" />
+                        <span className="text-sm font-medium text-red-700">
+                          Agent is currently inactive
+                        </span>
+                      </div>
                     </div>
                   )}
+
+                  {/* Description */}
+                  <div>
+                    <label className="block font-semibold text-gray-700">
+                      Description
+                    </label>
+                    <p className="text-gray-600 text-sm leading-relaxed italic truncate overflow-hidden whitespace-nowrap">
+                      "{agent.description}"
+                    </p>
+                  </div>
+
+                  {/* Agent Details */}
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                      <FiTag className="w-4 h-4 text-gray-600 flex-shrink-0" />
+                      <div>
+                        <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                          Category
+                        </span>
+                        <p className="text-sm font-medium text-gray-800">
+                          {agent.category || "Not specified"}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                      <FiUser className="w-4 h-4 text-gray-600 flex-shrink-0" />
+                      <div>
+                        <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                          Personality
+                        </span>
+                        <p className="text-sm font-medium text-gray-800">
+                          {formatPersonality(agent.personality)}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* First Message Section */}
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                      <FiMessageSquare className="w-4 h-4 text-gray-600 flex-shrink-0" />
+                      <div>
+                        <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                          First Message
+                        </span>
+                        <p className="text-sm font-medium text-gray-800">
+                          {agent.firstMessage || "Not specified"}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-end">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          playAudio(agent._id);
+                        }}
+                        className="inline-flex items-center gap-2 px-6 py-2 bg-black text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors shadow-sm"
+                      >
+                        <FiVolume2 className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    {playingAgentId === agent._id && audioUrl && (
+                      <div className="mt-4 space-y-3">
+                        <audio
+                          controls
+                          autoPlay
+                          src={audioUrl}
+                          onEnded={stopAudio}
+                          className="w-full"
+                        />
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            stopAudio();
+                          }}
+                          className="inline-flex items-center gap-2 px-4 py-2 bg-gray-500 text-white text-sm font-medium rounded-lg hover:bg-gray-600 transition-colors"
+                        >
+                          <FiSquare className="w-4 h-4" />
+                          Stop
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

@@ -1705,7 +1705,7 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId, forceVoiceChatModal })
                       type="text"
                       value={contactName}
                       onChange={(e) => setContactName(e.target.value)}
-                      placeholder="example: John Doe"
+                      placeholder="example: Jay Shrama"
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent text-lg"
                     />
                   </div>
@@ -1717,7 +1717,7 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId, forceVoiceChatModal })
                       type="tel"
                       value={phoneNumber}
                       onChange={(e) => setPhoneNumber(e.target.value)}
-                      placeholder="(example +08873987243)"
+                      placeholder="(example 8873987243)"
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent text-lg"
                     />
                   </div>
