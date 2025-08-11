@@ -7,6 +7,7 @@ import Superadmin from './Superadmin';
 import Home from './pages/Home';
 import Login from './pages/Login';
 import AgentMobileTalk from './component/dashboards/components/AgentMobileTalk';
+import PublicBusinessDetails from "./component/PublicBusinessDetails";
 
 const App = () => {
   useEffect(() => {
@@ -27,6 +28,7 @@ const App = () => {
         <Route path="/admin/*" element={<Admin />} />
         <Route path="/superadmin/*" element={<Superadmin />} />
         <Route path="/agent/:agentId/talk" element={<AgentMobileTalk />} />
+        <Route path="/:slug" element={<PublicBusinessDetails />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Router>
