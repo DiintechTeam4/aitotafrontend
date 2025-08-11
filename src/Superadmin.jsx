@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
-import SuperAdminAuthLayout from './component/auth/SuperAdminAuthLayout';
-import SuperAdminDashboard from './component/dashboards/SuperAdminDashboard';
+import React, { useState, useEffect } from "react";
+import { Routes, Route, Navigate, useNavigate } from "react-router-dom";
+import SuperAdminAuthLayout from "./component/auth/SuperAdminAuthLayout";
+import SuperAdminDashboard from "./component/dashboards/SuperAdminDashboard";
 
 const Superadmin = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -10,59 +10,65 @@ const Superadmin = () => {
 
   useEffect(() => {
     const initializeAuth = async () => {
-      const superAdminToken = localStorage.getItem('superadmintoken');
-      const superAdminData = localStorage.getItem('superAdminData');
-      
+      const superAdminToken = localStorage.getItem("superadmintoken");
+      const superAdminData = localStorage.getItem("superAdminData");
+
       if (superAdminToken && superAdminData) {
         try {
           const parsedSuperAdminData = JSON.parse(superAdminData);
-          if (parsedSuperAdminData.role === 'superadmin') {
+          if (parsedSuperAdminData.role === "superadmin") {
             setIsAuthenticated(true);
             // Update super admin user data if needed
-            localStorage.setItem('superAdminData', JSON.stringify({
-              ...parsedSuperAdminData,
-              name: parsedSuperAdminData.name
-            }));
+            localStorage.setItem(
+              "superAdminData",
+              JSON.stringify({
+                ...parsedSuperAdminData,
+                name: parsedSuperAdminData.name,
+              })
+            );
           } else {
-            throw new Error('Invalid role');
+            throw new Error("Invalid role");
           }
         } catch (error) {
-          console.error('Error validating super admin token:', error);
+          console.error("Error validating super admin token:", error);
           clearAuth();
         }
       } else {
         setIsAuthenticated(false);
       }
-      
+
       setIsLoading(false);
     };
-    
+
     initializeAuth();
   }, []);
 
   const clearAuth = () => {
-    localStorage.removeItem('superadmintoken');
-    localStorage.removeItem('superAdminData');
+    localStorage.removeItem("superadmintoken");
+    localStorage.removeItem("superAdminData");
     setIsAuthenticated(false);
     setIsLoading(false);
   };
 
   const handleAuthSuccess = (superAdminData) => {
     // Store super admin token and user data
-    localStorage.setItem('superadmintoken', superAdminData.token);
-    localStorage.setItem('superAdminData', JSON.stringify({
-      role: superAdminData.role,
-      name: superAdminData.name,
-      email: superAdminData.email
-    }));
-    
+    localStorage.setItem("superadmintoken", superAdminData.token);
+    localStorage.setItem(
+      "superAdminData",
+      JSON.stringify({
+        role: superAdminData.role,
+        name: superAdminData.name,
+        email: superAdminData.email,
+      })
+    );
+
     setIsAuthenticated(true);
     console.log("Super Admin authentication successful");
   };
 
   const handleLogout = () => {
     clearAuth();
-    navigate('/superadmin');
+    navigate("/superadmin");
   };
 
   if (isLoading) {
@@ -76,17 +82,32 @@ const Superadmin = () => {
   return (
     <div>
       <Routes>
-        <Route path='/' element={<SuperAdminAuthLayout onLogin={handleAuthSuccess}/>}/>
-        {
-          isAuthenticated ?
-          (
-            <Route path='/dashboard' element={<SuperAdminDashboard onLogout={handleLogout}/>}/>
-          )
-          :
-          (
-            <Route path='*' element={<SuperAdminAuthLayout onLogin={handleAuthSuccess}/>}/>
-          )
-        }
+        <Route
+          path=""
+          element={
+            isAuthenticated ? (
+              <Navigate to="/superadmin/dashboard" replace />
+            ) : (
+              <SuperAdminAuthLayout onLogin={handleAuthSuccess} />
+            )
+          }
+        />
+        {isAuthenticated && (
+          <Route
+            path="dashboard"
+            element={<SuperAdminDashboard onLogout={handleLogout} />}
+          />
+        )}
+        <Route
+          path="*"
+          element={
+            isAuthenticated ? (
+              <Navigate to="/superadmin/dashboard" replace />
+            ) : (
+              <SuperAdminAuthLayout onLogin={handleAuthSuccess} />
+            )
+          }
+        />
       </Routes>
     </div>
   );

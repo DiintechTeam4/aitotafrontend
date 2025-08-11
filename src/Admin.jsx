@@ -39,7 +39,7 @@ const Admin = () => {
           console.error("Error validating admin token:", error);
           clearAuth();
         }
-      }else{
+      } else {
         setIsAuthenticated(false);
       }
       setIsLoading(false);
@@ -73,7 +73,7 @@ const Admin = () => {
 
   const handleLogout = () => {
     clearAuth();
-    navigate("/admin/login");
+    navigate("/admin");
   };
 
   if (isLoading) {
@@ -88,20 +88,31 @@ const Admin = () => {
     <div>
       <Routes>
         <Route
-          path="/"
-          element={<AdminAuthLayout onLogin={handleAuthSuccess} />}
+          path=""
+          element={
+            isAuthenticated ? (
+              <Navigate to="/admin/dashboard" replace />
+            ) : (
+              <AdminAuthLayout onLogin={handleAuthSuccess} />
+            )
+          }
         />
-        {isAuthenticated ? (
+        {isAuthenticated && (
           <Route
-            path="/dashboard"
+            path="dashboard"
             element={<AdminDashboard onLogout={handleLogout} />}
           />
-        ) : (
-          <Route
-            path="*"
-            element={<AdminAuthLayout onLogin={handleAuthSuccess} />}
-          />
         )}
+        <Route
+          path="*"
+          element={
+            isAuthenticated ? (
+              <Navigate to="/admin/dashboard" replace />
+            ) : (
+              <AdminAuthLayout onLogin={handleAuthSuccess} />
+            )
+          }
+        />
       </Routes>
     </div>
   );

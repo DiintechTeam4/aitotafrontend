@@ -10,7 +10,7 @@ const User = () => {
   const [userRole, setUserRole] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const navigate = useNavigate();
- 
+
   useEffect(() => {
     const initializeAuth = async () => {
       const userToken = localStorage.getItem("usertoken");
@@ -142,7 +142,7 @@ const User = () => {
     <div>
       <Routes>
         <Route
-          path="/"
+          path=""
           element={
             isAuthenticated ? (
               <Navigate to="/auth/dashboard" replace />
@@ -153,20 +153,20 @@ const User = () => {
         />
 
         <Route
-          path="/login"
+          path="login"
           element={<AuthLayout onLogin={handleAuthSuccess} />}
         />
 
-        {isAuthenticated ? (
+        {isAuthenticated && (
           <>
             {userRole === "user" && (
               <>
                 <Route
-                  path="/dashboard"
+                  path="dashboard"
                   element={<UserDashboard onLogout={handleLogout} />}
                 />
                 <Route
-                  path="/auth/dashboard"
+                  path="auth/dashboard"
                   element={<UserDashboard onLogout={handleLogout} />}
                 />
               </>
@@ -174,7 +174,7 @@ const User = () => {
             {userRole === "client" && (
               <>
                 <Route
-                  path="/dashboard"
+                  path="dashboard"
                   element={
                     <ClientDashboard
                       onLogout={handleLogout}
@@ -186,7 +186,7 @@ const User = () => {
                   }
                 />
                 <Route
-                  path="/auth/dashboard"
+                  path="auth/dashboard"
                   element={
                     <ClientDashboard
                       onLogout={handleLogout}
@@ -204,7 +204,7 @@ const User = () => {
               userRole === "executive") && (
               <>
                 <Route
-                  path="/dashboard"
+                  path="dashboard"
                   element={
                     <HumanAgentDashboard
                       onLogout={handleLogout}
@@ -216,7 +216,7 @@ const User = () => {
                   }
                 />
                 <Route
-                  path="/auth/dashboard"
+                  path="auth/dashboard"
                   element={
                     <HumanAgentDashboard
                       onLogout={handleLogout}
@@ -230,9 +230,17 @@ const User = () => {
               </>
             )}
           </>
-        ) : (
-          <Route path="*" element={<Navigate to="/" replace />} />
         )}
+        <Route
+          path="*"
+          element={
+            isAuthenticated ? (
+              <Navigate to="/auth/dashboard" replace />
+            ) : (
+              <Navigate to="/" replace />
+            )
+          }
+        />
       </Routes>
     </div>
   );
