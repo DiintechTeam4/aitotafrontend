@@ -1068,7 +1068,7 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
               <div className="flex justify-between items-center">
                 <div>
                   <h3 className="text-lg font-semibold">
-                    {callStage === "input" && "Enter Phone Number"}
+                    {callStage === "input" && `AI Call by agent ${selectedAgentForCall.agentName}`}
                     {callStage === "connecting" && "Connecting..."}
                     {callStage === "connected" &&
                       `Call in Progress - ${formatTime(callDuration)}`}
@@ -1095,7 +1095,7 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
                       type="text"
                       value={contactName}
                       onChange={(e) => setContactName(e.target.value)}
-                      placeholder="example: John Doe"
+                      placeholder="example: Jay sharma"
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent text-lg"
                     />
                   </div>
@@ -1104,10 +1104,10 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
                       Phone Number
                     </label>
                     <input
-                      type="tel"
+                      type="tel"  
                       value={phoneNumber}
                       onChange={(e) => setPhoneNumber(e.target.value)}
-                      placeholder="(example +08873987243)"
+                      placeholder="example: 8873987243"
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent text-lg"
                     />
                   </div>
