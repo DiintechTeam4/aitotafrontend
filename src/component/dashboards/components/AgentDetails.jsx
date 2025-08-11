@@ -91,6 +91,11 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId, forceVoiceChatModal })
   const [callMessages, setCallMessages] = useState([]);
   const [isCallRecording, setIsCallRecording] = useState(false);
   const [callMicLevel, setCallMicLevel] = useState(0);
+  // Live logs state
+  const [dialUniqueId, setDialUniqueId] = useState("");
+  const [liveTranscript, setLiveTranscript] = useState("");
+  const [liveTranscriptLines, setLiveTranscriptLines] = useState([]);
+  const logsPollRef = useRef(null);
 
   // WebSocket related states
   const [wsConnection, setWsConnection] = useState(null);
@@ -963,22 +968,26 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId, forceVoiceChatModal })
     setCallStage("input");
   };
 
-  const makeAIDialCall = async (targetPhoneNumber, agentCallerId, agentApiKey, clientUuid) => {
+  const makeAIDialCall = async (targetPhoneNumber, agentCallerId, agentApiKey, clientUuid, providedUniqueId) => {
     try {
       const token = sessionStorage.getItem("clienttoken");
       if (!token) {
         throw new Error("Client token not found. Please log in.");
       }
 
+      const uniqueId = providedUniqueId || `aidial-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
       const callPayload = {
         transaction_id: "CTI_BOT_DIAL",
         phone_num: targetPhoneNumber.replace(/[^\d]/g, ""),
-        uniqueid: `aidial-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        uniqueid: uniqueId,
         callerid: agentCallerId,
         uuid: clientUuid,
         custom_param: {
           agentId: agent._id,
           agentName: agent.agentName,
+          contactName: contactName || "",
+          uniqueid: uniqueId
         },
         resFormat: 3,
       };
@@ -1015,17 +1024,22 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId, forceVoiceChatModal })
     if (phoneNumber.trim()) {
       setCallStage("connecting");
       setCallMessages([]);
+      // generate and store unique id for correlating logs
+      const generatedUniqueId = `aidial-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      setDialUniqueId(generatedUniqueId);
 
       const result = await makeAIDialCall(
         phoneNumber,
         agent.callerId,
         agent.X_API_KEY,
-        clientId
+        clientId,
+        generatedUniqueId
       );
 
       if (result.success) {
         setCallStage("connected");
         setIsCallConnected(true);
+        startLogsPolling(generatedUniqueId);
       } else {
         setCallStage("input");
         setIsCallConnected(false);
@@ -1033,6 +1047,48 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId, forceVoiceChatModal })
         console.error("AI Dial initiation failed:", result.error);
       }
     }
+  };
+
+  const stopLogsPolling = () => {
+    if (logsPollRef.current) {
+      clearInterval(logsPollRef.current);
+      logsPollRef.current = null;
+    }
+  };
+
+  const startLogsPolling = (uniqueIdToTrack) => {
+    stopLogsPolling();
+    const poll = async () => {
+      try {
+        const params = new URLSearchParams({
+          uniqueid: uniqueIdToTrack,
+          clientId: String(clientId || ""),
+          limit: "1",
+          sortBy: "createdAt",
+          sortOrder: "desc",
+        });
+        const resp = await fetch(`${API_BASE_URL}/logs?${params.toString()}`);
+        if (!resp.ok) return;
+        const data = await resp.json();
+        const log = data?.logs?.[0];
+        if (log && typeof log.transcript === 'string') {
+          if (log.transcript !== liveTranscript) {
+            setLiveTranscript(log.transcript);
+            const lines = log.transcript.split('\n').filter(Boolean);
+            setLiveTranscriptLines(lines);
+          }
+          const active = log?.metadata?.isActive;
+          if (active === false) {
+            stopLogsPolling();
+          }
+        }
+      } catch (e) {
+        // silent
+      }
+    };
+    // immediate and interval
+    poll();
+    logsPollRef.current = setInterval(poll, 2000);
   };
 
   const cancelCall = () => {
@@ -1045,6 +1101,10 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId, forceVoiceChatModal })
     setCallMessages([]);
     setIsCallRecording(false);
     setCallMicLevel(0);
+    setDialUniqueId("");
+    setLiveTranscript("");
+    setLiveTranscriptLines([]);
+    stopLogsPolling();
     if (callTimerRef.current) {
       clearInterval(callTimerRef.current);
     }
@@ -1782,6 +1842,28 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId, forceVoiceChatModal })
                       </h4>
                     </div>
                   </div>
+
+          {/* Live Transcript */}
+          <div className="space-y-2">
+            <div className="text-sm font-semibold text-gray-700">Live Transcript</div>
+            <div className="h-64 overflow-y-auto border border-gray-200 rounded-lg p-4 bg-white">
+              {liveTranscriptLines.length === 0 ? (
+                <div className="text-gray-500 text-sm">Waiting for conversation...</div>
+              ) : (
+                liveTranscriptLines.map((line, idx) => {
+                  const isUser = line.includes('] User (');
+                  const text = line.replace(/^\[[^\]]+\]\s(User|AI)\s\([^\)]+\):\s*/, '');
+                  return (
+                    <div key={idx} className={`flex mb-2 ${isUser ? 'justify-end' : 'justify-start'}`}>
+                      <div className={`max-w-[80%] px-3 py-2 rounded-lg text-sm ${isUser ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-800'}`}>
+                        <div>{text}</div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
                 </div>
               )}
             </div>
