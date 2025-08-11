@@ -10,8 +10,105 @@ import {
   Plus,
   X,
   IndianRupee,
+  VideoIcon,
+  Share2,
+  Copy,
+  Check,
 } from "lucide-react";
 import { API_BASE_URL } from "../../../config";
+
+// Share Popup Component
+const SharePopup = ({ isOpen, onClose, businessHash, businessTitle }) => {
+  const [copied, setCopied] = useState(false);
+
+  // Generate unique URL for each business card
+  const generateShareUrl = (identifier, title) => {
+    const baseUrl = import.meta.env.VITE_BASE_URL;
+    const slug = title
+      ? title
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/(^-|-$)/g, "")
+      : "";
+
+    // Check if identifier is a hash (8 characters) or ObjectId (24 characters)
+    const isHash = /^[a-f0-9]{8}$/.test(identifier);
+    const isObjectId = /^[a-f0-9]{24}$/.test(identifier);
+
+    if (isHash) {
+      return `${baseUrl}/${slug}-${identifier}`;
+    } else if (isObjectId) {
+      // Fallback to old format for existing businesses without hash
+      return `${baseUrl}/${slug}${identifier}`;
+    } else {
+      // Invalid identifier
+      return `${baseUrl}/${slug}-invalid`;
+    }
+  };
+
+  const shareUrl = generateShareUrl(businessHash, businessTitle);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error("Failed to copy: ", err);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-xl font-bold text-gray-800">Share Business</h3>
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+          >
+            <X className="w-5 h-5 text-gray-500" />
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          <p className="text-gray-600">Share this business with others:</p>
+
+          <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg border">
+            <input
+              type="text"
+              value={shareUrl}
+              readOnly
+              className="flex-1 bg-transparent text-sm text-gray-700 outline-none"
+            />
+            <button
+              onClick={handleCopy}
+              className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+            >
+              {copied ? (
+                <>
+                  <Check className="w-4 h-4" />
+                  Copied!
+                </>
+              ) : (
+                <>
+                  <Copy className="w-4 h-4" />
+                  Copy
+                </>
+              )}
+            </button>
+          </div>
+
+          <div className="text-xs text-gray-500">
+            Anyone with this link can view your business details
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 // Business Form Component
 const BusinessForm = ({ isOpen, onClose, onCreated }) => {
@@ -22,6 +119,7 @@ const BusinessForm = ({ isOpen, onClose, onCreated }) => {
     image: { url: "", key: "" },
     documents: { url: "", key: "" },
     videoLink: "",
+    link: "",
     description: "",
     mrp: "",
     offerPrice: "",
@@ -29,6 +127,7 @@ const BusinessForm = ({ isOpen, onClose, onCreated }) => {
 
   const [previewImage, setPreviewImage] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [fileUploading, setFileUploading] = useState(false);
   const [error, setError] = useState("");
 
   const handleInputChange = (e) => {
@@ -39,25 +138,58 @@ const BusinessForm = ({ isOpen, onClose, onCreated }) => {
     }));
   };
 
-  const handleFileChange = (e, fieldName) => {
+  const handleFileChange = async (e, fieldName) => {
     const file = e.target.files[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
+
+    setFileUploading(true);
+    setError("");
+
+    try {
+      // Get pre-signed upload URL for MyBusiness
+      const token = sessionStorage.getItem("clienttoken");
+      const res = await fetch(
+        `${API_BASE_URL}/client/upload-url-mybusiness?fileName=${file.name}&fileType=${file.type}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
+      if (!res.ok) throw new Error("Failed to get upload URL");
+      const data = await res.json();
+
+      if (!data.success)
+        throw new Error(data.message || "Failed to get upload URL");
+
+      // Upload file to S3
+      const uploadRes = await fetch(data.url, {
+        method: "PUT",
+        body: file,
+        headers: { "Content-Type": file.type },
+      });
+
+      if (!uploadRes.ok) throw new Error("Failed to upload file to S3");
+
+      // Store only the S3 key, URL will be generated by backend
       if (fieldName === "image") {
-        setPreviewImage(ev.target.result);
+        // Show a temporary preview using the presigned URL
+        setPreviewImage(data.url);
         setFormData((prev) => ({
           ...prev,
-          image: { url: ev.target.result, key: "" },
+          image: { url: "", key: data.key }, // Only store key, URL will be set by backend
         }));
       } else if (fieldName === "documents") {
         setFormData((prev) => ({
           ...prev,
-          documents: { url: ev.target.result, key: "" },
+          documents: { url: "", key: data.key }, // Only store key, URL will be set by backend
         }));
       }
-    };
-    reader.readAsDataURL(file);
+    } catch (err) {
+      setError(`File upload failed: ${err.message}`);
+      console.error("File upload error:", err);
+    } finally {
+      setFileUploading(false);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -82,14 +214,14 @@ const BusinessForm = ({ isOpen, onClose, onCreated }) => {
         "mrp",
       ];
       for (let field of requiredFields) {
-        if (!payload[field] || (field === "image" && !payload.image.url)) {
+        if (!payload[field] || (field === "image" && !payload.image.key)) {
           setError("All required fields must be filled.");
           setLoading(false);
           return;
         }
       }
       // Remove empty documents if not uploaded
-      if (!payload.documents || !payload.documents.url) {
+      if (!payload.documents || !payload.documents.key) {
         delete payload.documents;
       }
       const res = await fetch(`${API_BASE_URL}/client/business`, {
@@ -123,12 +255,14 @@ const BusinessForm = ({ isOpen, onClose, onCreated }) => {
       image: { url: "", key: "" },
       documents: { url: "", key: "" },
       videoLink: "",
+      link: "",
       description: "",
       mrp: "",
       offerPrice: "",
     });
     setPreviewImage(null);
     setError("");
+    setFileUploading(false);
   };
 
   if (!isOpen) return null;
@@ -215,11 +349,17 @@ const BusinessForm = ({ isOpen, onClose, onCreated }) => {
                     type="file"
                     onChange={(e) => handleFileChange(e, "image")}
                     accept="image/*"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                    disabled={fileUploading}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed"
                     required
                   />
                 </div>
-                {previewImage && (
+                {fileUploading && (
+                  <div className="w-20 h-20 flex items-center justify-center bg-gray-100 rounded-lg">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                  </div>
+                )}
+                {previewImage && !fileUploading && previewImage !== "" && (
                   <div className="w-20 h-20">
                     <img
                       src={previewImage}
@@ -233,7 +373,7 @@ const BusinessForm = ({ isOpen, onClose, onCreated }) => {
             {/* Video Link */}
             <div className="space-y-2">
               <label className="flex items-center text-sm font-medium text-gray-700">
-                <Link className="w-4 h-4 mr-2 text-red-500" /> Resources Link *
+                <VideoIcon className="w-4 h-4 mr-2 text-red-500" /> Video Link *
               </label>
               <input
                 type="url"
@@ -245,6 +385,21 @@ const BusinessForm = ({ isOpen, onClose, onCreated }) => {
                 required
               />
             </div>
+            {/* Resource Link */}
+            <div className="space-y-2">
+              <label className="flex items-center text-sm font-medium text-gray-700">
+                <Link className="w-4 h-4 mr-2 text-blue-500" /> Resource Link
+              </label>
+              <input
+                type="url"
+                name="link"
+                value={formData.link}
+                onChange={handleInputChange}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                placeholder="https://...."
+              />
+            </div>
+
             {/* Description */}
             <div className="space-y-2">
               <label className="text-sm font-medium text-gray-700">
@@ -279,8 +434,9 @@ const BusinessForm = ({ isOpen, onClose, onCreated }) => {
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">
-                  Offer Price
+                <label className="flex items-center text-sm font-medium text-gray-700">
+                  <IndianRupee className="w-4 h-4 mr-2 text-orange-600" /> Offer
+                  Price
                 </label>
                 <input
                   type="number"
@@ -332,6 +488,11 @@ export default function BusinessPage() {
   const [businesses, setBusinesses] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [sharePopup, setSharePopup] = useState({
+    isOpen: false,
+    businessHash: null,
+    businessTitle: "",
+  });
 
   const fetchBusinesses = async () => {
     setLoading(true);
@@ -363,6 +524,14 @@ export default function BusinessPage() {
   const openForm = () => setIsFormOpen(true);
   const closeForm = () => setIsFormOpen(false);
   const handleCreated = () => fetchBusinesses();
+
+  const openSharePopup = (businessHash, businessTitle) => {
+    setSharePopup({ isOpen: true, businessHash, businessTitle });
+  };
+
+  const closeSharePopup = () => {
+    setSharePopup({ isOpen: false, businessHash: null, businessTitle: "" });
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
@@ -431,12 +600,18 @@ export default function BusinessPage() {
                 className="bg-white rounded-xl shadow-md p-6 flex flex-col"
               >
                 <div className="flex items-center gap-4 mb-4">
-                  {business.image && (
+                  {business.image &&
+                  business.image.url &&
+                  business.image.url !== "" ? (
                     <img
                       src={business.image.url}
                       alt={business.title}
                       className="w-20 h-20 object-cover rounded-lg border-2 border-gray-200"
                     />
+                  ) : (
+                    <div className="w-20 h-20 bg-gray-100 rounded-lg border-2 border-gray-200 flex items-center justify-center">
+                      <Image className="w-8 h-8 text-gray-400" />
+                    </div>
                   )}
                   <div>
                     <h3 className="text-xl font-bold text-gray-900 mb-1">
@@ -454,28 +629,63 @@ export default function BusinessPage() {
                   <p className="text-gray-700 mb-2 line-clamp-3">
                     {business.description}
                   </p>
-                  {business.videoLink && (
-                    <a
-                      href={business.videoLink}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-600 underline text-sm"
-                    >
-                      Resource Link
-                    </a>
-                  )}
+                  <div className="space-y-1">
+                    {business.videoLink && (
+                      <a
+                        href={business.videoLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-red-600 underline text-sm block"
+                      >
+                        Video Link
+                      </a>
+                    )}
+                    {business.link && (
+                      <a
+                        href={business.link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 underline text-sm block"
+                      >
+                        Resource Link
+                      </a>
+                    )}
+                  </div>
                 </div>
-                <div className="mt-4 flex items-center gap-4">
-                  {business.mrp !== undefined && (
-                    <span className="text-lg font-semibold text-green-600">
-                      ₹{business.offerPrice}
-                    </span>
-                  )}
-                  {business.offerPrice && (
-                    <span className="text-sm text-orange-600 bg-orange-100 px-2 py-1 rounded">
-                      MRP : {business.mrp}
-                    </span>
-                  )}
+                <div className="mt-4 flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    {business.mrp !== undefined && (
+                      <span className="text-lg font-semibold text-green-600">
+                        ₹{business.offerPrice}
+                      </span>
+                    )}
+                    {business.offerPrice && (
+                      <span className="text-sm text-orange-600 bg-orange-100 px-2 py-1 rounded">
+                        MRP : {business.mrp}
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    onClick={() =>
+                      openSharePopup(
+                        business.hash || business._id,
+                        business.title
+                      )
+                    }
+                    className={`p-2 rounded-full transition-colors ${
+                      business.hash
+                        ? "hover:bg-gray-100 text-gray-500"
+                        : "bg-yellow-100 text-yellow-600 hover:bg-yellow-200"
+                    }`}
+                    title={
+                      business.hash
+                        ? "Share this business"
+                        : "Business needs hash update"
+                    }
+                    disabled={!business.hash && !business._id}
+                  >
+                    <Share2 className="w-5 h-5" />
+                  </button>
                 </div>
               </div>
             ))}
@@ -487,6 +697,13 @@ export default function BusinessPage() {
         isOpen={isFormOpen}
         onClose={closeForm}
         onCreated={handleCreated}
+      />
+      {/* Share Popup */}
+      <SharePopup
+        isOpen={sharePopup.isOpen}
+        onClose={closeSharePopup}
+        businessHash={sharePopup.businessHash}
+        businessTitle={sharePopup.businessTitle}
       />
     </div>
   );

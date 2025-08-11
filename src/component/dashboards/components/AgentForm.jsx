@@ -20,6 +20,8 @@ const AgentForm = ({ agent, onSave, onCancel, clientId }) => {
     voiceSelection: "abhilash",
     accountSid: "",
     serviceProvider: "",
+    callingType: "both",
+    callingNumber: "",
     callerId: "",
     X_API_KEY: "",
     audioBase64: "",
@@ -203,6 +205,28 @@ const AgentForm = ({ agent, onSave, onCancel, clientId }) => {
     setIsLoading(true);
 
     try {
+      // Validate required fields
+      if (!formData.agentName.trim()) {
+        alert("Agent name is required");
+        setIsLoading(false);
+        return;
+      }
+      if (!formData.description.trim()) {
+        alert("Description is required");
+        setIsLoading(false);
+        return;
+      }
+      if (!formData.callingNumber.trim()) {
+        alert("Calling number is required");
+        setIsLoading(false);
+        return;
+      }
+      if (!formData.systemPrompt.trim()) {
+        alert("System prompt is required");
+        setIsLoading(false);
+        return;
+      }
+
       // Create payload without empty serviceProvider
       const { serviceProvider, ...formDataWithoutServiceProvider } = formData;
       const payload = {
@@ -544,9 +568,9 @@ const AgentForm = ({ agent, onSave, onCancel, clientId }) => {
             Calling Type
           </label>
           <select
-            id="CallingType"
-            name="CallingType"
-            value={formData.CallingType}
+            id="callingType"
+            name="callingType"
+            value={formData.callingType}
             onChange={handleInputChange}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors"
           >
@@ -570,6 +594,7 @@ const AgentForm = ({ agent, onSave, onCancel, clientId }) => {
             value={formData.callingNumber}
             onChange={handleInputChange}
             placeholder="Enter your Calling Number"
+            required
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors"
           />
         </div>

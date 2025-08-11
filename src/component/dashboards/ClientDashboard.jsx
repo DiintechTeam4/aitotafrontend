@@ -21,7 +21,7 @@ import ApiKeyManager from "./components/ApiKeyManager";
 import ClientSelector from "./components/ClientSelector";
 import InBoundSection from "./components/InBoundSection";
 import OutboundSection from "./components/OutboundSection";
-import HumanAgents from './components/HumanAgents';
+import HumanAgents from "./components/HumanAgents";
 import ApprovalForm from "./components/ApprovalForm";
 import PerformanceKPIs from "./components/PerformanceKPIs";
 import MyBusiness from "./components/MyBusiness";
@@ -127,15 +127,27 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
   const handleDeleteAgent = async (id) => {
     if (window.confirm("Are you sure you want to delete this agent?")) {
       try {
-        await fetch(
+        const token = sessionStorage.getItem("clienttoken");
+        const response = await fetch(
           `${API_BASE_URL}/client/agents/${id}?clientId=${currentClient}`,
           {
             method: "DELETE",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
           }
         );
-        fetchAgents();
+
+        if (response.ok) {
+          alert("Agent deleted successfully!");
+          fetchAgents();
+        } else {
+          const errorData = await response.json();
+          alert(`Error deleting agent: ${errorData.error || "Unknown error"}`);
+        }
       } catch (error) {
         console.error("Error deleting agent:", error);
+        alert("Failed to delete agent");
       }
     }
   };
@@ -435,7 +447,7 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
         return <HumanAgents />;
 
       case "mybusiness":
-         return <MyBusiness/>
+        return <MyBusiness />;
 
       default:
         return <div>Select a section from the sidebar</div>;
