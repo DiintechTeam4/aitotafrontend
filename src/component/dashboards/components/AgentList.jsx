@@ -1022,14 +1022,26 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
       if (response.ok) {
         const result = await response.json();
         
-        // Update local state
-        setAgentStates(prev => ({
-          ...prev,
-          [agent._id]: {
+        // Update local state and, if activating, mark others with same accountSid as inactive for instant UI consistency
+        setAgentStates(prev => {
+          const updated = { ...prev };
+          updated[agent._id] = {
+            ...(updated[agent._id] || {}),
             isActive: newActiveStatus,
-            isToggling: false
+            isToggling: false,
+          };
+          if (newActiveStatus && agent.accountSid) {
+            agentsArray.forEach(a => {
+              if (a._id !== agent._id && a.accountSid === agent.accountSid) {
+                updated[a._id] = {
+                  ...(updated[a._id] || { isToggling: false, isActive: a.isActive !== undefined ? a.isActive : true }),
+                  isActive: false,
+                };
+              }
+            });
           }
-        }));
+          return updated;
+        });
 
         // Show success message
         const statusText = newActiveStatus ? 'activated' : 'deactivated';
@@ -1582,6 +1594,13 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
 
   // Ensure agents is always an array
   const agentsArray = Array.isArray(agents) ? agents : [];
+  // Active first sorting using current UI state when available
+  const sortedAgents = agentsArray.slice().sort((a, b) => {
+    const aActive = (agentStates[a._id]?.isActive) ?? (a.isActive !== undefined ? a.isActive : true);
+    const bActive = (agentStates[b._id]?.isActive) ?? (b.isActive !== undefined ? b.isActive : true);
+    if (aActive === bActive) return 0;
+    return aActive ? -1 : 1;
+  });
 
   return (
     <div className="w-full">
@@ -1601,7 +1620,7 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {agentsArray.map((agent, index) => {
+          {sortedAgents.map((agent, index) => {
             const currentAgentState = agentStates[agent._id] || { isActive: true, isToggling: false };
             const isActive = currentAgentState.isActive;
             const isToggling = currentAgentState.isToggling;
@@ -1631,7 +1650,7 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
                     <h3 className="text-white font-semibold text-lg truncate capitalize">
                       {agent.agentName}
                     </h3>
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center">
                       {/* Active/Inactive Toggle Button */}
                       <button
                         onClick={(e) => toggleActiveStatus(agent, e)}
