@@ -27,24 +27,78 @@ import {
 import { API_BASE_URL } from "../../../config";
 import QRCode from "qrcode";
 
-// Working QR Code Component (client-side QR generation)
-const WorkingQRCode = ({ value, size = 200, bgColor = "#fff", fgColor = "#000" }) => {
+// QR Code Logo Configuration
+// To customize the logo, update these values:
+const QR_LOGO_CONFIG = {
+  logoUrl: '/AitotaLogo.png', // Path to your logo image (relative to public folder)
+  logoSize: 0.3, // Logo size as a fraction of QR code size (0.1 = 10%, 0.2 = 20%, etc.)
+  // Recommended logoSize: 0.15-0.25 for best scannability
+  
+  // Alternative logo options (uncomment and modify as needed):
+  // logoUrl: '/your-custom-logo.png', // Your custom logo
+  // logoUrl: '/company-logo.jpg', // Company logo
+  // logoUrl: '/brand-icon.svg', // Brand icon
+  
+  // Logo size recommendations:
+  // - 0.1 (10%): Very small, highly scannable
+  // - 0.15 (15%): Small, good scannability
+  // - 0.2 (20%): Medium, balanced
+  // - 0.25 (25%): Large, may affect scannability
+  // - 0.3+ (30%+): Very large, not recommended
+};
+
+// Working QR Code Component with Logo Support (client-side QR generation)
+// 
+// This component generates QR codes with optional logo overlays.
+// The logo is placed in the center of the QR code with a white circular background
+// to ensure the QR code remains scannable.
+//
+// Props:
+// - value: The text/URL to encode in the QR code
+// - size: The size of the QR code in pixels
+// - bgColor: Background color of the QR code
+// - fgColor: Foreground color of the QR code
+// - logoUrl: URL to the logo image (optional)
+// - logoSize: Size of the logo as a fraction of QR code size (0.1-0.25 recommended)
+//
+// Logo Requirements:
+// - Should be a square image for best results
+// - PNG or JPG format recommended
+// - Place logo files in the public folder
+// - Keep logo size under 25% of QR code size for best scannability
+//
+const WorkingQRCode = ({ value, size = 200, bgColor = "#fff", fgColor = "#000", logoUrl = null, logoSize = 0.2 }) => {
   const [qrDataUrl, setQrDataUrl] = useState("");
   const [error, setError] = useState(null);
 
   useEffect(() => {
     if (!value) return;
-    QRCode.toDataURL(value, {
-      width: size,
-      margin: 2,
-      color: {
-        dark: fgColor,
-        light: bgColor,
-      },
-    })
-      .then(setQrDataUrl)
-      .catch((err) => setError(err.message));
-  }, [value, size, bgColor, fgColor]);
+    
+    const generateQRWithLogo = async () => {
+      try {
+        if (logoUrl) {
+          // Generate QR code with logo overlay
+          const qrDataUrl = await generateQRCodeWithLogo(value, size, bgColor, fgColor, logoUrl, logoSize);
+          setQrDataUrl(qrDataUrl);
+        } else {
+          // Generate regular QR code
+          const qrDataUrl = await QRCode.toDataURL(value, {
+            width: size,
+            margin: 2,
+            color: {
+              dark: fgColor,
+              light: bgColor,
+            },
+          });
+          setQrDataUrl(qrDataUrl);
+        }
+      } catch (err) {
+        setError(err.message);
+      }
+    };
+
+    generateQRWithLogo();
+  }, [value, size, bgColor, fgColor, logoUrl, logoSize]);
 
   if (error) {
     return (
@@ -75,6 +129,79 @@ const WorkingQRCode = ({ value, size = 200, bgColor = "#fff", fgColor = "#000" }
       )}
     </div>
   );
+};
+
+// Function to generate QR code with logo overlay
+const generateQRCodeWithLogo = async (text, size, bgColor, fgColor, logoUrl, logoSize = 0.2) => {
+  return new Promise((resolve, reject) => {
+    try {
+      // Create canvas
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      canvas.width = size;
+      canvas.height = size;
+
+      // Generate QR code data URL
+      QRCode.toDataURL(text, {
+        width: size,
+        margin: 2,
+        color: {
+          dark: fgColor,
+          light: bgColor,
+        },
+      }).then(qrDataUrl => {
+        // Create image from QR code
+        const qrImage = new Image();
+        qrImage.onload = () => {
+          // Draw QR code on canvas
+          ctx.drawImage(qrImage, 0, 0, size, size);
+
+          // Load and draw logo
+          const logoImage = new Image();
+          logoImage.onload = () => {
+            // Calculate logo dimensions (logoSize is a fraction of QR code size)
+            const logoWidth = size * logoSize;
+            const logoHeight = size * logoSize;
+            
+            // Center the logo
+            const logoX = (size - logoWidth) / 2;
+            const logoY = (size - logoHeight) / 2;
+
+            // Create a white background circle for the logo
+            const logoRadius = logoWidth / 2;
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(logoX + logoRadius, logoY + logoRadius, logoRadius, 0, 2 * Math.PI);
+            ctx.fillStyle = bgColor;
+            ctx.fill();
+            ctx.restore();
+
+            // Draw logo
+            ctx.drawImage(logoImage, logoX, logoY, logoWidth, logoHeight);
+
+            // Convert canvas to data URL
+            const finalDataUrl = canvas.toDataURL('image/png');
+            resolve(finalDataUrl);
+          };
+          
+          logoImage.onerror = () => {
+            // If logo fails to load, just return QR code without logo
+            resolve(qrDataUrl);
+          };
+          
+          logoImage.src = logoUrl;
+        };
+        
+        qrImage.onerror = () => {
+          reject(new Error('Failed to generate QR code'));
+        };
+        
+        qrImage.src = qrDataUrl;
+      }).catch(reject);
+    } catch (error) {
+      reject(error);
+    }
+  });
 };
 
 const AgentDetails = ({ agent, isOpen, onClose, clientId, forceVoiceChatModal }) => {
@@ -923,8 +1050,7 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId, forceVoiceChatModal })
     setDebugLogs([]);
     addDebugLog('Voice chat modal opened', 'info');
     
-    // Connect to WebSocket when opening voice chat
-    connectToWebSocket();
+    // Don't connect to WebSocket automatically - wait for user to click mic
   };
 
   const closeVoiceChat = () => {
@@ -1153,7 +1279,7 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId, forceVoiceChatModal })
     if (!isOpen || !agent) return null;
     return (
       <div className="fixed inset-0 bg-white z-50">
-        {/* Voice Chat Modal - Pure Voice-to-Voice Interface (from AgentDetails) */}
+        {/* Voice Chat Modal - Pure Voice-to-Voice Interface - FORCE VOICE CHAT MODAL */}
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-60">
           <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-hidden">
             {/* Header */}
@@ -1198,7 +1324,7 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId, forceVoiceChatModal })
                   onClick={onClose}
                   className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
                 >
-                  <FiArrowLeft className="w-6 h-6" />
+                  <span className="text-xl font-bold">×</span>
                 </button>
               </div>
             </div>
@@ -1211,16 +1337,16 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId, forceVoiceChatModal })
                   wsConnectionStatus === 'connecting' ? 'text-yellow-600' :
                   'text-red-600'
                 }`}>
-                  {wsConnectionStatus === 'connected' ? 'Voice Chat Active' :
+                  {wsConnectionStatus === 'connected' ? 'Voice Chat Active - Click mic to disconnect' :
                    wsConnectionStatus === 'connecting' ? 'Connecting...' :
-                   'Connection Failed'}
+                   'Click mic to connect'}
                 </div>
                 <div className="text-gray-600 text-sm">
                   {wsConnectionStatus === 'connected' 
                     ? 'Speak naturally - the AI will respond in real-time'
                     : wsConnectionStatus === 'connecting'
                     ? 'Please wait while we establish the connection'
-                    : 'Check your connection and try again'
+                    : 'Click the microphone to start voice chat'
                   }
                 </div>
                 
@@ -1241,16 +1367,30 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId, forceVoiceChatModal })
 
               {/* Large Microphone Visualization */}
               <div className="relative">
-                {/* Main microphone circle */}
-                <div className={`w-32 h-32 rounded-full flex items-center justify-center transition-all duration-300 ${
-                  isAudioStreaming
-                    ? "bg-green-500 scale-110"
-                    : wsConnectionStatus === 'connected'
-                    ? "bg-blue-600"
-                    : "bg-gray-400"
-                }`}>
+                {/* Main microphone circle - clickable to connect/disconnect */}
+                <button
+                  onClick={() => {
+                    if (wsConnectionStatus === 'connected') {
+                      // If connected, disconnect
+                      disconnectWebSocket();
+                      addDebugLog('Disconnected from WebSocket via mic click', 'info');
+                    } else {
+                      // If not connected, connect
+                      connectToWebSocket();
+                      addDebugLog('Connected to WebSocket via mic click', 'info');
+                    }
+                  }}
+                  className={`w-32 h-32 rounded-full flex items-center justify-center transition-all duration-300 cursor-pointer hover:scale-105 ${
+                    isAudioStreaming
+                      ? "bg-green-500 scale-110"
+                      : wsConnectionStatus === 'connected'
+                      ? "bg-blue-600"
+                      : "bg-gray-400"
+                  }`}
+                  title={wsConnectionStatus === 'connected' ? 'Click to disconnect' : 'Click to connect'}
+                >
                   <FiMic className="w-12 h-12 text-white" />
-                </div>
+                </button>
 
                 {/* Microphone level indicator rings */}
                 {isAudioStreaming && (
@@ -1538,7 +1678,7 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId, forceVoiceChatModal })
                     ) : (
                       <>
                         <FiVolume2 className="w-4 h-4" />
-                        Play Audio
+                        Test Voice
                       </>
                     )}
                   </button>
@@ -1596,6 +1736,8 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId, forceVoiceChatModal })
                     size={80}
                     bgColor="#fff"
                     fgColor="#000"
+                    logoUrl={QR_LOGO_CONFIG.logoUrl}
+                    logoSize={QR_LOGO_CONFIG.logoSize}
                   />
                 </div>
                 <h1 className="text-white text-center my-3">Scan QR</h1>
@@ -1917,7 +2059,7 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId, forceVoiceChatModal })
                   onClick={closeVoiceChat}
                   className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
                 >
-                  <FiArrowLeft className="w-6 h-6" />
+                  <span className="text-xl font-bold">×</span>
                 </button>
               </div>
             </div>
@@ -1931,16 +2073,16 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId, forceVoiceChatModal })
                   wsConnectionStatus === 'connecting' ? 'text-yellow-600' :
                   'text-red-600'
                 }`}>
-                  {wsConnectionStatus === 'connected' ? 'Voice Chat Active' :
+                  {wsConnectionStatus === 'connected' ? 'Voice Chat Active - Click mic to disconnect' :
                    wsConnectionStatus === 'connecting' ? 'Connecting...' :
-                   'Connection Failed'}
+                   'Click mic to connect'}
                 </div>
                 <div className="text-gray-600 text-sm">
                   {wsConnectionStatus === 'connected' 
                     ? 'Speak naturally - the AI will respond in real-time'
                     : wsConnectionStatus === 'connecting'
                     ? 'Please wait while we establish the connection'
-                    : 'Check your connection and try again'
+                    : 'Click the microphone to start voice chat'
                   }
                 </div>
                 
@@ -1961,16 +2103,30 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId, forceVoiceChatModal })
 
               {/* Large Microphone Visualization */}
               <div className="relative">
-                {/* Main microphone circle */}
-                <div className={`w-32 h-32 rounded-full flex items-center justify-center transition-all duration-300 ${
-                  isAudioStreaming
-                    ? "bg-green-500 scale-110"
-                    : wsConnectionStatus === 'connected'
-                    ? "bg-blue-600"
-                    : "bg-gray-400"
-                }`}>
+                {/* Main microphone circle - clickable to connect/disconnect */}
+                <button
+                  onClick={() => {
+                    if (wsConnectionStatus === 'connected') {
+                      // If connected, disconnect
+                      disconnectWebSocket();
+                      addDebugLog('Disconnected from WebSocket via mic click', 'info');
+                    } else {
+                      // If not connected, connect
+                      connectToWebSocket();
+                      addDebugLog('Connected to WebSocket via mic click', 'info');
+                    }
+                  }}
+                  className={`w-32 h-32 rounded-full flex items-center justify-center transition-all duration-300 cursor-pointer hover:scale-105 ${
+                    isAudioStreaming
+                      ? "bg-green-500 scale-110"
+                      : wsConnectionStatus === 'connected'
+                      ? "bg-blue-600"
+                      : "bg-gray-400"
+                  }`}
+                  title={wsConnectionStatus === 'connected' ? 'Click to disconnect' : 'Click to connect'}
+                >
                   <FiMic className="w-12 h-12 text-white" />
-                </div>
+                </button>
 
                 {/* Microphone level indicator rings */}
                 {isAudioStreaming && (
@@ -2083,40 +2239,10 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId, forceVoiceChatModal })
                     className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 font-medium"
                   >
                     <FiRefreshCw className="w-4 h-4" />
-                    Reconnect
+                    connect
                   </button>
                 )}
                 
-                {wsConnectionStatus === 'connected' && (
-                  <>
-                    {!isAudioStreaming ? (
-                      <button
-                        onClick={startContinuousAudioStreaming}
-                        className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                      >
-                        Start Audio Stream
-                      </button>
-                    ) : (
-                      <button
-                        onClick={stopContinuousAudioStreaming}
-                        className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-                      >
-                        Stop Audio Stream
-                      </button>
-                    )}
-                    <button
-                      onClick={() => {
-                        if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
-                          audioContextRef.current.resume();
-                          addDebugLog('Manually resumed audio context', 'info');
-                        }
-                      }}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                    >
-                      Resume Audio Context
-                    </button>
-                  </>
-                )}
               </div>
 
               {/* Audio Stats */}

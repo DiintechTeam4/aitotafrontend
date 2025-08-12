@@ -5,6 +5,8 @@ import {
   FiEdit,
   FiTrash2,
   FiVolume2,
+  FiVolumeX,
+  FiMicOff,
   FiSquare,
   FiUser,
   FiMessageSquare,
@@ -31,24 +33,78 @@ import { API_BASE_URL } from "../../../config";
 import AgentDetails from "./AgentDetails";
 import QRCode from "qrcode";
 
-// QR Code Component
-const QRCodeDisplay = ({ value, size = 200, bgColor = "#fff", fgColor = "#000" }) => {
+// QR Code Logo Configuration
+// To customize the logo, update these values:
+const QR_LOGO_CONFIG = {
+  logoUrl: '/AitotaLogo.png', // Path to your logo image (relative to public folder)
+  logoSize: 0.25, // Logo size as a fraction of QR code size (0.1 = 10%, 0.2 = 20%, etc.)
+  // Recommended logoSize: 0.15-0.25 for best scannability
+  
+  // Alternative logo options (uncomment and modify as needed):
+  // logoUrl: '/your-custom-logo.png', // Your custom logo
+  // logoUrl: '/company-logo.jpg', // Company logo
+  // logoUrl: '/brand-icon.svg', // Brand icon
+  
+  // Logo size recommendations:
+  // - 0.1 (10%): Very small, highly scannable
+  // - 0.15 (15%): Small, good scannability
+  // - 0.2 (20%): Medium, balanced
+  // - 0.25 (25%): Large, may affect scannability
+  // - 0.3+ (30%+): Very large, not recommended
+};
+
+// QR Code Component with Logo Support
+// 
+// This component generates QR codes with optional logo overlays.
+// The logo is placed in the center of the QR code with a white circular background
+// to ensure the QR code remains scannable.
+//
+// Props:
+// - value: The text/URL to encode in the QR code
+// - size: The size of the QR code in pixels
+// - bgColor: Background color of the QR code
+// - fgColor: Foreground color of the QR code
+// - logoUrl: URL to the logo image (optional)
+// - logoSize: Size of the logo as a fraction of QR code size (0.1-0.25 recommended)
+//
+// Logo Requirements:
+// - Should be a square image for best results
+// - PNG or JPG format recommended
+// - Place logo files in the public folder
+// - Keep logo size under 25% of QR code size for best scannability
+//
+const QRCodeDisplay = ({ value, size = 200, bgColor = "#fff", fgColor = "#000", logoUrl = null, logoSize = 0.2 }) => {
   const [qrDataUrl, setQrDataUrl] = useState("");
   const [error, setError] = useState(null);
 
   useEffect(() => {
     if (!value) return;
-    QRCode.toDataURL(value, {
-      width: size,
-      margin: 2,
-      color: {
-        dark: fgColor,
-        light: bgColor,
-      },
-    })
-      .then(setQrDataUrl)
-      .catch((err) => setError(err.message));
-  }, [value, size, bgColor, fgColor]);
+    
+    const generateQRWithLogo = async () => {
+      try {
+        if (logoUrl) {
+          // Generate QR code with logo overlay
+          const qrDataUrl = await generateQRCodeWithLogo(value, size, bgColor, fgColor, logoUrl, logoSize);
+          setQrDataUrl(qrDataUrl);
+        } else {
+          // Generate regular QR code
+          const qrDataUrl = await QRCode.toDataURL(value, {
+            width: size,
+            margin: 2,
+            color: {
+              dark: fgColor,
+              light: bgColor,
+            },
+          });
+          setQrDataUrl(qrDataUrl);
+        }
+      } catch (err) {
+        setError(err.message);
+      }
+    };
+
+    generateQRWithLogo();
+  }, [value, size, bgColor, fgColor, logoUrl, logoSize]);
 
   if (error) {
     return (
@@ -81,6 +137,79 @@ const QRCodeDisplay = ({ value, size = 200, bgColor = "#fff", fgColor = "#000" }
   );
 };
 
+// Function to generate QR code with logo overlay
+const generateQRCodeWithLogo = async (text, size, bgColor, fgColor, logoUrl, logoSize = 0.2) => {
+  return new Promise((resolve, reject) => {
+    try {
+      // Create canvas
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      canvas.width = size;
+      canvas.height = size;
+
+      // Generate QR code data URL
+      QRCode.toDataURL(text, {
+        width: size,
+        margin: 2,
+        color: {
+          dark: fgColor,
+          light: bgColor,
+        },
+      }).then(qrDataUrl => {
+        // Create image from QR code
+        const qrImage = new Image();
+        qrImage.onload = () => {
+          // Draw QR code on canvas
+          ctx.drawImage(qrImage, 0, 0, size, size);
+
+          // Load and draw logo
+          const logoImage = new Image();
+          logoImage.onload = () => {
+            // Calculate logo dimensions (logoSize is a fraction of QR code size)
+            const logoWidth = size * logoSize;
+            const logoHeight = size * logoSize;
+            
+            // Center the logo
+            const logoX = (size - logoWidth) / 2;
+            const logoY = (size - logoHeight) / 2;
+
+            // Create a white background circle for the logo
+            const logoRadius = logoWidth / 2;
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(logoX + logoRadius, logoY + logoRadius, logoRadius, 0, 2 * Math.PI);
+            ctx.fillStyle = bgColor;
+            ctx.fill();
+            ctx.restore();
+
+            // Draw logo
+            ctx.drawImage(logoImage, logoX, logoY, logoWidth, logoHeight);
+
+            // Convert canvas to data URL
+            const finalDataUrl = canvas.toDataURL('image/png');
+            resolve(finalDataUrl);
+          };
+          
+          logoImage.onerror = () => {
+            // If logo fails to load, just return QR code without logo
+            resolve(qrDataUrl);
+          };
+          
+          logoImage.src = logoUrl;
+        };
+        
+        qrImage.onerror = () => {
+          reject(new Error('Failed to generate QR code'));
+        };
+        
+        qrImage.src = qrDataUrl;
+      }).catch(reject);
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
+
 const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
   const [audioUrl, setAudioUrl] = useState(null);
   const [playingAgentId, setPlayingAgentId] = useState(null);
@@ -103,6 +232,8 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
   const [isAITalking, setIsAITalking] = useState(false);
   const [streamSid, setStreamSid] = useState(null);
   const [isAudioStreaming, setIsAudioStreaming] = useState(false);
+  const [isStoppingAudio, setIsStoppingAudio] = useState(false);
+  const [justConnected, setJustConnected] = useState(false);
   const [micLevel, setMicLevel] = useState(0);
   
   // Reconnection states
@@ -356,27 +487,8 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
       wsConnectionRef.current = ws;
       streamSidRef.current = streamId;
       
-      // Start audio streaming after connection is established and start message sent
-      setTimeout(() => {
-        startContinuousAudioStreaming();
-      }, 1000);
-      
-      // Retry audio streaming start if it fails initially
-      setTimeout(() => {
-        if (!isStreamingActiveRef.current && wsConnectionRef.current && wsConnectionRef.current.readyState === WebSocket.OPEN) {
-          addDebugLog('Retrying audio streaming start...', 'info');
-          startContinuousAudioStreaming();
-        }
-      }, 3000);
-      
-      // Also trigger a manual audio context resume
-      setTimeout(() => {
-        if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
-          audioContextRef.current.resume().then(() => {
-            addDebugLog('Audio context manually resumed', 'success');
-          });
-        }
-      }, 1500);
+      // Don't start audio streaming automatically - wait for user to click mic
+      addDebugLog('WebSocket connected. Click the microphone to start audio streaming.', 'info');
     };
     
     ws.onmessage = (event) => {
@@ -394,6 +506,7 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
       addDebugLog(`WebSocket error: ${error}`, 'error');
       setWsConnectionStatus('disconnected');
       setIsReconnecting(false);
+      setJustConnected(false);
     };
     
     ws.onclose = (event) => {
@@ -402,6 +515,7 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
       addDebugLog(`WebSocket disconnected. Code: ${event.code}, Reason: ${event.reason}`, 'warning');
       setWsConnectionStatus('disconnected');
       setWsConnection(null);
+      setJustConnected(false);
       wsConnectionRef.current = null;
       setStreamSid(null);
       streamSidRef.current = null;
@@ -418,6 +532,7 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
   // Handle connection failures and implement reconnection logic
   const handleConnectionFailure = (reason) => {
     setLastDisconnectReason(reason);
+    setJustConnected(false);
     
     if (reconnectAttemptsRef.current < maxReconnectAttempts) {
       const delay = Math.min(reconnectDelay * Math.pow(2, reconnectAttemptsRef.current), 30000); // Max 30 seconds
@@ -444,6 +559,7 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
     reconnectAttemptsRef.current = 0;
     setReconnectDelay(1000);
     setIsReconnecting(false);
+    setJustConnected(false);
     
     // Clear any existing timeout
     if (reconnectTimeoutRef.current) {
@@ -505,6 +621,7 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
     setIsReconnecting(false);
     setReconnectAttempts(0);
     reconnectAttemptsRef.current = 0;
+    setJustConnected(false);
     
     if (wsConnectionRef.current) {
       addDebugLog('Disconnecting WebSocket...', 'info');
@@ -641,13 +758,17 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
   const stopContinuousAudioStreaming = () => {
     addDebugLog('Stopping continuous audio streaming...', 'info');
     
+    // Immediately set streaming state to false
     isStreamingActiveRef.current = false;
     setIsAudioStreaming(false);
+    setIsStoppingAudio(false);
     setMicLevel(0);
 
     // Stop animation frame
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+      addDebugLog('Animation frame cancelled', 'info');
     }
 
     // Stop microphone stream
@@ -682,6 +803,18 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
       ...prev,
       streamingActive: false
     }));
+
+    // Double-check that streaming state is false
+    setTimeout(() => {
+      if (isAudioStreaming) {
+        addDebugLog('Streaming state still true after stop - forcing to false', 'warning');
+        setIsAudioStreaming(false);
+      }
+      if (isStoppingAudio) {
+        addDebugLog('Stopping state still true after stop - forcing to false', 'warning');
+        setIsStoppingAudio(false);
+      }
+    }, 50);
 
     addDebugLog(`Continuous streaming stopped. Final stats: ${audioStats.chunksRecorded} chunks recorded, ${audioStats.chunksSent} chunks sent, ${audioStats.bytesProcessed} bytes processed`, 'success');
   };
@@ -1078,20 +1211,31 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
     setSelectedAgentForQR(null);
   };
 
-  // Download QR Code function
+  // Download QR Code function with logo support
   const downloadQRCode = async () => {
     if (!selectedAgentForQR) return;
     
     try {
       const qrUrl = `${window.location.origin}/agent/${selectedAgentForQR._id}/talk`;
-      const qrDataUrl = await QRCode.toDataURL(qrUrl, {
-        width: 512,
-        margin: 2,
-        color: {
-          dark: "#000",
-          light: "#fff",
-        },
-      });
+      
+      // Use logo configuration
+      const logoUrl = QR_LOGO_CONFIG.logoUrl;
+      
+      let qrDataUrl;
+      if (logoUrl) {
+        // Generate QR code with logo overlay
+        qrDataUrl = await generateQRCodeWithLogo(qrUrl, 512, "#fff", "#000", logoUrl, QR_LOGO_CONFIG.logoSize);
+      } else {
+        // Generate regular QR code
+        qrDataUrl = await QRCode.toDataURL(qrUrl, {
+          width: 512,
+          margin: 2,
+          color: {
+            dark: "#000",
+            light: "#fff",
+          },
+        });
+      }
       
       // Create download link
       const link = document.createElement('a');
@@ -1124,6 +1268,16 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
         const url = URL.createObjectURL(audioBlob);
         setAudioUrl(url);
         setPlayingAgentId(agentId);
+        
+        // Create and play audio automatically
+        const audio = new Audio(url);
+        audio.onended = () => {
+          stopAudio();
+        };
+        audio.play().catch(error => {
+          console.error("Error playing audio:", error);
+          stopAudio();
+        });
       } else {
         setAudioUrl(null);
         setPlayingAgentId(null);
@@ -1137,6 +1291,15 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
 
   const stopAudio = () => {
     if (audioUrl) {
+      // Stop any currently playing audio
+      const audioElements = document.querySelectorAll('audio');
+      audioElements.forEach(audio => {
+        if (audio.src === audioUrl) {
+          audio.pause();
+          audio.currentTime = 0;
+        }
+      });
+      
       URL.revokeObjectURL(audioUrl);
     }
     setAudioUrl(null);
@@ -1178,8 +1341,10 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
     setDebugLogs([]);
     addDebugLog('Voice chat modal opened', 'info');
     
-    // Connect to WebSocket when opening voice chat, passing the agent data directly
-    connectToWebSocket(false, agent);
+    // Reset connection states
+    setJustConnected(false);
+    
+    // Don't connect to WebSocket automatically - wait for user to click mic
   };
 
 
@@ -1780,17 +1945,42 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
                       </div>
                     </div>
                   )}
-
-                  {/* Description */}
-                  <div>
-                    <label className="block font-semibold text-gray-700">
-                      Description
-                    </label>
-                    <p className="text-gray-600 text-sm leading-relaxed italic truncate overflow-hidden whitespace-nowrap">
-                      "{agent.description}"
-                    </p>
+                                    <div className="space-y-3">
+                    <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                      <FiMessageSquare className="w-4 h-4 text-gray-600 flex-shrink-0" />
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between">
+                        <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                          First Message
+                        </span>
+                        <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (playingAgentId === agent._id && audioUrl) {
+                                stopAudio();
+                              } else {
+                                playAudio(agent._id);
+                              }
+                            }}
+                            className="inline-flex items-center justify-center p-1 transition-colors duration-200 hover:scale-110 flex-shrink-0"
+                            title={playingAgentId === agent._id && audioUrl ? 'Stop Audio' : 'Play Audio'}
+                          >
+                            {playingAgentId === agent._id && audioUrl ? (
+                              <FiVolumeX className={`w-4 h-4 ${playingAgentId === agent._id && audioUrl ? 'text-red-500' : 'text-gray-600'}`} />
+                            ) : (
+                              <FiVolume2 className="w-4 h-4 text-gray-600 hover:text-gray-800" />
+                            )}
+                          </button>
+                          </div>
+                        <div className="flex items-center justify-between mt-1">
+                          <p className="text-sm font-medium text-gray-800 flex-1">
+                            {agent.firstMessage || "Not specified"}
+                          </p>
+                          
+                        </div>
+                      </div>
+                    </div>
                   </div>
-
                   {/* Agent Details */}
                   <div className="space-y-3">
                     <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
@@ -1818,54 +2008,16 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
                     </div>
                   </div>
 
-                  {/* First Message Section */}
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                      <FiMessageSquare className="w-4 h-4 text-gray-600 flex-shrink-0" />
-                      <div>
-                        <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-                          First Message
-                        </span>
-                        <p className="text-sm font-medium text-gray-800">
-                          {agent.firstMessage || "Not specified"}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-end">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          playAudio(agent._id);
-                        }}
-                        className="inline-flex items-center gap-2 px-6 py-2 bg-black text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors shadow-sm"
-                      >
-                        <FiVolume2 className="w-4 h-4" />
-                      </button>
-                    </div>
-
-                    {playingAgentId === agent._id && audioUrl && (
-                      <div className="mt-4 space-y-3">
-                        <audio
-                          controls
-                          autoPlay
-                          src={audioUrl}
-                          onEnded={stopAudio}
-                          className="w-full"
-                        />
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            stopAudio();
-                          }}
-                          className="inline-flex items-center gap-2 px-4 py-2 bg-gray-500 text-white text-sm font-medium rounded-lg hover:bg-gray-600 transition-colors"
-                        >
-                          <FiSquare className="w-4 h-4" />
-                          Stop
-                        </button>
-                      </div>
-                    )}
+                  {/* Description */}
+                  <div>
+                    <label className="block font-semibold text-gray-700">
+                      Description
+                    </label>
+                    <p className="text-gray-600 text-sm leading-relaxed italic truncate overflow-hidden whitespace-nowrap">
+                      "{agent.description}"
+                    </p>
                   </div>
+                  
                 </div>
               </div>
             );
@@ -1908,12 +2060,14 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
             {/* QR Code Content */}
             <div className="p-8 text-center">
               <div className="mb-6">
-                <QRCodeDisplay
-                  value={`${window.location.origin}/agent/${selectedAgentForQR._id}/talk`}
-                  size={250}
-                  bgColor="#fff"
-                  fgColor="#000"
-                />
+                                  <QRCodeDisplay
+                    value={`${window.location.origin}/agent/${selectedAgentForQR._id}/talk`}
+                    size={250}
+                    bgColor="#fff"
+                    fgColor="#000"
+                    logoUrl={QR_LOGO_CONFIG.logoUrl}
+                    logoSize={QR_LOGO_CONFIG.logoSize}
+                  />
               </div>
               
               <div className="space-y-3">
@@ -1954,7 +2108,7 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
         onEdit={onEdit}
       />
 
-      {/* Voice Chat Modal - Pure Voice-to-Voice Interface */}
+      {/* Voice Chat Modal - Pure Voice-to-Voice Interface - AGENT LIST MODAL */}
       {showVoiceChatModal && selectedAgentForChat && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-60">
           <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-hidden">
@@ -2000,7 +2154,7 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
                   onClick={closeVoiceChat}
                   className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
                 >
-                  <FiArrowLeft className="w-6 h-6" />
+                  <span className="text-xl font-bold">×</span>
                 </button>
               </div>
             </div>
@@ -2013,16 +2167,16 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
                   wsConnectionStatus === 'connecting' ? 'text-yellow-600' :
                   'text-red-600'
                 }`}>
-                  {wsConnectionStatus === 'connected' ? 'Voice Chat Active' :
+                  {wsConnectionStatus === 'connected' ? 'Voice Chat Active - Click mic to disconnect' :
                    wsConnectionStatus === 'connecting' ? 'Connecting...' :
-                   'Connection Failed'}
+                   'Click mic to connect'}
                 </div>
                 <div className="text-gray-600 text-sm">
                   {wsConnectionStatus === 'connected' 
                     ? 'Speak naturally - the AI will respond in real-time'
                     : wsConnectionStatus === 'connecting'
                     ? 'Please wait while we establish the connection'
-                    : 'Check your connection and try again'
+                    : 'Click the microphone to start voice chat'
                   }
                 </div>
                 
@@ -2043,16 +2197,74 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
 
               {/* Large Microphone Visualization */}
               <div className="relative">
-                {/* Main microphone circle */}
-                <div className={`w-32 h-32 rounded-full flex items-center justify-center transition-all duration-300 ${
-                  isAudioStreaming
-                    ? "bg-green-500 scale-110"
-                    : wsConnectionStatus === 'connected'
-                    ? "bg-blue-600"
-                    : "bg-gray-400"
-                }`}>
-                  <FiMic className="w-12 h-12 text-white" />
-                </div>
+                {/* Main microphone circle - clickable to connect/disconnect */}
+                <button
+                  onClick={() => {
+                    addDebugLog(`Mic clicked - Current state: isAudioStreaming=${isAudioStreaming}, isStoppingAudio=${isStoppingAudio}, wsStatus=${wsConnectionStatus}, justConnected=${justConnected}`, 'info');
+                    
+                    if (wsConnectionStatus === 'connected') {
+                      if (isAudioStreaming) {
+                        // If already streaming, stop audio streaming
+                        addDebugLog('Mic clicked while streaming - stopping audio...', 'info');
+                        setIsStoppingAudio(true);
+                        addDebugLog('Set stopping state to true', 'info');
+                        stopContinuousAudioStreaming();
+                        // Force immediate state update to ensure UI reflects the change
+                        setTimeout(() => {
+                          if (isAudioStreaming) {
+                            addDebugLog('Forcing isAudioStreaming to false', 'warning');
+                            setIsAudioStreaming(false);
+                          }
+                          setIsStoppingAudio(false);
+                          addDebugLog('Set stopping state to false', 'info');
+                        }, 100);
+                      } else if (justConnected) {
+                        // If just connected and not streaming, start audio streaming
+                        addDebugLog('Mic clicked after connection - starting audio streaming...', 'info');
+                        setJustConnected(false);
+                        startContinuousAudioStreaming();
+                        addDebugLog('Started audio streaming after mic click', 'info');
+                      } else {
+                        // If connected but not streaming and not just connected, disconnect WebSocket
+                        addDebugLog('Mic clicked while connected but not streaming - disconnecting WebSocket...', 'info');
+                        disconnectWebSocket();
+                        addDebugLog('Disconnected from WebSocket via mic click', 'info');
+                      }
+                    } else {
+                      // If not connected, connect
+                      connectToWebSocket(false, selectedAgentForChat);
+                      setJustConnected(true);
+                      addDebugLog('Connected to WebSocket via mic click', 'info');
+                      
+                      // Don't start audio streaming automatically - wait for user to click mic again
+                      addDebugLog('WebSocket connected. Click the microphone again to start audio streaming.', 'info');
+                    }
+                  }}
+                  className={`w-32 h-32 rounded-full flex items-center justify-center transition-all duration-300 cursor-pointer hover:scale-105 ${
+                    isStoppingAudio
+                      ? "bg-red-500 scale-95"
+                      : isAudioStreaming
+                      ? "bg-green-500 scale-110"
+                      : wsConnectionStatus === 'connected'
+                      ? "bg-blue-600"
+                      : "bg-gray-400"
+                  }`}
+                  title={
+                    isStoppingAudio
+                      ? 'Stopping audio...'
+                      : wsConnectionStatus === 'connected' 
+                      ? (isAudioStreaming ? 'Click to stop audio' : justConnected ? 'Click to start audio' : 'Click to disconnect')
+                      : 'Click to connect'
+                  }
+                >
+                  {isStoppingAudio ? (
+                    <div className="w-12 h-12 text-white flex items-center justify-center">
+                      <div className="w-8 h-8 border-4 border-white border-t-transparent rounded-full animate-spin"></div>
+                    </div>
+                  ) : (
+                    <FiMic className="w-12 h-12 text-white" />
+                  )}
+                </button>
 
                 {/* Microphone level indicator rings */}
                 {isAudioStreaming && (
@@ -2106,13 +2318,17 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
 
               {/* Status Messages */}
               <div className="text-center space-y-2">
-                {wsConnectionStatus === 'connected' && isAudioStreaming ? (
+                {isStoppingAudio ? (
+                  <div className="text-red-600 font-medium">
+                    🔴 Stopping audio stream...
+                  </div>
+                ) : wsConnectionStatus === 'connected' && isAudioStreaming ? (
                   <div className="text-green-600 font-medium">
                     🎤 Listening... Speak to the AI
                   </div>
                 ) : wsConnectionStatus === 'connected' && !isAudioStreaming ? (
                   <div className="text-blue-600 font-medium">
-                    🔄 Starting audio stream...
+                    {justConnected ? '🎤 Click microphone to start audio streaming' : '🎤 Click microphone to disconnect'}
                   </div>
                 ) : wsConnectionStatus === 'connecting' ? (
                   <div className="text-yellow-600 font-medium">
@@ -2120,7 +2336,7 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
                   </div>
                 ) : (
                   <div className="text-red-600 font-medium">
-                    ❌ Connection failed
+                    🎤 Click microphone to connect
                   </div>
                 )}
                 
@@ -2165,39 +2381,8 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
                     className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 font-medium"
                   >
                     <FiRefreshCw className="w-4 h-4" />
-                    Reconnect
+                    Connect
                   </button>
-                )}
-                
-                {wsConnectionStatus === 'connected' && (
-                  <>
-                    {!isAudioStreaming ? (
-                      <button
-                        onClick={startContinuousAudioStreaming}
-                        className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                      >
-                        Start Audio Stream
-                      </button>
-                    ) : (
-                      <button
-                        onClick={stopContinuousAudioStreaming}
-                        className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-                      >
-                        Stop Audio Stream
-                      </button>
-                    )}
-                    <button
-                      onClick={() => {
-                        if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
-                          audioContextRef.current.resume();
-                          addDebugLog('Manually resumed audio context', 'info');
-                        }
-                      }}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                    >
-                      Resume Audio Context
-                    </button>
-                  </>
                 )}
               </div>
 
