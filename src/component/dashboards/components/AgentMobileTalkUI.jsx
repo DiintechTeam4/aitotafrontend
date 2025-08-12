@@ -978,45 +978,8 @@ const AgentMobileTalkUI = ({ agent, clientId, onClose }) => {
               onClick={manualReconnect}
               className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 font-medium text-xs"
             >
-              Reconnect
+              Connect
             </button>
-          )}
-          
-          {wsStatus === 'connected' && (
-            <>
-              {!isStreaming ? (
-                <button
-                  onClick={startAudioStreaming}
-                  className="px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-xs"
-                >
-                  Start Audio
-                </button>
-              ) : (
-                <button
-                  onClick={stopAudioStreaming}
-                  className="px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-xs"
-                >
-                  Stop Audio
-                </button>
-              )}
-              <button
-                onClick={() => {
-                  if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
-                    audioContextRef.current.resume();
-                    addDebugLog('Manually resumed audio context', 'info');
-                  }
-                }}
-                className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-xs"
-              >
-                Resume Audio
-              </button>
-              <button
-                onClick={testAudioProcessing}
-                className="px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-xs"
-              >
-                Test Audio
-              </button>
-            </>
           )}
         </div>
       </div>
