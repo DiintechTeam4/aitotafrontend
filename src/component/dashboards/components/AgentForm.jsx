@@ -17,7 +17,7 @@ const AgentForm = ({ agent, onSave, onCancel, clientId }) => {
     systemPrompt: "",
     sttSelection: "google",
     ttsSelection: "sarvam",
-    voiceSelection: "abhilash",
+    voiceSelection: "",
     accountSid: "",
     serviceProvider: "",
     callingType: "both",
@@ -56,7 +56,7 @@ const AgentForm = ({ agent, onSave, onCancel, clientId }) => {
         ttsSelection: agent.ttsSelection || "sarvam",
         callingNumber: agent.callingNumber || "",
         callingType: agent.callingType || "both",
-        voiceSelection: agent.voiceSelection || "abhilash",
+        voiceSelection: agent.voiceSelection || "anushka",
         accountSid: agent.accountSid || "",
         serviceProvider: agent.serviceProvider || "",
         callerId: agent.callerId || "",
@@ -317,9 +317,7 @@ const AgentForm = ({ agent, onSave, onCancel, clientId }) => {
             <VoiceSynthesizer
               text={msg.text}
               language={formData.language || "en"}
-              speaker={
-                formData.voiceSelection === "anushka" ? "anushka" : "abhilash"
-              }
+              speaker={formData.voiceSelection}
               onAudioGenerated={(audioBlob, audioUrl, audioBase64) =>
                 handleAudioGeneratedForMessage(
                   idx,
@@ -477,8 +475,24 @@ const AgentForm = ({ agent, onSave, onCancel, clientId }) => {
             onChange={handleInputChange}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
           >
-            <option value="abhilash">Abhilash (Male)</option>
-            <option value="anushka">Anushka (Female)</option>
+            <option value="anushka">Anushka</option>
+            <option value="meera">Meera</option>
+            <option value="pavithra">Pavithra</option>
+            <option value="maitreyi">Maitreyi</option>
+            <option value="arvind">Arvind</option>
+            <option value="amol">Amol</option>
+            <option value="amartya">Amartya</option>
+            <option value="diya">Diya</option>
+            <option value="neel">Neel</option>
+            <option value="misha">Misha</option>
+            <option value="vian">Vian</option>
+            <option value="arjun">Arjun</option>
+            <option value="maya">Maya</option>
+            <option value="male-professional">Male Professional</option>
+            <option value="female-professional">Female Professional</option>
+            <option value="male-friendly">Male Friendly</option>
+            <option value="female-friendly">Female Friendly</option>
+            <option value="neutral">Neutral</option>
           </select>
         </div>
       </div>
