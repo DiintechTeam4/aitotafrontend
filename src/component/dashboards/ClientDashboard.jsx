@@ -14,6 +14,7 @@ import {
   FiArrowDownLeft,
   FiArrowUpRight,
   FiBriefcase,
+  FiPhone,
 } from "react-icons/fi";
 import AgentForm from "./components/AgentForm";
 import AgentList from "./components/AgentList";
@@ -26,6 +27,7 @@ import ApprovalForm from "./components/ApprovalForm";
 import PerformanceKPIs from "./components/PerformanceKPIs";
 import MyBusiness from "./components/MyBusiness";
 import { API_BASE_URL } from "../../config";
+import MyDials from "./components/MyDials";
 
 function ClientDashboard({ onLogout, clientId: propClientId }) {
   // Try to get clientId from props, sessionStorage, or clientData
@@ -448,6 +450,9 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
 
       case "mybusiness":
         return <MyBusiness />;
+      
+      case "mydials":
+        return <MyDials/>
 
       default:
         return <div>Select a section from the sidebar</div>;
@@ -613,6 +618,18 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
             >
               <FiBriefcase className="text-xl w-6 text-center" />
               <span className="flex-1 font-medium">My Business</span>
+            </button>
+
+            <button
+              className={`flex items-center w-full px-6 py-4 text-left transition-all duration-200 gap-3 ${
+                activeSection === "mydials"
+                  ? "bg-black text-white border-r-4 border-white"
+                  : "text-gray-300 hover:bg-gray-800 hover:text-white"
+              }`}
+              onClick={() => handleSectionChange("mydials")}
+            >
+              <FiPhone className="text-xl w-6 text-center" />
+              <span className="flex-1 font-medium">My Dials</span>
             </button>
           </nav>
 
