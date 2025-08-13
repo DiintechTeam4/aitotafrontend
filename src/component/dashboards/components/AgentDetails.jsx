@@ -284,12 +284,188 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId, forceVoiceChatModal })
 
   const callTimerRef = useRef(null);
 
+  // Call termination state
+  const [callTerminationData, setCallTerminationData] = useState({
+    accountSid: null,
+    callSid: null,
+    streamSid: null
+  });
+  const [isTerminatingCall, setIsTerminatingCall] = useState(false);
+
   // Debug logging function
-  const addDebugLog = (message, type = 'info') => {
-    const timestamp = new Date().toLocaleTimeString();
-    const logEntry = { timestamp, message, type };
-    console.log(`[${type.toUpperCase()}] ${timestamp}: ${message}`);
-    setDebugLogs(prev => [...prev.slice(-19), logEntry]);
+  const addDebugLog = (message, level = 'info') => {
+    const timestamp = new Date().toISOString();
+    const logEntry = `[${timestamp}] ${level.toUpperCase()}: ${message}`;
+    console.log(logEntry);
+    
+    setDebugLogs(prev => [...prev, logEntry]);
+    
+    // Keep only last 100 logs
+    if (debugLogs.length >= 100) {
+      setDebugLogs(prev => prev.slice(-100));
+    }
+  };
+
+    // Fetch call termination data from the latest call log
+  const fetchCallTerminationData = async () => {
+    try {
+      if (!clientId) {
+        console.error('Missing clientId for call termination');
+        return { success: false, data: null };
+      }
+
+      // First try to get the most recent active call log
+      const params = new URLSearchParams({
+        clientId: String(clientId || ""),
+        limit: "10", // Get more logs to find one with streamSid and callSid
+        sortBy: "createdAt",
+        sortOrder: "desc",
+      });
+
+      console.log('Fetching call logs with params:', params.toString());
+
+      const response = await fetch(`${API_BASE_URL}/logs?${params.toString()}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch call logs for termination');
+      }
+
+      const data = await response.json();
+      console.log('Raw logs API response:', data);
+      
+      const logs = data?.logs || [];
+      console.log('Processed logs array:', logs);
+      
+      // Find the first log that has both streamSid and callSid
+      const log = logs.find(log => log.streamSid && log.callSid);
+      
+      if (log) {
+        // Extract accountSid from callSid (assuming format: accountSid_callId)
+        const callSidParts = log.callSid.split('_');
+        const accountSid = callSidParts[0] || '5104'; // Default fallback
+
+        const terminationData = {
+          accountSid,
+          callSid: log.callSid,
+          streamSid: log.streamSid
+        };
+
+        console.log('Found call log for termination:', {
+          streamSid: log.streamSid,
+          callSid: log.callSid,
+          accountSid,
+          logId: log._id,
+          createdAt: log.createdAt
+        });
+
+        // Update state for UI display
+        setCallTerminationData(terminationData);
+        
+        // Return the data directly
+        return { success: true, data: terminationData };
+      } else {
+        console.error('No call log found with streamSid and callSid. Available logs:', logs.map(l => ({
+          id: l._id,
+          streamSid: l.streamSid,
+          callSid: l.callSid,
+          createdAt: l.createdAt,
+          metadata: l.metadata,
+          clientId: l.clientId
+        })));
+        return { success: false, data: null };
+      }
+    } catch (error) {
+      console.error('Error fetching call termination data:', error);
+      return { success: false, data: null };
+    }
+  };
+
+  // Terminate the active call
+  const terminateCall = async () => {
+    try {
+      setIsTerminatingCall(true);
+      
+      // First fetch the latest call termination data
+      const result = await fetchCallTerminationData();
+      if (!result.success || !result.data) {
+        alert('Unable to get call termination data. Please try again.');
+        setIsTerminatingCall(false);
+        return;
+      }
+
+      // Use the fresh data returned from the API call
+      const terminationData = result.data;
+      
+      // Prepare termination payload using the fresh data
+      const terminationPayload = {
+        event: "stop",
+        sequenceNumber: 1,
+        stop: {
+          accountSid: terminationData.accountSid,
+          callSid: terminationData.callSid
+        },
+        streamSid: terminationData.streamSid
+      };
+
+      console.log('Terminating call with payload:', terminationPayload);
+      console.log('Fresh termination data used:', terminationData);
+      console.log('Current callTerminationData state:', callTerminationData);
+
+      // Send termination request
+      const response = await fetch('https://test.aitota.com/api/calls/terminate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(terminationPayload)
+      });
+
+      const terminationResult = await response.json();
+      
+      if (terminationResult.success) {
+        console.log('Call terminated successfully:', terminationResult);
+        alert('Call terminated successfully');
+        // Close the call modal
+        setShowCallModal(false);
+        setCallStage("input");
+        setCallDuration(0);
+        setLiveTranscript("");
+        setLiveTranscriptLines([]);
+        stopCallTimer();
+      } else {
+        console.error('Call termination failed:', terminationResult);
+        alert(`Call termination failed: ${terminationResult.message || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Error terminating call:', error);
+      alert(`Error terminating call: ${error.message}`);
+    } finally {
+      setIsTerminatingCall(false);
+    }
+  };
+
+  // Format call duration to MM:SS format
+  const formatCallDuration = (seconds) => {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+  };
+
+  // Start call duration timer
+  const startCallTimer = () => {
+    // Only start timer if we have transcript activity
+    if (liveTranscript && liveTranscript.trim() !== '') {
+      callTimerRef.current = setInterval(() => {
+        setCallDuration((prev) => prev + 1);
+      }, 1000);
+    }
+  };
+
+  // Stop call duration timer
+  const stopCallTimer = () => {
+    if (callTimerRef.current) {
+      clearInterval(callTimerRef.current);
+      callTimerRef.current = null;
+    }
   };
 
   const formatPersonality = (personality) => {
@@ -1092,6 +1268,11 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId, forceVoiceChatModal })
   const handleCall = () => {
     setShowCallModal(true);
     setCallStage("input");
+    
+    // Fetch call termination data when opening the modal
+    setTimeout(() => {
+      fetchCallTerminationData();
+    }, 100);
   };
 
   const makeAIDialCall = async (targetPhoneNumber, agentCallerId, agentApiKey, clientUuid, providedUniqueId) => {
@@ -1150,6 +1331,14 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId, forceVoiceChatModal })
     if (phoneNumber.trim()) {
       setCallStage("connecting");
       setCallMessages([]);
+      
+      // Clear any previous termination data when starting a new call
+      setCallTerminationData({
+        accountSid: null,
+        callSid: null,
+        streamSid: null
+      });
+      
       // generate and store unique id for correlating logs
       const generatedUniqueId = `aidial-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       setDialUniqueId(generatedUniqueId);
@@ -1165,7 +1354,13 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId, forceVoiceChatModal })
       if (result.success) {
         setCallStage("connected");
         setIsCallConnected(true);
+        // Don't start timer yet - wait for first transcript (WhatsApp-like behavior)
         startLogsPolling(generatedUniqueId);
+        
+        // Fetch call termination data when call is connected
+        setTimeout(() => {
+          fetchCallTerminationData();
+        }, 1000);
       } else {
         setCallStage("input");
         setIsCallConnected(false);
@@ -1202,6 +1397,12 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId, forceVoiceChatModal })
             setLiveTranscript(log.transcript);
             const lines = log.transcript.split('\n').filter(Boolean);
             setLiveTranscriptLines(lines);
+            
+            // Start timer when first transcript is received (WhatsApp-like behavior)
+            if (log.transcript.trim() !== '' && callDuration === 0 && !callTimerRef.current) {
+              console.log('First transcript received, starting call timer');
+              startCallTimer();
+            }
           }
           const active = log?.metadata?.isActive;
           if (active === false) {
@@ -1231,9 +1432,7 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId, forceVoiceChatModal })
     setLiveTranscript("");
     setLiveTranscriptLines([]);
     stopLogsPolling();
-    if (callTimerRef.current) {
-      clearInterval(callTimerRef.current);
-    }
+    stopCallTimer();
   };
 
   // Cleanup on unmount
@@ -1245,25 +1444,11 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId, forceVoiceChatModal })
       // Stop continuous playback
       stopContinuousPlayback();
 
-      // Clear speech detection timers
-      if (silenceTimerRef.current) {
-        clearTimeout(silenceTimerRef.current);
-        silenceTimerRef.current = null;
-      }
+      // Stop call timer
+      stopCallTimer();
 
-      // Clear reconnection timeout
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current);
-        reconnectTimeoutRef.current = null;
-      }
-
-      // Cleanup call timer
-      if (callTimerRef.current) {
-        clearInterval(callTimerRef.current);
-      }
-
-      // Disconnect WebSocket
-      disconnectWebSocket();
+      // Stop logs polling
+      stopLogsPolling();
     };
   }, []);
 
@@ -1885,6 +2070,12 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId, forceVoiceChatModal })
                     {callStage === "connecting" && "Connecting..."}
                     {callStage === "connected" && "Call Connected"}
                   </h3>
+                  {/* Call Duration Display in Header */}
+                        {(callStage === "connecting" || callStage === "connected" || callStage === "timeout") && callDuration > 0 && (
+        <div className="text-sm text-green-100 mt-1 font-mono">
+          ⏱️ {formatCallDuration(callDuration)}
+        </div>
+      )}
                 </div>
                 <button
                   onClick={cancelCall}
@@ -1960,16 +2151,17 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId, forceVoiceChatModal })
                     <h4 className="text-lg font-semibold text-gray-800 mb-2">
                       Connecting...
                     </h4>
-                    <p className="text-gray-600">
-                      Establishing connection to {phoneNumber}
-                    </p>
+                          <p className="text-gray-600 mb-3">
+        Establishing connection to {phoneNumber}
+      </p>
+     
                   </div>
                 </div>
               )}
 
               {callStage === "connected" && (
                 <div className="space-y-4">
-                  <div className="flex flex-col items-center justify-center py-12 space-y-6">
+                  <div className="flex flex-col items-center justify-center py-8 space-y-6">
                     <div className="relative">
                       <div className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center">
                         <FiPhoneCall className="w-12 h-12 text-green-600" />
@@ -1982,15 +2174,42 @@ const AgentDetails = ({ agent, isOpen, onClose, clientId, forceVoiceChatModal })
                       <h4 className="text-2xl font-bold text-green-700 mb-2">
                         Call Connected
                       </h4>
+                                {/* Call Duration - Only show when timer is running */}
+          
                     </div>
                   </div>
 
-          {/* Live Transcript */}
-          <div className="space-y-2">
-            <div className="text-sm font-semibold text-gray-700">Live Transcript</div>
+                         {/* End Call Button */}
+       <div className="flex justify-center space-x-4">
+         <button
+           onClick={terminateCall}
+           disabled={isTerminatingCall}
+           className={`px-8 py-3 text-white rounded-lg transition-colors font-medium ${
+             isTerminatingCall
+               ? "bg-red-400 cursor-not-allowed"
+               : "bg-red-600 hover:bg-red-700"
+           }`}
+         >
+           {isTerminatingCall ? (
+             <div className="flex items-center gap-2">
+               <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+               Terminating...
+             </div>
+           ) : (
+             <div className="flex items-center gap-2">
+               <FiPhoneCall className="w-5 h-5" />
+               End Call
+             </div>
+           )}
+         </button>
+       </div>
+
+                  {/* Live Transcript */}
+                  <div className="space-y-2">
+                    <div className="text-sm font-semibold text-gray-700">Live Transcript</div>
             <div className="h-64 overflow-y-auto border border-gray-200 rounded-lg p-4 bg-white">
               {liveTranscriptLines.length === 0 ? (
-                <div className="text-gray-500 text-sm">Waiting for conversation...</div>
+                <div className="text-gray-500 text-sm"></div>
               ) : (
                 liveTranscriptLines.map((line, idx) => {
                   const isUser = line.includes('] User (');
