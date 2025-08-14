@@ -2283,34 +2283,34 @@ const AgentDetails = ({
           )}
         </div>
       </div>
-      
-            {/* Fixed Bottom Call History Section */}
-            <div className="fixed bottom-0 left-64 right-0 bg-white border-t border-gray-200 shadow-lg z-40">
-              <div className="bg-gray-50 px-6 py-3">
-                <div className="flex justify-between items-center">
-                  <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
-                    <FiClock className="w-5 h-5" />
-                    Call History
-                  </h3>
-                  <button
-                    onClick={() => setShowCallLogs(!showCallLogs)}
-                    className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                      showCallLogs
-                        ? "bg-gray-600 text-white hover:bg-gray-700"
-                        : "bg-blue-600 text-white hover:bg-blue-700"
-                    }`}
-                  >
-                    {showCallLogs ? "Hide History Logs" : "Show History Logs"}
-                  </button>
-                </div>
-              </div>
 
-              {showCallLogs && (
-                <div className="max-h-96 overflow-y-auto bg-white">
-                  <CallLogs agentId={agent._id} clientId={clientId} />
-                </div>
-              )}
-            </div>
+      {/* Fixed Bottom Call History Section */}
+      <div className="fixed bottom-0 left-64 right-0 bg-white border-t border-gray-200 shadow-lg z-40">
+        <div className="bg-gray-50 px-6 py-3">
+          <div className="flex justify-between items-center">
+            <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+              <FiClock className="w-5 h-5" />
+              Call History
+            </h3>
+            <button
+              onClick={() => setShowCallLogs(!showCallLogs)}
+              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                showCallLogs
+                  ? "bg-gray-600 text-white hover:bg-gray-700"
+                  : "bg-blue-600 text-white hover:bg-blue-700"
+              }`}
+            >
+              {showCallLogs ? "Hide History Logs" : "Show History Logs"}
+            </button>
+          </div>
+        </div>
+
+        {showCallLogs && (
+          <div className="max-h-96 overflow-y-auto bg-white">
+            <CallLogs agentId={agent._id} clientId={clientId} />
+          </div>
+        )}
+      </div>
 
       {/* Call Modal */}
       {showCallModal && (
