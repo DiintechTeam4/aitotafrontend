@@ -140,9 +140,7 @@ function MyDials() {
                   source: "dials",
                   lastContact:
                     lead.date || lead.time || new Date().toISOString(),
-                  notes: `Lead Status: ${lead.leadStatus || "N/A"}\n${
-                    lead.notes || ""
-                  }`,
+                  notes: `Lead Status: ${lead.leadStatus || "N/A"}`,
                   // Add all the actual data fields
                   time: lead.time,
                   date: lead.date,
@@ -152,6 +150,7 @@ function MyDials() {
                   category: lead.category,
                   duration: lead.duration,
                   callType: lead.callType,
+                  notes: lead.notes,
                 });
               });
             }
