@@ -23,7 +23,6 @@ function CampaignDetails({ campaignId, onBack }) {
   const [agents, setAgents] = useState([]);
   const [selectedAgent, setSelectedAgent] = useState(null);
 
-
   const [showCallModal, setShowCallModal] = useState(false);
   const [callingStatus, setCallingStatus] = useState("idle"); // idle, calling, paused, completed
   const [currentGroupIndex, setCurrentGroupIndex] = useState(0);
@@ -38,8 +37,6 @@ function CampaignDetails({ campaignId, onBack }) {
 
   // API base URL
   const API_BASE = `${API_BASE_URL}/client`;
-  console.log(API_BASE_URL)
-
   useEffect(() => {
     fetchCampaignDetails();
     fetchAvailableGroups();
@@ -929,6 +926,7 @@ function CampaignDetails({ campaignId, onBack }) {
                         <div
                           key={agent._id}
                           className="border border-gray-200 rounded-lg p-4 cursor-pointer hover:border-blue-500 hover:bg-blue-200 transition-colors"
+                          onClick={() => setSelectedAgent(agent)}
                         >
                           <h5 className="font-semibold text-gray-800 mb-2">
                             {agent.agentName}
