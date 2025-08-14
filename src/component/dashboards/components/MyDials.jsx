@@ -29,13 +29,23 @@ function MyDials() {
     try {
       setLoading(true);
       const token = sessionStorage.getItem("clienttoken");
+      // Map frontend filter values to backend filter values
+      let backendFilter = filter;
+      if (filter === "today") backendFilter = "today";
+      else if (filter === "yesterday") backendFilter = "yesterday";
+      else if (filter === "last7days") backendFilter = "last7days";
+      else if (filter === "custom") backendFilter = "custom";
+
+      console.log("Sending filter to dials report API:", backendFilter);
+
       const response = await fetch(
-        `${API_BASE_URL}/client/dials/report?filter=${filter}${
+        `${API_BASE_URL}/client/dials/report?filter=${backendFilter}${
           startDate && endDate
             ? `&startDate=${startDate}&endDate=${endDate}`
             : ""
         }`,
         {
+          method: "GET",
           headers: {
             Authorization: `Bearer ${token}`,
             "Content-Type": "application/json",
@@ -88,13 +98,23 @@ function MyDials() {
     try {
       setLoading(true);
       const token = sessionStorage.getItem("clienttoken");
+      // Map frontend filter values to backend filter values
+      let backendFilter = filter;
+      if (filter === "today") backendFilter = "today";
+      else if (filter === "yesterday") backendFilter = "yesterday";
+      else if (filter === "last7days") backendFilter = "last7days";
+      else if (filter === "custom") backendFilter = "custom";
+
+      console.log("Sending filter to leads API:", backendFilter);
+
       const response = await fetch(
-        `${API_BASE_URL}/client/dials/leads?filter=${filter}${
+        `${API_BASE_URL}/client/dials/leads?filter=${backendFilter}${
           startDate && endDate
             ? `&startDate=${startDate}&endDate=${endDate}`
             : ""
         }`,
         {
+          method: "GET",
           headers: {
             Authorization: `Bearer ${token}`,
             "Content-Type": "application/json",
@@ -120,7 +140,18 @@ function MyDials() {
                   source: "dials",
                   lastContact:
                     lead.date || lead.time || new Date().toISOString(),
-                  notes: `Lead Status: ${lead.leadStatus || "N/A"}`,
+                  notes: `Lead Status: ${lead.leadStatus || "N/A"}\n${
+                    lead.notes || ""
+                  }`,
+                  // Add all the actual data fields
+                  time: lead.time,
+                  date: lead.date,
+                  phoneNumber: lead.phoneNumber,
+                  transcript: lead.transcript,
+                  leadStatus: lead.leadStatus,
+                  category: lead.category,
+                  duration: lead.duration,
+                  callType: lead.callType,
                 });
               });
             }
@@ -257,79 +288,25 @@ function MyDials() {
           <p className="mt-4 text-gray-600">Loading reports...</p>
         </div>
       ) : (
-        <div className="bg-white rounded-lg shadow overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <h4 className="text-lg font-medium text-gray-900">Dials Report</h4>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Report
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Period
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Metrics
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Generated
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {reports.length > 0 ? (
-                  reports.map((report) => (
-                    <tr key={report.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900">
-                          {report.title}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {report.period}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">
-                          <div>
-                            {report.totalCalls} calls • {report.avgDuration} avg
-                          </div>
-                          <div className="text-gray-500">
-                            {report.conversionRate} conversion
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {new Date(report.generatedAt).toLocaleDateString()}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <button className="text-indigo-600 hover:text-indigo-900 mr-3">
-                          View
-                        </button>
-                        <button className="text-green-600 hover:text-green-900">
-                          Download
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td
-                      colSpan="5"
-                      className="px-6 py-8 text-center text-gray-500"
-                    >
-                      No reports available. Select a filter and click Refresh to
-                      load data.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+        <div className="bg-white rounded-lg shadow p-6">
+          <h4 className="text-lg font-medium text-gray-900 mb-4">
+            Dials Summary
+          </h4>
+          <div className="text-center text-gray-600">
+            <p>
+              Filter applied:{" "}
+              {filter === "today"
+                ? "Today"
+                : filter === "yesterday"
+                ? "Yesterday"
+                : filter === "last7days"
+                ? "Last 7 Days"
+                : "Custom Range"}
+            </p>
+            <p className="mt-2">
+              Data loaded successfully. Use the metrics above to analyze your
+              dials performance.
+            </p>
           </div>
         </div>
       )}
@@ -391,20 +368,6 @@ function MyDials() {
               <h4 className="text-lg font-medium text-gray-900">
                 Active Leads
               </h4>
-              <div className="flex gap-2">
-                <div className="relative">
-                  <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                  <input
-                    type="text"
-                    placeholder="Search leads..."
-                    className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </div>
-                <button className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center gap-2">
-                  <FiFilter className="text-sm" />
-                  Filter
-                </button>
-              </div>
             </div>
           </div>
           <div className="overflow-x-auto">
@@ -412,73 +375,122 @@ function MyDials() {
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Lead
+                    Contact Info
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Company
+                    Phone Number
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
+                    Lead Status
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Source
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Last Contact
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
+                    Transcript
                   </th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {leads.map((lead) => (
-                  <tr key={lead.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div>
+                {leads.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan="8"
+                      className="px-6 py-8 text-center text-gray-500"
+                    >
+                      No leads available. Select a filter and click Refresh to
+                      load data.
+                    </td>
+                  </tr>
+                ) : (
+                  leads.map((lead) => (
+                    <tr key={lead.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-medium text-gray-900">
                           {lead.name}
                         </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm text-gray-500">
-                          {lead.email}
+                          Category: {lead.category || "N/A"}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-gray-900">
+                          {lead.contactName}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {lead.phoneNumber || "N/A"}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-900">
+                          {lead.date
+                            ? new Date(lead.date).toLocaleDateString()
+                            : "N/A"}
                         </div>
                         <div className="text-sm text-gray-500">
-                          {lead.phone}
+                          {lead.time
+                            ? new Date(lead.time).toLocaleTimeString()
+                            : "N/A"}
                         </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {lead.company}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span
-                        className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                          lead.status === "qualified"
-                            ? "bg-green-100 text-green-800"
-                            : lead.status === "prospecting"
-                            ? "bg-yellow-100 text-yellow-800"
-                            : "bg-gray-100 text-gray-800"
-                        }`}
-                      >
-                        {lead.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {lead.source}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {new Date(lead.lastContact).toLocaleDateString()}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <button className="text-indigo-600 hover:text-indigo-900 mr-3">
-                        View
-                      </button>
-                      <button className="text-blue-600 hover:text-blue-900">
-                        Edit
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <span
+                          className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                            lead.leadStatus === "vvi" ||
+                            lead.leadStatus === "Very Interested"
+                              ? "bg-green-100 text-green-800"
+                              : lead.leadStatus === "maybe" ||
+                                lead.leadStatus === "medium"
+                              ? "bg-yellow-100 text-yellow-800"
+                              : lead.leadStatus === "junk lead" ||
+                                lead.leadStatus === "not required"
+                              ? "bg-red-100 text-red-800"
+                              : "bg-gray-100 text-gray-800"
+                          }`}
+                        >
+                          {lead.leadStatus || "N/A"}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {lead.duration
+                          ? `${
+                              Math.round((lead.duration / 60) * 100) / 100
+                            } min`
+                          : "N/A"}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <span
+                          className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                            lead.callType === "incoming"
+                              ? "bg-green-100 text-green-800"
+                              : "bg-blue-100 text-blue-800"
+                          }`}
+                        >
+                          {lead.callType || "N/A"}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <div
+                          className="max-w-xs truncate"
+                          title={lead.transcript || "No transcript"}
+                        >
+                          {lead.transcript
+                            ? lead.transcript.length > 50
+                              ? `${lead.transcript.substring(0, 50)}...`
+                              : lead.transcript
+                            : "N/A"}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <button className="text-indigo-600 hover:text-indigo-900 mr-3">
+                          View
+                        </button>
+                        <button className="text-blue-600 hover:text-blue-900">
+                          Edit
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>

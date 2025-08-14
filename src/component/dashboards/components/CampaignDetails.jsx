@@ -1,5 +1,16 @@
 import { useState, useEffect } from "react";
-import { FiX, FiPlus, FiUsers, FiCalendar, FiTrash2 } from "react-icons/fi";
+import {
+  FiX,
+  FiPlus,
+  FiUsers,
+  FiCalendar,
+  FiTrash2,
+  FiPhone,
+  FiPlay,
+  FiPause,
+  FiSkipForward,
+} from "react-icons/fi";
+import { API_BASE_URL } from "../../../config";
 
 function CampaignDetails({ campaignId, onBack }) {
   const [campaign, setCampaign] = useState(null);
@@ -7,15 +18,316 @@ function CampaignDetails({ campaignId, onBack }) {
   const [selectedGroups, setSelectedGroups] = useState([]);
   const [loading, setLoading] = useState(false);
   const [addingGroups, setAddingGroups] = useState(false);
-  const { API_BASE_URL } = require("../../../config");
-  console.log(API_BASE_URL)
+
+  // New states for calling functionality
+  const [agents, setAgents] = useState([]);
+  const [selectedAgent, setSelectedAgent] = useState(null);
+
+
+  const [showCallModal, setShowCallModal] = useState(false);
+  const [callingStatus, setCallingStatus] = useState("idle"); // idle, calling, paused, completed
+  const [currentGroupIndex, setCurrentGroupIndex] = useState(0);
+  const [currentContactIndex, setCurrentContactIndex] = useState(0);
+  const [callResults, setCallResults] = useState([]);
+  const [clientData, setClientData] = useState(null);
+  const [loadingAgents, setLoadingAgents] = useState(false);
+  const [campaignGroups, setCampaignGroups] = useState([]);
+  const [loadingCampaignGroups, setLoadingCampaignGroups] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState(null);
+  const [showAddGroupsModal, setShowAddGroupsModal] = useState(false);
+
   // API base URL
-  const API_BASE = API_BASE_URL;
+  const API_BASE = `${API_BASE_URL}/client`;
+  console.log(API_BASE_URL)
 
   useEffect(() => {
     fetchCampaignDetails();
     fetchAvailableGroups();
+    fetchAgents();
+    fetchClientData();
+    // Remove fetchCampaignGroups from here to prevent re-rendering issues
   }, [campaignId]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (showCallModal && !event.target.closest(".call-modal")) {
+        setShowCallModal(false);
+      }
+      if (showAddGroupsModal && !event.target.closest(".add-groups-modal")) {
+        handleCloseAddGroupsModal();
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [showCallModal, showAddGroupsModal]);
+
+  const fetchClientData = async () => {
+    try {
+      const token = sessionStorage.getItem("clienttoken");
+      const response = await fetch(`${API_BASE}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      const result = await response.json();
+      if (result.success) {
+        setClientData(result.data);
+      }
+    } catch (error) {
+      console.error("Error fetching client data:", error);
+    }
+  };
+
+  const fetchAgents = async () => {
+    try {
+      setLoadingAgents(true);
+      const token = sessionStorage.getItem("clienttoken");
+
+      const response = await fetch(`${API_BASE}/agents`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      const result = await response.json();
+      if (result.success) {
+        setAgents(result.data || []);
+      } else {
+        console.error("Failed to fetch agents:", result.error);
+        setAgents([]);
+      }
+    } catch (error) {
+      console.error("Error fetching agents:", error);
+      setAgents([]);
+    } finally {
+      setLoadingAgents(false);
+    }
+  };
+
+  const makeVoiceBotCall = async (contact, agent) => {
+    try {
+      // Get client API key from database
+      const token = sessionStorage.getItem("clienttoken");
+      const apiKeysResponse = await fetch(`${API_BASE}/api-keys`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      const apiKeysResult = await apiKeysResponse.json();
+      let apiKey = "629lXqsiDk85lfMub7RsN73u4741MlOl4Dv8kJE9"; // fallback
+
+      if (apiKeysResult.success && apiKeysResult.data.length > 0) {
+        // Use the first available API key or find a specific one
+        apiKey = apiKeysResult.data[0].key;
+      }
+
+      const callPayload = {
+        transaction_id: "CTI_BOT_DIAL",
+        phone_num: contact.phone.replace(/[^\d]/g, ""), // Remove non-digits
+        uniqueid: `abc123xyz`,
+        callerid: "168353225",
+        uuid: clientData?.clientId || "client-uuid-001",
+        custom_param: {
+          a: `b`,
+          c: "d",
+        },
+        resFormat: 3,
+      };
+
+      // Use your backend proxy instead of direct API call
+      const response = await fetch(`${API_BASE}/proxy/clicktobot`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          apiKey: apiKey,
+          payload: callPayload,
+        }),
+      });
+
+      const result = await response.json();
+
+      return {
+        success: result.success,
+        data: result.data,
+        contact: contact,
+        group: campaignGroups[currentGroupIndex],
+        timestamp: new Date(),
+      };
+    } catch (error) {
+      console.error("Error making voice bot call:", error);
+      return {
+        success: false,
+        error: error.message,
+        contact: contact,
+        group: campaignGroups[currentGroupIndex],
+        timestamp: new Date(),
+      };
+    }
+  };
+
+  const startCalling = async () => {
+    if (!selectedAgent || campaignGroups.length === 0) {
+      alert(
+        "Please select an agent and ensure there are groups in the campaign."
+      );
+      return;
+    }
+
+    setCallingStatus("calling");
+    setCurrentGroupIndex(0);
+    setCurrentContactIndex(0);
+    setCallResults([]);
+
+    // Loop through all campaign groups
+    for (let groupIdx = 0; groupIdx < campaignGroups.length; groupIdx++) {
+      if (callingStatus === "paused") {
+        break;
+      }
+
+      setCurrentGroupIndex(groupIdx);
+      const group = campaignGroups[groupIdx];
+
+      if (!group || !group.contacts || group.contacts.length === 0) {
+        continue; // Skip groups without contacts
+      }
+
+      // Loop through all contacts in the current group
+      for (
+        let contactIdx = 0;
+        contactIdx < group.contacts.length;
+        contactIdx++
+      ) {
+        if (callingStatus === "paused") {
+          break;
+        }
+
+        setCurrentContactIndex(contactIdx);
+        const contact = group.contacts[contactIdx];
+
+        console.log(
+          `Calling ${contact.name} at ${contact.phone} in group ${group.name}...`
+        );
+
+        const result = await makeVoiceBotCall(contact, selectedAgent);
+        setCallResults((prev) => [...prev, result]);
+
+        // Wait 2 seconds between calls to avoid overwhelming the API
+        if (contactIdx < group.contacts.length - 1) {
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+        }
+      }
+    }
+
+    setCallingStatus("completed");
+  };
+
+  const pauseCalling = () => {
+    setCallingStatus("paused");
+  };
+
+  const resumeCalling = async () => {
+    setCallingStatus("calling");
+
+    // Resume from current group and contact
+    for (
+      let groupIdx = currentGroupIndex;
+      groupIdx < campaignGroups.length;
+      groupIdx++
+    ) {
+      if (callingStatus === "paused") {
+        break;
+      }
+
+      setCurrentGroupIndex(groupIdx);
+      const group = campaignGroups[groupIdx];
+
+      if (!group || !group.contacts || group.contacts.length === 0) {
+        continue;
+      }
+
+      // Start from current contact index for the first group, 0 for subsequent groups
+      const startContactIdx =
+        groupIdx === currentGroupIndex ? currentContactIndex : 0;
+
+      for (
+        let contactIdx = startContactIdx;
+        contactIdx < group.contacts.length;
+        contactIdx++
+      ) {
+        if (callingStatus === "paused") {
+          break;
+        }
+
+        setCurrentContactIndex(contactIdx);
+        const contact = group.contacts[contactIdx];
+
+        console.log(
+          `Calling ${contact.name} at ${contact.phone} in group ${group.name}...`
+        );
+
+        const result = await makeVoiceBotCall(contact, selectedAgent);
+        setCallResults((prev) => [...prev, result]);
+
+        // Wait 2 seconds between calls
+        if (contactIdx < group.contacts.length - 1) {
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+        }
+      }
+    }
+
+    setCallingStatus("completed");
+  };
+
+  const skipToNext = () => {
+    const currentGroup = campaignGroups[currentGroupIndex];
+    if (
+      currentGroup &&
+      currentContactIndex < currentGroup.contacts.length - 1
+    ) {
+      setCurrentContactIndex((prev) => prev + 1);
+    } else if (currentGroupIndex < campaignGroups.length - 1) {
+      setCurrentGroupIndex((prev) => prev + 1);
+      setCurrentContactIndex(0);
+    }
+  };
+
+  const resetCalling = () => {
+    setCallingStatus("idle");
+    setCurrentGroupIndex(0);
+    setCurrentContactIndex(0);
+    setCallResults([]);
+    // Don't reset the selected agent or close the modal
+  };
+
+  // Get current progress
+  const getProgress = () => {
+    let completedContacts = 0;
+    let totalContacts = 0;
+
+    for (let i = 0; i < campaignGroups.length; i++) {
+      const group = campaignGroups[i];
+      if (i < currentGroupIndex) {
+        completedContacts += group.contacts.length;
+      } else if (i === currentGroupIndex) {
+        completedContacts += currentContactIndex;
+      }
+      totalContacts += group.contacts.length;
+    }
+
+    return { completed: completedContacts, total: totalContacts };
+  };
 
   const fetchCampaignDetails = async () => {
     try {
@@ -32,7 +344,8 @@ function CampaignDetails({ campaignId, onBack }) {
       const result = await response.json();
       if (result.success) {
         setCampaign(result.data);
-        setSelectedGroups(result.data.groupIds || []);
+        // Remove this call to prevent re-rendering issues
+        // fetchCampaignGroups();
       } else {
         console.error("Failed to fetch campaign details:", result.error);
         // For demo purposes, create a dummy campaign if API fails
@@ -46,7 +359,6 @@ function CampaignDetails({ campaignId, onBack }) {
           status: "draft",
           createdAt: new Date(),
         });
-        setSelectedGroups([]);
       }
     } catch (error) {
       console.error("Error fetching campaign details:", error);
@@ -61,7 +373,6 @@ function CampaignDetails({ campaignId, onBack }) {
         status: "draft",
         createdAt: new Date(),
       });
-      setSelectedGroups([]);
     } finally {
       setLoading(false);
     }
@@ -131,6 +442,113 @@ function CampaignDetails({ campaignId, onBack }) {
     }
   };
 
+  const fetchCampaignGroups = async () => {
+    try {
+      setLoadingCampaignGroups(true);
+      const token = sessionStorage.getItem("clienttoken");
+
+      if (!token) {
+        setCampaignGroups([]);
+        return;
+      }
+
+      const response = await fetch(
+        `${API_BASE}/campaigns/${campaignId}/groups`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      if (result.success) {
+        setCampaignGroups(result.data || []);
+      } else {
+        console.error("Failed to fetch campaign groups:", result.error);
+        setCampaignGroups([]);
+      }
+    } catch (error) {
+      console.error("Error fetching campaign groups:", error);
+      setCampaignGroups([]);
+    } finally {
+      setLoadingCampaignGroups(false);
+    }
+  };
+
+  const handleCloseAddGroupsModal = () => {
+    setShowAddGroupsModal(false);
+    // Clear selected groups that are not in the campaign
+    const currentSelected = selectedGroups.filter((id) =>
+      campaignGroups.some((cg) => cg._id === id)
+    );
+    setSelectedGroups(currentSelected);
+  };
+
+  const getAvailableGroupsForCampaign = () => {
+    // Get groups that are not already in the campaign
+    const campaignGroupIds = campaignGroups.map((group) => group._id);
+    return availableGroups.filter(
+      (group) => !campaignGroupIds.includes(group._id)
+    );
+  };
+
+  const handleAddSpecificGroupsToCampaign = async (groupIdsToAdd) => {
+    if (groupIdsToAdd.length === 0) {
+      alert("Please select at least one group to add to the campaign.");
+      return;
+    }
+
+    try {
+      setAddingGroups(true);
+      const token = sessionStorage.getItem("clienttoken");
+
+      // Get current campaign groups and add new ones
+      const currentGroupIds = campaignGroups.map((group) => group._id);
+      const updatedGroupIds = [...currentGroupIds, ...groupIdsToAdd];
+
+      const response = await fetch(
+        `${API_BASE}/campaigns/${campaignId}/groups`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            groupIds: updatedGroupIds,
+          }),
+        }
+      );
+
+      const result = await response.json();
+      if (result.success) {
+        // Update the campaign with new groups
+        setCampaign((prev) => ({
+          ...prev,
+          groupIds: updatedGroupIds,
+        }));
+        // Refresh campaign groups to show the updated list
+        fetchCampaignGroups();
+        setShowAddGroupsModal(false);
+        alert("Groups added to campaign successfully!");
+      } else {
+        console.error("Failed to add groups to campaign:", result.error);
+        alert("Failed to add groups: " + result.error);
+      }
+    } catch (error) {
+      console.error("Error adding groups to campaign:", error);
+      alert("Error adding groups to campaign: " + error.message);
+    } finally {
+      setAddingGroups(false);
+    }
+  };
+
   const handleAddGroupsToCampaign = async () => {
     if (selectedGroups.length === 0) {
       alert("Please select at least one group to add to the campaign.");
@@ -162,6 +580,8 @@ function CampaignDetails({ campaignId, onBack }) {
           ...prev,
           groupIds: selectedGroups,
         }));
+        // Refresh campaign groups to show the updated list
+        fetchCampaignGroups();
         alert("Groups updated successfully!");
       } else {
         console.error("Failed to add groups to campaign:", result.error);
@@ -188,7 +608,9 @@ function CampaignDetails({ campaignId, onBack }) {
     ) {
       try {
         setLoading(true);
-        const updatedGroups = selectedGroups.filter((id) => id !== groupId);
+        const updatedGroups = campaignGroups.filter(
+          (group) => group._id !== groupId
+        );
 
         const token = sessionStorage.getItem("clienttoken");
         const response = await fetch(
@@ -200,18 +622,19 @@ function CampaignDetails({ campaignId, onBack }) {
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
-              groupIds: updatedGroups,
+              groupIds: updatedGroups.map((group) => group._id),
             }),
           }
         );
 
         const result = await response.json();
         if (result.success) {
-          setSelectedGroups(updatedGroups);
           setCampaign((prev) => ({
             ...prev,
-            groupIds: updatedGroups,
+            groupIds: updatedGroups.map((group) => group._id),
           }));
+          // Refresh campaign groups to show the updated list
+          fetchCampaignGroups();
         } else {
           console.error("Failed to remove group:", result.error);
           alert("Failed to remove group: " + result.error);
@@ -219,11 +642,12 @@ function CampaignDetails({ campaignId, onBack }) {
       } catch (error) {
         console.error("Error removing group:", error);
         // For demo purposes, remove locally if API fails
-        const updatedGroups = selectedGroups.filter((id) => id !== groupId);
-        setSelectedGroups(updatedGroups);
+        const updatedGroups = campaignGroups.filter(
+          (group) => group._id !== groupId
+        );
         setCampaign((prev) => ({
           ...prev,
-          groupIds: updatedGroups,
+          groupIds: updatedGroups.map((group) => group._id),
         }));
       } finally {
         setLoading(false);
@@ -289,7 +713,7 @@ function CampaignDetails({ campaignId, onBack }) {
               Created: {new Date(campaign.createdAt).toLocaleDateString()}
             </div>
             <div className="text-lg font-semibold text-gray-800">
-              {selectedGroups.length} groups
+              {campaignGroups.length} groups
             </div>
           </div>
         </div>
@@ -338,139 +762,550 @@ function CampaignDetails({ campaignId, onBack }) {
               <div>
                 <div className="text-sm text-gray-500">Groups</div>
                 <div className="font-medium">
-                  {selectedGroups.length} groups selected
+                  {campaignGroups.length} groups in campaign
                 </div>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Group Selection */}
+        {/* Campaign Groups */}
         <div className="mb-8">
-          <h3 className="text-xl font-semibold text-gray-800 mb-4">
-            Manage Groups
-          </h3>
-
-          {/* Available Groups */}
-          <div className="mb-6">
-            <h4 className="text-lg font-medium text-gray-700 mb-4">
-              Available Groups
-            </h4>
-            {availableGroups.length === 0 ? (
-              <div className="text-center py-8 bg-gray-50 rounded-lg">
-                <FiUsers className="mx-auto text-4xl text-gray-400 mb-4" />
-                <h5 className="text-lg font-medium text-gray-600 mb-2">
-                  No groups available
-                </h5>
-                <p className="text-gray-500">
-                  Create groups first to add them to campaigns
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h4 className="text-lg font-medium text-gray-700">
+                Campaign Groups
+              </h4>
+              {lastUpdated && (
+                <p className="text-xs text-gray-500 mt-1">
+                  Last updated: {lastUpdated.toLocaleString()}
                 </p>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  setShowCallModal(true);
+                }}
+                className="px-3 py-1 text-sm bg-green-100 text-green-700 rounded-md hover:bg-green-200 flex items-center gap-2"
+                disabled={campaignGroups.length === 0 || loadingAgents}
+              >
+                <FiPhone className="w-4 h-4" />
+                Make Calls
+              </button>
+              <button
+                onClick={() => setShowAddGroupsModal(true)}
+                className="px-3 py-1 text-sm bg-green-100 text-green-700 rounded-md hover:bg-green-200 flex items-center gap-2"
+              >
+                <FiPlus className="w-4 h-4" />
+                Add Groups
+              </button>
+              <button
+                onClick={fetchCampaignGroups}
+                disabled={loadingCampaignGroups}
+                className="px-3 py-1 text-sm bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                  />
+                </svg>
+                Refresh
+              </button>
+            </div>
+          </div>
+          {loadingCampaignGroups ? (
+            <div className="text-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+              <p className="text-gray-500 mt-2">Loading campaign groups...</p>
+            </div>
+          ) : campaignGroups.length === 0 ? (
+            <div className="text-center py-12 bg-gray-50 rounded-lg">
+              <FiUsers className="mx-auto text-4xl text-gray-400 mb-4" />
+              <h5 className="text-lg font-medium text-gray-600 mb-2">
+                No groups in campaign
+              </h5>
+              <p className="text-gray-500">
+                This campaign doesn't have any groups yet
+              </p>
+            </div>
+          ) : (
+            <>
+              {/* Summary */}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                <div className="grid grid-cols-2 gap-4 text-center">
+                  <div>
+                    <div className="text-2xl font-bold text-blue-800">
+                      {campaignGroups.length}
+                    </div>
+                    <div className="text-sm text-blue-600">Total Groups</div>
+                  </div>
+                  <div>
+                    <div className="text-2xl font-bold text-blue-800">
+                      {campaignGroups.reduce(
+                        (total, group) => total + (group.contacts?.length || 0),
+                        0
+                      )}
+                    </div>
+                    <div className="text-sm text-blue-600">Total Contacts</div>
+                  </div>
+                </div>
               </div>
-            ) : (
+
+              {/* Groups Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {availableGroups.map((group) => (
+                {campaignGroups.map((group) => (
                   <div
                     key={group._id}
-                    className={`border rounded-lg p-4 transition-all ${
-                      selectedGroups.includes(group._id)
-                        ? "border-blue-500 bg-blue-50"
-                        : "border-gray-200 bg-white hover:shadow-md"
-                    }`}
+                    className="bg-blue-50 border border-blue-200 rounded-lg p-4"
                   >
-                    <div className="flex items-center justify-between mb-2">
-                      <h5 className="font-semibold text-gray-800">
+                    <div className="flex items-center justify-between mb-3">
+                      <h5 className="font-semibold text-blue-800">
                         {group.name}
                       </h5>
-                      <input
-                        type="checkbox"
-                        checked={selectedGroups.includes(group._id)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedGroups([...selectedGroups, group._id]);
-                          } else {
-                            setSelectedGroups(
-                              selectedGroups.filter((id) => id !== group._id)
-                            );
-                          }
-                        }}
-                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                      />
+                      <button
+                        onClick={() => handleRemoveGroup(group._id)}
+                        className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition-colors"
+                        disabled={loading}
+                        title="Remove from campaign"
+                      >
+                        <FiTrash2 className="text-sm" />
+                      </button>
                     </div>
-                    <p className="text-sm text-gray-600 mb-2">
+                    <p className="text-sm text-blue-600 mb-2">
                       {group.description}
                     </p>
-                    <div className="text-xs text-gray-500">
+                    <div className="text-xs text-blue-500">
                       {group.contacts?.length || 0} contacts
                     </div>
                   </div>
                 ))}
               </div>
-            )}
-          </div>
-
-          {/* Update Groups Button */}
-          <div className="flex justify-end">
-            <button
-              onClick={handleAddGroupsToCampaign}
-              className="px-6 py-2 bg-black text-white rounded hover:bg-gray-800 transition-colors flex items-center gap-2"
-              disabled={addingGroups}
-            >
-              {addingGroups ? "Updating..." : "Update Campaign Groups"}
-            </button>
-          </div>
-        </div>
-
-        {/* Selected Groups */}
-        <div>
-          <h4 className="text-lg font-medium text-gray-700 mb-4">
-            Selected Groups
-          </h4>
-          {selectedGroups.length === 0 ? (
-            <div className="text-center py-12 bg-gray-50 rounded-lg">
-              <FiUsers className="mx-auto text-4xl text-gray-400 mb-4" />
-              <h5 className="text-lg font-medium text-gray-600 mb-2">
-                No groups selected
-              </h5>
-              <p className="text-gray-500">
-                Select groups above to add them to this campaign
-              </p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {selectedGroups.map((groupId) => {
-                const group = availableGroups.find((g) => g._id === groupId);
-                if (!group) return null;
-
-                return (
-                  <div
-                    key={group._id}
-                    className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
-                  >
-                    <div className="flex items-center justify-between mb-3">
-                      <h5 className="font-semibold text-gray-800">
-                        {group.name}
-                      </h5>
-                      <button
-                        onClick={() => handleRemoveGroup(group._id)}
-                        className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
-                        disabled={loading}
-                      >
-                        <FiTrash2 className="text-sm" />
-                      </button>
-                    </div>
-                    <p className="text-sm text-gray-600 mb-2">
-                      {group.description}
-                    </p>
-                    <div className="text-xs text-gray-500">
-                      {group.contacts?.length || 0} contacts
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+            </>
           )}
         </div>
       </div>
+
+      {/* Make Calls Modal */}
+      {showCallModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 call-modal">
+          <div className="bg-white rounded-lg w-11/12 max-w-4xl max-h-[90vh] overflow-y-auto shadow-2xl">
+            <div className="flex justify-between items-center p-6 border-b border-gray-200">
+              <h3 className="m-0 text-gray-800">
+                Make Calls to Campaign Groups
+              </h3>
+              <button
+                className="bg-none border-none text-2xl cursor-pointer text-gray-500 hover:text-gray-700 p-0 w-8 h-8 flex items-center justify-center"
+                onClick={() => setShowCallModal(false)}
+              >
+                <FiX />
+              </button>
+            </div>
+
+            <div className="p-6">
+              {/* Agent Selection */}
+              {!selectedAgent && (
+                <div className="mb-6">
+                  <h4 className="text-lg font-semibold text-gray-800 mb-4">
+                    Select an Agent
+                  </h4>
+                  {loadingAgents ? (
+                    <div className="text-center py-4">Loading agents...</div>
+                  ) : agents.length === 0 ? (
+                    <div className="text-center py-4 text-gray-500">
+                      No agents available
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {agents.map((agent) => (
+                        <div
+                          key={agent._id}
+                          className="border border-gray-200 rounded-lg p-4 cursor-pointer hover:border-blue-500 hover:bg-blue-200 transition-colors"
+                        >
+                          <h5 className="font-semibold text-gray-800 mb-2">
+                            {agent.agentName}
+                          </h5>
+                          <p className="text-sm text-gray-600">
+                            {agent.description}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Calling Interface */}
+              {selectedAgent && (
+                <div>
+                  <div className="mb-6 p-4 bg-blue-50 rounded-lg">
+                    <h4 className="font-semibold text-gray-800 mb-2">
+                      Selected Agent: {selectedAgent.agentName}
+                    </h4>
+                    <p className="text-sm text-gray-600">
+                      {selectedAgent.description}
+                    </p>
+                    <button
+                      onClick={() => setSelectedAgent(null)}
+                      className="mt-2 text-sm text-blue-600 hover:text-blue-800"
+                    >
+                      Change Agent
+                    </button>
+                  </div>
+
+                  {/* Campaign Overview */}
+                  <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+                    <h4 className="font-semibold text-gray-800 mb-2">
+                      Campaign Overview
+                    </h4>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                      <div>
+                        <span className="text-gray-600">Campaign Groups:</span>
+                        <div className="font-semibold">
+                          {campaignGroups.length}
+                        </div>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">Total Contacts:</span>
+                        <div className="font-semibold">
+                          {campaignGroups.reduce(
+                            (total, group) =>
+                              total + (group.contacts?.length || 0),
+                            0
+                          )}
+                        </div>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">Current Group:</span>
+                        <div className="font-semibold">
+                          {campaignGroups[currentGroupIndex]?.name || "None"}
+                        </div>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">Status:</span>
+                        <div className="font-semibold capitalize">
+                          {callingStatus}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Call Progress */}
+                  <div className="mb-6">
+                    <div className="flex justify-between items-center mb-4">
+                      <h4 className="text-lg font-semibold text-gray-800">
+                        Call Progress
+                      </h4>
+                      <div className="text-sm text-gray-600">
+                        <div className="text-center mb-4">
+                          <div className="text-sm text-gray-600 mb-2">
+                            Group {currentGroupIndex + 1} of{" "}
+                            {campaignGroups.length} (
+                            {campaignGroups[currentGroupIndex]?.name ||
+                              "Unknown"}
+                            )
+                          </div>
+                          <div className="text-sm text-gray-600 mb-2">
+                            Contact {currentContactIndex + 1} of{" "}
+                            {campaignGroups[currentGroupIndex]?.contacts
+                              ?.length || 0}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Progress Bar */}
+                    <div className="w-full bg-gray-200 rounded-full h-2 mb-4">
+                      <div
+                        className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                        style={{
+                          width: `${
+                            (getProgress().completed / getProgress().total) *
+                            100
+                          }%`,
+                        }}
+                      ></div>
+                    </div>
+
+                    {/* Current Contact */}
+                    {callingStatus !== "idle" &&
+                      campaignGroups[currentGroupIndex] && (
+                        <div className="p-4 bg-gray-50 rounded-lg mb-4">
+                          <h5 className="font-semibold text-gray-800">
+                            Currently Calling:{" "}
+                            {campaignGroups[currentGroupIndex]?.contacts?.[
+                              currentContactIndex
+                            ]?.name || "Unknown"}
+                          </h5>
+                          <p className="text-sm text-gray-600">
+                            Phone:{" "}
+                            {campaignGroups[currentGroupIndex]?.contacts?.[
+                              currentContactIndex
+                            ]?.phone || "Unknown"}
+                          </p>
+                          <p className="text-sm text-gray-500">
+                            Group:{" "}
+                            {campaignGroups[currentGroupIndex]?.name ||
+                              "Unknown"}
+                          </p>
+                        </div>
+                      )}
+
+                    {/* Control Buttons */}
+                    <div className="flex gap-3 justify-center">
+                      {callingStatus === "idle" && (
+                        <button
+                          onClick={startCalling}
+                          className="px-6 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors flex items-center gap-2"
+                        >
+                          <FiPlay className="text-sm" />
+                          Start Calling
+                        </button>
+                      )}
+
+                      {callingStatus === "calling" && (
+                        <>
+                          <button
+                            onClick={pauseCalling}
+                            className="px-6 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700 transition-colors flex items-center gap-2"
+                          >
+                            <FiPause className="text-sm" />
+                            Pause
+                          </button>
+                          <button
+                            onClick={skipToNext}
+                            className="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors flex items-center gap-2"
+                          >
+                            <FiSkipForward className="text-sm" />
+                            Skip
+                          </button>
+                        </>
+                      )}
+
+                      {callingStatus === "paused" && (
+                        <button
+                          onClick={resumeCalling}
+                          className="px-6 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors flex items-center gap-2"
+                        >
+                          <FiPlay className="text-sm" />
+                          Resume
+                        </button>
+                      )}
+
+                      {(callingStatus === "completed" ||
+                        callingStatus === "paused") && (
+                        <button
+                          onClick={resetCalling}
+                          className="px-6 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
+                        >
+                          Reset
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Call Results */}
+                  {callResults.length > 0 && (
+                    <div>
+                      <h4 className="text-lg font-semibold text-gray-800 mb-4">
+                        Call Results
+                      </h4>
+                      <div className="max-h-64 overflow-y-auto">
+                        {callResults.map((result, index) => (
+                          <div
+                            key={index}
+                            className={`p-3 mb-2 rounded-lg ${
+                              result.success
+                                ? "bg-green-50 border border-green-200"
+                                : "bg-red-50 border border-red-200"
+                            }`}
+                          >
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <h6 className="font-semibold text-gray-800">
+                                  {result.contact.name}
+                                </h6>
+                                <p className="text-sm text-gray-600">
+                                  {result.contact.phone}
+                                </p>
+                                <p className="text-xs text-gray-500">
+                                  Group: {result.group?.name || "Unknown"}
+                                </p>
+                              </div>
+                              <div className="text-right">
+                                <span
+                                  className={`text-xs px-2 py-1 rounded ${
+                                    result.success
+                                      ? "bg-green-100 text-green-800"
+                                      : "bg-red-100 text-red-800"
+                                  }`}
+                                >
+                                  {result.success ? "Success" : "Failed"}
+                                </span>
+                                <div className="text-xs text-gray-500 mt-1">
+                                  {result.timestamp.toLocaleTimeString()}
+                                </div>
+                              </div>
+                            </div>
+                            {result.error && (
+                              <p className="text-sm text-red-600 mt-2">
+                                Error: {result.error}
+                              </p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Groups Modal */}
+      {showAddGroupsModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg w-11/12 max-w-4xl max-h-[90vh] overflow-y-auto shadow-2xl add-groups-modal">
+            <div className="flex justify-between items-center p-6 border-b border-gray-200">
+              <h3 className="m-0 text-gray-800">Add Groups to Campaign</h3>
+              <button
+                className="bg-none border-none text-2xl cursor-pointer text-gray-500 hover:text-gray-700 p-0 w-8 h-8 flex items-center justify-center"
+                onClick={handleCloseAddGroupsModal}
+              >
+                <FiX />
+              </button>
+            </div>
+
+            <div className="p-6">
+              <div className="mb-6">
+                <h4 className="text-lg font-semibold text-gray-800 mb-4">
+                  Available Groups
+                </h4>
+                <p className="text-sm text-gray-600 mb-4">
+                  Select groups to add to this campaign. Only groups not already
+                  in the campaign are shown.
+                </p>
+
+                {getAvailableGroupsForCampaign().length === 0 ? (
+                  <div className="text-center py-8 bg-gray-50 rounded-lg">
+                    <FiUsers className="mx-auto text-4xl text-gray-400 mb-4" />
+                    <h5 className="text-lg font-medium text-gray-600 mb-2">
+                      No available groups
+                    </h5>
+                    <p className="text-gray-500">
+                      All groups are already in this campaign
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {getAvailableGroupsForCampaign().map((group) => (
+                      <div
+                        key={group._id}
+                        className="border border-gray-200 rounded-lg p-4 hover:border-green-500 hover:bg-green-50 transition-colors cursor-pointer"
+                        onClick={() => {
+                          const currentSelected = selectedGroups.filter(
+                            (id) => !campaignGroups.some((cg) => cg._id === id)
+                          );
+                          if (currentSelected.includes(group._id)) {
+                            setSelectedGroups(
+                              currentSelected.filter((id) => id !== group._id)
+                            );
+                          } else {
+                            setSelectedGroups([...currentSelected, group._id]);
+                          }
+                        }}
+                      >
+                        <div className="flex items-center justify-between mb-3">
+                          <h5 className="font-semibold text-gray-800">
+                            {group.name}
+                          </h5>
+                          <div
+                            className={`w-5 h-5 rounded border-2 ${
+                              selectedGroups.includes(group._id) &&
+                              !campaignGroups.some((cg) => cg._id === group._id)
+                                ? "bg-green-500 border-green-500"
+                                : "border-gray-300"
+                            } flex items-center justify-center`}
+                          >
+                            {selectedGroups.includes(group._id) &&
+                              !campaignGroups.some(
+                                (cg) => cg._id === group._id
+                              ) && (
+                                <svg
+                                  className="w-3 h-3 text-white"
+                                  fill="currentColor"
+                                  viewBox="0 0 20 20"
+                                >
+                                  <path
+                                    fillRule="evenodd"
+                                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                                    clipRule="evenodd"
+                                  />
+                                </svg>
+                              )}
+                          </div>
+                        </div>
+                        <p className="text-sm text-gray-600 mb-2">
+                          {group.description}
+                        </p>
+                        <div className="text-xs text-gray-500">
+                          {group.contacts?.length || 0} contacts
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
+                <button
+                  onClick={handleCloseAddGroupsModal}
+                  className="px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    const groupsToAdd = selectedGroups.filter(
+                      (id) => !campaignGroups.some((cg) => cg._id === id)
+                    );
+                    handleAddSpecificGroupsToCampaign(groupsToAdd);
+                  }}
+                  disabled={
+                    addingGroups ||
+                    selectedGroups.filter(
+                      (id) => !campaignGroups.some((cg) => cg._id === id)
+                    ).length === 0
+                  }
+                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                >
+                  {addingGroups ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      Adding...
+                    </>
+                  ) : (
+                    <>
+                      <FiPlus className="w-4 h-4" />
+                      Add to Campaign
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

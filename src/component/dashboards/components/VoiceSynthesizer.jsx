@@ -26,6 +26,29 @@ const VoiceSynthesizer = ({
     setError("");
 
     try {
+      const supportedSpeakers = new Set([
+        "abhilash",
+        "anushka",
+        "karun",
+        "manisha",
+        "vidya",
+        "arya",
+        "hitesh",
+      ]);
+
+      const getDefaultSpeakerForLanguage = (lang) =>
+        (lang || "en").toLowerCase() === "hi" ? "anushka" : "abhilash";
+
+      const sanitizeSpeaker = (lang, requested) => {
+        if (!requested || typeof requested !== "string") {
+          return getDefaultSpeakerForLanguage(lang);
+        }
+        const s = requested.toLowerCase();
+        return supportedSpeakers.has(s)
+          ? s
+          : getDefaultSpeakerForLanguage(lang);
+      };
+
       const response = await fetch(
         `${API_BASE_URL}/client/voice/synthesize?clientId=${clientId}`,
         {
@@ -34,12 +57,22 @@ const VoiceSynthesizer = ({
             "Content-Type": "application/json",
             Authorization: `Bearer ${sessionStorage.getItem("clienttoken")}`,
           },
-          body: JSON.stringify({ text, language, speaker }),
+          body: JSON.stringify({
+            text,
+            language,
+            speaker: sanitizeSpeaker(language, speaker),
+          }),
         }
       );
       const data = await response.json();
       if (!response.ok || !data.audioBase64) {
-        throw new Error(data.error || "Failed to generate audio");
+        const errMsg =
+          typeof data.error === "string"
+            ? data.error
+            : data && typeof data === "object"
+            ? JSON.stringify(data)
+            : "Failed to generate audio";
+        throw new Error(errMsg);
       }
       // Convert base64 to Blob for playback
       const audioBlob = b64toBlob(data.audioBase64, "audio/mpeg");
