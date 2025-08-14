@@ -40,8 +40,14 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
   );
   const [agents, setAgents] = useState([]);
   const [editingAgent, setEditingAgent] = useState(null);
-  const [activeSection, setActiveSection] = useState("agents");
-  const [activeTab, setActiveTab] = useState("list"); // For agents subsections
+  const [activeSection, setActiveSection] = useState(() => {
+    // Get persisted section from localStorage, default to "agents"
+    return localStorage.getItem("clientDashboard_activeSection") || "agents";
+  });
+  const [activeTab, setActiveTab] = useState(() => {
+    // Get persisted tab from localStorage, default to "list"
+    return localStorage.getItem("clientDashboard_activeTab") || "list";
+  });
   const [isApproved, setIsApproved] = useState(null);
   const [isProfileCompleted, setIsProfileCompleted] = useState(null);
 
@@ -118,7 +124,7 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
   const handleAgentSaved = () => {
     fetchAgents();
     setEditingAgent(null);
-    setActiveTab("list");
+    persistTabChange("list");
   };
 
   const handleEditAgent = (agent) => {
@@ -154,19 +160,38 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
     }
   };
 
+  // Function to persist section changes
+  const persistSectionChange = (section) => {
+    setActiveSection(section);
+    localStorage.setItem("clientDashboard_activeSection", section);
+
+    // Reset to default tab when changing sections
+    if (section === "agents") {
+      setActiveTab("list");
+      localStorage.setItem("clientDashboard_activeTab", "list");
+    }
+
+    setEditingAgent(null);
+  };
+
+  // Function to persist tab changes
+  const persistTabChange = (tab) => {
+    setActiveTab(tab);
+    localStorage.setItem("clientDashboard_activeTab", tab);
+  };
+
   const handleClientChange = (newClientId) => {
     setCurrentClient(newClientId);
+    // Reset to default when changing clients
     setActiveSection("agents");
     setActiveTab("list");
+    localStorage.setItem("clientDashboard_activeSection", "agents");
+    localStorage.setItem("clientDashboard_activeTab", "list");
     setEditingAgent(null);
   };
 
   const handleSectionChange = (section) => {
-    setActiveSection(section);
-    if (section === "agents") {
-      setActiveTab("list");
-    }
-    setEditingAgent(null);
+    persistSectionChange(section);
   };
 
   const renderMainContent = () => {
@@ -357,7 +382,7 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
                         ? "bg-black text-white"
                         : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
                     }`}
-                    onClick={() => setActiveTab("list")}
+                    onClick={() => persistTabChange("list")}
                   >
                     Agents ({agents.length})
                   </button>
@@ -368,7 +393,7 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
                         ? "bg-black text-white"
                         : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
                     }`}
-                    onClick={() => setActiveTab("api-keys")}
+                    onClick={() => persistTabChange("api-keys")}
                   >
                     API Keys
                   </button>
@@ -378,7 +403,7 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
                         ? "bg-black text-white"
                         : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
                     }`}
-                    onClick={() => setActiveTab("settings")}
+                    onClick={() => persistTabChange("settings")}
                   >
                     Settings
                   </button>
@@ -387,7 +412,7 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
                 <button
                   className="px-5 py-3 text-sm font-medium rounded-md transition-all bg-black text-white hover:bg-gray-800"
                   onClick={() => {
-                    setActiveTab("form");
+                    persistTabChange("form");
                     setEditingAgent(null);
                   }}
                 >
@@ -411,7 +436,7 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
                   agent={editingAgent}
                   onSave={handleAgentSaved}
                   onCancel={() => {
-                    setActiveTab("list");
+                    persistTabChange("list");
                     setEditingAgent(null);
                   }}
                   clientId={currentClient}
@@ -450,9 +475,9 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
 
       case "mybusiness":
         return <MyBusiness />;
-      
+
       case "mydials":
-        return <MyDials/>
+        return <MyDials />;
 
       default:
         return <div>Select a section from the sidebar</div>;
