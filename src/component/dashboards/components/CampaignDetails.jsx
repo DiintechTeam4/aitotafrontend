@@ -34,6 +34,16 @@ function CampaignDetails({ campaignId, onBack }) {
   const [loadingCampaignGroups, setLoadingCampaignGroups] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(null);
   const [showAddGroupsModal, setShowAddGroupsModal] = useState(false);
+  // Call details states
+  const [showCallDetailsModal, setShowCallDetailsModal] = useState(false);
+  const [callDetails, setCallDetails] = useState([]);
+  const [callDetailsLoading, setCallDetailsLoading] = useState(false);
+  const [callDetailsPage, setCallDetailsPage] = useState(1);
+  const [callDetailsLimit] = useState(20);
+  const [callDetailsMeta, setCallDetailsMeta] = useState({
+    totalPages: 0,
+    totalLogs: 0,
+  });
 
   // API base URL
   const API_BASE = `${API_BASE_URL}/client`;
@@ -42,6 +52,7 @@ function CampaignDetails({ campaignId, onBack }) {
     fetchAvailableGroups();
     fetchAgents();
     fetchClientData();
+    fetchCampaignGroups();
     // Remove fetchCampaignGroups from here to prevent re-rendering issues
   }, [campaignId]);
 
@@ -127,15 +138,19 @@ function CampaignDetails({ campaignId, onBack }) {
         apiKey = apiKeysResult.data[0].key;
       }
 
+      // Generate unique ID for this campaign call (same format as agent calls)
+      const uniqueId = `aidial-${Date.now()}-${Math.random()
+        .toString(36)
+        .substr(2, 9)}`;
+
       const callPayload = {
         transaction_id: "CTI_BOT_DIAL",
         phone_num: contact.phone.replace(/[^\d]/g, ""), // Remove non-digits
-        uniqueid: `abc123xyz`,
+        uniqueid: uniqueId,
         callerid: "168353225",
         uuid: clientData?.clientId || "client-uuid-001",
         custom_param: {
-          a: `b`,
-          c: "d",
+          uniqueid: uniqueId,
         },
         resFormat: 3,
       };
@@ -155,12 +170,30 @@ function CampaignDetails({ campaignId, onBack }) {
 
       const result = await response.json();
 
+      // If call is successful, store the unique ID in the campaign
+      if (result.success && campaign?._id) {
+        try {
+          await fetch(`${API_BASE}/campaigns/${campaign._id}/unique-ids`, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ uniqueId }),
+          });
+        } catch (error) {
+          console.error("Failed to store unique ID in campaign:", error);
+          // Don't fail the call if this fails
+        }
+      }
+
       return {
         success: result.success,
         data: result.data,
         contact: contact,
         group: campaignGroups[currentGroupIndex],
         timestamp: new Date(),
+        uniqueId: uniqueId, // Include unique ID in result for tracking
       };
     } catch (error) {
       console.error("Error making voice bot call:", error);
@@ -478,6 +511,43 @@ function CampaignDetails({ campaignId, onBack }) {
     }
   };
 
+  // Fetch campaign call logs
+  const fetchCampaignCallLogs = async (page = 1) => {
+    try {
+      if (!campaign?._id) return;
+      setCallDetailsLoading(true);
+      const token = sessionStorage.getItem("clienttoken");
+      const params = new URLSearchParams({
+        page: String(page),
+        limit: String(callDetailsLimit),
+        sortBy: "createdAt",
+        sortOrder: "desc",
+      });
+      const resp = await fetch(
+        `${API_BASE}/campaigns/${campaign._id}/call-logs?${params.toString()}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+      const result = await resp.json();
+      if (!resp.ok || result.success === false) {
+        throw new Error(result.error || "Failed to fetch call logs");
+      }
+      setCallDetails(result.data || []);
+      setCallDetailsMeta(result.pagination || { totalPages: 0, totalLogs: 0 });
+      setCallDetailsPage(page);
+    } catch (e) {
+      console.error("Error fetching campaign call logs:", e);
+      setCallDetails([]);
+      setCallDetailsMeta({ totalPages: 0, totalLogs: 0 });
+    } finally {
+      setCallDetailsLoading(false);
+    }
+  };
+
   const handleCloseAddGroupsModal = () => {
     setShowAddGroupsModal(false);
     // Clear selected groups that are not in the campaign
@@ -789,6 +859,16 @@ function CampaignDetails({ campaignId, onBack }) {
               >
                 <FiPhone className="w-4 h-4" />
                 Make Calls
+              </button>
+              <button
+                onClick={() => {
+                  setShowCallDetailsModal(true);
+                  fetchCampaignCallLogs(1);
+                }}
+                className="px-3 py-1 text-sm bg-purple-100 text-purple-700 rounded-md hover:bg-purple-200 flex items-center gap-2"
+                disabled={!campaign}
+              >
+                Call Details
               </button>
               <button
                 onClick={() => setShowAddGroupsModal(true)}
@@ -1299,6 +1379,130 @@ function CampaignDetails({ campaignId, onBack }) {
                     </>
                   )}
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Call Details Modal */}
+      {showCallDetailsModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg w-11/12 max-w-5xl max-h-[90vh] overflow-y-auto shadow-2xl">
+            <div className="flex justify-between items-center p-6 border-b border-gray-200">
+              <h3 className="m-0 text-gray-800">Call Details</h3>
+              <button
+                className="bg-none border-none text-2xl cursor-pointer text-gray-500 hover:text-gray-700 p-0 w-8 h-8 flex items-center justify-center"
+                onClick={() => setShowCallDetailsModal(false)}
+              >
+                <FiX />
+              </button>
+            </div>
+            <div className="p-6">
+              {callDetailsLoading ? (
+                <div className="text-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                  <p className="text-gray-500 mt-2">Loading call logs...</p>
+                </div>
+              ) : callDetails.length === 0 ? (
+                <div className="text-center py-12 bg-gray-50 rounded-lg">
+                  <FiUsers className="mx-auto text-4xl text-gray-400 mb-4" />
+                  <h5 className="text-lg font-medium text-gray-600 mb-2">
+                    No call logs
+                  </h5>
+                  <p className="text-gray-500">
+                    No calls found for this campaign yet.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {callDetails.map((log) => (
+                    <div
+                      key={log._id}
+                      className="border border-gray-200 rounded-lg p-4"
+                    >
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <div className="text-sm text-gray-500">Time</div>
+                          <div className="font-semibold">
+                            {new Date(
+                              log.createdAt || log.time
+                            ).toLocaleString()}
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-sm text-gray-500">Duration</div>
+                          <div className="font-semibold">
+                            {Math.max(0, log.duration || 0)}s
+                          </div>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-3">
+                        <div>
+                          <div className="text-sm text-gray-500">Mobile</div>
+                          <div className="font-medium">{log.mobile || "-"}</div>
+                        </div>
+                        <div>
+                          <div className="text-sm text-gray-500">Agent</div>
+                          <div className="font-medium">
+                            {log.agentId?.agentName || "-"}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-sm text-gray-500">
+                            Lead Status
+                          </div>
+                          <div className="font-medium capitalize">
+                            {log.leadStatus || "-"}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="mt-3 text-xs text-gray-500 break-all">
+                        <span className="font-semibold">uniqueId:</span>{" "}
+                        {log.metadata?.customParams?.uniqueid || "-"}
+                      </div>
+                      {log.transcript && (
+                        <details className="mt-3">
+                          <summary className="cursor-pointer text-sm text-blue-600">
+                            View transcript
+                          </summary>
+                          <pre className="whitespace-pre-wrap text-xs bg-gray-50 p-3 rounded mt-2 max-h-64 overflow-y-auto">
+                            {log.transcript}
+                          </pre>
+                        </details>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {/* Pagination */}
+              <div className="flex items-center justify-between mt-4">
+                <div className="text-sm text-gray-600">
+                  Page {callDetailsPage} of {callDetailsMeta.totalPages || 1} •
+                  Total {callDetailsMeta.totalLogs || 0}
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 disabled:opacity-50"
+                    onClick={() =>
+                      fetchCampaignCallLogs(Math.max(1, callDetailsPage - 1))
+                    }
+                    disabled={callDetailsPage <= 1 || callDetailsLoading}
+                  >
+                    Prev
+                  </button>
+                  <button
+                    className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 disabled:opacity-50"
+                    onClick={() => fetchCampaignCallLogs(callDetailsPage + 1)}
+                    disabled={
+                      callDetailsLoading ||
+                      (callDetailsMeta.totalPages &&
+                        callDetailsPage >= callDetailsMeta.totalPages)
+                    }
+                  >
+                    Next
+                  </button>
+                </div>
               </div>
             </div>
           </div>
