@@ -39,8 +39,12 @@ const CallLogs = ({ agentId, clientId }) => {
 
   const formatTime = (seconds) => {
     if (!seconds) return "0:00";
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
+
+    // Handle decimal seconds by rounding to nearest whole number
+    const roundedSeconds = Math.round(seconds);
+
+    const mins = Math.floor(roundedSeconds / 60);
+    const secs = roundedSeconds % 60;
     return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
 
