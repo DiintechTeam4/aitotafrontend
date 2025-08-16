@@ -265,6 +265,27 @@ const AgentDetails = ({
   const [liveTranscript, setLiveTranscript] = useState("");
   const [liveTranscriptLines, setLiveTranscriptLines] = useState([]);
   const logsPollRef = useRef(null);
+  
+  // Call stage and termination state (matching AgentList)
+  const [callTerminationReason, setCallTerminationReason] = useState("");
+  const [isTerminatingCall, setIsTerminatingCall] = useState(false);
+  const callStageRef = useRef("input");
+  const isCallConnectedRef = useRef(false);
+  const liveTranscriptRef = useRef("");
+  const callInitiatedTimeRef = useRef(null);
+  
+  // Update refs when state changes (prevent stale closures)
+  useEffect(() => {
+    callStageRef.current = callStage;
+  }, [callStage]);
+  
+  useEffect(() => {
+    isCallConnectedRef.current = isCallConnected;
+  }, [isCallConnected]);
+  
+  useEffect(() => {
+    liveTranscriptRef.current = liveTranscript;
+  }, [liveTranscript]);
 
   // WebSocket related states
   const [wsConnection, setWsConnection] = useState(null);
@@ -325,6 +346,7 @@ const AgentDetails = ({
   const silenceStartTimeRef = useRef(null);
 
   const callTimerRef = useRef(null);
+  const callTimeoutRef = useRef(null);
 
   // Call termination state
   const [callTerminationData, setCallTerminationData] = useState({
@@ -332,7 +354,6 @@ const AgentDetails = ({
     callSid: null,
     streamSid: null,
   });
-  const [isTerminatingCall, setIsTerminatingCall] = useState(false);
   const [showCallLogs, setShowCallLogs] = useState(false);
 
   // Debug logging function
@@ -425,6 +446,75 @@ const AgentDetails = ({
     }
   };
 
+  // Handle automatic call termination when call becomes inactive
+  const handleAutomaticCallTermination = (log) => {
+    console.log('Handling automatic call termination:', log);
+    
+    // Prevent multiple terminations
+    if (callStageRef.current === "terminated") {
+      console.log('Call already terminated, skipping...');
+      return;
+    }
+    
+    // Stop polling and timer
+    stopLogsPolling();
+    stopCallTimer();
+    
+    // Determine termination reason - PRIORITIZE isActive: false over leadStatus
+    let reason = "Call ended";
+    let detailedReason = "";
+    
+    // Check isActive status FIRST - this is the primary termination trigger
+    if (log.metadata?.isActive === false) {
+      reason = "Call disconnected";
+      detailedReason = "The call was automatically detected as inactive";
+    } else if (log.leadStatus) {
+      // Only check leadStatus if isActive is not false
+      switch (log.leadStatus) {
+        case 'not_connected':
+          reason = "Call disconnected";
+          detailedReason = "The call was disconnected from the mobile device or network";
+          break;
+        case 'junk_lead':
+          reason = "Call marked as junk lead";
+          detailedReason = "The call was classified as not valuable";
+          break;
+        case 'wrong_number':
+          reason = "Wrong number";
+          detailedReason = "The dialed number was incorrect or unreachable";
+          break;
+        case 'decline':
+          reason = "Call declined";
+          detailedReason = "The recipient declined the call";
+          break;
+        case 'maybe':
+          // Don't terminate for 'maybe' status - this indicates user is answering
+          console.log('Call has leadStatus: maybe - keeping call active (user is answering)');
+          return; // Exit without terminating
+        default:
+          reason = `Call ended (${log.leadStatus})`;
+          detailedReason = `Call terminated with status: ${log.leadStatus}`;
+      }
+    } else {
+      reason = "Call disconnected";
+      detailedReason = "The call connection was lost or terminated";
+    }
+    
+    console.log(`Call termination details: ${reason} - ${detailedReason}`);
+    
+    // Set termination reason
+    setCallTerminationReason(reason);
+    
+    // Update call stage to terminated
+    setCallStage("terminated");
+    setIsCallConnected(false);
+    
+    // Show alert when call is automatically terminated
+    alert(`Call Terminated: ${reason}\n\n${detailedReason}\n\nCall history will remain visible until you close the modal.`);
+    
+    // Don't auto-close modal - let user manually close to view history
+  };
+
   // Terminate the active call
   const terminateCall = async () => {
     try {
@@ -503,6 +593,50 @@ const AgentDetails = ({
     return `${minutes.toString().padStart(2, "0")}:${remainingSeconds
       .toString()
       .padStart(2, "0")}`;
+  };
+
+  // Format message timestamp for display
+  const formatMessageTime = (timestamp) => {
+    try {
+      const date = new Date(timestamp);
+      const now = new Date();
+      const diffInHours = (now - date) / (1000 * 60 * 60);
+      
+      // If message is from today, show time only
+      if (date.toDateString() === now.toDateString()) {
+        return date.toLocaleTimeString('en-US', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false
+        });
+      }
+      
+      // If message is from yesterday, show "Yesterday" and time
+      const yesterday = new Date(now);
+      yesterday.setDate(yesterday.getDate() - 1);
+      if (date.toDateString() === yesterday.toDateString()) {
+        return `Yesterday ${date.toLocaleTimeString('en-US', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false
+        })}`;
+      }
+      
+      // If message is older, show date and time
+      return date.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      });
+    } catch (error) {
+      return new Date().toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      });
+    }
   };
 
   // Start call duration timer
@@ -1531,6 +1665,7 @@ const AgentDetails = ({
       if (result.success) {
         setCallStage("connected");
         setIsCallConnected(true);
+        callInitiatedTimeRef.current = Date.now(); // Set call initiation time
         // Don't start timer yet - wait for first transcript (WhatsApp-like behavior)
         startLogsPolling(generatedUniqueId);
 
@@ -1558,6 +1693,13 @@ const AgentDetails = ({
     stopLogsPolling();
     const poll = async () => {
       try {
+        // Stop polling if call is already terminated
+        if (callStageRef.current === "terminated") {
+          console.log('Call already terminated, stopping polling');
+          stopLogsPolling();
+          return;
+        }
+        
         const params = new URLSearchParams({
           uniqueid: uniqueIdToTrack,
           clientId: String(clientId || ""),
@@ -1569,34 +1711,137 @@ const AgentDetails = ({
         if (!resp.ok) return;
         const data = await resp.json();
         const log = data?.logs?.[0];
-        if (log && typeof log.transcript === "string") {
-          if (log.transcript !== liveTranscript) {
-            setLiveTranscript(log.transcript);
-            const lines = log.transcript.split("\n").filter(Boolean);
-            setLiveTranscriptLines(lines);
-
-            // Start timer when first transcript is received (WhatsApp-like behavior)
-            if (
-              log.transcript.trim() !== "" &&
-              callDuration === 0 &&
-              !callTimerRef.current
-            ) {
-              console.log("First transcript received, starting call timer");
-              startCallTimer();
+        
+        if (log) {
+          // Calculate time since call was initiated (do this first)
+          const timeSinceInitiation = callInitiatedTimeRef.current ? Date.now() - callInitiatedTimeRef.current : 0;
+          const isInGracePeriod = timeSinceInitiation < 15000; // 15-second grace period
+          
+          // Check call status from metadata FIRST - this is the most important check
+          const active = log?.metadata?.isActive;
+          const leadStatus = log?.leadStatus;
+          
+          console.log('Polling call status:', { 
+            uniqueId: uniqueIdToTrack, 
+            isActive: active, 
+            leadStatus: leadStatus,
+            callStage: callStageRef.current,
+            timeSinceInitiation: timeSinceInitiation,
+            isInGracePeriod: isInGracePeriod
+          });
+          
+          // If we're in "connecting" stage and have transcript activity, transition to "connected"
+          if (callStageRef.current === "connecting" && log.transcript && log.transcript.trim() !== '') {
+            console.log('Call transitioning from connecting to connected due to transcript activity');
+            setCallStage("connected");
+          }
+          
+          // If we're in "connecting" stage and have any log activity (even without transcript), transition to "connected"
+          if (callStageRef.current === "connecting" && log && log.createdAt) {
+            const logAge = Date.now() - new Date(log.createdAt).getTime();
+            if (logAge < 30000) { // Log is recent (within 30 seconds)
+              console.log('Call transitioning from connecting to connected due to recent log activity');
+              setCallStage("connected");
             }
           }
-          const active = log?.metadata?.isActive;
-          if (active === false) {
-            stopLogsPolling();
+          
+          // Fallback: If we're in "connecting" stage for more than 10 seconds, transition to "connected"
+          if (callStageRef.current === "connecting" && timeSinceInitiation > 10000) {
+            console.log('Call transitioning from connecting to connected due to time elapsed');
+            setCallStage("connected");
+          }
+          
+          // Special handling for call being answered (user lifting the phone)
+          // Some backends might set specific status during this transition
+          if (callStageRef.current === "connecting" && leadStatus === "maybe") {
+            console.log('Call detected as being answered (leadStatus: maybe), keeping in connecting state');
+            // Don't terminate, just wait for more activity
+          }
+          
+          // Additional check for call being answered - look for specific metadata patterns
+          if (callStageRef.current === "connecting" && log.metadata) {
+            const metadata = log.metadata;
+            // Check for various indicators that the call is being answered
+            if (metadata.isActive === false && (leadStatus === "maybe" || !leadStatus)) {
+              console.log('Call detected as being answered (isActive: false, leadStatus: maybe), keeping in connecting state');
+              // Don't terminate, this is likely the transition period when user is lifting the phone
+            }
+          }
+          
+          // Check if call is inactive - ONLY check isActive status for termination (after grace period)
+          if (active === false && !isInGracePeriod) {
+            console.log('Call detected as inactive (isActive: false), automatically terminating...');
+            handleAutomaticCallTermination(log);
+            return; // Stop processing if call is terminated
+          }
+          
+          // Check if transcript exists and process it
+          if (typeof log.transcript === 'string') {
+            if (log.transcript !== liveTranscriptRef.current) {
+              setLiveTranscript(log.transcript);
+              
+              // Process transcript lines with timestamps
+              const lines = log.transcript.split('\n').filter(Boolean);
+              
+              // Add timestamps to lines if they don't have them
+              const linesWithTimestamps = lines.map(line => {
+                // If line already has a timestamp, keep it
+                if (line.match(/^\[[^\]]+\]/)) {
+                  return line;
+                }
+                
+                // If no timestamp, add current time
+                const now = new Date();
+                const timestamp = now.toISOString();
+                return `[${timestamp}] ${line}`;
+              });
+              
+              setLiveTranscriptLines(linesWithTimestamps);
+            
+              // Start timer when first transcript is received (WhatsApp-like behavior)
+              if (log.transcript.trim() !== '' && callDuration === 0 && !callTimerRef.current) {
+                console.log('First transcript received, starting call timer');
+                startCallTimer();
+              }
+              
+              // Clear timeout if we detect transcript activity
+              if (callTimeoutRef.current && log.transcript.trim() !== '') {
+                clearTimeout(callTimeoutRef.current);
+                callTimeoutRef.current = null;
+              }
+            }
+          }
+          
+          // Additional check: if no log found or log is very old, consider call disconnected (only after grace period)
+          if (!log || (log.createdAt && (Date.now() - new Date(log.createdAt).getTime()) > 300000)) { // 5 minutes
+            console.log('No recent log activity, considering call disconnected');
+            if (callStageRef.current === "connected" && !isInGracePeriod) {
+              handleAutomaticCallTermination({
+                ...log,
+                leadStatus: 'not_connected',
+                metadata: { ...log?.metadata, isActive: false }
+              });
+            }
           }
         }
       } catch (e) {
-        // silent
+        console.error('Error in call polling:', e);
+        // If polling fails multiple times, consider call disconnected (only after grace period)
+        const timeSinceInitiation = callInitiatedTimeRef.current ? Date.now() - callInitiatedTimeRef.current : 0;
+        const isInGracePeriod = timeSinceInitiation < 15000; // 15-second grace period
+        
+        if (callStageRef.current === "connected" && !isInGracePeriod) {
+          console.log('Polling failed, considering call disconnected');
+          handleAutomaticCallTermination({
+            leadStatus: 'not_connected',
+            metadata: { isActive: false }
+          });
+        }
       }
     };
     // immediate and interval
     poll();
-    logsPollRef.current = setInterval(poll, 2000);
+    logsPollRef.current = setInterval(poll, 1500);
   };
 
   const cancelCall = () => {
@@ -1612,6 +1857,8 @@ const AgentDetails = ({
     setDialUniqueId("");
     setLiveTranscript("");
     setLiveTranscriptLines([]);
+    setCallTerminationReason("");
+    callInitiatedTimeRef.current = null;
     stopLogsPolling();
     stopCallTimer();
   };
@@ -2324,6 +2571,7 @@ const AgentDetails = ({
                     {callStage === "input" && "Enter Name and Phone Number"}
                     {callStage === "connecting" && "Connecting..."}
                     {callStage === "connected" && "Call Connected"}
+                    {callStage === "terminated" && "Call Ended"}
                   </h3>
                   {/* Call Duration Display in Header */}
                   {(callStage === "connecting" ||
@@ -2467,33 +2715,132 @@ const AgentDetails = ({
                     </div>
                     <div className="h-64 overflow-y-auto border border-gray-200 rounded-lg p-4 bg-white">
                       {liveTranscriptLines.length === 0 ? (
-                        <div className="text-gray-500 text-sm"></div>
+                        <div className="text-gray-500 text-sm">Waiting for conversation...</div>
                       ) : (
-                        liveTranscriptLines.map((line, idx) => {
-                          const isUser = line.includes("] User (");
-                          const text = line.replace(
-                            /^\[[^\]]+\]\s(User|AI)\s\([^\)]+\):\s*/,
-                            ""
-                          );
-                          return (
-                            <div
-                              key={idx}
-                              className={`flex mb-2 ${
-                                isUser ? "justify-end" : "justify-start"
-                              }`}
-                            >
-                              <div
-                                className={`max-w-[80%] px-3 py-2 rounded-lg text-sm ${
-                                  isUser
-                                    ? "bg-green-600 text-white"
-                                    : "bg-gray-100 text-gray-800"
-                                }`}
-                              >
-                                <div>{text}</div>
+                        <>
+                          {liveTranscriptLines.map((line, idx) => {
+                            const isUser = line.includes('] User (');
+                            const text = line.replace(/^\[[^\]]+\]\s(User|AI)\s\([^\)]+\):\s*/, '');
+                            
+                            // Extract timestamp from the line if available, otherwise use current time
+                            let messageTime = new Date();
+                            const timestampMatch = line.match(/\[([^\]]+)\]/);
+                            if (timestampMatch) {
+                              try {
+                                // Try to parse the timestamp from the log format
+                                const timestampStr = timestampMatch[1];
+                                if (timestampStr.includes('T') || timestampStr.includes('-')) {
+                                  messageTime = new Date(timestampStr);
+                                } else {
+                                  // If it's a simple timestamp, use current time
+                                  messageTime = new Date();
+                                }
+                              } catch (e) {
+                                // If parsing fails, use current time
+                                messageTime = new Date();
+                              }
+                            }
+                            
+                            // Format time using the new function for better display
+                            const timeString = formatMessageTime(messageTime);
+                            
+                            return (
+                              <div key={idx} className={`flex mb-2 ${isUser ? 'justify-end' : 'justify-start'}`}>
+                                <div className={`max-w-[80%] px-3 py-2 rounded-lg text-sm ${isUser ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-800'} relative`}>
+                                  <div className="mb-1">{text}</div>
+                                  <div className={`text-xs ${isUser ? 'text-green-100' : 'text-gray-500'} text-right flex items-center gap-1`}>
+                                    {timeString}
+                                    {/* Show checkmark for user messages to indicate delivery */}
+                                    {isUser && (
+                                      <span className="text-green-200">✓</span>
+                                    )}
+                                  </div>
+                                </div>
                               </div>
-                            </div>
-                          );
-                        })
+                            );
+                          })}
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {callStage === "terminated" && (
+                <div className="space-y-4">
+                  {/* Simple termination header */}
+                  <div className="flex items-center justify-between p-4 bg-red-50 rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+                      <span className="text-red-700 font-medium">
+                        Call Ended
+                      </span>
+                      {callDuration > 0 && (
+                        <div className="text-sm text-red-600 font-mono">
+                          ⏱️ {formatCallDuration(callDuration)}
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      onClick={cancelCall}
+                      className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm"
+                    >
+                      Close
+                    </button>
+                  </div>
+
+                  {/* Call Logs/Transcripts - Show after call termination */}
+                  <div className="space-y-2">
+                    <div className="text-sm font-semibold text-gray-700">
+                      Call History
+                    </div>
+                    <div className="h-64 overflow-y-auto border border-gray-200 rounded-lg p-4 bg-white">
+                      {liveTranscriptLines.length === 0 ? (
+                        <div className="text-gray-500 text-sm">No call logs available...</div>
+                      ) : (
+                        <>
+                          {liveTranscriptLines.map((line, idx) => {
+                            const isUser = line.includes('] User (');
+                            const text = line.replace(/^\[[^\]]+\]\s(User|AI)\s\([^\)]+\):\s*/, '');
+                            
+                            // Extract timestamp from the line if available, otherwise use current time
+                            let messageTime = new Date();
+                            const timestampMatch = line.match(/\[([^\]]+)\]/);
+                            if (timestampMatch) {
+                              try {
+                                // Try to parse the timestamp from the log format
+                                const timestampStr = timestampMatch[1];
+                                if (timestampStr.includes('T') || timestampStr.includes('-')) {
+                                  messageTime = new Date(timestampStr);
+                                } else {
+                                  // If it's a simple timestamp, use current time
+                                  messageTime = new Date();
+                                }
+                              } catch (e) {
+                                // If parsing fails, use current time
+                                messageTime = new Date();
+                              }
+                            }
+                            
+                            // Format time using the new function for better display
+                            const timeString = formatMessageTime(messageTime);
+                            
+                            return (
+                              <div key={idx} className={`flex mb-2 ${isUser ? 'justify-end' : 'justify-start'}`}>
+                                <div className={`max-w-[80%] px-3 py-2 rounded-lg text-sm ${isUser ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-800'} relative`}>
+                                  <div className="mb-1">{text}</div>
+                                  <div className={`text-xs ${isUser ? 'text-green-100' : 'text-gray-500'} text-right flex items-center gap-1`}>
+                                    {timeString}
+                                    {/* Show checkmark for user messages to indicate delivery */}
+                                    {isUser && (
+                                      <span className="text-green-200">✓</span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </>
                       )}
                     </div>
                   </div>
