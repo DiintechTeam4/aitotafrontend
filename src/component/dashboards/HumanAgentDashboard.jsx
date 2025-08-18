@@ -22,6 +22,7 @@ import { API_BASE_URL } from "../../config";
 import PerformanceKPIs from "./components/PerformanceKPIs";
 import InBoundSection from "./components/InBoundSection";
 import OutboundSection from "./components/OutboundSection";
+import StaffAgents from "./components/StaffAgents";
 
 const HumanAgentDashboard = ({ userData, onLogout }) => {
   const [humanAgent, setHumanAgent] = useState(null);
@@ -163,11 +164,14 @@ const HumanAgentDashboard = ({ userData, onLogout }) => {
           <div className="h-full flex flex-col">
             <div className="bg-white border-b border-gray-200 px-8 py-6">
               <h2 className="text-3xl font-bold text-gray-900 mb-4">
-                AI Agents
+                Agents
               </h2>
               <p className="text-gray-600 text-lg">
-                Manage and monitor AI agents
+                Handle agents assigned to a staff
               </p>
+            </div>
+            <div className="flex-1 p-8 overflow-y-auto">
+              <StaffAgents />
             </div>
           </div>
         );

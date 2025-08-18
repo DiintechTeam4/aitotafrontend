@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   FiX,
   FiPlus,
@@ -16,9 +16,6 @@ import {
 import { API_BASE_URL } from "../../../config";
 
 function CampaignDetails({ campaignId, onBack }) {
-  // Debug: Check if icons are imported
-  console.log("Icons imported:", { FiPhone, FiUsers, FiPlus, FiBarChart2 });
-
   const [campaign, setCampaign] = useState(null);
   const [availableGroups, setAvailableGroups] = useState([]);
   const [selectedGroups, setSelectedGroups] = useState([]);
@@ -31,11 +28,11 @@ function CampaignDetails({ campaignId, onBack }) {
 
   const [showCallModal, setShowCallModal] = useState(false);
   const [callingStatus, setCallingStatus] = useState("idle"); // idle, calling, paused, completed
-  const [currentGroupIndex, setCurrentGroupIndex] = useState(0);
   const [currentContactIndex, setCurrentContactIndex] = useState(0);
   const [callResults, setCallResults] = useState([]);
   const [clientData, setClientData] = useState(null);
   const [loadingAgents, setLoadingAgents] = useState(false);
+  const [isStartingCall, setIsStartingCall] = useState(false); // Prevent multiple simultaneous start calls
   const [campaignGroups, setCampaignGroups] = useState([]);
   const [loadingCampaignGroups, setLoadingCampaignGroups] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(null);
@@ -51,6 +48,20 @@ function CampaignDetails({ campaignId, onBack }) {
     totalLogs: 0,
   });
 
+  // Live call logs states
+  const [selectedCall, setSelectedCall] = useState(null);
+  const [showLiveCallModal, setShowLiveCallModal] = useState(false);
+  const [liveTranscript, setLiveTranscript] = useState("");
+  const [liveTranscriptLines, setLiveTranscriptLines] = useState([]);
+  const [isPolling, setIsPolling] = useState(false);
+  const [liveCallDetails, setLiveCallDetails] = useState(null);
+  const [callConnectionStatus, setCallConnectionStatus] = useState("connected"); // connected, not_connected
+  const [callResultsConnectionStatus, setCallResultsConnectionStatus] =
+    useState({}); // Track connection status for each call result
+  const logsPollRef = useRef(null);
+  const transcriptRef = useRef(null);
+  const connectionTimeoutRef = useRef(null);
+
   // Campaign contacts management states
   const [campaignContacts, setCampaignContacts] = useState([]);
   const [showContactsModal, setShowContactsModal] = useState(false);
@@ -61,17 +72,256 @@ function CampaignDetails({ campaignId, onBack }) {
     email: "",
   });
   const [loadingContacts, setLoadingContacts] = useState(false);
+  const [showRestoreNotification, setShowRestoreNotification] = useState(false);
 
   // API base URL
   const API_BASE = `${API_BASE_URL}/client`;
+
+  // State persistence functions
+  const getStorageKey = (key) => `campaign_${campaignId}_${key}`;
+
+  const saveCallingState = () => {
+    const state = {
+      showCallModal,
+      callingStatus,
+      currentContactIndex,
+      callResults,
+      selectedAgent,
+      callResultsConnectionStatus,
+      timestamp: Date.now(),
+    };
+    localStorage.setItem(getStorageKey("callingState"), JSON.stringify(state));
+  };
+
+  const loadCallingState = () => {
+    try {
+      const saved = localStorage.getItem(getStorageKey("callingState"));
+      if (saved) {
+        const state = JSON.parse(saved);
+        // Only restore if the saved state is less than 24 hours old
+        if (Date.now() - state.timestamp < 24 * 60 * 60 * 1000) {
+          setShowCallModal(state.showCallModal || false);
+          setCallingStatus(state.callingStatus || "idle");
+          setCurrentContactIndex(state.currentContactIndex || 0);
+
+          // Convert timestamp strings back to Date objects in callResults
+          const restoredCallResults = (state.callResults || []).map(
+            (result) => ({
+              ...result,
+              timestamp: new Date(result.timestamp),
+            })
+          );
+          setCallResults(restoredCallResults);
+
+          // Restore connection status for call results
+          if (state.callResultsConnectionStatus) {
+            setCallResultsConnectionStatus(state.callResultsConnectionStatus);
+          }
+
+          setSelectedAgent(state.selectedAgent || null);
+          return true;
+        } else {
+          // Clear old state
+          localStorage.removeItem(getStorageKey("callingState"));
+        }
+      }
+    } catch (error) {
+      console.error("Error loading calling state:", error);
+    }
+    return false;
+  };
+
+  const clearCallingState = () => {
+    localStorage.removeItem(getStorageKey("callingState"));
+  };
+
+  // Utility function to safely format timestamps
+  const safeFormatTimestamp = (timestamp) => {
+    if (!timestamp) return "Unknown";
+    try {
+      const date = timestamp instanceof Date ? timestamp : new Date(timestamp);
+      if (isNaN(date.getTime())) return "Invalid Date";
+      return date.toLocaleTimeString();
+    } catch (error) {
+      console.error("Error formatting timestamp:", error);
+      return "Error";
+    }
+  };
+
+  // Function to check connection status for a specific call result
+  const checkCallResultConnection = async (uniqueId, resultIndex) => {
+    try {
+      const token = sessionStorage.getItem("clienttoken");
+      const response = await fetch(
+        `${API_BASE_URL}/logs?uniqueid=${uniqueId}&limit=1`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+
+      if (result.logs && result.logs.length > 0) {
+        // Found logs, mark as connected
+        setCallResultsConnectionStatus((prev) => ({
+          ...prev,
+          [uniqueId]: "connected",
+        }));
+      } else {
+        // No logs found, mark as not connected
+        setCallResultsConnectionStatus((prev) => ({
+          ...prev,
+          [uniqueId]: "not_connected",
+        }));
+      }
+    } catch (error) {
+      console.error("Error checking connection status:", error);
+      // On error, mark as not connected
+      setCallResultsConnectionStatus((prev) => ({
+        ...prev,
+        [uniqueId]: "not_connected",
+      }));
+    }
+  };
+
+  const manualSaveState = () => {
+    saveCallingState();
+    // Show a temporary success message
+    const saveButton = document.querySelector(
+      '[title="Manually save your calling progress"]'
+    );
+    if (saveButton) {
+      const originalText = saveButton.innerHTML;
+      saveButton.innerHTML = `
+        <svg class="w-4 h-4 mr-1 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+        </svg>
+        Saved!
+      `;
+      saveButton.className =
+        "inline-flex items-center px-4 py-2 text-sm text-green-600 bg-green-50 border border-green-200 rounded-lg transition-all duration-200";
+
+      setTimeout(() => {
+        saveButton.innerHTML = originalText;
+        saveButton.className =
+          "inline-flex items-center px-4 py-2 text-sm text-blue-600 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 hover:border-blue-300 transition-all duration-200";
+      }, 2000);
+    }
+  };
+
+  // Save state whenever calling-related states change
+  useEffect(() => {
+    if (campaignId) {
+      saveCallingState();
+    }
+  }, [
+    showCallModal,
+    callingStatus,
+    currentContactIndex,
+    callResults,
+    selectedAgent,
+    callResultsConnectionStatus,
+    campaignId,
+  ]);
+
   useEffect(() => {
     fetchCampaignDetails();
     fetchAvailableGroups();
     fetchAgents();
     fetchClientData();
     fetchCampaignGroups();
-    // Remove fetchCampaignGroups from here to prevent re-rendering issues
   }, [campaignId]);
+
+  // Fetch campaign contacts when campaign data is available
+  useEffect(() => {
+    if (campaign?._id) {
+      fetchCampaignContacts();
+    }
+  }, [campaign]);
+
+  // Load calling state when campaign contacts are available
+  useEffect(() => {
+    if (campaignContacts.length > 0 && campaignId) {
+      const hasRestoredState = loadCallingState();
+      if (hasRestoredState && callingStatus === "calling") {
+        // If we restored a calling state, show a notification
+        setShowRestoreNotification(true);
+        // Auto-hide notification after 5 seconds
+        setTimeout(() => setShowRestoreNotification(false), 5000);
+      }
+    }
+  }, [campaignContacts, campaignId]);
+
+  // Auto-resume calling if status was 'calling' before reload
+  useEffect(() => {
+    if (
+      callingStatus === "calling" &&
+      campaignContacts.length > 0 &&
+      selectedAgent
+    ) {
+      // Resume calling automatically after a short delay
+      const timer = setTimeout(() => {
+        if (callingStatus === "calling") {
+          console.log("Auto-resuming calling session...");
+          resumeCalling();
+        }
+      }, 2000);
+
+      return () => clearTimeout(timer);
+    }
+  }, [callingStatus, campaignContacts, selectedAgent]);
+
+  // Check connection status for call results after 40 seconds
+  useEffect(() => {
+    callResults.forEach((result, index) => {
+      if (result.success && result.uniqueId) {
+        // Set initial status as connected
+        setCallResultsConnectionStatus((prev) => ({
+          ...prev,
+          [result.uniqueId]: "connected",
+        }));
+
+        // Check connection status after 40 seconds
+        const timer = setTimeout(() => {
+          checkCallResultConnection(result.uniqueId, index);
+        }, 40000);
+
+        // Cleanup timer on unmount
+        return () => clearTimeout(timer);
+      }
+    });
+  }, [callResults]);
+
+  // Debug: Monitor callResults changes to identify duplicates
+  useEffect(() => {
+    if (callResults.length > 0) {
+      console.log("CallResults changed:", callResults.length, "results");
+
+      // Check for duplicates
+      const contactCounts = {};
+      callResults.forEach((result) => {
+        const contactKey = `${result.contact.phone}-${result.contact.name}`;
+        contactCounts[contactKey] = (contactCounts[contactKey] || 0) + 1;
+      });
+
+      const duplicates = Object.entries(contactCounts).filter(
+        ([key, count]) => count > 1
+      );
+      if (duplicates.length > 0) {
+        console.warn("Duplicate call results detected:", duplicates);
+        duplicates.forEach(([contactKey, count]) => {
+          console.warn(`Contact ${contactKey} has ${count} call results`);
+        });
+      }
+    }
+  }, [callResults]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -156,9 +406,11 @@ function CampaignDetails({ campaignId, onBack }) {
       }
 
       // Generate unique ID for this campaign call (same format as agent calls)
-      const uniqueId = `aidial-${Date.now()}-${Math.random()
+      // Use performance.now() for higher precision and add a counter to ensure uniqueness
+      const uniqueId = `aidial-${Date.now()}-${performance
+        .now()
         .toString(36)
-        .substr(2, 9)}`;
+        .replace(".", "")}-${Math.random().toString(36).substr(2, 9)}`;
 
       const callPayload = {
         transaction_id: "CTI_BOT_DIAL",
@@ -208,7 +460,6 @@ function CampaignDetails({ campaignId, onBack }) {
         success: result.success,
         data: result.data,
         contact: contact,
-        group: campaignGroups[currentGroupIndex],
         timestamp: new Date(),
         uniqueId: uniqueId, // Include unique ID in result for tracking
       };
@@ -218,170 +469,245 @@ function CampaignDetails({ campaignId, onBack }) {
         success: false,
         error: error.message,
         contact: contact,
-        group: campaignGroups[currentGroupIndex],
         timestamp: new Date(),
+        uniqueId: uniqueId, // Include unique ID even for failed calls
       };
     }
   };
 
   const startCalling = async () => {
-    if (!selectedAgent || campaignGroups.length === 0) {
-      alert(
-        "Please select an agent and ensure there are groups in the campaign."
+    // Prevent multiple simultaneous calls
+    if (callingStatus === "calling" || isStartingCall) {
+      console.log(
+        "Calling already in progress or starting, ignoring duplicate start request"
       );
       return;
     }
 
-    setCallingStatus("calling");
-    setCurrentGroupIndex(0);
-    setCurrentContactIndex(0);
-    setCallResults([]);
+    if (!selectedAgent || campaignContacts.length === 0) {
+      alert(
+        "Please select an agent and ensure there are contacts in the campaign. Add contacts through 'Manage Contacts' first."
+      );
+      return;
+    }
 
-    // Loop through all campaign groups
-    for (let groupIdx = 0; groupIdx < campaignGroups.length; groupIdx++) {
+    setIsStartingCall(true);
+
+    console.log("Starting calling process...");
+    console.log("Current callResults before starting:", callResults);
+
+    setCallingStatus("calling");
+    setCurrentContactIndex(0);
+
+    // Don't clear existing results - keep them to prevent duplicates
+    // setCallResults([]); // Removed this line to prevent duplicate calls
+
+    // Track contacts that have been called in this session
+    const calledContacts = new Set();
+
+    // Remove duplicates from campaignContacts to prevent duplicate calls
+    const uniqueContacts = campaignContacts.filter(
+      (contact, index, self) =>
+        index ===
+        self.findIndex(
+          (c) => c.phone === contact.phone && c.name === contact.name
+        )
+    );
+
+    console.log(
+      `Original contacts: ${campaignContacts.length}, Unique contacts: ${uniqueContacts.length}`
+    );
+
+    // Loop through all campaign contacts
+    for (let contactIdx = 0; contactIdx < uniqueContacts.length; contactIdx++) {
       if (callingStatus === "paused") {
         break;
       }
 
-      setCurrentGroupIndex(groupIdx);
-      const group = campaignGroups[groupIdx];
+      setCurrentContactIndex(contactIdx);
+      const contact = uniqueContacts[contactIdx];
 
-      if (!group || !group.contacts || group.contacts.length === 0) {
-        continue; // Skip groups without contacts
-      }
+      // Create a unique key for this contact
+      const contactKey = `${contact.phone}-${contact.name}`;
 
-      // Loop through all contacts in the current group
-      for (
-        let contactIdx = 0;
-        contactIdx < group.contacts.length;
-        contactIdx++
-      ) {
-        if (callingStatus === "paused") {
-          break;
-        }
+      // Check if this contact was already called in this session or in previous results
+      const alreadyCalledInSession = calledContacts.has(contactKey);
+      const alreadyCalledInResults = callResults.some(
+        (r) =>
+          r.contact.phone === contact.phone && r.contact.name === contact.name
+      );
 
-        setCurrentContactIndex(contactIdx);
-        const contact = group.contacts[contactIdx];
+      // Additional check: if the same contact was called very recently (within 30 seconds), skip it
+      const recentCall = callResults.find(
+        (r) =>
+          r.contact.phone === contact.phone &&
+          r.contact.name === contact.name &&
+          r.timestamp &&
+          Date.now() - new Date(r.timestamp).getTime() < 30000 // 30 seconds
+      );
 
+      if (alreadyCalledInSession || alreadyCalledInResults || recentCall) {
         console.log(
-          `Calling ${contact.name} at ${contact.phone} in group ${group.name}...`
+          `Contact ${contact.name} (${contact.phone}) already called or called recently, skipping...`
         );
-
-        const result = await makeVoiceBotCall(contact, selectedAgent);
-        setCallResults((prev) => [...prev, result]);
-
-        // Wait 2 seconds between calls to avoid overwhelming the API
-        if (contactIdx < group.contacts.length - 1) {
-          await new Promise((resolve) => setTimeout(resolve, 2000));
-        }
+        continue;
       }
+
+      console.log(
+        `Calling ${contact.name} at ${contact.phone} from campaign contacts...`
+      );
+
+      // Mark this contact as called
+      calledContacts.add(contactKey);
+
+      console.log(
+        `Making voice bot call to ${contact.name} (${contact.phone})...`
+      );
+      const result = await makeVoiceBotCall(contact, selectedAgent);
+      console.log(`Call result for ${contact.name}:`, result);
+
+      // Add the call result
+      setCallResults((prev) => {
+        console.log(
+          `Adding new call result for ${contact.name}. Previous count: ${prev.length}`
+        );
+        return [...prev, result];
+      });
+
+      // Wait 2 seconds between calls to avoid overwhelming the API
+      if (contactIdx < uniqueContacts.length - 1) {
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+      }
+
+      // Additional safeguard: wait 1 second after each call to prevent rapid successive calls
+      await new Promise((resolve) => setTimeout(resolve, 1000));
     }
 
+    console.log("Calling process completed. Final callResults:", callResults);
     setCallingStatus("completed");
+    setIsStartingCall(false);
   };
 
   const pauseCalling = () => {
     setCallingStatus("paused");
+    console.log("Calling paused - state will persist across page reloads");
   };
 
   const resumeCalling = async () => {
     setCallingStatus("calling");
 
-    // Resume from current group and contact
+    // Track contacts that have been called in this session
+    const calledContacts = new Set();
+
+    // Resume from current contact index
     for (
-      let groupIdx = currentGroupIndex;
-      groupIdx < campaignGroups.length;
-      groupIdx++
+      let contactIdx = currentContactIndex;
+      contactIdx < campaignContacts.length;
+      contactIdx++
     ) {
       if (callingStatus === "paused") {
         break;
       }
 
-      setCurrentGroupIndex(groupIdx);
-      const group = campaignGroups[groupIdx];
+      setCurrentContactIndex(contactIdx);
+      const contact = campaignContacts[contactIdx];
 
-      if (!group || !group.contacts || group.contacts.length === 0) {
+      // Create a unique key for this contact
+      const contactKey = `${contact.phone}-${contact.name}`;
+
+      // Check if this contact was already called in this session or in previous results
+      const alreadyCalledInSession = calledContacts.has(contactKey);
+      const alreadyCalledInResults = callResults.some(
+        (r) =>
+          r.contact.phone === contact.phone && r.contact.name === contact.name
+      );
+
+      // Additional check: if the same contact was called very recently (within 30 seconds), skip it
+      const recentCall = callResults.find(
+        (r) =>
+          r.contact.phone === contact.phone &&
+          r.contact.name === contact.name &&
+          r.timestamp &&
+          Date.now() - new Date(r.timestamp).getTime() < 30000 // 30 seconds
+      );
+
+      if (alreadyCalledInSession || alreadyCalledInResults || recentCall) {
+        console.log(
+          `Contact ${contact.name} (${contact.phone}) already called or called recently, skipping...`
+        );
         continue;
       }
 
-      // Start from current contact index for the first group, 0 for subsequent groups
-      const startContactIdx =
-        groupIdx === currentGroupIndex ? currentContactIndex : 0;
+      console.log(
+        `Calling ${contact.name} at ${contact.phone} from campaign contacts...`
+      );
 
-      for (
-        let contactIdx = startContactIdx;
-        contactIdx < group.contacts.length;
-        contactIdx++
-      ) {
-        if (callingStatus === "paused") {
-          break;
-        }
+      // Mark this contact as called
+      calledContacts.add(contactKey);
 
-        setCurrentContactIndex(contactIdx);
-        const contact = group.contacts[contactIdx];
+      const result = await makeVoiceBotCall(contact, selectedAgent);
+      setCallResults((prev) => [...prev, result]);
 
-        console.log(
-          `Calling ${contact.name} at ${contact.phone} in group ${group.name}...`
-        );
-
-        const result = await makeVoiceBotCall(contact, selectedAgent);
-        setCallResults((prev) => [...prev, result]);
-
-        // Wait 2 seconds between calls
-        if (contactIdx < group.contacts.length - 1) {
-          await new Promise((resolve) => setTimeout(resolve, 2000));
-        }
+      // Wait 2 seconds between calls
+      if (contactIdx < campaignContacts.length - 1) {
+        await new Promise((resolve) => setTimeout(resolve, 2000));
       }
+
+      // Additional safeguard: wait 1 second after each call to prevent rapid successive calls
+      await new Promise((resolve) => setTimeout(resolve, 1000));
     }
 
     setCallingStatus("completed");
   };
 
   const skipToNext = () => {
-    const currentGroup = campaignGroups[currentGroupIndex];
-    if (
-      currentGroup &&
-      currentContactIndex < currentGroup.contacts.length - 1
-    ) {
+    if (currentContactIndex < campaignContacts.length - 1) {
       setCurrentContactIndex((prev) => prev + 1);
-    } else if (currentGroupIndex < campaignGroups.length - 1) {
-      setCurrentGroupIndex((prev) => prev + 1);
-      setCurrentContactIndex(0);
     }
   };
 
   const resetCalling = () => {
     setCallingStatus("idle");
-    setCurrentGroupIndex(0);
     setCurrentContactIndex(0);
     setCallResults([]);
-    // Don't reset the selected agent or close the modal
+    setCallResultsConnectionStatus({}); // Clear connection status
+    clearCallingState(); // Clear saved state when resetting
+    console.log("Calling reset - all progress cleared");
+  };
+
+  // Function to remove duplicate call results
+  const removeDuplicateCallResults = () => {
+    setCallResults((prev) => {
+      const uniqueResults = [];
+      const seenContacts = new Set();
+
+      prev.forEach((result) => {
+        const contactKey = `${result.contact.phone}-${result.contact.name}`;
+        if (!seenContacts.has(contactKey)) {
+          seenContacts.add(contactKey);
+          uniqueResults.push(result);
+        } else {
+          console.log(
+            `Removing duplicate call result for ${result.contact.name}`
+          );
+        }
+      });
+
+      console.log(
+        `Cleaned up call results: ${prev.length} -> ${uniqueResults.length}`
+      );
+      return uniqueResults;
+    });
   };
 
   // Get current progress
   const getProgress = () => {
-    let completedContacts = 0;
-    let totalContacts = 0;
+    const totalContacts = campaignContacts.length;
+    const completedContacts = currentContactIndex;
 
-    for (let i = 0; i < campaignGroups.length; i++) {
-      const group = campaignGroups[i];
-      if (i < currentGroupIndex) {
-        // Previous groups are fully completed
-        completedContacts += group.contacts.length;
-      } else if (i === currentGroupIndex) {
-        // Current group: count contacts up to current index
-        completedContacts += currentContactIndex;
-      }
-      totalContacts += group.contacts.length;
-    }
-
-    // If we're at the last group and last contact, mark as fully completed
-    if (
-      currentGroupIndex === campaignGroups.length - 1 &&
-      currentContactIndex >=
-        (campaignGroups[currentGroupIndex]?.contacts?.length || 0)
-    ) {
-      completedContacts = totalContacts;
+    // If we're at the last contact, mark as fully completed
+    if (currentContactIndex >= totalContacts) {
+      return { completed: totalContacts, total: totalContacts };
     }
 
     return { completed: completedContacts, total: totalContacts };
@@ -889,6 +1215,255 @@ function CampaignDetails({ campaignId, onBack }) {
     }
   };
 
+  // Live call logs functions
+  const startLiveCallPolling = async (uniqueId) => {
+    if (isPolling) {
+      stopLiveCallPolling();
+    }
+
+    setIsPolling(true);
+    setCallConnectionStatus("connected");
+    setLiveTranscript("");
+    setLiveTranscriptLines([]);
+    setLiveCallDetails(null);
+
+    const pollLogs = async () => {
+      try {
+        console.log("Polling for uniqueId:", uniqueId);
+        const apiUrl = `${API_BASE_URL}/logs?uniqueid=${uniqueId}&limit=1`;
+        console.log("API URL:", apiUrl);
+        const token = sessionStorage.getItem("clienttoken");
+        const response = await fetch(
+          `${API_BASE_URL}/logs?uniqueid=${uniqueId}&limit=1`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const result = await response.json();
+        console.log("Polling response:", result);
+        if (result.logs && result.logs.length > 0) {
+          const callLog = result.logs[0];
+          console.log("Found call log:", callLog);
+          setLiveCallDetails(callLog);
+
+          // Check if call is active based on isActive field
+          const isCallActiveForStatus = callLog.metadata?.isActive !== false;
+
+          if (isCallActiveForStatus) {
+            // Call is active, set connected status
+            setCallConnectionStatus("connected");
+            if (connectionTimeoutRef.current) {
+              clearTimeout(connectionTimeoutRef.current);
+            }
+
+            // Set new timeout for 40 seconds
+            connectionTimeoutRef.current = setTimeout(() => {
+              console.log(
+                "No response for 40 seconds, setting call status to 'not connected'"
+              );
+              setCallConnectionStatus("not_connected");
+            }, 40000);
+          } else {
+            // Call is not active (isActive is false), set disconnected status
+            console.log(
+              "Call is not active (isActive: false), setting status to 'not connected'"
+            );
+            setCallConnectionStatus("not_connected");
+            if (connectionTimeoutRef.current) {
+              clearTimeout(connectionTimeoutRef.current);
+              connectionTimeoutRef.current = null;
+            }
+          }
+
+          if (callLog.transcript) {
+            setLiveTranscript(callLog.transcript);
+
+            // Parse transcript lines with timestamps and group by speaker
+            const rawLines = callLog.transcript
+              .split("\n")
+              .filter((line) => line.trim());
+
+            const groupedMessages = [];
+            let currentMessage = null;
+
+            for (const line of rawLines) {
+              // Extract timestamp from format [2025-08-16T07:20:20.885Z]
+              const timestampMatch = line.match(/\[([^\]]+)\]/);
+              let timestamp = null;
+
+              if (timestampMatch) {
+                try {
+                  // Parse the timestamp and format it nicely
+                  const date = new Date(timestampMatch[1]);
+                  if (!isNaN(date.getTime())) {
+                    timestamp = date.toLocaleTimeString("en-US", {
+                      hour: "numeric",
+                      minute: "2-digit",
+                      second: "2-digit",
+                      hour12: true,
+                    });
+                  }
+                } catch (error) {
+                  console.error("Error parsing timestamp:", error);
+                }
+              }
+
+              // Remove timestamp from line
+              const lineWithoutTimestamp = line.replace(/\[[^\]]+\]\s*/, "");
+
+              // Extract speaker and text
+              const colonIndex = lineWithoutTimestamp.indexOf(":");
+              if (colonIndex !== -1) {
+                const speaker = lineWithoutTimestamp
+                  .substring(0, colonIndex)
+                  .trim();
+                const text = lineWithoutTimestamp
+                  .substring(colonIndex + 1)
+                  .trim();
+
+                const isAI =
+                  speaker.toLowerCase().includes("ai") ||
+                  speaker.toLowerCase().includes("agent");
+                const isUser =
+                  speaker.toLowerCase().includes("user") ||
+                  speaker.toLowerCase().includes("customer");
+
+                // If this is a new speaker or first message, start a new message
+                if (!currentMessage || currentMessage.speaker !== speaker) {
+                  // Save previous message if exists
+                  if (currentMessage) {
+                    groupedMessages.push(currentMessage);
+                  }
+
+                  // Start new message
+                  currentMessage = {
+                    speaker,
+                    text: text,
+                    timestamp,
+                    isAI,
+                    isUser,
+                  };
+                } else {
+                  // Same speaker, append to current message
+                  currentMessage.text += " " + text;
+                }
+              } else {
+                // No speaker found, treat as continuation of previous message
+                if (currentMessage) {
+                  currentMessage.text += " " + lineWithoutTimestamp.trim();
+                }
+              }
+            }
+
+            // Add the last message
+            if (currentMessage) {
+              groupedMessages.push(currentMessage);
+            }
+
+            const lines = groupedMessages;
+
+            setLiveTranscriptLines(lines);
+
+            // Auto-scroll to bottom when new messages are added
+            setTimeout(() => {
+              if (transcriptRef.current) {
+                transcriptRef.current.scrollTop =
+                  transcriptRef.current.scrollHeight;
+              }
+            }, 100);
+          }
+
+          // Check if call is still active (not completed and isActive is true)
+          const shouldContinuePolling = callLog.metadata?.isActive !== false;
+          const isCallCompleted =
+            callLog.leadStatus &&
+            ["completed", "ended", "failed"].includes(
+              callLog.leadStatus.toLowerCase()
+            );
+
+          if (shouldContinuePolling && !isCallCompleted) {
+            // Continue polling
+            logsPollRef.current = setTimeout(pollLogs, 2000);
+          } else {
+            // Call completed or not active, stop polling
+            console.log("Call completed or not active, stopping polling");
+            setIsPolling(false);
+          }
+        } else {
+          // No logs found yet, continue polling
+          console.log("No call logs found yet, continuing to poll...");
+          logsPollRef.current = setTimeout(pollLogs, 2000);
+        }
+      } catch (error) {
+        console.error("Error polling live call logs:", error);
+        // Continue polling even on error
+        logsPollRef.current = setTimeout(pollLogs, 2000);
+      }
+    };
+
+    pollLogs();
+  };
+
+  const stopLiveCallPolling = () => {
+    if (logsPollRef.current) {
+      clearTimeout(logsPollRef.current);
+      logsPollRef.current = null;
+    }
+    if (connectionTimeoutRef.current) {
+      clearTimeout(connectionTimeoutRef.current);
+      connectionTimeoutRef.current = null;
+    }
+    setIsPolling(false);
+    setCallConnectionStatus("connected");
+  };
+
+  const handleViewLiveCall = (call) => {
+    console.log("Opening live call modal for:", call);
+    setSelectedCall(call);
+    setShowLiveCallModal(true);
+
+    // Start polling for live logs if uniqueId exists
+    if (call.metadata?.customParams?.uniqueid) {
+      console.log(
+        "Starting live polling for uniqueId:",
+        call.metadata.customParams.uniqueid
+      );
+      startLiveCallPolling(call.metadata.customParams.uniqueid);
+    } else {
+      console.log("No uniqueId found in call data");
+    }
+  };
+
+  const closeLiveCallModal = () => {
+    setShowLiveCallModal(false);
+    setSelectedCall(null);
+    stopLiveCallPolling();
+    setLiveTranscript("");
+    setLiveTranscriptLines([]);
+    setLiveCallDetails(null);
+    setCallConnectionStatus("connected");
+  };
+
+  // Cleanup polling on component unmount
+  useEffect(() => {
+    return () => {
+      if (logsPollRef.current) {
+        clearTimeout(logsPollRef.current);
+      }
+      if (connectionTimeoutRef.current) {
+        clearTimeout(connectionTimeoutRef.current);
+      }
+    };
+  }, []);
+
   const getStatusColor = (status) => {
     switch (status) {
       case "active":
@@ -1156,21 +1731,42 @@ function CampaignDetails({ campaignId, onBack }) {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <button
-                onClick={() => setShowCallModal(true)}
-                className="group relative bg-gradient-to-r from-green-500 to-green-600 text-white px-6 py-4 rounded-xl hover:from-green-600 hover:to-green-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-1"
-                disabled={campaignGroups.length === 0 || loadingAgents}
+                onClick={() => {
+                  setShowCallModal(true);
+                  fetchCampaignContacts(); // Load campaign contacts when opening modal
+                }}
+                className={`group relative px-6 py-4 rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-1 ${
+                  campaignContacts.length === 0 ||
+                  loadingAgents ||
+                  loadingContacts
+                    ? "bg-gray-400 cursor-not-allowed"
+                    : "bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700"
+                } text-white`}
+                disabled={
+                  campaignContacts.length === 0 ||
+                  loadingAgents ||
+                  loadingContacts
+                }
               >
                 <div className="flex items-center">
                   <div className="p-2 bg-white bg-opacity-20 rounded-lg mr-3">
-                    <FiPhone
-                      className="w-6 h-6 text-green-700"
-                      style={{ minWidth: "24px", minHeight: "24px" }}
-                    />
+                    {loadingContacts ? (
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
+                    ) : (
+                      <FiPhone
+                        className="w-6 h-6 text-green-700"
+                        style={{ minWidth: "24px", minHeight: "24px" }}
+                      />
+                    )}
                   </div>
                   <div className="text-left">
                     <div className="font-semibold">Make Calls</div>
                     <div className="text-sm opacity-90">
-                      Start campaign calling
+                      {loadingContacts
+                        ? "Loading contacts..."
+                        : campaignContacts.length === 0
+                        ? "No contacts available"
+                        : `Start campaign calling (${campaignContacts.length} contacts)`}
                     </div>
                   </div>
                 </div>
@@ -1239,6 +1835,52 @@ function CampaignDetails({ campaignId, onBack }) {
               </button>
             </div>
           </div>
+
+          {/* State Restoration Notification */}
+          {showRestoreNotification && (
+            <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mx-4 mt-4 rounded-md">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <svg
+                    className="h-5 w-5 text-blue-400"
+                    fill="currentColor"
+                    viewBox="0 0 20 20"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 9a1 1 0 000 2h6a1 1 0 100-2H7zm3 3a1 1 0 000 2H7a1 1 0 100 2h3z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <p className="text-sm text-blue-700">
+                    <strong>Calling session restored!</strong> Your previous
+                    calling progress has been loaded. You can continue from
+                    where you left off or reset to start fresh.
+                  </p>
+                </div>
+                <div className="ml-auto pl-3">
+                  <button
+                    onClick={() => setShowRestoreNotification(false)}
+                    className="inline-flex text-blue-400 hover:text-blue-500"
+                  >
+                    <svg
+                      className="h-5 h-5"
+                      fill="currentColor"
+                      viewBox="0 0 20 20"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Campaign Groups Section */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
@@ -1438,6 +2080,26 @@ function CampaignDetails({ campaignId, onBack }) {
                 <p className="text-gray-600 mt-1">
                   Automate your campaign calling process
                 </p>
+                <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="flex items-center text-sm text-blue-700">
+                    <svg
+                      className="w-4 h-4 mr-2"
+                      fill="currentColor"
+                      viewBox="0 0 20 20"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 9a1 1 0 000 2h6a1 1 0 100-2H7zm3 3a1 1 0 000 2H7a1 1 0 100 2h3z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                    <span>
+                      <strong>Auto-save enabled:</strong> Your calling progress
+                      is automatically saved and will persist across page
+                      reloads. You can continue calling from where you left off!
+                    </span>
+                  </div>
+                </div>
               </div>
               <button
                 className="bg-none border-none text-2xl cursor-pointer text-gray-500 hover:text-gray-700 p-2 w-10 h-10 flex items-center justify-center rounded-lg hover:bg-gray-200 transition-colors duration-200"
@@ -1599,18 +2261,22 @@ function CampaignDetails({ campaignId, onBack }) {
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                       <div className="text-center">
                         <div className="text-2xl font-bold text-blue-600">
-                          {campaignGroups.length}
+                          {loadingContacts ? (
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                          ) : (
+                            campaignContacts.length
+                          )}
                         </div>
                         <div className="text-sm text-gray-600">
-                          Campaign Groups
+                          Campaign Contacts
                         </div>
                       </div>
                       <div className="text-center">
                         <div className="text-2xl font-bold text-green-600">
-                          {campaignGroups.reduce(
-                            (total, group) =>
-                              total + (group.contacts?.length || 0),
-                            0
+                          {loadingContacts ? (
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600 mx-auto"></div>
+                          ) : (
+                            campaignContacts.length
                           )}
                         </div>
                         <div className="text-sm text-gray-600">
@@ -1619,10 +2285,15 @@ function CampaignDetails({ campaignId, onBack }) {
                       </div>
                       <div className="text-center">
                         <div className="text-2xl font-bold text-purple-600">
-                          {campaignGroups[currentGroupIndex]?.name || "None"}
+                          {loadingContacts ? (
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto"></div>
+                          ) : (
+                            campaignContacts[currentContactIndex]?.name ||
+                            "None"
+                          )}
                         </div>
                         <div className="text-sm text-gray-600">
-                          Current Group
+                          Current Contact
                         </div>
                       </div>
                       <div className="text-center">
@@ -1655,15 +2326,12 @@ function CampaignDetails({ campaignId, onBack }) {
                       </h4>
                       <div className="text-right">
                         <div className="text-sm text-gray-600 mb-1">
-                          Group {currentGroupIndex + 1} of{" "}
-                          {campaignGroups.length} (
-                          {campaignGroups[currentGroupIndex]?.name || "Unknown"}
-                          )
+                          Contact {currentContactIndex + 1} of{" "}
+                          {campaignContacts.length}
                         </div>
                         <div className="text-sm text-gray-600">
-                          Contact {currentContactIndex + 1} of{" "}
-                          {campaignGroups[currentGroupIndex]?.contacts
-                            ?.length || 0}
+                          {campaignContacts[currentContactIndex]?.name ||
+                            "Unknown"}
                         </div>
                       </div>
                     </div>
@@ -1683,7 +2351,7 @@ function CampaignDetails({ campaignId, onBack }) {
 
                     {/* Current Contact */}
                     {callingStatus !== "idle" &&
-                      campaignGroups[currentGroupIndex] && (
+                      campaignContacts[currentContactIndex] && (
                         <div className="p-6 bg-gradient-to-r from-green-50 to-green-100 rounded-xl border border-green-200 mb-6">
                           <h5 className="font-semibold text-gray-800 mb-3 flex items-center">
                             <svg
@@ -1701,33 +2369,72 @@ function CampaignDetails({ campaignId, onBack }) {
                             </svg>
                             Currently Calling
                           </h5>
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
                               <div className="text-sm text-gray-600">Name</div>
                               <div className="font-semibold text-gray-900">
-                                {campaignGroups[currentGroupIndex]?.contacts?.[
-                                  currentContactIndex
-                                ]?.name || "Unknown"}
+                                {campaignContacts[currentContactIndex]?.name ||
+                                  "Unknown"}
                               </div>
                             </div>
                             <div>
                               <div className="text-sm text-gray-600">Phone</div>
                               <div className="font-semibold text-gray-900">
-                                {campaignGroups[currentGroupIndex]?.contacts?.[
-                                  currentContactIndex
-                                ]?.phone || "Unknown"}
-                              </div>
-                            </div>
-                            <div>
-                              <div className="text-sm text-gray-600">Group</div>
-                              <div className="font-semibold text-gray-900">
-                                {campaignGroups[currentGroupIndex]?.name ||
+                                {campaignContacts[currentContactIndex]?.phone ||
                                   "Unknown"}
                               </div>
                             </div>
                           </div>
                         </div>
                       )}
+
+                    {/* Save Progress Button */}
+                    {callingStatus !== "idle" && (
+                      <div className="flex justify-center mb-4 space-x-3">
+                        <button
+                          onClick={manualSaveState}
+                          className="inline-flex items-center px-4 py-2 text-sm text-blue-600 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 hover:border-blue-300 transition-all duration-200"
+                          title="Manually save your calling progress"
+                        >
+                          <svg
+                            className="w-4 h-4 mr-1"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"
+                            />
+                          </svg>
+                          Save Progress
+                        </button>
+
+                        {/* Cleanup Duplicates Button */}
+                        <button
+                          onClick={removeDuplicateCallResults}
+                          className="inline-flex items-center px-4 py-2 text-sm text-orange-600 bg-orange-50 border border-orange-200 rounded-lg hover:bg-orange-100 hover:border-orange-300 transition-all duration-200"
+                          title="Remove duplicate call results"
+                        >
+                          <svg
+                            className="w-4 h-4 mr-1"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                            />
+                          </svg>
+                          Clean Duplicates
+                        </button>
+                      </div>
+                    )}
 
                     {/* Control Buttons */}
                     <div className="flex gap-4 justify-center">
@@ -1807,9 +2514,40 @@ function CampaignDetails({ campaignId, onBack }) {
                             key={index}
                             className={`p-4 rounded-xl border-2 ${
                               result.success
-                                ? "bg-green-50 border-green-200"
+                                ? "bg-green-50 border-green-200 cursor-pointer hover:bg-green-100 hover:border-green-300 transition-all duration-200"
                                 : "bg-red-50 border-red-200"
                             }`}
+                            onClick={() => {
+                              if (result.success && result.uniqueId) {
+                                // Create a call object with the necessary data for live logs
+                                const callData = {
+                                  _id: `result-${index}`,
+                                  mobile: result.contact.phone,
+                                  agentId: {
+                                    agentName:
+                                      selectedAgent?.agentName ||
+                                      "Campaign Agent",
+                                  },
+                                  leadStatus: "connected",
+                                  metadata: {
+                                    customParams: {
+                                      uniqueid: result.uniqueId,
+                                    },
+                                  },
+                                  createdAt:
+                                    result.timestamp instanceof Date
+                                      ? result.timestamp
+                                      : new Date(result.timestamp),
+                                  time:
+                                    result.timestamp instanceof Date
+                                      ? result.timestamp
+                                      : new Date(result.timestamp),
+                                  duration: 0,
+                                  callType: "outbound",
+                                };
+                                handleViewLiveCall(callData);
+                              }
+                            }}
                           >
                             <div className="flex justify-between items-start">
                               <div className="flex-1">
@@ -1825,20 +2563,21 @@ function CampaignDetails({ campaignId, onBack }) {
                                       {result.contact.phone}
                                     </div>
                                   </div>
-                                  <div>
-                                    <span className="text-gray-600">
-                                      Group:
-                                    </span>
-                                    <div className="font-medium">
-                                      {result.group?.name || "Unknown"}
-                                    </div>
-                                  </div>
+
                                   <div>
                                     <span className="text-gray-600">Time:</span>
                                     <div className="font-medium">
-                                      {result.timestamp.toLocaleTimeString()}
+                                      {safeFormatTimestamp(result.timestamp)}
                                     </div>
                                   </div>
+                                  {result.uniqueId && (
+                                    <div>
+                                      <span className="text-gray-600">ID:</span>
+                                      <div className="font-medium text-xs">
+                                        {result.uniqueId.substring(0, 20)}...
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                               <div className="text-right ml-4">
@@ -1851,6 +2590,64 @@ function CampaignDetails({ campaignId, onBack }) {
                                 >
                                   {result.success ? "Success" : "Failed"}
                                 </span>
+                                {result.success && result.uniqueId && (
+                                  <>
+                                    <div className="mt-2 flex items-center text-xs text-blue-600">
+                                      <svg
+                                        className="w-3 h-3 mr-1"
+                                        fill="currentColor"
+                                        viewBox="0 0 20 20"
+                                      >
+                                        <path
+                                          fillRule="evenodd"
+                                          d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z"
+                                          clipRule="evenodd"
+                                        />
+                                      </svg>
+                                      Click to view live logs
+                                    </div>
+
+                                    {/* Connection Status */}
+                                    <div className="mt-2">
+                                      <div
+                                        className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
+                                          callResultsConnectionStatus[
+                                            result.uniqueId
+                                          ] === "connected"
+                                            ? "bg-green-100 text-green-700 border border-green-200"
+                                            : callResultsConnectionStatus[
+                                                result.uniqueId
+                                              ] === "not_connected"
+                                            ? "bg-red-100 text-red-700 border border-red-200"
+                                            : "bg-gray-100 text-gray-600 border border-gray-200"
+                                        }`}
+                                      >
+                                        <div
+                                          className={`w-2 h-2 rounded-full mr-1 ${
+                                            callResultsConnectionStatus[
+                                              result.uniqueId
+                                            ] === "connected"
+                                              ? "bg-green-500"
+                                              : callResultsConnectionStatus[
+                                                  result.uniqueId
+                                                ] === "not_connected"
+                                              ? "bg-red-500"
+                                              : "bg-gray-400"
+                                          }`}
+                                        ></div>
+                                        {callResultsConnectionStatus[
+                                          result.uniqueId
+                                        ] === "connected"
+                                          ? "Connected"
+                                          : callResultsConnectionStatus[
+                                              result.uniqueId
+                                            ] === "not_connected"
+                                          ? "Not Connected"
+                                          : "Checking..."}
+                                      </div>
+                                    </div>
+                                  </>
+                                )}
                               </div>
                             </div>
                             {result.error && (
@@ -2346,6 +3143,304 @@ function CampaignDetails({ campaignId, onBack }) {
                   )}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Live Call Modal */}
+      {showLiveCallModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl w-11/12 max-w-4xl max-h-[90vh] overflow-y-auto shadow-2xl">
+            <div className="flex justify-between items-center p-6 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-blue-100">
+              <div>
+                <h3 className="text-2xl font-bold text-gray-800 flex items-center">
+                  <svg
+                    className="w-6 h-6 mr-2 text-blue-600"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
+                    />
+                  </svg>
+                  Live Call Logs
+                </h3>
+                <p className="text-gray-600 mt-1">
+                  Real-time call transcript and details
+                </p>
+              </div>
+              <button
+                className="bg-none border-none text-2xl cursor-pointer text-gray-500 hover:text-gray-700 p-2 w-10 h-10 flex items-center justify-center rounded-lg hover:bg-gray-200 transition-colors duration-200"
+                onClick={closeLiveCallModal}
+              >
+                <FiX />
+              </button>
+            </div>
+
+            <div className="p-6">
+              {/* Call Information */}
+              {selectedCall && (
+                <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <div className="text-sm text-gray-500">Contact</div>
+                      <div className="font-semibold">
+                        {selectedCall.mobile || "Unknown"}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-gray-500">Agent</div>
+                      <div className="font-semibold">
+                        {selectedCall.agentId?.agentName || "Unknown"}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-gray-500">Status</div>
+                      <div className="font-semibold capitalize">
+                        {selectedCall.leadStatus || "Unknown"}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-2 text-xs text-gray-500">
+                    <span className="font-semibold">uniqueId:</span>{" "}
+                    {selectedCall.metadata?.customParams?.uniqueid || "Unknown"}
+                  </div>
+                </div>
+              )}
+
+              {/* Live Status Indicator */}
+              <div className="mb-6">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center">
+                    <div
+                      className={`w-3 h-3 rounded-full mr-2 ${
+                        isPolling
+                          ? "bg-green-500 animate-pulse"
+                          : liveCallDetails?.metadata?.isActive === false
+                          ? "bg-red-500"
+                          : "bg-gray-400"
+                      }`}
+                    ></div>
+                    <span className="text-sm font-medium">
+                      {isPolling
+                        ? "Live - Polling for updates..."
+                        : liveCallDetails?.metadata?.isActive === false
+                        ? "Call ended - Polling stopped"
+                        : "Not polling"}
+                    </span>
+                  </div>
+                  <div className="text-sm text-gray-500">
+                    {liveCallDetails
+                      ? `Last updated: ${new Date().toLocaleTimeString()}`
+                      : "Waiting for call data..."}
+                  </div>
+                </div>
+
+                {/* Connection Status */}
+                <div
+                  className={`inline-flex items-center px-3 py-2 rounded-lg text-sm font-medium ${
+                    callConnectionStatus === "connected"
+                      ? "bg-green-100 text-green-700 border border-green-200"
+                      : "bg-red-100 text-red-700 border border-red-200"
+                  }`}
+                >
+                  <div
+                    className={`w-2 h-2 rounded-full mr-2 ${
+                      callConnectionStatus === "connected"
+                        ? "bg-green-500"
+                        : "bg-red-500"
+                    }`}
+                  ></div>
+                  {callConnectionStatus === "connected"
+                    ? "Call Connected"
+                    : "Call Disconnected"}
+                  {callConnectionStatus === "not_connected" && (
+                    <span className="ml-2 text-xs opacity-75">
+                      {liveCallDetails?.metadata?.isActive === false
+                        ? "(Call ended by system)"
+                        : "(No response for 40+ seconds)"}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Live Transcript */}
+              <div className="mb-6">
+                <h4 className="text-lg font-semibold text-gray-800 mb-3 flex items-center">
+                  <svg
+                    className="w-5 h-5 mr-2 text-green-600"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
+                  </svg>
+                  Live Transcript
+                </h4>
+
+                {liveTranscriptLines.length > 0 ? (
+                  <div
+                    ref={transcriptRef}
+                    className="bg-gray-50 rounded-lg p-4 max-h-96 overflow-y-auto"
+                  >
+                    {liveTranscriptLines.map((line, index) => (
+                      <div key={index} className="mb-4 last:mb-0">
+                        {line.isAI ? (
+                          // AI Message (Left side)
+                          <div className="flex justify-start">
+                            <div className="flex items-end space-x-2 max-w-xs lg:max-w-md">
+                              <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
+                                <svg
+                                  className="w-4 h-4 text-white"
+                                  fill="currentColor"
+                                  viewBox="0 0 20 20"
+                                >
+                                  <path
+                                    fillRule="evenodd"
+                                    d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-6-3a2 2 0 11-4 0 2 2 0 014 0zm-2 4a5 5 0 00-4.546 2.916A5.986 5.986 0 0010 16a5.986 5.986 0 004.546-2.084A5 5 0 0010 11z"
+                                    clipRule="evenodd"
+                                  />
+                                </svg>
+                              </div>
+                              <div className="bg-blue-500 text-white rounded-lg px-4 py-2 shadow-sm">
+                                <div className="text-sm">{line.text}</div>
+                                {line.timestamp && (
+                                  <div className="text-xs text-blue-100 mt-1">
+                                    {line.timestamp}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ) : line.isUser ? (
+                          // User Message (Right side)
+                          <div className="flex justify-end">
+                            <div className="flex items-end space-x-2 max-w-xs lg:max-w-md">
+                              <div className="bg-gray-200 text-gray-800 rounded-lg px-4 py-2 shadow-sm">
+                                <div className="text-sm">{line.text}</div>
+                                {line.timestamp && (
+                                  <div className="text-xs text-gray-500 mt-1">
+                                    {line.timestamp}
+                                  </div>
+                                )}
+                              </div>
+                              <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center flex-shrink-0">
+                                <svg
+                                  className="w-4 h-4 text-white"
+                                  fill="currentColor"
+                                  viewBox="0 0 20 20"
+                                >
+                                  <path
+                                    fillRule="evenodd"
+                                    d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z"
+                                    clipRule="evenodd"
+                                  />
+                                </svg>
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          // System Message (Center)
+                          <div className="flex justify-center">
+                            <div className="bg-gray-100 text-gray-600 rounded-lg px-3 py-1 text-xs">
+                              {line.text}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : liveTranscript ? (
+                  <div className="bg-gray-50 rounded-lg p-4 max-h-96 overflow-y-auto">
+                    <pre className="whitespace-pre-wrap text-sm text-gray-700">
+                      {liveTranscript}
+                    </pre>
+                  </div>
+                ) : (
+                  <div className="bg-gray-50 rounded-lg p-4 text-center text-gray-500">
+                    <svg
+                      className="w-8 h-8 mx-auto mb-2 text-gray-400"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+                      />
+                    </svg>
+                    No transcript available yet. Waiting for call data...
+                  </div>
+                )}
+              </div>
+
+              {/* Call Details */}
+              {liveCallDetails && (
+                <div>
+                  <h4 className="text-lg font-semibold text-gray-800 mb-3 flex items-center">
+                    <svg
+                      className="w-5 h-5 mr-2 text-blue-600"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+                      />
+                    </svg>
+                    Call Details
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <div className="text-sm text-gray-500 mb-1">Duration</div>
+                      <div className="font-semibold">
+                        {Math.max(0, liveCallDetails.duration || 0)}s
+                      </div>
+                    </div>
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <div className="text-sm text-gray-500 mb-1">
+                        Call Time
+                      </div>
+                      <div className="font-semibold">
+                        {new Date(
+                          liveCallDetails.createdAt || liveCallDetails.time
+                        ).toLocaleString()}
+                      </div>
+                    </div>
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <div className="text-sm text-gray-500 mb-1">
+                        Lead Status
+                      </div>
+                      <div className="font-semibold capitalize">
+                        {liveCallDetails.leadStatus || "Unknown"}
+                      </div>
+                    </div>
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <div className="text-sm text-gray-500 mb-1">
+                        Call Type
+                      </div>
+                      <div className="font-semibold capitalize">
+                        {liveCallDetails.callType || "Unknown"}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

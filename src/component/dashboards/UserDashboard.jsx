@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
 import {
   FaChartBar,
   FaUser,
@@ -10,9 +10,9 @@ import {
   FaBell,
   FaHistory,
   FaQuestionCircle,
-  FaAngleLeft
-} from 'react-icons/fa';
-import { API_BASE_URL } from '../../config';
+  FaAngleLeft,
+} from "react-icons/fa";
+import { API_BASE_URL } from "../../config";
 
 const UserDashboard = ({ onLogout }) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -44,27 +44,30 @@ const UserDashboard = ({ onLogout }) => {
       setLoading(true);
       setError(null);
       try {
-        const userToken = localStorage.getItem('usertoken');
-        // const clientToken = sessionStorage.getItem('clienttoken');
+        const userToken =
+          sessionStorage.getItem("usertoken") ||
+          localStorage.getItem("usertoken");
         const token = userToken;
         if (!token) {
-          setError('No authentication token found.');
+          setError("No authentication token found.");
           setLoading(false);
           return;
         }
         const response = await fetch(`${API_BASE_URL}/user/userprofile`, {
           headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
           },
         });
         if (!response.ok) {
-          throw new Error('Failed to fetch user profile');
+          throw new Error("Failed to fetch user profile");
         }
         const data = await response.json();
         setUser(data.user || data.data || data); // fallback for different API shapes
       } catch (err) {
-        setError(err.message || 'An error occurred while fetching user profile.');
+        setError(
+          err.message || "An error occurred while fetching user profile."
+        );
       } finally {
         setLoading(false);
       }
@@ -106,7 +109,12 @@ const UserDashboard = ({ onLogout }) => {
         <div className="bg-white p-8 rounded shadow text-center">
           <h2 className="text-xl font-bold text-red-600 mb-4">Error</h2>
           <p className="text-gray-700 mb-4">{error}</p>
-          <button className="bg-blue-600 text-white px-4 py-2 rounded" onClick={onLogout}>Log out</button>
+          <button
+            className="bg-blue-600 text-white px-4 py-2 rounded"
+            onClick={onLogout}
+          >
+            Log out
+          </button>
         </div>
       </div>
     );
@@ -196,7 +204,9 @@ const UserDashboard = ({ onLogout }) => {
       >
         <header className="bg-white shadow-sm">
           <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-            <h1 className="text-xl font-bold text-gray-800">Welcome, {user?.name || 'User'}</h1>
+            <h1 className="text-xl font-bold text-gray-800">
+              Welcome, {user?.name || "User"}
+            </h1>
           </div>
         </header>
 
@@ -205,11 +215,16 @@ const UserDashboard = ({ onLogout }) => {
             <div className="mb-6">
               <div className="flex justify-between items-center">
                 <div>
-                  <h2 className="text-2xl font-bold text-gray-800">{activeTab}</h2>
+                  <h2 className="text-2xl font-bold text-gray-800">
+                    {activeTab}
+                  </h2>
                   <nav className="text-sm text-gray-500 mt-1">
                     <ol className="flex items-center space-x-2">
                       <li>
-                        <a href="#" className="text-blue-600 hover:text-blue-700">
+                        <a
+                          href="#"
+                          className="text-blue-600 hover:text-blue-700"
+                        >
                           Dashboard
                         </a>
                       </li>
@@ -220,21 +235,29 @@ const UserDashboard = ({ onLogout }) => {
                 </div>
               </div>
             </div>
-            
+
             {activeTab === "Overview" && (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-4">
-                  <h5 className="text-lg font-semibold text-gray-800">Profile Status</h5>
+                  <h5 className="text-lg font-semibold text-gray-800">
+                    Profile Status
+                  </h5>
                   <h2 className="text-3xl my-2 text-blue-600">Complete</h2>
-                  <p className="text-sm text-gray-600">Your profile is up to date</p>
+                  <p className="text-sm text-gray-600">
+                    Your profile is up to date
+                  </p>
                 </div>
                 <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-4">
-                  <h5 className="text-lg font-semibold text-gray-800">Messages</h5>
+                  <h5 className="text-lg font-semibold text-gray-800">
+                    Messages
+                  </h5>
                   <h2 className="text-3xl my-2 text-green-600">3</h2>
                   <p className="text-sm text-gray-600">2 unread messages</p>
                 </div>
                 <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-4">
-                  <h5 className="text-lg font-semibold text-gray-800">Notifications</h5>
+                  <h5 className="text-lg font-semibold text-gray-800">
+                    Notifications
+                  </h5>
                   <h2 className="text-3xl my-2 text-purple-600">5</h2>
                   <p className="text-sm text-gray-600">3 new notifications</p>
                 </div>
@@ -244,19 +267,28 @@ const UserDashboard = ({ onLogout }) => {
             {activeTab === "Profile" && (
               <div className="space-y-4">
                 <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
-                  <h3 className="text-xl font-semibold text-gray-800 mb-4">Profile Information</h3>
+                  <h3 className="text-xl font-semibold text-gray-800 mb-4">
+                    Profile Information
+                  </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {user && Object.entries(user).map(([key, value]) => (
-                      <div key={key} className="mb-2">
-                        <label className="block text-sm font-medium text-gray-700">{key}</label>
-                        <input
-                          type="text"
-                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-gray-100"
-                          value={typeof value === 'object' ? JSON.stringify(value) : String(value)}
-                          readOnly
-                        />
-                      </div>
-                    ))}
+                    {user &&
+                      Object.entries(user).map(([key, value]) => (
+                        <div key={key} className="mb-2">
+                          <label className="block text-sm font-medium text-gray-700">
+                            {key}
+                          </label>
+                          <input
+                            type="text"
+                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-gray-100"
+                            value={
+                              typeof value === "object"
+                                ? JSON.stringify(value)
+                                : String(value)
+                            }
+                            readOnly
+                          />
+                        </div>
+                      ))}
                   </div>
                   {/* Prompts for incomplete profiles */}
                   <div className="mt-6 space-y-2">
@@ -278,7 +310,9 @@ const UserDashboard = ({ onLogout }) => {
             {activeTab === "Store" && (
               <div className="space-y-4">
                 <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
-                  <h3 className="text-xl font-semibold text-gray-800 mb-4">Recent Messages</h3>
+                  <h3 className="text-xl font-semibold text-gray-800 mb-4">
+                    Recent Messages
+                  </h3>
                   <div className="space-y-4">
                     <p className="text-gray-600">No messages to display</p>
                   </div>
@@ -289,7 +323,9 @@ const UserDashboard = ({ onLogout }) => {
             {activeTab === "Models" && (
               <div className="space-y-4">
                 <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
-                  <h3 className="text-xl font-semibold text-gray-800 mb-4">Recent Notifications</h3>
+                  <h3 className="text-xl font-semibold text-gray-800 mb-4">
+                    Recent Notifications
+                  </h3>
                   <div className="space-y-4">
                     <p className="text-gray-600">No notifications to display</p>
                   </div>
@@ -300,9 +336,13 @@ const UserDashboard = ({ onLogout }) => {
             {activeTab === "History" && (
               <div className="space-y-4">
                 <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
-                  <h3 className="text-xl font-semibold text-gray-800 mb-4">Activity History</h3>
+                  <h3 className="text-xl font-semibold text-gray-800 mb-4">
+                    Activity History
+                  </h3>
                   <div className="space-y-4">
-                    <p className="text-gray-600">No recent activity to display</p>
+                    <p className="text-gray-600">
+                      No recent activity to display
+                    </p>
                   </div>
                 </div>
               </div>
@@ -311,9 +351,13 @@ const UserDashboard = ({ onLogout }) => {
             {activeTab === "Help" && (
               <div className="space-y-4">
                 <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
-                  <h3 className="text-xl font-semibold text-gray-800 mb-4">Help & Support</h3>
+                  <h3 className="text-xl font-semibold text-gray-800 mb-4">
+                    Help & Support
+                  </h3>
                   <div className="space-y-4">
-                    <p className="text-gray-600">Need help? Contact our support team.</p>
+                    <p className="text-gray-600">
+                      Need help? Contact our support team.
+                    </p>
                   </div>
                 </div>
               </div>
@@ -322,9 +366,13 @@ const UserDashboard = ({ onLogout }) => {
             {activeTab === "Settings" && (
               <div className="space-y-4">
                 <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
-                  <h3 className="text-xl font-semibold text-gray-800 mb-4">Account Settings</h3>
+                  <h3 className="text-xl font-semibold text-gray-800 mb-4">
+                    Account Settings
+                  </h3>
                   <div className="space-y-4">
-                    <p className="text-gray-600">Account settings will be available soon.</p>
+                    <p className="text-gray-600">
+                      Account settings will be available soon.
+                    </p>
                   </div>
                 </div>
               </div>
@@ -336,4 +384,4 @@ const UserDashboard = ({ onLogout }) => {
   );
 };
 
-export default UserDashboard; 
+export default UserDashboard;
