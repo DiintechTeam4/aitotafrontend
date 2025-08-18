@@ -13,17 +13,28 @@ import {
   FiSkipForward,
 } from "react-icons/fi";
 import { API_BASE_URL } from "../../../config";
+import * as XLSX from "xlsx";
 
 function GroupDetails({ groupId, onBack }) {
   const [group, setGroup] = useState(null);
   const [contacts, setContacts] = useState([]);
   const [showAddContactForm, setShowAddContactForm] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
   const [loading, setLoading] = useState(false);
   const [addingContact, setAddingContact] = useState(false);
+  const [importingContacts, setImportingContacts] = useState(false);
   const [contactForm, setContactForm] = useState({
     name: "",
     phone: "",
     email: "",
+  });
+  const [importData, setImportData] = useState({
+    file: null,
+    parsedData: [],
+    errors: [],
+    isValid: false,
+    totalRows: 0,
+    validRows: 0,
   });
   const [agents, setAgents] = useState([]);
   const [showAgentDropdown, setShowAgentDropdown] = useState(false);
@@ -382,6 +393,206 @@ function GroupDetails({ groupId, onBack }) {
     }
   };
 
+  // CSV/Excel Import Functions
+  const parseCSV = (csvText) => {
+    const lines = csvText.split("\n");
+    const headers = lines[0].split(",").map((h) => h.trim().toLowerCase());
+    const data = [];
+    const errors = [];
+
+    for (let i = 1; i < lines.length; i++) {
+      if (!lines[i].trim()) continue;
+
+      const values = lines[i].split(",").map((v) => v.trim());
+      const row = {};
+
+      headers.forEach((header, index) => {
+        row[header] = values[index] || "";
+      });
+
+      // Validate required fields
+      if (!row.name || !row.phone) {
+        errors.push(`Row ${i + 1}: Missing required fields (name or phone)`);
+        continue;
+      }
+
+      // Validate phone number format
+      const phoneRegex = /^[\+]?[1-9][\d]{0,15}$/;
+      const cleanPhone = row.phone.replace(/[^\d+]/g, "");
+      if (!phoneRegex.test(cleanPhone)) {
+        errors.push(`Row ${i + 1}: Invalid phone number format`);
+        continue;
+      }
+
+      // Validate email if provided
+      if (row.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row.email)) {
+        errors.push(`Row ${i + 1}: Invalid email format`);
+        continue;
+      }
+
+      data.push({
+        name: row.name,
+        phone: cleanPhone,
+        email: row.email || "",
+      });
+    }
+
+    return { data, errors };
+  };
+
+  const parseExcel = async (file) => {
+    try {
+      // Read Excel file as ArrayBuffer
+      const data = await file.arrayBuffer();
+
+      // Parse workbook
+      const workbook = XLSX.read(data, { type: "array" });
+
+      // Get first sheet
+      const sheetName = workbook.SheetNames[0];
+      const sheet = workbook.Sheets[sheetName];
+
+      // Convert to JSON
+      const jsonData = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+
+      // Extract contacts
+      const contacts = jsonData.map((row) => ({
+        name: row["Name"] || row["Full Name"] || row["Contact Name"] || "",
+        email: row["Email"] || row["E-mail"] || "",
+        phone: row["Phone"] || row["Mobile"] || row["Contact Number"] || "",
+      }));
+
+      return {
+        data: contacts,
+        errors: [],
+      };
+    } catch (error) {
+      console.error("Error parsing Excel file:", error);
+      return {
+        data: [],
+        errors: [
+          "Error parsing Excel file. Please ensure it contains columns: Name, Email, Phone.",
+        ],
+      };
+    }
+  };
+
+  const handleFileUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const allowedTypes = [
+      "text/csv",
+      "application/vnd.ms-excel",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ];
+
+    if (!allowedTypes.includes(file.type)) {
+      alert("Please upload a CSV or Excel file");
+      return;
+    }
+
+    setImportData((prev) => ({ ...prev, file }));
+
+    try {
+      let result;
+      if (file.type === "text/csv") {
+        const text = await file.text();
+        result = parseCSV(text);
+      } else {
+        result = await parseExcel(file);
+      }
+
+      setImportData((prev) => ({
+        ...prev,
+        parsedData: result.data,
+        errors: result.errors,
+        isValid: result.errors.length === 0 && result.data.length > 0,
+        totalRows: result.data.length + result.errors.length,
+        validRows: result.data.length,
+      }));
+    } catch (error) {
+      console.error("Error processing file:", error);
+      setImportData((prev) => ({
+        ...prev,
+        errors: ["Error processing file. Please check the file format."],
+        isValid: false,
+      }));
+    }
+  };
+
+  const handleImportContacts = async () => {
+    if (!importData.isValid || importData.parsedData.length === 0) {
+      alert("No valid contacts to import");
+      return;
+    }
+
+    setImportingContacts(true);
+    let successCount = 0;
+    let errorCount = 0;
+
+    try {
+      for (const contact of importData.parsedData) {
+        try {
+          const token = sessionStorage.getItem("clienttoken");
+          const response = await fetch(
+            `${API_BASE}/groups/${groupId}/contacts`,
+            {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${token}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify(contact),
+            }
+          );
+
+          const result = await response.json();
+          if (result.success) {
+            const newContact = {
+              _id: result.data._id || Date.now().toString(),
+              name: contact.name,
+              phone: contact.phone,
+              email: contact.email,
+              createdAt: new Date(),
+            };
+            setContacts((prev) => [...prev, newContact]);
+            successCount++;
+          } else {
+            errorCount++;
+            console.error(
+              `Failed to import contact ${contact.name}:`,
+              result.error
+            );
+          }
+        } catch (error) {
+          errorCount++;
+          console.error(`Error importing contact ${contact.name}:`, error);
+        }
+      }
+
+      alert(
+        `Import completed!\nSuccessfully imported: ${successCount}\nFailed: ${errorCount}`
+      );
+
+      // Reset import data
+      setImportData({
+        file: null,
+        parsedData: [],
+        errors: [],
+        isValid: false,
+        totalRows: 0,
+        validRows: 0,
+      });
+      setShowImportModal(false);
+    } catch (error) {
+      console.error("Error during import:", error);
+      alert("Error during import. Please try again.");
+    } finally {
+      setImportingContacts(false);
+    }
+  };
+
   const handleAddDummyContact = async (dummyContact) => {
     try {
       setLoading(true);
@@ -507,6 +718,27 @@ function GroupDetails({ groupId, onBack }) {
             >
               <FiPlus className="text-sm" />
               Add Contact
+            </button>
+
+            <button
+              onClick={() => setShowImportModal(true)}
+              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors flex items-center gap-2"
+              disabled={loading}
+            >
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"
+                />
+              </svg>
+              Import CSV/Excel
             </button>
           </div>
         </div>
@@ -849,6 +1081,218 @@ function GroupDetails({ groupId, onBack }) {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Import CSV/Excel Modal */}
+      {showImportModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg w-11/12 max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl">
+            <div className="flex justify-between items-center p-6 border-b border-gray-200">
+              <h3 className="m-0 text-gray-800">
+                Import Contacts from CSV/Excel
+              </h3>
+              <button
+                className="bg-none border-none text-2xl cursor-pointer text-gray-500 hover:text-gray-700 p-0 w-8 h-8 flex items-center justify-center"
+                onClick={() => setShowImportModal(false)}
+              >
+                <FiX />
+              </button>
+            </div>
+
+            <div className="p-6">
+              {/* File Upload Section */}
+              <div className="mb-6">
+                <h4 className="text-lg font-semibold text-gray-800 mb-4">
+                  Upload File
+                </h4>
+                <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+                  <input
+                    type="file"
+                    accept=".csv,.xlsx,.xls"
+                    onChange={handleFileUpload}
+                    className="hidden"
+                    id="file-upload"
+                  />
+                  <label
+                    htmlFor="file-upload"
+                    className="cursor-pointer inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                  >
+                    <svg
+                      className="w-4 h-4 mr-2"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"
+                      />
+                    </svg>
+                    Choose CSV or Excel File
+                  </label>
+                  <p className="text-sm text-gray-500 mt-2">
+                    Supported formats: CSV, XLSX, XLS
+                  </p>
+                </div>
+              </div>
+
+              {/* File Format Instructions */}
+              <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+                <h5 className="font-semibold text-gray-800 mb-2">
+                  File Format Requirements:
+                </h5>
+                <ul className="text-sm text-gray-600 space-y-1">
+                  <li>
+                    • First row should contain headers:{" "}
+                    <code className="bg-gray-200 px-1 rounded">
+                      name, phone, email
+                    </code>
+                  </li>
+                  <li>
+                    • <strong>Name</strong> and <strong>Phone</strong> are
+                    required fields
+                  </li>
+                  <li>
+                    • <strong>Email</strong> is optional
+                  </li>
+                  <li>
+                    • Phone numbers should be in international format (e.g.,
+                    +1234567890)
+                  </li>
+                  <li>• Maximum file size: 5MB</li>
+                </ul>
+                <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded">
+                  <p className="text-sm text-blue-700">
+                    <strong>Example CSV format:</strong>
+                    <br />
+                    <code className="text-xs">
+                      name,phone,email
+                      <br />
+                      John Doe,+1234567890,john@example.com
+                      <br />
+                      Jane Smith,+1987654321,jane@example.com
+                    </code>
+                  </p>
+                </div>
+
+                <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded">
+                  <p className="text-sm text-green-700">
+                    <strong>Excel File Format:</strong>
+                    <br />
+                    Create an Excel file with these columns:
+                    <br />
+                    <code className="text-xs">
+                      A1: name | B1: phone | C1: email
+                      <br />
+                      A2: John Doe | B2: +1234567890 | C2: john@example.com
+                      <br />
+                      A3: Jane Smith | B3: +1987654321 | C3: jane@example.com
+                    </code>
+                    <br />
+                  </p>
+                </div>
+              </div>
+
+              {/* File Preview */}
+              {importData.file && (
+                <div className="mb-6">
+                  <h4 className="text-lg font-semibold text-gray-800 mb-4">
+                    File Preview
+                  </h4>
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <div>
+                        <p className="font-medium text-gray-800">
+                          {importData.file.name}
+                        </p>
+                        <p className="text-sm text-gray-600">
+                          {(importData.file.size / 1024 / 1024).toFixed(2)} MB
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm text-gray-600">
+                          Total rows: {importData.totalRows}
+                        </p>
+                        <p className="text-sm text-green-600">
+                          Valid rows: {importData.validRows}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Validation Results */}
+                    {importData.errors.length > 0 && (
+                      <div className="mb-4">
+                        <h5 className="font-medium text-red-600 mb-2">
+                          Validation Errors ({importData.errors.length}):
+                        </h5>
+                        <div className="max-h-32 overflow-y-auto">
+                          {importData.errors.map((error, index) => (
+                            <p
+                              key={index}
+                              className="text-sm text-red-600 mb-1"
+                            >
+                              • {error}
+                            </p>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Preview of Valid Data */}
+                    {importData.parsedData.length > 0 && (
+                      <div>
+                        <h5 className="font-medium text-green-600 mb-2">
+                          Valid Contacts ({importData.parsedData.length}):
+                        </h5>
+                        <div className="max-h-32 overflow-y-auto">
+                          {importData.parsedData
+                            .slice(0, 5)
+                            .map((contact, index) => (
+                              <div
+                                key={index}
+                                className="text-sm text-gray-700 mb-1"
+                              >
+                                • {contact.name} - {contact.phone}{" "}
+                                {contact.email && `(${contact.email})`}
+                              </div>
+                            ))}
+                          {importData.parsedData.length > 5 && (
+                            <p className="text-sm text-gray-500">
+                              ... and {importData.parsedData.length - 5} more
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex gap-4 justify-end pt-4 border-t border-gray-200">
+                <button
+                  type="button"
+                  className="px-4 py-2 bg-gray-100 text-gray-700 border border-gray-300 rounded hover:bg-gray-200 transition-colors"
+                  onClick={() => setShowImportModal(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+                  onClick={handleImportContacts}
+                  disabled={!importData.isValid || importingContacts}
+                >
+                  {importingContacts
+                    ? "Importing..."
+                    : `Import ${importData.validRows} Contacts`}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

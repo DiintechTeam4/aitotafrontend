@@ -13,9 +13,25 @@ const User = () => {
 
   useEffect(() => {
     const initializeAuth = async () => {
-      const userToken = localStorage.getItem("usertoken");
+      // Migrate any legacy localStorage values to sessionStorage
+      try {
+        const legacyUserToken = localStorage.getItem("usertoken");
+        const legacyUserData = localStorage.getItem("userData");
+        if (legacyUserToken && !sessionStorage.getItem("usertoken")) {
+          sessionStorage.setItem("usertoken", legacyUserToken);
+          localStorage.removeItem("usertoken");
+        }
+        if (legacyUserData && !sessionStorage.getItem("userData")) {
+          sessionStorage.setItem("userData", legacyUserData);
+          localStorage.removeItem("userData");
+        }
+      } catch (_) {
+        // ignore migration errors
+      }
+
+      const userToken = sessionStorage.getItem("usertoken");
       const clientToken = sessionStorage.getItem("clienttoken");
-      const userData = localStorage.getItem("userData");
+      const userData = sessionStorage.getItem("userData");
       const clientData = sessionStorage.getItem("clientData");
 
       console.log("Auth Check:", {
@@ -67,11 +83,13 @@ const User = () => {
 
   const clearAuth = () => {
     // Clear all possible tokens and data
-    localStorage.removeItem("usertoken");
+    sessionStorage.removeItem("usertoken");
     sessionStorage.removeItem("clienttoken");
-    localStorage.removeItem("userData");
     sessionStorage.removeItem("userData");
     sessionStorage.removeItem("clientData");
+    // Cleanup legacy keys just in case
+    localStorage.removeItem("usertoken");
+    localStorage.removeItem("userData");
     setIsAuthenticated(false);
     setUserRole(null);
     setIsLoading(false);
@@ -92,10 +110,14 @@ const User = () => {
           clientId: loginData.clientId || loginData.id || loginData._id, // Add fallbacks for clientId
         })
       );
-    } else if (loginData.role === "HumanAgent") {
-      console.log("Storing HumanAgent data in localStorage:", loginData);
-      localStorage.setItem("usertoken", loginData.token);
-      localStorage.setItem(
+    } else if (
+      loginData.role === "HumanAgent" ||
+      loginData.role === "humanAgent" ||
+      loginData.role === "executive"
+    ) {
+      console.log("Storing HumanAgent data in sessionStorage:", loginData);
+      sessionStorage.setItem("usertoken", loginData.token);
+      sessionStorage.setItem(
         "userData",
         JSON.stringify({
           role: loginData.role,
@@ -107,9 +129,19 @@ const User = () => {
           id: loginData.id,
         })
       );
+      // Also expose a clienttoken for agent to use client services
+      // Prefer a dedicated client token if backend provides it, otherwise reuse the agent token
+      try {
+        const clientToken = loginData.clientToken || loginData.token;
+        if (clientToken) {
+          sessionStorage.setItem("clienttoken", clientToken);
+        }
+      } catch (_) {
+        // ignore
+      }
     } else {
-      localStorage.setItem("usertoken", loginData.token);
-      localStorage.setItem(
+      sessionStorage.setItem("usertoken", loginData.token);
+      sessionStorage.setItem(
         "userData",
         JSON.stringify({
           role: loginData.role,
@@ -209,8 +241,8 @@ const User = () => {
                     <HumanAgentDashboard
                       onLogout={handleLogout}
                       userData={
-                        JSON.parse(localStorage.getItem("userData")) ||
-                        JSON.parse(sessionStorage.getItem("userData"))
+                        JSON.parse(sessionStorage.getItem("userData")) ||
+                        JSON.parse(localStorage.getItem("userData"))
                       }
                     />
                   }
@@ -221,8 +253,8 @@ const User = () => {
                     <HumanAgentDashboard
                       onLogout={handleLogout}
                       userData={
-                        JSON.parse(localStorage.getItem("userData")) ||
-                        JSON.parse(sessionStorage.getItem("userData"))
+                        JSON.parse(sessionStorage.getItem("userData")) ||
+                        JSON.parse(localStorage.getItem("userData"))
                       }
                     />
                   }

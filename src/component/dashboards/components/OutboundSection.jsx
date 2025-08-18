@@ -13,7 +13,7 @@ function OutboundSection({ tenantId }) {
   // New states for campaigns
   const [campaigns, setCampaigns] = useState([]);
   const [showAddCampaignForm, setShowAddCampaignForm] = useState(false);
-console.log(API_BASE_URL)
+
   // Form states
   const [groupForm, setGroupForm] = useState({ name: "", description: "" });
   const [campaignForm, setCampaignForm] = useState({
@@ -43,10 +43,6 @@ console.log(API_BASE_URL)
     try {
       setLoading(true);
       const token = sessionStorage.getItem("clienttoken");
-      console.log(
-        "Using token for groups:",
-        token ? "Token exists" : "No token"
-      );
 
       const response = await fetch(`${API_BASE}/groups`, {
         headers: {
@@ -55,9 +51,7 @@ console.log(API_BASE_URL)
         },
       });
 
-      console.log("Groups response status:", response.status);
       const result = await response.json();
-      console.log("Groups response:", result);
 
       if (result.success) {
         setContactGroups(result.data);
@@ -76,10 +70,6 @@ console.log(API_BASE_URL)
     try {
       setLoading(true);
       const token = sessionStorage.getItem("clienttoken");
-      console.log(
-        "Using token for campaigns:",
-        token ? "Token exists" : "No token"
-      );
 
       const response = await fetch(`${API_BASE}/campaigns`, {
         headers: {
@@ -88,9 +78,7 @@ console.log(API_BASE_URL)
         },
       });
 
-      console.log("Campaigns response status:", response.status);
       const result = await response.json();
-      console.log("Campaigns response:", result);
 
       if (result.success) {
         setCampaigns(result.data);
@@ -144,10 +132,6 @@ console.log(API_BASE_URL)
     try {
       setLoading(true);
       const token = sessionStorage.getItem("clienttoken");
-      console.log(
-        "Using token for create campaign:",
-        token ? "Token exists" : "No token"
-      );
       console.log("Campaign form data:", campaignForm);
 
       const response = await fetch(`${API_BASE}/campaigns`, {
@@ -332,7 +316,7 @@ console.log(API_BASE_URL)
                 {contactGroups.map((group) => (
                   <div
                     key={group._id}
-                    className="bg-gray-50 border border-gray-200 rounded-lg p-6 shadow hover:shadow-lg transition-all"
+                    className="bg-gray-50 border border-gray-200 rounded-lg p-6 shadow hover:shadow-lg transition-all h-64 flex flex-col"
                   >
                     <div className="flex justify-between items-center mb-2">
                       <h3 className="text-lg font-bold text-gray-800 m-0">
@@ -360,19 +344,24 @@ console.log(API_BASE_URL)
                     <div className="text-sm text-gray-500 font-semibold">
                       <span>{group.contacts?.length || 0} contacts</span>
                     </div>
-                    <div className="mt-3">
+                    <div className="mt-3 flex-1 overflow-hidden">
                       <span className="text-sm text-gray-600 font-semibold">
                         Contacts:
                       </span>
                       {!group.contacts || group.contacts.length === 0 ? (
                         <span className="ml-2 text-gray-400">No contacts</span>
                       ) : (
-                        <ul className="ml-4 mt-1 list-disc text-sm">
-                          {group.contacts.map((c, idx) => (
+                        <ul className="ml-4 mt-1 list-disc text-sm max-h-32 overflow-y-auto">
+                          {group.contacts.slice(0, 4).map((c, idx) => (
                             <li key={idx} className="text-gray-700">
                               {c.name} ({c.phone})
                             </li>
                           ))}
+                          {group.contacts.length > 4 && (
+                            <li className="text-blue-600 font-medium">
+                              +{group.contacts.length - 4} more contacts
+                            </li>
+                          )}
                         </ul>
                       )}
                     </div>

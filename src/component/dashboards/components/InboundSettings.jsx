@@ -14,15 +14,15 @@ const InboundSettings = ({ clientId }) => {
         setLoading(true);
         setError(null);
 
-        const token = sessionStorage.getItem('clienttoken') || localStorage.getItem('usertoken');
-        const response = await fetch(
-          `${API_BASE_URL}/client/agents`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
+        const token =
+          sessionStorage.getItem("clienttoken") ||
+          sessionStorage.getItem("usertoken") ||
+          localStorage.getItem("usertoken");
+        const response = await fetch(`${API_BASE_URL}/client/agents`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
 
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
@@ -50,17 +50,14 @@ const InboundSettings = ({ clientId }) => {
     try {
       setError(null);
 
-      const response = await fetch(
-        `${API_BASE_URL}/client/agents`,
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${sessionStorage.getItem("clienttoken")}`,
-          },
-          body: JSON.stringify(form),
-        }
-      );
+      const response = await fetch(`${API_BASE_URL}/client/agents`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${sessionStorage.getItem("clienttoken")}`,
+        },
+        body: JSON.stringify(form),
+      });
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
