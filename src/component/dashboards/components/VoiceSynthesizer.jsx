@@ -50,12 +50,17 @@ const VoiceSynthesizer = ({
       };
 
       const response = await fetch(
-        `${API_BASE_URL}/client/voice/synthesize?clientId=${clientId}`,
+        `${API_BASE_URL}/client/voice/synthesize${
+          clientId ? `?clientId=${clientId}` : ""
+        }`,
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${sessionStorage.getItem("clienttoken")}`,
+            Authorization: `Bearer ${
+              sessionStorage.getItem("clienttoken") ||
+              localStorage.getItem("admintoken")
+            }`,
           },
           body: JSON.stringify({
             text,

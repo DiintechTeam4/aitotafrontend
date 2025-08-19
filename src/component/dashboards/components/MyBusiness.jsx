@@ -18,35 +18,11 @@ import {
 import { API_BASE_URL } from "../../../config";
 
 // Share Popup Component
-const SharePopup = ({ isOpen, onClose, businessHash, businessTitle }) => {
+const SharePopup = ({ isOpen, onClose, businessShareLink, businessTitle }) => {
   const [copied, setCopied] = useState(false);
 
-  // Generate unique URL for each business card
-  const generateShareUrl = (identifier, title) => {
-    const baseUrl = import.meta.env.VITE_BASE_URL;
-    const slug = title
-      ? title
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, "-")
-          .replace(/(^-|-$)/g, "")
-      : "";
-
-    // Check if identifier is a hash (8 characters) or ObjectId (24 characters)
-    const isHash = /^[a-f0-9]{8}$/.test(identifier);
-    const isObjectId = /^[a-f0-9]{24}$/.test(identifier);
-
-    if (isHash) {
-      return `${baseUrl}/${slug}-${identifier}`;
-    } else if (isObjectId) {
-      // Fallback to old format for existing businesses without hash
-      return `${baseUrl}/${slug}${identifier}`;
-    } else {
-      // Invalid identifier
-      return `${baseUrl}/${slug}-invalid`;
-    }
-  };
-
-  const shareUrl = generateShareUrl(businessHash, businessTitle);
+  // Only use the shareLink from backend database
+  const shareUrl = businessShareLink;
 
   const handleCopy = async () => {
     try {
@@ -76,34 +52,51 @@ const SharePopup = ({ isOpen, onClose, businessHash, businessTitle }) => {
         <div className="space-y-4">
           <p className="text-gray-600">Share this business with others:</p>
 
-          <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg border">
-            <input
-              type="text"
-              value={shareUrl}
-              readOnly
-              className="flex-1 bg-transparent text-sm text-gray-700 outline-none"
-            />
-            <button
-              onClick={handleCopy}
-              className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
-            >
-              {copied ? (
-                <>
-                  <Check className="w-4 h-4" />
-                  Copied!
-                </>
-              ) : (
-                <>
-                  <Copy className="w-4 h-4" />
-                  Copy
-                </>
-              )}
-            </button>
-          </div>
+          {shareUrl ? (
+            <>
+              <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg border">
+                <input
+                  type="text"
+                  value={shareUrl}
+                  readOnly
+                  className="flex-1 bg-transparent text-sm text-gray-700 outline-none"
+                />
+                <button
+                  onClick={handleCopy}
+                  className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+                >
+                  {copied ? (
+                    <>
+                      <Check className="w-4 h-4" />
+                      Copied!
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-4 h-4" />
+                      Copy
+                    </>
+                  )}
+                </button>
+              </div>
 
-          <div className="text-xs text-gray-500">
-            Anyone with this link can view your business details
-          </div>
+              <div className="text-xs text-gray-500">
+                Anyone with this link can view your business details
+              </div>
+            </>
+          ) : (
+            <div className="text-center py-6">
+              <div className="inline-flex items-center justify-center w-16 h-16 bg-yellow-100 rounded-full mb-4">
+                <X className="w-8 h-8 text-yellow-600" />
+              </div>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                Share Link Not Available
+              </h3>
+              <p className="text-gray-500 mb-4">
+                This business doesn't have a share link generated yet. Please
+                contact support.
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -490,7 +483,7 @@ export default function BusinessPage() {
   const [error, setError] = useState("");
   const [sharePopup, setSharePopup] = useState({
     isOpen: false,
-    businessHash: null,
+    businessShareLink: null,
     businessTitle: "",
   });
 
@@ -525,12 +518,19 @@ export default function BusinessPage() {
   const closeForm = () => setIsFormOpen(false);
   const handleCreated = () => fetchBusinesses();
 
-  const openSharePopup = (businessHash, businessTitle) => {
-    setSharePopup({ isOpen: true, businessHash, businessTitle });
+  const openSharePopup = (businessShareLink, businessTitle) => {
+    // Only open popup if share link exists
+    if (businessShareLink) {
+      setSharePopup({ isOpen: true, businessShareLink, businessTitle });
+    }
   };
 
   const closeSharePopup = () => {
-    setSharePopup({ isOpen: false, businessHash: null, businessTitle: "" });
+    setSharePopup({
+      isOpen: false,
+      businessShareLink: null,
+      businessTitle: "",
+    });
   };
 
   return (
@@ -732,22 +732,19 @@ export default function BusinessPage() {
                         </div>
                         <button
                           onClick={() =>
-                            openSharePopup(
-                              business.hash || business._id,
-                              business.title
-                            )
+                            openSharePopup(business.Sharelink, business.title)
                           }
                           className={`p-2 rounded-lg transition-all duration-200 ${
-                            business.hash
-                              ? "hover:bg-gray-100 text-gray-500 hover:text-gray-700"
-                              : "bg-yellow-100 text-yellow-600 hover:bg-yellow-200"
+                            business.Sharelink
+                              ? "hover:bg-gray-100 text-gray-500 hover:text-gray-700 cursor-pointer"
+                              : "bg-gray-100 text-gray-400 cursor-not-allowed opacity-50"
                           }`}
                           title={
-                            business.hash
+                            business.Sharelink
                               ? "Share this business"
-                              : "Business needs hash update"
+                              : "Share link not available - contact support"
                           }
-                          disabled={!business.hash && !business._id}
+                          disabled={!business.Sharelink}
                         >
                           <Share2 className="w-5 h-5" />
                         </button>
@@ -770,7 +767,7 @@ export default function BusinessPage() {
       <SharePopup
         isOpen={sharePopup.isOpen}
         onClose={closeSharePopup}
-        businessHash={sharePopup.businessHash}
+        businessShareLink={sharePopup.businessShareLink}
         businessTitle={sharePopup.businessTitle}
       />
     </div>

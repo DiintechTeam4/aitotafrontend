@@ -29,6 +29,7 @@ import { QrCode } from "lucide-react";
 
 import { API_BASE_URL } from "../../../config";
 import AgentDetails from "./AgentDetails";
+import AgentForm from "./AgentForm";
 import QRCode from "qrcode";
 
 // QR Code Logo Configuration
@@ -208,6 +209,9 @@ function StaffAgents() {
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [showQRModal, setShowQRModal] = useState(false);
   const [selectedAgentForQR, setSelectedAgentForQR] = useState(null);
+  const [showCreateAgentModal, setShowCreateAgentModal] = useState(false);
+  const [selectedProvider, setSelectedProvider] = useState(null);
+  const [showAgentForm, setShowAgentForm] = useState(false);
 
   // Get token: prefer sessionStorage for both, fallback to legacy localStorage
   const getClientToken = () => {
@@ -218,44 +222,58 @@ function StaffAgents() {
     );
   };
 
-  // Fetch assigned agent
-  useEffect(() => {
-    const fetchAssignedAgent = async () => {
-      try {
-        setLoading(true);
-        const token = getClientToken();
-
-        if (!token) {
-          setError("No authentication token found");
-          setLoading(false);
-          return;
-        }
-
-        const response = await fetch(`${API_BASE_URL}/client/staff/agent`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        });
-
-        if (!response.ok) {
-          if (response.status === 404) {
-            setError("No agent assigned to you");
-          } else {
-            throw new Error(`Failed to fetch agent: ${response.status}`);
-          }
-        } else {
-          const data = await response.json();
-          setAssignedAgent(data.data);
-        }
-      } catch (err) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
+  // Resolve clientId from assignedAgent or session storage
+  const getResolvedClientId = () => {
+    if (assignedAgent?.clientId) return assignedAgent.clientId;
+    try {
+      const raw = sessionStorage.getItem("clientData");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && parsed.clientId) return parsed.clientId;
       }
-    };
+    } catch (e) {}
+    return "";
+  };
 
-    fetchAssignedAgent();
+  // Fetch assigned agent (refactor for reuse)
+  const fetchAssignedAgentData = async () => {
+    try {
+      setLoading(true);
+      const token = getClientToken();
+
+      if (!token) {
+        setError("No authentication token found");
+        setLoading(false);
+        return;
+      }
+
+      const response = await fetch(`${API_BASE_URL}/client/staff/agent`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          setError("No agent assigned to you");
+        } else {
+          throw new Error(`Failed to fetch agent: ${response.status}`);
+        }
+      } else {
+        const data = await response.json();
+        setAssignedAgent(data.data);
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Initial fetch
+  useEffect(() => {
+    fetchAssignedAgentData();
   }, []);
 
   const formatPersonality = (personality) => {
@@ -356,6 +374,15 @@ function StaffAgents() {
     setSelectedAgentForQR(null);
   };
 
+  // Create Agent flow
+  const openCreateAgentModal = () => setShowCreateAgentModal(true);
+  const closeCreateAgentModal = () => setShowCreateAgentModal(false);
+  const handleProviderSelect = (provider) => {
+    setSelectedProvider(provider);
+    setShowCreateAgentModal(false);
+    setShowAgentForm(true);
+  };
+
   const downloadQRCode = async () => {
     if (!selectedAgentForQR) return;
 
@@ -448,16 +475,113 @@ function StaffAgents() {
           <p className="text-gray-500">
             You don't have any agents assigned to you at the moment.
           </p>
+          <div className="mt-6">
+            <button
+              onClick={openCreateAgentModal}
+              className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+            >
+              Create Agent
+            </button>
+          </div>
         </div>
+
+        {/* Provider Selection Modal */}
+        {showCreateAgentModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-60">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+              <div className="bg-gradient-to-r from-indigo-600 to-indigo-700 px-6 py-4 text-white flex items-center justify-between">
+                <h3 className="text-lg font-semibold m-0">
+                  Select Service Provider
+                </h3>
+                <button
+                  onClick={closeCreateAgentModal}
+                  className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                >
+                  <FiX className="w-6 h-6" />
+                </button>
+              </div>
+              <div className="p-6 grid grid-cols-1 gap-4">
+                <button
+                  onClick={() => handleProviderSelect("c-zentrix")}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 text-left"
+                >
+                  <div className="font-semibold text-gray-800">C-Zentrix</div>
+                  <div className="text-sm text-gray-500">
+                    Create agent with C-Zentrix
+                  </div>
+                </button>
+                <button
+                  onClick={() => handleProviderSelect("tata")}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 text-left"
+                >
+                  <div className="font-semibold text-gray-800">TATA</div>
+                  <div className="text-sm text-gray-500">
+                    Create agent with TATA (no Account SID or Caller ID
+                    required)
+                  </div>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Agent Form Modal */}
+        {showAgentForm && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-60">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-6xl mx-4 max-h-[90vh] overflow-auto">
+              <div className="bg-gradient-to-r from-gray-800 to-black px-6 py-4 text-white flex items-center justify-between">
+                <h3 className="text-lg font-semibold m-0">
+                  Create Agent (
+                  {selectedProvider === "tata" ? "TATA" : "C-Zentrix"})
+                </h3>
+                <button
+                  onClick={() => setShowAgentForm(false)}
+                  className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                >
+                  <FiX className="w-6 h-6" />
+                </button>
+              </div>
+              <div className="p-4">
+                <AgentForm
+                  agent={null}
+                  onSave={() => {
+                    setShowAgentForm(false);
+                    setSelectedProvider(null);
+                    fetchAssignedAgentData();
+                  }}
+                  onCancel={() => {
+                    setShowAgentForm(false);
+                    setSelectedProvider(null);
+                  }}
+                  clientId={getResolvedClientId()}
+                  initialServiceProvider={selectedProvider}
+                  lockServiceProvider={true}
+                />
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
 
   return (
     <div className="w-full">
+      {/* Top actions */}
+      <div className="flex justify-end mb-4">
+        <button
+          onClick={openCreateAgentModal}
+          className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+        >
+          Create Agent
+        </button>
+      </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Main Agent Card */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 hover:shadow-lg hover:border-gray-300 transition-all duration-300 overflow-hidden cursor-pointer relative">
+        <div
+          className="bg-white rounded-xl shadow-sm border border-gray-100 hover:shadow-lg hover:border-gray-300 transition-all duration-300 overflow-hidden cursor-pointer relative"
+          onClick={() => handleViewDetails(assignedAgent)}
+        >
           {/* Active Status Indicator */}
           <div
             className={`absolute top-2 left-2 w-3 h-3 rounded-full ${
@@ -621,54 +745,7 @@ function StaffAgents() {
         </div>
       </div>
 
-      {/* Agent Information Panel */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-        <h3 className="text-lg font-semibold text-gray-800 mb-4">
-          Agent Information
-        </h3>
-
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
-                Language
-              </label>
-              <p className="text-sm font-medium text-gray-800">
-                {assignedAgent.language || "English"}
-              </p>
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
-                Voice
-              </label>
-              <p className="text-sm font-medium text-gray-800">
-                {assignedAgent.voiceSelection || "Default"}
-              </p>
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
-              System Prompt
-            </label>
-            <p className="text-sm text-gray-800 bg-gray-50 p-3 rounded-lg">
-              {assignedAgent.systemPrompt || "No system prompt configured"}
-            </p>
-          </div>
-
-          {assignedAgent.brandInfo && (
-            <div>
-              <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
-                Brand Information
-              </label>
-              <p className="text-sm text-gray-800 bg-gray-50 p-3 rounded-lg">
-                {assignedAgent.brandInfo}
-              </p>
-            </div>
-          )}
-        </div>
-      </div>
+      {/* Details are shown only via AgentDetails modal when card is clicked */}
 
       {/* Click outside to close menu */}
       {openMenuId && (
@@ -753,6 +830,82 @@ function StaffAgents() {
         clientId={assignedAgent?.clientId}
         onEdit={() => {}} // No edit functionality for staff
       />
+
+      {/* Provider Selection Modal */}
+      {showCreateAgentModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-60">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+            <div className="bg-gradient-to-r from-indigo-600 to-indigo-700 px-6 py-4 text-white flex items-center justify-between">
+              <h3 className="text-lg font-semibold m-0">
+                Select Service Provider
+              </h3>
+              <button
+                onClick={closeCreateAgentModal}
+                className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+              >
+                <FiX className="w-6 h-6" />
+              </button>
+            </div>
+            <div className="p-6 grid grid-cols-1 gap-4">
+              <button
+                onClick={() => handleProviderSelect("c-zentrix")}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 text-left"
+              >
+                <div className="font-semibold text-gray-800">C-Zentrix</div>
+                <div className="text-sm text-gray-500">
+                  Create agent with C-Zentrix
+                </div>
+              </button>
+              <button
+                onClick={() => handleProviderSelect("tata")}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 text-left"
+              >
+                <div className="font-semibold text-gray-800">TATA</div>
+                <div className="text-sm text-gray-500">
+                  Create agent with TATA (no Account SID or Caller ID required)
+                </div>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Agent Form Modal */}
+      {showAgentForm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-60">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-6xl mx-4 max-h-[90vh] overflow-auto">
+            <div className="bg-gradient-to-r from-gray-800 to-black px-6 py-4 text-white flex items-center justify-between">
+              <h3 className="text-lg font-semibold m-0">
+                Create Agent (
+                {selectedProvider === "tata" ? "TATA" : "C-Zentrix"})
+              </h3>
+              <button
+                onClick={() => setShowAgentForm(false)}
+                className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+              >
+                <FiX className="w-6 h-6" />
+              </button>
+            </div>
+            <div className="p-4">
+              <AgentForm
+                agent={null}
+                onSave={() => {
+                  setShowAgentForm(false);
+                  setSelectedProvider(null);
+                  fetchAssignedAgentData();
+                }}
+                onCancel={() => {
+                  setShowAgentForm(false);
+                  setSelectedProvider(null);
+                }}
+                clientId={getResolvedClientId()}
+                initialServiceProvider={selectedProvider}
+                lockServiceProvider={true}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

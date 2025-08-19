@@ -27,7 +27,7 @@ import {
   FiArrowLeft,
   FiRefreshCw,
 } from "react-icons/fi";
-import { QrCode } from 'lucide-react';
+import { QrCode } from "lucide-react";
 
 import { API_BASE_URL } from "../../../config";
 import AgentDetails from "./AgentDetails";
@@ -36,15 +36,15 @@ import QRCode from "qrcode";
 // QR Code Logo Configuration
 // To customize the logo, update these values:
 const QR_LOGO_CONFIG = {
-  logoUrl: '/AitotaLogo.png', // Path to your logo image (relative to public folder)
+  logoUrl: "/AitotaLogo.png", // Path to your logo image (relative to public folder)
   logoSize: 0.25, // Logo size as a fraction of QR code size (0.1 = 10%, 0.2 = 20%, etc.)
   // Recommended logoSize: 0.15-0.25 for best scannability
-  
+
   // Alternative logo options (uncomment and modify as needed):
   // logoUrl: '/your-custom-logo.png', // Your custom logo
   // logoUrl: '/company-logo.jpg', // Company logo
   // logoUrl: '/brand-icon.svg', // Brand icon
-  
+
   // Logo size recommendations:
   // - 0.1 (10%): Very small, highly scannable
   // - 0.15 (15%): Small, good scannability
@@ -54,7 +54,7 @@ const QR_LOGO_CONFIG = {
 };
 
 // QR Code Component with Logo Support
-// 
+//
 // This component generates QR codes with optional logo overlays.
 // The logo is placed in the center of the QR code with a white circular background
 // to ensure the QR code remains scannable.
@@ -73,18 +73,32 @@ const QR_LOGO_CONFIG = {
 // - Place logo files in the public folder
 // - Keep logo size under 25% of QR code size for best scannability
 //
-const QRCodeDisplay = ({ value, size = 200, bgColor = "#fff", fgColor = "#000", logoUrl = null, logoSize = 0.2 }) => {
+const QRCodeDisplay = ({
+  value,
+  size = 200,
+  bgColor = "#fff",
+  fgColor = "#000",
+  logoUrl = null,
+  logoSize = 0.2,
+}) => {
   const [qrDataUrl, setQrDataUrl] = useState("");
   const [error, setError] = useState(null);
 
   useEffect(() => {
     if (!value) return;
-    
+
     const generateQRWithLogo = async () => {
       try {
         if (logoUrl) {
           // Generate QR code with logo overlay
-          const qrDataUrl = await generateQRCodeWithLogo(value, size, bgColor, fgColor, logoUrl, logoSize);
+          const qrDataUrl = await generateQRCodeWithLogo(
+            value,
+            size,
+            bgColor,
+            fgColor,
+            logoUrl,
+            logoSize
+          );
           setQrDataUrl(qrDataUrl);
         } else {
           // Generate regular QR code
@@ -109,7 +123,10 @@ const QRCodeDisplay = ({ value, size = 200, bgColor = "#fff", fgColor = "#000", 
   if (error) {
     return (
       <div className="flex flex-col items-center space-y-2">
-        <div className="flex flex-col items-center justify-center bg-gray-100 border-2 border-dashed border-gray-300 rounded p-4" style={{ width: size, height: size }}>
+        <div
+          className="flex flex-col items-center justify-center bg-gray-100 border-2 border-dashed border-gray-300 rounded p-4"
+          style={{ width: size, height: size }}
+        >
           <div className="text-2xl mb-2">📱</div>
           <div className="text-xs text-gray-600 text-center">QR Code Error</div>
           <div className="text-xs text-red-500 mt-1">{error}</div>
@@ -121,7 +138,10 @@ const QRCodeDisplay = ({ value, size = 200, bgColor = "#fff", fgColor = "#000", 
   return (
     <div className="flex flex-col items-center space-y-4">
       {!qrDataUrl ? (
-        <div className="flex items-center justify-center bg-gray-100 border rounded animate-pulse" style={{ width: size, height: size }}>
+        <div
+          className="flex items-center justify-center bg-gray-100 border rounded animate-pulse"
+          style={{ width: size, height: size }}
+        >
           <span className="text-xs text-gray-500">Generating QR...</span>
         </div>
       ) : (
@@ -138,12 +158,19 @@ const QRCodeDisplay = ({ value, size = 200, bgColor = "#fff", fgColor = "#000", 
 };
 
 // Function to generate QR code with logo overlay
-const generateQRCodeWithLogo = async (text, size, bgColor, fgColor, logoUrl, logoSize = 0.2) => {
+const generateQRCodeWithLogo = async (
+  text,
+  size,
+  bgColor,
+  fgColor,
+  logoUrl,
+  logoSize = 0.2
+) => {
   return new Promise((resolve, reject) => {
     try {
       // Create canvas
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
       canvas.width = size;
       canvas.height = size;
 
@@ -155,55 +182,63 @@ const generateQRCodeWithLogo = async (text, size, bgColor, fgColor, logoUrl, log
           dark: fgColor,
           light: bgColor,
         },
-      }).then(qrDataUrl => {
-        // Create image from QR code
-        const qrImage = new Image();
-        qrImage.onload = () => {
-          // Draw QR code on canvas
-          ctx.drawImage(qrImage, 0, 0, size, size);
+      })
+        .then((qrDataUrl) => {
+          // Create image from QR code
+          const qrImage = new Image();
+          qrImage.onload = () => {
+            // Draw QR code on canvas
+            ctx.drawImage(qrImage, 0, 0, size, size);
 
-          // Load and draw logo
-          const logoImage = new Image();
-          logoImage.onload = () => {
-            // Calculate logo dimensions (logoSize is a fraction of QR code size)
-            const logoWidth = size * logoSize;
-            const logoHeight = size * logoSize;
-            
-            // Center the logo
-            const logoX = (size - logoWidth) / 2;
-            const logoY = (size - logoHeight) / 2;
+            // Load and draw logo
+            const logoImage = new Image();
+            logoImage.onload = () => {
+              // Calculate logo dimensions (logoSize is a fraction of QR code size)
+              const logoWidth = size * logoSize;
+              const logoHeight = size * logoSize;
 
-            // Create a white background circle for the logo
-            const logoRadius = logoWidth / 2;
-            ctx.save();
-            ctx.beginPath();
-            ctx.arc(logoX + logoRadius, logoY + logoRadius, logoRadius, 0, 2 * Math.PI);
-            ctx.fillStyle = bgColor;
-            ctx.fill();
-            ctx.restore();
+              // Center the logo
+              const logoX = (size - logoWidth) / 2;
+              const logoY = (size - logoHeight) / 2;
 
-            // Draw logo
-            ctx.drawImage(logoImage, logoX, logoY, logoWidth, logoHeight);
+              // Create a white background circle for the logo
+              const logoRadius = logoWidth / 2;
+              ctx.save();
+              ctx.beginPath();
+              ctx.arc(
+                logoX + logoRadius,
+                logoY + logoRadius,
+                logoRadius,
+                0,
+                2 * Math.PI
+              );
+              ctx.fillStyle = bgColor;
+              ctx.fill();
+              ctx.restore();
 
-            // Convert canvas to data URL
-            const finalDataUrl = canvas.toDataURL('image/png');
-            resolve(finalDataUrl);
+              // Draw logo
+              ctx.drawImage(logoImage, logoX, logoY, logoWidth, logoHeight);
+
+              // Convert canvas to data URL
+              const finalDataUrl = canvas.toDataURL("image/png");
+              resolve(finalDataUrl);
+            };
+
+            logoImage.onerror = () => {
+              // If logo fails to load, just return QR code without logo
+              resolve(qrDataUrl);
+            };
+
+            logoImage.src = logoUrl;
           };
-          
-          logoImage.onerror = () => {
-            // If logo fails to load, just return QR code without logo
-            resolve(qrDataUrl);
+
+          qrImage.onerror = () => {
+            reject(new Error("Failed to generate QR code"));
           };
-          
-          logoImage.src = logoUrl;
-        };
-        
-        qrImage.onerror = () => {
-          reject(new Error('Failed to generate QR code'));
-        };
-        
-        qrImage.src = qrDataUrl;
-      }).catch(reject);
+
+          qrImage.src = qrDataUrl;
+        })
+        .catch(reject);
     } catch (error) {
       reject(error);
     }
@@ -225,28 +260,28 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
   // Voice Chat Modal States (Updated for WebSocket)
   const [showVoiceChatModal, setShowVoiceChatModal] = useState(false);
   const [selectedAgentForChat, setSelectedAgentForChat] = useState(null);
-  
+
   // WebSocket related states
   const [wsConnection, setWsConnection] = useState(null);
-  const [wsConnectionStatus, setWsConnectionStatus] = useState('disconnected');
+  const [wsConnectionStatus, setWsConnectionStatus] = useState("disconnected");
   const [isAITalking, setIsAITalking] = useState(false);
   const [streamSid, setStreamSid] = useState(null);
   const [isAudioStreaming, setIsAudioStreaming] = useState(false);
   const [isStoppingAudio, setIsStoppingAudio] = useState(false);
   const [justConnected, setJustConnected] = useState(false);
   const [micLevel, setMicLevel] = useState(0);
-  
+
   // Reconnection states
   const [reconnectAttempts, setReconnectAttempts] = useState(0);
   const [maxReconnectAttempts] = useState(5);
   const [reconnectDelay, setReconnectDelay] = useState(1000);
   const [isReconnecting, setIsReconnecting] = useState(false);
-  const [lastDisconnectReason, setLastDisconnectReason] = useState('');
-  
+  const [lastDisconnectReason, setLastDisconnectReason] = useState("");
+
   // Speech detection states
   const [isUserSpeaking, setIsUserSpeaking] = useState(false);
   const [userSpeechEnded, setUserSpeechEnded] = useState(false);
-  const [aiStatus, setAiStatus] = useState('idle'); // 'idle', 'listening', 'thinking', 'speaking'
+  const [aiStatus, setAiStatus] = useState("idle"); // 'idle', 'listening', 'thinking', 'speaking'
 
   // Debug states
   const [debugLogs, setDebugLogs] = useState([]);
@@ -255,7 +290,7 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
     chunksSent: 0,
     bytesProcessed: 0,
     lastChunkTime: null,
-    streamingActive: false
+    streamingActive: false,
   });
 
   // Call Modal States
@@ -287,7 +322,7 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
   const microphoneRef = useRef(null);
   const dataArrayRef = useRef(null);
   const animationFrameRef = useRef(null);
-  
+
   // Audio context and processing refs
   const audioPlaybackContextRef = useRef(null);
   const streamRef = useRef(null);
@@ -316,7 +351,7 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
   const [callTerminationData, setCallTerminationData] = useState({
     accountSid: null,
     callSid: null,
-    streamSid: null
+    streamSid: null,
   });
   const [isTerminatingCall, setIsTerminatingCall] = useState(false);
 
@@ -330,10 +365,10 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
   useEffect(() => {
     if (agents && agents.length > 0) {
       const initialStates = {};
-      agents.forEach(agent => {
+      agents.forEach((agent) => {
         initialStates[agent._id] = {
           isActive: agent.isActive !== undefined ? agent.isActive : true,
-          isToggling: false
+          isToggling: false,
         };
       });
       setAgentStates(initialStates);
@@ -391,11 +426,11 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
   }, []);
 
   // Debug logging function
-  const addDebugLog = (message, type = 'info') => {
+  const addDebugLog = (message, type = "info") => {
     const timestamp = new Date().toLocaleTimeString();
     const logEntry = { timestamp, message, type };
     console.log(`[${type.toUpperCase()}] ${timestamp}: ${message}`);
-    setDebugLogs(prev => [...prev.slice(-19), logEntry]);
+    setDebugLogs((prev) => [...prev.slice(-19), logEntry]);
   };
 
   const formatPersonality = (personality) => {
@@ -430,7 +465,7 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
   // Enhanced WebSocket connection management with reconnection
   const connectToWebSocket = (isReconnect = false, agentData = null) => {
     if (wsConnection && wsConnection.readyState === WebSocket.OPEN) {
-      addDebugLog('WebSocket already connected', 'info');
+      addDebugLog("WebSocket already connected", "info");
       return;
     }
 
@@ -442,106 +477,130 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
 
     if (isReconnect) {
       setIsReconnecting(true);
-      addDebugLog(`Reconnection attempt ${reconnectAttemptsRef.current + 1}/${maxReconnectAttempts}`, 'info');
+      addDebugLog(
+        `Reconnection attempt ${
+          reconnectAttemptsRef.current + 1
+        }/${maxReconnectAttempts}`,
+        "info"
+      );
     } else {
       setReconnectAttempts(0);
       reconnectAttemptsRef.current = 0;
     }
 
-    setWsConnectionStatus('connecting');
-    addDebugLog('Attempting WebSocket connection...', 'info');
-    
+    setWsConnectionStatus("connecting");
+    addDebugLog("Attempting WebSocket connection...", "info");
+
     // Use the correct WebSocket URL format that matches your server
     const wsUrl = `wss://test.aitota.com/ws`;
-    addDebugLog(`Connecting to: ${wsUrl}`, 'info');
-    
+    addDebugLog(`Connecting to: ${wsUrl}`, "info");
+
     const ws = new WebSocket(wsUrl);
-    
+
     // Set connection timeout
     const connectionTimeout = setTimeout(() => {
       if (ws.readyState === WebSocket.CONNECTING) {
-        addDebugLog('WebSocket connection timeout', 'error');
+        addDebugLog("WebSocket connection timeout", "error");
         ws.close();
-        handleConnectionFailure('Connection timeout');
+        handleConnectionFailure("Connection timeout");
       }
     }, 10000); // 10 second timeout
-    
+
     ws.onopen = () => {
       clearTimeout(connectionTimeout);
-      addDebugLog('WebSocket connected successfully', 'success');
-      setWsConnectionStatus('connected');
+      addDebugLog("WebSocket connected successfully", "success");
+      setWsConnectionStatus("connected");
       setIsReconnecting(false);
       setReconnectAttempts(0);
       reconnectAttemptsRef.current = 0;
       setReconnectDelay(1000); // Reset delay
-      setLastDisconnectReason('');
-      
+      setLastDisconnectReason("");
+
       // Generate a unique stream ID
-      const streamId = `stream_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const streamId = `stream_${Date.now()}_${Math.random()
+        .toString(36)
+        .substr(2, 9)}`;
       setStreamSid(streamId);
-      
+
       // Use agentData if provided, otherwise fall back to selectedAgentForChat
       const agent = agentData || selectedAgentForChat;
-      
+
       if (!agent) {
-        addDebugLog('No agent data available for WebSocket connection', 'error');
+        addDebugLog(
+          "No agent data available for WebSocket connection",
+          "error"
+        );
         ws.close();
         return;
       }
-      
+
       // Send the start message in the format expected by your server
       const startMessage = {
-        event: 'start',
+        event: "start",
         streamSid: streamId,
         start: {
-          accountSid: agent.accountSid || 'default_account',
+          accountSid: agent.accountSid || "default_account",
           streamSid: streamId,
           from: clientId,
           to: agent.callerId,
-          extraData: btoa(JSON.stringify({
-            agentId: agent._id,
-            agentName: agent.agentName,
-            clientId: clientId,
-            CallDirection: "InDial" // This will be treated as inbound
-          }))
-        }
+          extraData: btoa(
+            JSON.stringify({
+              agentId: agent._id,
+              agentName: agent.agentName,
+              clientId: clientId,
+              CallDirection: "InDial", // This will be treated as inbound
+            })
+          ),
+        },
       };
-      
-      addDebugLog(`Sending start message: ${JSON.stringify(startMessage)}`, 'info');
+
+      addDebugLog(
+        `Sending start message: ${JSON.stringify(startMessage)}`,
+        "info"
+      );
       ws.send(JSON.stringify(startMessage));
-      
+
       // Set the WebSocket connection AFTER sending the start message
       setWsConnection(ws);
       wsConnectionRef.current = ws;
       streamSidRef.current = streamId;
-      
+
       // Don't start audio streaming automatically - wait for user to click mic
-      addDebugLog('WebSocket connected. Click the microphone to start audio streaming.', 'info');
+      addDebugLog(
+        "WebSocket connected. Click the microphone to start audio streaming.",
+        "info"
+      );
     };
-    
+
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        addDebugLog(`Received WebSocket message: ${data.event}`, 'info');
+        addDebugLog(`Received WebSocket message: ${data.event}`, "info");
         handleWebSocketMessage(data);
       } catch (error) {
-        addDebugLog(`Error parsing WebSocket message: ${error.message}`, 'error');
+        addDebugLog(
+          `Error parsing WebSocket message: ${error.message}`,
+          "error"
+        );
       }
     };
-    
+
     ws.onerror = (error) => {
       clearTimeout(connectionTimeout);
-      addDebugLog(`WebSocket error: ${error}`, 'error');
-      setWsConnectionStatus('disconnected');
+      addDebugLog(`WebSocket error: ${error}`, "error");
+      setWsConnectionStatus("disconnected");
       setIsReconnecting(false);
       setJustConnected(false);
     };
-    
+
     ws.onclose = (event) => {
       clearTimeout(connectionTimeout);
       const reason = event.reason || `Code: ${event.code}`;
-      addDebugLog(`WebSocket disconnected. Code: ${event.code}, Reason: ${event.reason}`, 'warning');
-      setWsConnectionStatus('disconnected');
+      addDebugLog(
+        `WebSocket disconnected. Code: ${event.code}, Reason: ${event.reason}`,
+        "warning"
+      );
+      setWsConnectionStatus("disconnected");
       setWsConnection(null);
       setJustConnected(false);
       wsConnectionRef.current = null;
@@ -549,9 +608,10 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
       streamSidRef.current = null;
       setLastDisconnectReason(reason);
       stopContinuousAudioStreaming();
-      
+
       // Attempt reconnection if not manually closed
-      if (event.code !== 1000 && event.code !== 1001) { // Not normal closure
+      if (event.code !== 1000 && event.code !== 1001) {
+        // Not normal closure
         handleConnectionFailure(reason);
       }
     };
@@ -561,81 +621,102 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
   const handleConnectionFailure = (reason) => {
     setLastDisconnectReason(reason);
     setJustConnected(false);
-    
+
     if (reconnectAttemptsRef.current < maxReconnectAttempts) {
-      const delay = Math.min(reconnectDelay * Math.pow(2, reconnectAttemptsRef.current), 30000); // Max 30 seconds
-      
-      addDebugLog(`Connection failed: ${reason}. Reconnecting in ${delay/1000}s...`, 'warning');
-      
+      const delay = Math.min(
+        reconnectDelay * Math.pow(2, reconnectAttemptsRef.current),
+        30000
+      ); // Max 30 seconds
+
+      addDebugLog(
+        `Connection failed: ${reason}. Reconnecting in ${delay / 1000}s...`,
+        "warning"
+      );
+
       reconnectTimeoutRef.current = setTimeout(() => {
         reconnectAttemptsRef.current++;
         setReconnectAttempts(reconnectAttemptsRef.current);
         connectToWebSocket(true);
       }, delay);
     } else {
-      addDebugLog(`Max reconnection attempts (${maxReconnectAttempts}) reached. Please reconnect manually.`, 'error');
+      addDebugLog(
+        `Max reconnection attempts (${maxReconnectAttempts}) reached. Please reconnect manually.`,
+        "error"
+      );
       setIsReconnecting(false);
     }
   };
 
   // Manual reconnect function
   const manualReconnect = () => {
-    addDebugLog('Manual reconnection initiated', 'info');
-    
+    addDebugLog("Manual reconnection initiated", "info");
+
     // Reset reconnection state
     setReconnectAttempts(0);
     reconnectAttemptsRef.current = 0;
     setReconnectDelay(1000);
     setIsReconnecting(false);
     setJustConnected(false);
-    
+
     // Clear any existing timeout
     if (reconnectTimeoutRef.current) {
       clearTimeout(reconnectTimeoutRef.current);
       reconnectTimeoutRef.current = null;
     }
-    
+
     // Disconnect existing connection if any
     if (wsConnectionRef.current) {
       wsConnectionRef.current.close();
     }
-    
+
     // Start new connection
     connectToWebSocket(false);
   };
 
   const handleWebSocketMessage = (data) => {
     switch (data.event) {
-      case 'connected':
-        addDebugLog('WebSocket session connected', 'success');
+      case "connected":
+        addDebugLog("WebSocket session connected", "success");
         break;
-        
-      case 'start':
-        addDebugLog(`Session started with streamSid: ${data.streamSid}`, 'success');
+
+      case "start":
+        addDebugLog(
+          `Session started with streamSid: ${data.streamSid}`,
+          "success"
+        );
         setStreamSid(data.streamSid);
         break;
-        
-      case 'media':
+
+      case "media":
         if (data.media && data.media.payload) {
-          addDebugLog(`Received audio chunk: ${data.media.payload.length} chars`, 'info');
-          
+          addDebugLog(
+            `Received audio chunk: ${data.media.payload.length} chars`,
+            "info"
+          );
+
           // Minimal receiving indicator - no state updates that could affect audio
-          addDebugLog(`Received audio chunk: ${data.media.payload.length} chars`, 'info');
-          
+          addDebugLog(
+            `Received audio chunk: ${data.media.payload.length} chars`,
+            "info"
+          );
+
           playAudioChunk(data.media.payload);
         }
         break;
-        
-      case 'stop':
-        addDebugLog('Session stopped by server', 'info');
+
+      case "stop":
+        addDebugLog("Session stopped by server", "info");
         break;
-        
-      case 'error':
-        addDebugLog(`Server error: ${data.message || 'Unknown error'}`, 'error');
+
+      case "error":
+        addDebugLog(
+          `Server error: ${data.message || "Unknown error"}`,
+          "error"
+        );
         break;
-        
+
       default:
-        addDebugLog(`Unknown WebSocket event: ${data.event}`, 'warning');
+        addDebugLog(`Unknown WebSocket event: ${data.event}`, "warning");
     }
   };
 
@@ -645,23 +726,25 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
       clearTimeout(reconnectTimeoutRef.current);
       reconnectTimeoutRef.current = null;
     }
-    
+
     setIsReconnecting(false);
     setReconnectAttempts(0);
     reconnectAttemptsRef.current = 0;
     setJustConnected(false);
-    
+
     if (wsConnectionRef.current) {
-      addDebugLog('Disconnecting WebSocket...', 'info');
-      wsConnectionRef.current.send(JSON.stringify({
-        event: 'stop',
-        streamSid: streamSidRef.current
-      }));
-      
-      wsConnectionRef.current.close(1000, 'Manual disconnect'); // Normal closure
+      addDebugLog("Disconnecting WebSocket...", "info");
+      wsConnectionRef.current.send(
+        JSON.stringify({
+          event: "stop",
+          streamSid: streamSidRef.current,
+        })
+      );
+
+      wsConnectionRef.current.close(1000, "Manual disconnect"); // Normal closure
       setWsConnection(null);
       wsConnectionRef.current = null;
-      setWsConnectionStatus('disconnected');
+      setWsConnectionStatus("disconnected");
       setStreamSid(null);
       streamSidRef.current = null;
     }
@@ -672,78 +755,99 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
   const startContinuousAudioStreaming = async () => {
     try {
       if (isStreamingActiveRef.current) {
-        addDebugLog('Audio streaming already active', 'warning');
+        addDebugLog("Audio streaming already active", "warning");
         return;
       }
 
       // Check if WebSocket is ready before starting audio streaming
-      if (!wsConnectionRef.current || wsConnectionRef.current.readyState !== WebSocket.OPEN) {
-        addDebugLog('WebSocket not ready, cannot start audio streaming', 'error');
+      if (
+        !wsConnectionRef.current ||
+        wsConnectionRef.current.readyState !== WebSocket.OPEN
+      ) {
+        addDebugLog(
+          "WebSocket not ready, cannot start audio streaming",
+          "error"
+        );
         return;
       }
 
       if (!streamSidRef.current) {
-        addDebugLog('No streamSid available, cannot start audio streaming', 'error');
+        addDebugLog(
+          "No streamSid available, cannot start audio streaming",
+          "error"
+        );
         return;
       }
 
-      addDebugLog('Starting continuous audio streaming...', 'info');
+      addDebugLog("Starting continuous audio streaming...", "info");
 
       // Request microphone permission with higher sample rate
-      const stream = await navigator.mediaDevices.getUserMedia({ 
+      const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           sampleRate: 48000, // Use browser's native sample rate
           channelCount: 1,
           echoCancellation: true,
           noiseSuppression: true,
-          autoGainControl: false
-        } 
+          autoGainControl: false,
+        },
       });
 
       streamRef.current = stream;
-      addDebugLog('Microphone access granted for continuous streaming', 'success');
+      addDebugLog(
+        "Microphone access granted for continuous streaming",
+        "success"
+      );
 
       // Create audio context with browser's default sample rate
-      audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
+      audioContextRef.current = new (window.AudioContext ||
+        window.webkitAudioContext)();
 
       // Resume audio context if suspended
-      if (audioContextRef.current.state === 'suspended') {
+      if (audioContextRef.current.state === "suspended") {
         await audioContextRef.current.resume();
       }
 
-      addDebugLog(`Audio context created with sample rate: ${audioContextRef.current.sampleRate}`, 'info');
-      
+      addDebugLog(
+        `Audio context created with sample rate: ${audioContextRef.current.sampleRate}`,
+        "info"
+      );
+
       const source = audioContextRef.current.createMediaStreamSource(stream);
-      
+
       // Create analyzer for visual feedback
       analyserRef.current = audioContextRef.current.createAnalyser();
       analyserRef.current.fftSize = 256;
       source.connect(analyserRef.current);
-      
+
       // Use ScriptProcessorNode for reliable audio processing
       const bufferSize = 4096; // Larger buffer for more stable processing
-      const scriptProcessor = audioContextRef.current.createScriptProcessor(bufferSize, 1, 1);
-      
+      const scriptProcessor = audioContextRef.current.createScriptProcessor(
+        bufferSize,
+        1,
+        1
+      );
+
       let sampleBuffer = [];
       const targetSampleRate = 8000; // Target sample rate for server
-      const downsampleRatio = audioContextRef.current.sampleRate / targetSampleRate;
+      const downsampleRatio =
+        audioContextRef.current.sampleRate / targetSampleRate;
       let downsampleCounter = 0;
-      
+
       scriptProcessor.onaudioprocess = (event) => {
         if (!isStreamingActiveRef.current) {
           return;
         }
-        
+
         const inputBuffer = event.inputBuffer;
         const inputData = inputBuffer.getChannelData(0);
-        
+
         // Downsample from browser's native sample rate to 8kHz
         for (let i = 0; i < inputData.length; i++) {
           downsampleCounter++;
           if (downsampleCounter >= downsampleRatio) {
             sampleBuffer.push(inputData[i]);
             downsampleCounter = 0;
-            
+
             // When we have 80 samples (10ms at 8kHz), process them
             if (sampleBuffer.length >= 80) {
               const chunk = new Float32Array(sampleBuffer.splice(0, 80));
@@ -752,40 +856,42 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
           }
         }
       };
-      
+
       source.connect(scriptProcessor);
       scriptProcessor.connect(audioContextRef.current.destination);
-      
+
       processorNodeRef.current = scriptProcessor;
       microphoneRef.current = { stream, scriptProcessor };
-      
+
       isStreamingActiveRef.current = true;
       setIsAudioStreaming(true);
-      
+
       // Reset audio stats
       setAudioStats({
         chunksRecorded: 0,
         chunksSent: 0,
         bytesProcessed: 0,
         lastChunkTime: null,
-        streamingActive: true
+        streamingActive: true,
       });
-      
+
       // Start visual feedback
       updateMicLevel();
-      
-      addDebugLog('Continuous audio streaming started successfully', 'success');
-      
+
+      addDebugLog("Continuous audio streaming started successfully", "success");
     } catch (error) {
-      addDebugLog(`Error starting continuous audio streaming: ${error.message}`, 'error');
+      addDebugLog(
+        `Error starting continuous audio streaming: ${error.message}`,
+        "error"
+      );
       isStreamingActiveRef.current = false;
       setIsAudioStreaming(false);
     }
   };
 
   const stopContinuousAudioStreaming = () => {
-    addDebugLog('Stopping continuous audio streaming...', 'info');
-    
+    addDebugLog("Stopping continuous audio streaming...", "info");
+
     // Immediately set streaming state to false
     isStreamingActiveRef.current = false;
     setIsAudioStreaming(false);
@@ -796,14 +902,14 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
       animationFrameRef.current = null;
-      addDebugLog('Animation frame cancelled', 'info');
+      addDebugLog("Animation frame cancelled", "info");
     }
 
     // Stop microphone stream
     if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => {
+      streamRef.current.getTracks().forEach((track) => {
         track.stop();
-        addDebugLog('Microphone track stopped', 'info');
+        addDebugLog("Microphone track stopped", "info");
       });
       streamRef.current = null;
     }
@@ -812,14 +918,14 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
     if (processorNodeRef.current) {
       processorNodeRef.current.disconnect();
       processorNodeRef.current = null;
-      addDebugLog('ScriptProcessor disconnected', 'info');
+      addDebugLog("ScriptProcessor disconnected", "info");
     }
 
     // Close audio context
-    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+    if (audioContextRef.current && audioContextRef.current.state !== "closed") {
       audioContextRef.current.close();
       audioContextRef.current = null;
-      addDebugLog('Audio context closed', 'info');
+      addDebugLog("Audio context closed", "info");
     }
 
     // Reset refs
@@ -827,24 +933,33 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
     microphoneRef.current = null;
     dataArrayRef.current = null;
 
-    setAudioStats(prev => ({
+    setAudioStats((prev) => ({
       ...prev,
-      streamingActive: false
+      streamingActive: false,
     }));
 
     // Double-check that streaming state is false
     setTimeout(() => {
       if (isAudioStreaming) {
-        addDebugLog('Streaming state still true after stop - forcing to false', 'warning');
+        addDebugLog(
+          "Streaming state still true after stop - forcing to false",
+          "warning"
+        );
         setIsAudioStreaming(false);
       }
       if (isStoppingAudio) {
-        addDebugLog('Stopping state still true after stop - forcing to false', 'warning');
+        addDebugLog(
+          "Stopping state still true after stop - forcing to false",
+          "warning"
+        );
         setIsStoppingAudio(false);
       }
     }, 50);
 
-    addDebugLog(`Continuous streaming stopped. Final stats: ${audioStats.chunksRecorded} chunks recorded, ${audioStats.chunksSent} chunks sent, ${audioStats.bytesProcessed} bytes processed`, 'success');
+    addDebugLog(
+      `Continuous streaming stopped. Final stats: ${audioStats.chunksRecorded} chunks recorded, ${audioStats.chunksSent} chunks sent, ${audioStats.bytesProcessed} bytes processed`,
+      "success"
+    );
   };
 
   const processAudioData = (audioData) => {
@@ -855,71 +970,93 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
       for (let i = 0; i < 80; i++) {
         int16Array[i] = Math.max(-32768, Math.min(32767, audioData[i] * 32768));
       }
-      
+
       // Convert to base64
       const bytes = new Uint8Array(int16Array.buffer);
-      let binaryString = '';
+      let binaryString = "";
       for (let i = 0; i < bytes.length; i++) {
         binaryString += String.fromCharCode(bytes[i]);
       }
       const base64Audio = btoa(binaryString);
-      
+
       // Get current WebSocket connection and streamSid from refs to avoid stale closures
       const currentWs = wsConnectionRef.current;
       const currentStreamSid = streamSidRef.current;
-      
+
       // Update stats first (this will always happen)
-      setAudioStats(prev => ({
+      setAudioStats((prev) => ({
         chunksRecorded: prev.chunksRecorded + 1,
-        chunksSent: currentWs && currentWs.readyState === WebSocket.OPEN ? prev.chunksSent + 1 : prev.chunksSent,
+        chunksSent:
+          currentWs && currentWs.readyState === WebSocket.OPEN
+            ? prev.chunksSent + 1
+            : prev.chunksSent,
         bytesProcessed: prev.bytesProcessed + 160,
         lastChunkTime: new Date().toLocaleTimeString(),
-        streamingActive: true
+        streamingActive: true,
       }));
-      
+
       // Send via WebSocket only if connection is ready
-      if (currentWs && currentWs.readyState === WebSocket.OPEN && currentStreamSid) {
+      if (
+        currentWs &&
+        currentWs.readyState === WebSocket.OPEN &&
+        currentStreamSid
+      ) {
         const mediaMessage = {
-          event: 'media',
+          event: "media",
           streamSid: currentStreamSid,
           media: {
-            payload: base64Audio
-          }
+            payload: base64Audio,
+          },
         };
-        
+
         currentWs.send(JSON.stringify(mediaMessage));
-        
+
         // Minimal sending indicator - no state updates that could affect audio
         if (audioStats.chunksSent % 25 === 0) {
-          addDebugLog(`Sent audio chunk #${audioStats.chunksSent + 1}`, 'info');
+          addDebugLog(`Sent audio chunk #${audioStats.chunksSent + 1}`, "info");
         }
-        
+
         // Log every 25th chunk to show activity
-        setAudioStats(prev => {
+        setAudioStats((prev) => {
           if (prev.chunksSent % 25 === 0) {
-            addDebugLog(`Sent audio chunk #${prev.chunksSent + 1} (160 bytes, ${base64Audio.length} chars base64)`, 'info');
+            addDebugLog(
+              `Sent audio chunk #${prev.chunksSent + 1} (160 bytes, ${
+                base64Audio.length
+              } chars base64)`,
+              "info"
+            );
           }
           return prev;
         });
       } else {
         // Log connection issues with more detail
         if (!currentWs) {
-          addDebugLog('No WebSocket connection - audio chunk generated but not sent', 'warning');
+          addDebugLog(
+            "No WebSocket connection - audio chunk generated but not sent",
+            "warning"
+          );
         } else if (currentWs.readyState !== WebSocket.OPEN) {
           const stateNames = {
-            0: 'CONNECTING',
-            1: 'OPEN',
-            2: 'CLOSING',
-            3: 'CLOSED'
+            0: "CONNECTING",
+            1: "OPEN",
+            2: "CLOSING",
+            3: "CLOSED",
           };
-          addDebugLog(`WebSocket not ready (state: ${stateNames[currentWs.readyState] || currentWs.readyState}) - audio chunk generated but not sent`, 'warning');
+          addDebugLog(
+            `WebSocket not ready (state: ${
+              stateNames[currentWs.readyState] || currentWs.readyState
+            }) - audio chunk generated but not sent`,
+            "warning"
+          );
         } else if (!currentStreamSid) {
-          addDebugLog('No streamSid - audio chunk generated but not sent', 'warning');
+          addDebugLog(
+            "No streamSid - audio chunk generated but not sent",
+            "warning"
+          );
         }
       }
-      
     } catch (error) {
-      addDebugLog(`Error processing audio data: ${error.message}`, 'error');
+      addDebugLog(`Error processing audio data: ${error.message}`, "error");
     }
   };
 
@@ -927,7 +1064,9 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
     if (!isStreamingActiveRef.current || !analyserRef.current) return;
 
     if (!dataArrayRef.current) {
-      dataArrayRef.current = new Uint8Array(analyserRef.current.frequencyBinCount);
+      dataArrayRef.current = new Uint8Array(
+        analyserRef.current.frequencyBinCount
+      );
     }
 
     analyserRef.current.getByteFrequencyData(dataArrayRef.current);
@@ -945,13 +1084,13 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
 
     // Speech detection logic
     const isSilent = level < 10; // Threshold for silence detection
-    
+
     if (!isSilent) {
       // User is speaking
       if (!isUserSpeaking) {
         setIsUserSpeaking(true);
         setUserSpeechEnded(false);
-        setAiStatus('listening');
+        setAiStatus("listening");
       }
 
       if (silenceTimerRef.current) {
@@ -965,10 +1104,11 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
 
         silenceTimerRef.current = setTimeout(() => {
           const silenceDuration = Date.now() - silenceStartTimeRef.current;
-          if (silenceDuration > 1200) { // > 1.2s = user probably done
+          if (silenceDuration > 1200) {
+            // > 1.2s = user probably done
             setUserSpeechEnded(true);
             setIsUserSpeaking(false);
-            setAiStatus('idle');
+            setAiStatus("idle");
           }
           silenceTimerRef.current = null;
         }, 1200);
@@ -981,103 +1121,108 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
   // Continuous audio playback for AI responses
   const playAudioChunk = async (base64Audio) => {
     try {
-      addDebugLog(`Received audio chunk: ${base64Audio.length} chars`, 'info');
-      
+      addDebugLog(`Received audio chunk: ${base64Audio.length} chars`, "info");
+
       if (!audioPlaybackContextRef.current) {
-        audioPlaybackContextRef.current = new (window.AudioContext || window.webkitAudioContext)({
-          sampleRate: 8000
+        audioPlaybackContextRef.current = new (window.AudioContext ||
+          window.webkitAudioContext)({
+          sampleRate: 8000,
         });
-        addDebugLog('Audio playback context created', 'info');
+        addDebugLog("Audio playback context created", "info");
       }
 
       const audioContext = audioPlaybackContextRef.current;
-      
+
       // Ensure audio context is running
-      if (audioContext.state === 'suspended') {
+      if (audioContext.state === "suspended") {
         await audioContext.resume();
       }
-      
+
       // Convert base64 to binary data
       const binaryString = atob(base64Audio);
       const bytes = new Uint8Array(binaryString.length);
       for (let i = 0; i < binaryString.length; i++) {
         bytes[i] = binaryString.charCodeAt(i);
       }
-      
+
       // Convert bytes to Int16Array (assuming 16-bit PCM)
       const int16Array = new Int16Array(bytes.buffer);
       const float32Array = new Float32Array(int16Array.length);
-      
+
       // Convert int16 to float32
       for (let i = 0; i < int16Array.length; i++) {
         float32Array[i] = int16Array[i] / 32768;
       }
-      
+
       // Add to buffer queue
       audioBufferQueueRef.current.push({
         data: float32Array,
-        timestamp: Date.now()
+        timestamp: Date.now(),
       });
-      
+
       // Limit buffer size to prevent memory issues (keep last 100 chunks = ~4 seconds)
       if (audioBufferQueueRef.current.length > 100) {
         audioBufferQueueRef.current = audioBufferQueueRef.current.slice(-100);
-        addDebugLog('Buffer queue trimmed to prevent memory overflow', 'info');
+        addDebugLog("Buffer queue trimmed to prevent memory overflow", "info");
       }
-      
+
       // Start playback if not already playing
       if (!isPlayingRef.current) {
         // Show "thinking" status if user had finished speaking
         if (userSpeechEnded) {
-          setAiStatus('thinking');
-          
+          setAiStatus("thinking");
+
           // Short delay before showing "speaking"
           setTimeout(() => {
-            setAiStatus('speaking');
+            setAiStatus("speaking");
           }, 100);
         } else {
-          setAiStatus('speaking');
+          setAiStatus("speaking");
         }
-        
+
         startContinuousPlayback();
       }
-      
     } catch (error) {
-      addDebugLog(`Error processing audio chunk: ${error.message}`, 'error');
+      addDebugLog(`Error processing audio chunk: ${error.message}`, "error");
     }
   };
 
   // Start continuous audio playback
   const startContinuousPlayback = async () => {
     if (isPlayingRef.current) return;
-    
+
     try {
       isPlayingRef.current = true;
       setIsAITalking(true);
-      setAiStatus('speaking');
-      
+      setAiStatus("speaking");
+
       const audioContext = audioPlaybackContextRef.current;
       if (!audioContext) return;
-      
+
       // Ensure audio context is running
-      if (audioContext.state === 'suspended') {
+      if (audioContext.state === "suspended") {
         await audioContext.resume();
       }
-      
+
       // Initialize playback timing with a small delay to ensure smooth start
       const startDelay = 0.1; // 100ms delay
       playbackStartTimeRef.current = audioContext.currentTime + startDelay;
       nextPlayTimeRef.current = audioContext.currentTime + startDelay;
-      
-      addDebugLog(`Starting continuous audio playback with ${startDelay}s delay`, 'success');
-      
+
+      addDebugLog(
+        `Starting continuous audio playback with ${startDelay}s delay`,
+        "success"
+      );
+
       // Start the playback loop
       setTimeout(() => {
         scheduleNextChunk();
       }, startDelay * 150);
-      
     } catch (error) {
-      addDebugLog(`Error starting continuous playback: ${error.message}`, 'error');
+      addDebugLog(
+        `Error starting continuous playback: ${error.message}`,
+        "error"
+      );
       isPlayingRef.current = false;
       setIsAITalking(false);
     }
@@ -1086,56 +1231,60 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
   // Schedule the next audio chunk for playback
   const scheduleNextChunk = () => {
     if (!isPlayingRef.current || !audioPlaybackContextRef.current) return;
-    
+
     const audioContext = audioPlaybackContextRef.current;
     const queue = audioBufferQueueRef.current;
-    
+
     if (queue.length === 0) {
       // No more chunks, stop playback
       isPlayingRef.current = false;
       setIsAITalking(false);
-      setAiStatus('idle');
+      setAiStatus("idle");
       setUserSpeechEnded(false);
-      addDebugLog('Audio playback queue empty, stopping', 'info');
+      addDebugLog("Audio playback queue empty, stopping", "info");
       return;
     }
-    
+
     // Process multiple chunks at once for better performance
     const chunksToProcess = Math.min(queue.length, 5); // Process up to 5 chunks at once
     let totalDuration = 0;
-    
+
     for (let i = 0; i < chunksToProcess; i++) {
       const chunk = queue.shift();
       const float32Array = chunk.data;
-      
+
       // Create audio buffer
       const buffer = audioContext.createBuffer(1, float32Array.length, 8000);
       buffer.getChannelData(0).set(float32Array);
-      
+
       // Create and schedule audio source
       const source = audioContext.createBufferSource();
       source.buffer = buffer;
       source.connect(audioContext.destination);
-      
+
       // Schedule playback at the correct time
       const chunkDuration = float32Array.length / 8000; // Duration in seconds
       source.start(nextPlayTimeRef.current + totalDuration);
-      
+
       totalDuration += chunkDuration;
     }
-    
+
     // Update next play time
     nextPlayTimeRef.current += totalDuration;
-    
+
     // Schedule next batch of chunks
-    const timeUntilNext = (nextPlayTimeRef.current - audioContext.currentTime) * 1000;
+    const timeUntilNext =
+      (nextPlayTimeRef.current - audioContext.currentTime) * 1000;
     setTimeout(() => {
       scheduleNextChunk();
     }, Math.max(0, timeUntilNext - 20)); // 20ms buffer for batch processing
-    
+
     // Log every 25th chunk (approximately every second)
     if (queue.length % 25 === 0) {
-      addDebugLog(`Playing chunks, queue length: ${queue.length}, processed: ${chunksToProcess}`, 'info');
+      addDebugLog(
+        `Playing chunks, queue length: ${queue.length}, processed: ${chunksToProcess}`,
+        "info"
+      );
     }
   };
 
@@ -1145,46 +1294,46 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
     setIsAITalking(false);
     audioBufferQueueRef.current = [];
     nextPlayTimeRef.current = 0;
-    addDebugLog('Continuous audio playback stopped', 'info');
+    addDebugLog("Continuous audio playback stopped", "info");
   };
 
   const toggleActiveStatus = async (agent, e) => {
     e.stopPropagation();
-    
+
     const currentState = agentStates[agent._id];
     if (currentState?.isToggling) return; // Prevent multiple requests
 
     try {
       // Set toggling state
-      setAgentStates(prev => ({
+      setAgentStates((prev) => ({
         ...prev,
         [agent._id]: {
           ...prev[agent._id],
-          isToggling: true
-        }
+          isToggling: true,
+        },
       }));
 
       const newActiveStatus = !currentState?.isActive;
-      
+
       const response = await fetch(
         `${API_BASE_URL}/client/agents/${agent._id}/toggle-active?clientId=${clientId}`,
         {
-          method: 'PATCH',
+          method: "PATCH",
           headers: {
-            'Content-Type': 'application/json',
+            "Content-Type": "application/json",
             Authorization: `Bearer ${sessionStorage.getItem("clienttoken")}`,
           },
           body: JSON.stringify({
-            isActive: newActiveStatus
-          })
+            isActive: newActiveStatus,
+          }),
         }
       );
 
       if (response.ok) {
         const result = await response.json();
-        
+
         // Update local state and, if activating, mark others with same accountSid as inactive for instant UI consistency
-        setAgentStates(prev => {
+        setAgentStates((prev) => {
           const updated = { ...prev };
           updated[agent._id] = {
             ...(updated[agent._id] || {}),
@@ -1192,10 +1341,13 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
             isToggling: false,
           };
           if (newActiveStatus && agent.accountSid) {
-            agentsArray.forEach(a => {
+            agentsArray.forEach((a) => {
               if (a._id !== agent._id && a.accountSid === agent.accountSid) {
                 updated[a._id] = {
-                  ...(updated[a._id] || { isToggling: false, isActive: a.isActive !== undefined ? a.isActive : true }),
+                  ...(updated[a._id] || {
+                    isToggling: false,
+                    isActive: a.isActive !== undefined ? a.isActive : true,
+                  }),
                   isActive: false,
                 };
               }
@@ -1205,24 +1357,23 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
         });
 
         // Show success message
-        const statusText = newActiveStatus ? 'activated' : 'deactivated';
+        const statusText = newActiveStatus ? "activated" : "deactivated";
         console.log(`Agent ${agent.agentName} ${statusText} successfully`);
-        
       } else {
         throw new Error(`Failed to toggle agent status: ${response.status}`);
       }
     } catch (error) {
-      console.error('Error toggling agent status:', error);
-      
+      console.error("Error toggling agent status:", error);
+
       // Reset toggling state on error
-      setAgentStates(prev => ({
+      setAgentStates((prev) => ({
         ...prev,
         [agent._id]: {
           ...prev[agent._id],
-          isToggling: false
-        }
+          isToggling: false,
+        },
       }));
-      
+
       alert(`Failed to toggle agent status. Please try again.`);
     }
   };
@@ -1242,17 +1393,24 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
   // Download QR Code function with logo support
   const downloadQRCode = async () => {
     if (!selectedAgentForQR) return;
-    
+
     try {
       const qrUrl = `${window.location.origin}/agent/${selectedAgentForQR._id}/talk`;
-      
+
       // Use logo configuration
       const logoUrl = QR_LOGO_CONFIG.logoUrl;
-      
+
       let qrDataUrl;
       if (logoUrl) {
         // Generate QR code with logo overlay
-        qrDataUrl = await generateQRCodeWithLogo(qrUrl, 512, "#fff", "#000", logoUrl, QR_LOGO_CONFIG.logoSize);
+        qrDataUrl = await generateQRCodeWithLogo(
+          qrUrl,
+          512,
+          "#fff",
+          "#000",
+          logoUrl,
+          QR_LOGO_CONFIG.logoSize
+        );
       } else {
         // Generate regular QR code
         qrDataUrl = await QRCode.toDataURL(qrUrl, {
@@ -1264,20 +1422,22 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
           },
         });
       }
-      
+
       // Create download link
-      const link = document.createElement('a');
+      const link = document.createElement("a");
       link.download = `${selectedAgentForQR.agentName}-QR-Code.png`;
       link.href = qrDataUrl;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      
+
       // Show success message
-      alert(`QR Code for ${selectedAgentForQR.agentName} downloaded successfully!`);
+      alert(
+        `QR Code for ${selectedAgentForQR.agentName} downloaded successfully!`
+      );
     } catch (error) {
-      console.error('Error downloading QR code:', error);
-      alert('Failed to download QR code. Please try again.');
+      console.error("Error downloading QR code:", error);
+      alert("Failed to download QR code. Please try again.");
     }
   };
 
@@ -1296,13 +1456,13 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
         const url = URL.createObjectURL(audioBlob);
         setAudioUrl(url);
         setPlayingAgentId(agentId);
-        
+
         // Create and play audio automatically
         const audio = new Audio(url);
         audio.onended = () => {
           stopAudio();
         };
-        audio.play().catch(error => {
+        audio.play().catch((error) => {
           console.error("Error playing audio:", error);
           stopAudio();
         });
@@ -1320,14 +1480,14 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
   const stopAudio = () => {
     if (audioUrl) {
       // Stop any currently playing audio
-      const audioElements = document.querySelectorAll('audio');
-      audioElements.forEach(audio => {
+      const audioElements = document.querySelectorAll("audio");
+      audioElements.forEach((audio) => {
         if (audio.src === audioUrl) {
           audio.pause();
           audio.currentTime = 0;
         }
       });
-      
+
       URL.revokeObjectURL(audioUrl);
     }
     setAudioUrl(null);
@@ -1364,21 +1524,19 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
     setSelectedAgentForChat(agent);
     setShowVoiceChatModal(true);
     setOpenMenuId(null);
-    
+
     // Clear debug logs
     setDebugLogs([]);
-    addDebugLog('Voice chat modal opened', 'info');
-    
+    addDebugLog("Voice chat modal opened", "info");
+
     // Reset connection states
     setJustConnected(false);
-    
+
     // Don't connect to WebSocket automatically - wait for user to click mic
   };
 
-
-
   const closeVoiceChat = () => {
-    addDebugLog('Closing voice chat...', 'info');
+    addDebugLog("Closing voice chat...", "info");
     setShowVoiceChatModal(false);
     setMicLevel(0);
     setIsAITalking(false);
@@ -1386,7 +1544,7 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
     // Reset speech detection states
     setIsUserSpeaking(false);
     setUserSpeechEnded(false);
-    setAiStatus('idle');
+    setAiStatus("idle");
 
     // Clear speech detection timers
     if (silenceTimerRef.current) {
@@ -1396,15 +1554,18 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
 
     // Stop continuous streaming
     stopContinuousAudioStreaming();
-    
+
     // Stop continuous playback
     stopContinuousPlayback();
-    
+
     // Disconnect WebSocket
     disconnectWebSocket();
-    
+
     // Close audio playback context
-    if (audioPlaybackContextRef.current && audioPlaybackContextRef.current.state !== 'closed') {
+    if (
+      audioPlaybackContextRef.current &&
+      audioPlaybackContextRef.current.state !== "closed"
+    ) {
       audioPlaybackContextRef.current.close();
       audioPlaybackContextRef.current = null;
     }
@@ -1420,21 +1581,29 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
     setShowCallModal(true);
     setCallStage("input");
     setOpenMenuId(null);
-    
+
     // Fetch call termination data when opening the modal
     setTimeout(() => {
       fetchCallTerminationData();
     }, 100);
   };
 
-  const makeAIDialCall = async (targetPhoneNumber, agentCallerId, agentApiKey, clientUuid, providedUniqueId) => {
+  const makeAIDialCall = async (
+    targetPhoneNumber,
+    agentCallerId,
+    agentApiKey,
+    clientUuid,
+    providedUniqueId
+  ) => {
     try {
       const token = sessionStorage.getItem("clienttoken");
       if (!token) {
         throw new Error("Client token not found. Please log in.");
       }
 
-      const uniqueId = providedUniqueId || `aidial-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      const uniqueId =
+        providedUniqueId ||
+        `aidial-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
       const callPayload = {
         transaction_id: "CTI_BOT_DIAL",
@@ -1446,7 +1615,7 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
           agentId: selectedAgentForCall?._id,
           agentName: selectedAgentForCall?.agentName,
           contactName: contactName || "",
-          uniqueid: uniqueId
+          uniqueid: uniqueId,
         },
         resFormat: 3,
       };
@@ -1483,10 +1652,12 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
     setCallTerminationData({
       accountSid: null,
       callSid: null,
-      streamSid: null
+      streamSid: null,
     });
 
-    const generatedUniqueId = `aidial-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const generatedUniqueId = `aidial-${Date.now()}-${Math.random()
+      .toString(36)
+      .substr(2, 9)}`;
     setDialUniqueId(generatedUniqueId);
 
     const result = await makeAIDialCall(
@@ -1503,43 +1674,52 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
       callInitiatedTimeRef.current = Date.now(); // Track when call was initiated
       // Don't start timer yet - wait for first transcript (WhatsApp-like behavior)
       startLogsPolling(generatedUniqueId);
-      
+
       // Fetch call termination data when call is connected
       setTimeout(() => {
         fetchCallTerminationData();
       }, 1000);
-      
+
       // Set 40-second timeout to check for progress
       callTimeoutRef.current = setTimeout(() => {
         // Check if we have any transcript or call activity
-        if (!liveTranscriptRef.current || liveTranscriptRef.current.trim() === '') {
-          console.log('40-second timeout reached - no transcript progress detected');
+        if (
+          !liveTranscriptRef.current ||
+          liveTranscriptRef.current.trim() === ""
+        ) {
+          console.log(
+            "40-second timeout reached - no transcript progress detected"
+          );
           setCallStage("timeout");
           setIsCallConnected(false);
           stopCallTimer();
           stopLogsPolling();
         }
       }, 40000); // 40 seconds
-      
+
       // Additional aggressive timeout for mobile disconnection detection
       setTimeout(() => {
         if (callStageRef.current === "connected" && logsPollRef.current) {
-          console.log('Setting up aggressive mobile disconnection check...');
-          
+          console.log("Setting up aggressive mobile disconnection check...");
+
           // Check every 30 seconds if call is still active
           const mobileDisconnectCheck = setInterval(() => {
             if (callStageRef.current === "connected") {
-              console.log('Aggressive check: Verifying mobile call is still active...');
-              
+              console.log(
+                "Aggressive check: Verifying mobile call is still active..."
+              );
+
               // Check if we're still in grace period
-              const timeSinceInitiation = callInitiatedTimeRef.current ? Date.now() - callInitiatedTimeRef.current : 0;
+              const timeSinceInitiation = callInitiatedTimeRef.current
+                ? Date.now() - callInitiatedTimeRef.current
+                : 0;
               const isInGracePeriod = timeSinceInitiation < 15000; // 15-second grace period
-              
+
               if (isInGracePeriod) {
-                console.log('Still in grace period, skipping aggressive check');
+                console.log("Still in grace period, skipping aggressive check");
                 return;
               }
-              
+
               // Force a poll and check if we're getting any response
               const forceCheck = async () => {
                 try {
@@ -1550,39 +1730,52 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
                     sortBy: "createdAt",
                     sortOrder: "desc",
                   });
-                  const resp = await fetch(`${API_BASE_URL}/logs?${params.toString()}`);
+                  const resp = await fetch(
+                    `${API_BASE_URL}/logs?${params.toString()}`
+                  );
                   if (resp.ok) {
                     const data = await resp.json();
                     const log = data?.logs?.[0];
-                    
+
                     if (log) {
-                      const timeSinceLastUpdate = Date.now() - new Date(log.metadata?.lastUpdated || log.createdAt).getTime();
-                      console.log(`Time since last update: ${timeSinceLastUpdate}ms`);
-                      
+                      const timeSinceLastUpdate =
+                        Date.now() -
+                        new Date(
+                          log.metadata?.lastUpdated || log.createdAt
+                        ).getTime();
+                      console.log(
+                        `Time since last update: ${timeSinceLastUpdate}ms`
+                      );
+
                       // If no activity for more than 2 minutes, consider call disconnected
-                      if (timeSinceLastUpdate > 120000) { // 2 minutes
-                        console.log('No recent activity detected, considering call disconnected from mobile');
+                      if (timeSinceLastUpdate > 120000) {
+                        // 2 minutes
+                        console.log(
+                          "No recent activity detected, considering call disconnected from mobile"
+                        );
                         clearInterval(mobileDisconnectCheck);
                         handleAutomaticCallTermination({
                           ...log,
-                          leadStatus: 'not_connected',
-                          metadata: { ...log.metadata, isActive: false }
+                          leadStatus: "not_connected",
+                          metadata: { ...log.metadata, isActive: false },
                         });
                       }
                     } else {
-                      console.log('No log found, considering call disconnected');
+                      console.log(
+                        "No log found, considering call disconnected"
+                      );
                       clearInterval(mobileDisconnectCheck);
                       handleAutomaticCallTermination({
-                        leadStatus: 'not_connected',
-                        metadata: { isActive: false }
+                        leadStatus: "not_connected",
+                        metadata: { isActive: false },
                       });
                     }
                   }
                 } catch (e) {
-                  console.error('Aggressive check failed:', e);
+                  console.error("Aggressive check failed:", e);
                 }
               };
-              
+
               forceCheck();
             } else {
               clearInterval(mobileDisconnectCheck);
@@ -1610,11 +1803,11 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
       try {
         // Stop polling if call is already terminated
         if (callStageRef.current === "terminated") {
-          console.log('Call already terminated, stopping polling');
+          console.log("Call already terminated, stopping polling");
           stopLogsPolling();
           return;
         }
-        
+
         const params = new URLSearchParams({
           uniqueid: uniqueIdToTrack,
           clientId: String(clientId || ""),
@@ -1626,152 +1819,190 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
         if (!resp.ok) return;
         const data = await resp.json();
         const log = data?.logs?.[0];
-        
+
         if (log) {
           // Calculate time since call was initiated (do this first)
-          const timeSinceInitiation = callInitiatedTimeRef.current ? Date.now() - callInitiatedTimeRef.current : 0;
+          const timeSinceInitiation = callInitiatedTimeRef.current
+            ? Date.now() - callInitiatedTimeRef.current
+            : 0;
           const isInGracePeriod = timeSinceInitiation < 15000; // 15-second grace period
-          
+
           // Check call status from metadata FIRST - this is the most important check
           const active = log?.metadata?.isActive;
           const leadStatus = log?.leadStatus;
-          
-          console.log('Polling call status:', { 
-            uniqueId: uniqueIdToTrack, 
-            isActive: active, 
+
+          console.log("Polling call status:", {
+            uniqueId: uniqueIdToTrack,
+            isActive: active,
             leadStatus: leadStatus,
             callStage: callStageRef.current,
             timeSinceInitiation: timeSinceInitiation,
-            isInGracePeriod: isInGracePeriod
+            isInGracePeriod: isInGracePeriod,
           });
-          
+
           // If we're in "connecting" stage and have transcript activity, transition to "connected"
-          if (callStageRef.current === "connecting" && log.transcript && log.transcript.trim() !== '') {
-            console.log('Call transitioning from connecting to connected due to transcript activity');
+          if (
+            callStageRef.current === "connecting" &&
+            log.transcript &&
+            log.transcript.trim() !== ""
+          ) {
+            console.log(
+              "Call transitioning from connecting to connected due to transcript activity"
+            );
             setCallStage("connected");
           }
-          
+
           // If we're in "connecting" stage and have any log activity (even without transcript), transition to "connected"
           if (callStageRef.current === "connecting" && log && log.createdAt) {
             const logAge = Date.now() - new Date(log.createdAt).getTime();
-            if (logAge < 30000) { // Log is recent (within 30 seconds)
-              console.log('Call transitioning from connecting to connected due to recent log activity');
+            if (logAge < 30000) {
+              // Log is recent (within 30 seconds)
+              console.log(
+                "Call transitioning from connecting to connected due to recent log activity"
+              );
               setCallStage("connected");
             }
           }
-          
+
           // Fallback: If we're in "connecting" stage for more than 10 seconds, transition to "connected"
-          if (callStageRef.current === "connecting" && timeSinceInitiation > 10000) {
-            console.log('Call transitioning from connecting to connected due to time elapsed');
+          if (
+            callStageRef.current === "connecting" &&
+            timeSinceInitiation > 10000
+          ) {
+            console.log(
+              "Call transitioning from connecting to connected due to time elapsed"
+            );
             setCallStage("connected");
           }
-          
+
           // Special handling for call being answered (user lifting the phone)
           // Some backends might set specific status during this transition
           if (callStageRef.current === "connecting" && leadStatus === "maybe") {
-            console.log('Call detected as being answered (leadStatus: maybe), keeping in connecting state');
+            console.log(
+              "Call detected as being answered (leadStatus: maybe), keeping in connecting state"
+            );
             // Don't terminate, just wait for more activity
           }
-          
+
           // Additional check for call being answered - look for specific metadata patterns
           if (callStageRef.current === "connecting" && log.metadata) {
             const metadata = log.metadata;
             // Check for various indicators that the call is being answered
-            if (metadata.isActive === false && (leadStatus === "maybe" || !leadStatus)) {
-              console.log('Call detected as being answered (isActive: false, leadStatus: maybe), keeping in connecting state');
+            if (
+              metadata.isActive === false &&
+              (leadStatus === "maybe" || !leadStatus)
+            ) {
+              console.log(
+                "Call detected as being answered (isActive: false, leadStatus: maybe), keeping in connecting state"
+              );
               // Don't terminate, this is likely the transition period when user is lifting the phone
             }
           }
-          
+
           // Check if call is inactive - ONLY check isActive status for termination (after grace period)
           if (active === false && !isInGracePeriod) {
-            console.log('Call detected as inactive (isActive: false), automatically terminating...');
+            console.log(
+              "Call detected as inactive (isActive: false), automatically terminating..."
+            );
             handleAutomaticCallTermination(log);
             return; // Stop processing if call is terminated
           }
-          
+
           // Check if transcript exists and process it
-          if (typeof log.transcript === 'string') {
-          if (log.transcript !== liveTranscript) {
-            setLiveTranscript(log.transcript);
-              
+          if (typeof log.transcript === "string") {
+            if (log.transcript !== liveTranscript) {
+              setLiveTranscript(log.transcript);
+
               // Process transcript lines with timestamps
-            const lines = log.transcript.split('\n').filter(Boolean);
-              
+              const lines = log.transcript.split("\n").filter(Boolean);
+
               // Add timestamps to lines if they don't have them
-              const linesWithTimestamps = lines.map(line => {
+              const linesWithTimestamps = lines.map((line) => {
                 // If line already has a timestamp, keep it
                 if (line.match(/^\[[^\]]+\]/)) {
                   return line;
                 }
-                
+
                 // If no timestamp, add current time
                 const now = new Date();
                 const timestamp = now.toISOString();
                 return `[${timestamp}] ${line}`;
               });
-              
+
               setLiveTranscriptLines(linesWithTimestamps);
-            
-            // Start timer when first transcript is received (WhatsApp-like behavior)
-            if (log.transcript.trim() !== '' && callDuration === 0 && !callTimerRef.current) {
-              console.log('First transcript received, starting call timer');
-              startCallTimer();
-            }
-            
-            // Clear timeout if we detect transcript activity
-            if (callTimeoutRef.current && log.transcript.trim() !== '') {
-              clearTimeout(callTimeoutRef.current);
-              callTimeoutRef.current = null;
+
+              // Start timer when first transcript is received (WhatsApp-like behavior)
+              if (
+                log.transcript.trim() !== "" &&
+                callDuration === 0 &&
+                !callTimerRef.current
+              ) {
+                console.log("First transcript received, starting call timer");
+                startCallTimer();
+              }
+
+              // Clear timeout if we detect transcript activity
+              if (callTimeoutRef.current && log.transcript.trim() !== "") {
+                clearTimeout(callTimeoutRef.current);
+                callTimeoutRef.current = null;
+              }
             }
           }
-          }
-          
+
           // Additional check: if no log found or log is very old, consider call disconnected (only after grace period)
-          if (!log || (log.createdAt && (Date.now() - new Date(log.createdAt).getTime()) > 300000)) { // 5 minutes
-            console.log('No recent log activity, considering call disconnected');
+          if (
+            !log ||
+            (log.createdAt &&
+              Date.now() - new Date(log.createdAt).getTime() > 300000)
+          ) {
+            // 5 minutes
+            console.log(
+              "No recent log activity, considering call disconnected"
+            );
             if (callStageRef.current === "connected" && !isInGracePeriod) {
               handleAutomaticCallTermination({
                 ...log,
-                leadStatus: 'not_connected',
-                metadata: { ...log?.metadata, isActive: false }
+                leadStatus: "not_connected",
+                metadata: { ...log?.metadata, isActive: false },
               });
             }
           }
         }
       } catch (e) {
-        console.error('Error in call polling:', e);
+        console.error("Error in call polling:", e);
         // If polling fails multiple times, consider call disconnected (only after grace period)
-        const timeSinceInitiation = callInitiatedTimeRef.current ? Date.now() - callInitiatedTimeRef.current : 0;
+        const timeSinceInitiation = callInitiatedTimeRef.current
+          ? Date.now() - callInitiatedTimeRef.current
+          : 0;
         const isInGracePeriod = timeSinceInitiation < 15000; // 15-second grace period
-        
+
         if (callStageRef.current === "connected" && !isInGracePeriod) {
-          console.log('Polling failed, considering call disconnected');
+          console.log("Polling failed, considering call disconnected");
           handleAutomaticCallTermination({
-            leadStatus: 'not_connected',
-            metadata: { isActive: false }
+            leadStatus: "not_connected",
+            metadata: { isActive: false },
           });
         }
       }
     };
-    
+
     // Initial poll
     poll();
-    
+
     // Set up regular polling with shorter interval for better responsiveness
     logsPollRef.current = setInterval(poll, 1500); // Poll every 1.5 seconds instead of 2
-    
+
     // Also set up a backup check for long-running calls
     setTimeout(() => {
       if (callStageRef.current === "connected" && logsPollRef.current) {
-        console.log('Setting up backup call status check...');
+        console.log("Setting up backup call status check...");
         // Additional check every 10 seconds for long calls
         const backupCheck = setInterval(() => {
           if (callStageRef.current === "connected") {
-            console.log('Backup check: verifying call is still active...');
+            console.log("Backup check: verifying call is still active...");
             poll(); // Force a poll check
           } else if (callStageRef.current === "terminated") {
-            console.log('Call terminated, stopping backup check');
+            console.log("Call terminated, stopping backup check");
             clearInterval(backupCheck);
           } else {
             clearInterval(backupCheck);
@@ -1783,7 +2014,7 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
 
   const startCallTimer = () => {
     // Only start timer if we have transcript activity
-    if (liveTranscriptRef.current && liveTranscriptRef.current.trim() !== '') {
+    if (liveTranscriptRef.current && liveTranscriptRef.current.trim() !== "") {
       callTimerRef.current = setInterval(() => {
         setCallDuration((prev) => prev + 1);
       }, 1000);
@@ -1815,13 +2046,13 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
     callInitiatedTimeRef.current = null; // Reset initiated time
     stopLogsPolling();
     stopCallTimer();
-    
+
     // Clear timeout
     if (callTimeoutRef.current) {
       clearTimeout(callTimeoutRef.current);
       callTimeoutRef.current = null;
     }
-    
+
     if (callMicIntervalRef.current) {
       clearInterval(callMicIntervalRef.current);
     }
@@ -1837,11 +2068,11 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
     if (callMicIntervalRef.current) {
       clearInterval(callMicIntervalRef.current);
     }
-    
+
     // Set call to terminated state immediately
     setCallStage("terminated");
     setCallTerminationReason("Call ended manually");
-    
+
     // Don't show alert for manual termination - just let user see the compact header
     // The compact "Call Ended" header will be displayed instead
   };
@@ -1850,7 +2081,7 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
   const fetchCallTerminationData = async () => {
     try {
       if (!clientId) {
-        console.error('Missing clientId for call termination');
+        console.error("Missing clientId for call termination");
         return { success: false, data: null };
       }
 
@@ -1862,81 +2093,84 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
         sortOrder: "desc",
       });
 
-      console.log('Fetching call logs with params:', params.toString());
+      console.log("Fetching call logs with params:", params.toString());
 
       const response = await fetch(`${API_BASE_URL}/logs?${params.toString()}`);
       if (!response.ok) {
-        throw new Error('Failed to fetch call logs for termination');
+        throw new Error("Failed to fetch call logs for termination");
       }
 
       const data = await response.json();
-      console.log('Raw logs API response:', data);
-      
+      console.log("Raw logs API response:", data);
+
       const logs = data?.logs || [];
-      console.log('Processed logs array:', logs);
-      
+      console.log("Processed logs array:", logs);
+
       // Find the first log that has both streamSid and callSid
-      const log = logs.find(log => log.streamSid && log.callSid);
-      
+      const log = logs.find((log) => log.streamSid && log.callSid);
+
       if (log) {
         // Extract accountSid from callSid (assuming format: accountSid_callId)
-        const callSidParts = log.callSid.split('_');
-        const accountSid = callSidParts[0] || '5104'; // Default fallback
+        const callSidParts = log.callSid.split("_");
+        const accountSid = callSidParts[0] || "5104"; // Default fallback
 
         const terminationData = {
           accountSid,
           callSid: log.callSid,
-          streamSid: log.streamSid
+          streamSid: log.streamSid,
         };
 
-        console.log('Found call log for termination:', {
+        console.log("Found call log for termination:", {
           streamSid: log.streamSid,
           callSid: log.callSid,
           accountSid,
           logId: log._id,
-          createdAt: log.createdAt
+          createdAt: log.createdAt,
         });
 
         // Update state for UI display
         setCallTerminationData(terminationData);
-        
+
         // Return the data directly
         return { success: true, data: terminationData };
       } else {
-        console.error('No call log found with streamSid and callSid. Available logs:', logs.map(l => ({
-          id: l._id,
-          streamSid: l.streamSid,
-          callSid: l.callSid,
-          createdAt: l.createdAt,
-          metadata: l.metadata,
-          clientId: l.clientId
-        })));
+        console.error(
+          "No call log found with streamSid and callSid. Available logs:",
+          logs.map((l) => ({
+            id: l._id,
+            streamSid: l.streamSid,
+            callSid: l.callSid,
+            createdAt: l.createdAt,
+            metadata: l.metadata,
+            clientId: l.clientId,
+          }))
+        );
         return { success: false, data: null };
       }
     } catch (error) {
-      console.error('Error fetching call termination data:', error);
+      console.error("Error fetching call termination data:", error);
       return { success: false, data: null };
     }
   };
 
   // Handle automatic call termination when call becomes inactive
   const handleAutomaticCallTermination = (log) => {
-    console.log('Handling automatic call termination:', log);
-    
+    console.log("Handling automatic call termination:", log);
+
     // Prevent multiple terminations
     if (callStageRef.current === "terminated") {
-      console.log('Call already terminated, skipping...');
+      console.log("Call already terminated, skipping...");
       return;
     }
-    
+
     // Stop polling and timer
     stopLogsPolling();
     stopCallTimer();
-    
+
     // Determine termination reason - PRIORITIZE isActive: false over leadStatus
     let reason = "Call ended";
     let detailedReason = "";
-    
+
     // Check isActive status FIRST - this is the primary termination trigger
     if (log.metadata?.isActive === false) {
       reason = "Call disconnected";
@@ -1944,25 +2178,28 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
     } else if (log.leadStatus) {
       // Only check leadStatus if isActive is not false
       switch (log.leadStatus) {
-        case 'not_connected':
+        case "not_connected":
           reason = "Call disconnected";
-          detailedReason = "The call was disconnected from the mobile device or network";
+          detailedReason =
+            "The call was disconnected from the mobile device or network";
           break;
-        case 'junk_lead':
+        case "junk_lead":
           reason = "Call marked as junk lead";
           detailedReason = "The call was classified as not valuable";
           break;
-        case 'wrong_number':
+        case "wrong_number":
           reason = "Wrong number";
           detailedReason = "The dialed number was incorrect or unreachable";
           break;
-        case 'decline':
+        case "decline":
           reason = "Call declined";
           detailedReason = "The recipient declined the call";
           break;
-        case 'maybe':
+        case "maybe":
           // Don't terminate for 'maybe' status - this indicates user is answering
-          console.log('Call has leadStatus: maybe - keeping call active (user is answering)');
+          console.log(
+            "Call has leadStatus: maybe - keeping call active (user is answering)"
+          );
           return; // Exit without terminating
         default:
           reason = `Call ended (${log.leadStatus})`;
@@ -1972,19 +2209,21 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
       reason = "Call disconnected";
       detailedReason = "The call connection was lost or terminated";
     }
-    
+
     console.log(`Call termination details: ${reason} - ${detailedReason}`);
-    
+
     // Set termination reason
     setCallTerminationReason(reason);
-    
+
     // Update call stage to terminated
     setCallStage("terminated");
     setIsCallConnected(false);
-    
+
     // Show alert when call is automatically terminated
-    alert(`Call Terminated: ${reason}\n\n${detailedReason}\n\nCall history will remain visible until you close the modal.`);
-    
+    alert(
+      `Call Terminated: ${reason}\n\n${detailedReason}\n\nCall history will remain visible until you close the modal.`
+    );
+
     // Don't auto-close modal - let user manually close to view history
   };
 
@@ -1992,72 +2231,81 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
   const terminateCall = async () => {
     try {
       setIsTerminatingCall(true);
-      
+
       // First fetch the latest call termination data
       const result = await fetchCallTerminationData();
       if (!result.success || !result.data) {
-        alert('Unable to get call termination data. Please try again.');
+        alert("Unable to get call termination data. Please try again.");
         setIsTerminatingCall(false);
         return;
       }
 
       // Use the fresh data returned from the API call
       const terminationData = result.data;
-      
+
       // Prepare termination payload using the fresh data
       const terminationPayload = {
         event: "stop",
         sequenceNumber: 1,
         stop: {
           accountSid: terminationData.accountSid,
-          callSid: terminationData.callSid
+          callSid: terminationData.callSid,
         },
-        streamSid: terminationData.streamSid
+        streamSid: terminationData.streamSid,
       };
 
-      console.log('Terminating call with payload:', terminationPayload);
-      console.log('Fresh termination data used:', terminationData);
-      console.log('Current callTerminationData state:', callTerminationData);
+      console.log("Terminating call with payload:", terminationPayload);
+      console.log("Fresh termination data used:", terminationData);
+      console.log("Current callTerminationData state:", callTerminationData);
 
       // Send termination request
-      const response = await fetch('https://test.aitota.com/api/calls/terminate', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(terminationPayload)
-      });
+      const response = await fetch(
+        "https://test.aitota.com/api/calls/terminate",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(terminationPayload),
+        }
+      );
 
       const terminationResult = await response.json();
-      
+
       if (terminationResult.success) {
-        console.log('Call terminated successfully:', terminationResult);
-        
+        console.log("Call terminated successfully:", terminationResult);
+
         // Set termination state immediately for user-initiated termination
         setCallStage("terminated");
         setCallTerminationReason("Call terminated by user");
         setIsCallConnected(false);
-        
+
         // Stop all call-related processes
         stopLogsPolling();
         stopCallTimer();
-        
+
         // Don't show alert - the compact "Call Ended" header will be displayed
       } else {
-        console.error('Call termination failed:', terminationResult);
-        alert(`Call termination failed: ${terminationResult.message || 'Unknown error'}`);
+        console.error("Call termination failed:", terminationResult);
+        alert(
+          `Call termination failed: ${
+            terminationResult.message || "Unknown error"
+          }`
+        );
       }
     } catch (error) {
-      console.error('Error terminating call:', error);
+      console.error("Error terminating call:", error);
       alert(`Error terminating call: ${error.message}`);
-      
+
       // Even if API call fails, mark call as terminated locally
       setCallStage("terminated");
-      setCallTerminationReason("Call termination failed - marked as terminated");
+      setCallTerminationReason(
+        "Call termination failed - marked as terminated"
+      );
       setIsCallConnected(false);
       stopLogsPolling();
       stopCallTimer();
-      
+
       // Don't show alert - the compact "Call Ended" header will be displayed
     } finally {
       setIsTerminatingCall(false);
@@ -2068,7 +2316,9 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
   const formatCallDuration = (seconds) => {
     const minutes = Math.floor(seconds / 60);
     const remainingSeconds = seconds % 60;
-    return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+    return `${minutes.toString().padStart(2, "0")}:${remainingSeconds
+      .toString()
+      .padStart(2, "0")}`;
   };
 
   // Format message timestamp for display
@@ -2077,41 +2327,41 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
       const date = new Date(timestamp);
       const now = new Date();
       const diffInHours = (now - date) / (1000 * 60 * 60);
-      
+
       // If message is from today, show time only
       if (date.toDateString() === now.toDateString()) {
-        return date.toLocaleTimeString('en-US', {
-          hour: '2-digit',
-          minute: '2-digit',
-          hour12: false
+        return date.toLocaleTimeString("en-US", {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false,
         });
       }
-      
+
       // If message is from yesterday, show "Yesterday" and time
       const yesterday = new Date(now);
       yesterday.setDate(yesterday.getDate() - 1);
       if (date.toDateString() === yesterday.toDateString()) {
-        return `Yesterday ${date.toLocaleTimeString('en-US', {
-          hour: '2-digit',
-          minute: '2-digit',
-          hour12: false
+        return `Yesterday ${date.toLocaleTimeString("en-US", {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false,
         })}`;
       }
-      
+
       // If message is older, show date and time
-      return date.toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false
+      return date.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
       });
     } catch (e) {
       // If timestamp parsing fails, return current time
-      return new Date().toLocaleTimeString('en-US', {
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false
+      return new Date().toLocaleTimeString("en-US", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
       });
     }
   };
@@ -2294,8 +2544,12 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
   const agentsArray = Array.isArray(agents) ? agents : [];
   // Active first sorting using current UI state when available
   const sortedAgents = agentsArray.slice().sort((a, b) => {
-    const aActive = (agentStates[a._id]?.isActive) ?? (a.isActive !== undefined ? a.isActive : true);
-    const bActive = (agentStates[b._id]?.isActive) ?? (b.isActive !== undefined ? b.isActive : true);
+    const aActive =
+      agentStates[a._id]?.isActive ??
+      (a.isActive !== undefined ? a.isActive : true);
+    const bActive =
+      agentStates[b._id]?.isActive ??
+      (b.isActive !== undefined ? b.isActive : true);
     if (aActive === bActive) return 0;
     return aActive ? -1 : 1;
   });
@@ -2319,30 +2573,34 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {sortedAgents.map((agent, index) => {
-            const currentAgentState = agentStates[agent._id] || { isActive: true, isToggling: false };
+            const currentAgentState = agentStates[agent._id] || {
+              isActive: true,
+              isToggling: false,
+            };
             const isActive = currentAgentState.isActive;
             const isToggling = currentAgentState.isToggling;
-            
+
             return (
               <div
                 key={agent._id}
                 className={`group bg-white rounded-xl shadow-sm border border-gray-100 hover:shadow-lg hover:border-gray-300 transition-all duration-300 overflow-hidden cursor-pointer relative ${
-                  !isActive ? 'opacity-60' : ''
+                  !isActive ? "opacity-60" : ""
                 }`}
                 onClick={() => handleViewDetails(agent)}
               >
                 {/* Active Status Indicator */}
-                <div className={`absolute top-2 left-2 w-3 h-3 rounded-full ${
-                  isActive ? 'bg-green-500' : 'bg-red-500'
-                } z-10`} 
-                title={isActive ? 'Agent is Active' : 'Agent is Inactive'}
+                <div
+                  className={`absolute top-2 left-2 w-3 h-3 rounded-full ${
+                    isActive ? "bg-green-500" : "bg-red-500"
+                  } z-10`}
+                  title={isActive ? "Agent is Active" : "Agent is Inactive"}
                 />
 
                 {/* Header */}
                 <div
-                  className={`bg-gradient-to-r ${getAgentColor(index)} px-6 py-4 ${
-                    !isActive ? 'grayscale' : ''
-                  }`}
+                  className={`bg-gradient-to-r ${getAgentColor(
+                    index
+                  )} px-6 py-4 ${!isActive ? "grayscale" : ""}`}
                 >
                   <div className="flex justify-between items-center">
                     <h3 className="text-white font-semibold text-lg truncate capitalize">
@@ -2354,13 +2612,19 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
                         onClick={(e) => toggleActiveStatus(agent, e)}
                         disabled={isToggling}
                         className={`p-2 transition-colors rounded-lg ${
-                          isToggling 
-                            ? 'text-white/50 cursor-not-allowed' 
+                          isToggling
+                            ? "text-white/50 cursor-not-allowed"
                             : isActive
-                              ? 'text-green-300 hover:text-green-100 hover:bg-white/10'
-                              : 'text-red-300 hover:text-red-100 hover:bg-white/10'
+                            ? "text-green-300 hover:text-green-100 hover:bg-white/10"
+                            : "text-red-300 hover:text-red-100 hover:bg-white/10"
                         }`}
-                        title={isToggling ? 'Updating...' : isActive ? 'Deactivate Agent' : 'Activate Agent'}
+                        title={
+                          isToggling
+                            ? "Updating..."
+                            : isActive
+                            ? "Deactivate Agent"
+                            : "Activate Agent"
+                        }
                       >
                         {isToggling ? (
                           <FiLoader className="w-4 h-4 animate-spin" />
@@ -2379,11 +2643,15 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
                         }}
                         disabled={!isActive}
                         className={`p-2 rounded-lg transition-colors ${
-                          isActive 
-                            ? 'text-white/70 hover:text-white hover:bg-white/10'
-                            : 'text-white/30 cursor-not-allowed'
+                          isActive
+                            ? "text-white/70 hover:text-white hover:bg-white/10"
+                            : "text-white/30 cursor-not-allowed"
                         }`}
-                        title={isActive ? "Show QR Code" : "Agent must be active to show QR"}
+                        title={
+                          isActive
+                            ? "Show QR Code"
+                            : "Agent must be active to show QR"
+                        }
                       >
                         <QrCode className="w-4 h-4" />
                       </button>
@@ -2396,11 +2664,15 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
                         }}
                         disabled={!isActive}
                         className={`p-2 rounded-lg transition-colors ${
-                          isActive 
-                            ? 'text-white/70 hover:text-white hover:bg-white/10'
-                            : 'text-white/30 cursor-not-allowed'
+                          isActive
+                            ? "text-white/70 hover:text-white hover:bg-white/10"
+                            : "text-white/30 cursor-not-allowed"
                         }`}
-                        title={isActive ? "AI Talk" : "Agent must be active for AI Talk"}
+                        title={
+                          isActive
+                            ? "AI Talk"
+                            : "Agent must be active for AI Talk"
+                        }
                       >
                         <FiMic className="w-4 h-4" />
                       </button>
@@ -2413,11 +2685,15 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
                         }}
                         disabled={!isActive}
                         className={`p-2 rounded-lg transition-colors ${
-                          isActive 
-                            ? 'text-white/70 hover:text-white hover:bg-white/10'
-                            : 'text-white/30 cursor-not-allowed'
+                          isActive
+                            ? "text-white/70 hover:text-white hover:bg-white/10"
+                            : "text-white/30 cursor-not-allowed"
                         }`}
-                        title={isActive ? "AI Dial" : "Agent must be active for AI Dial"}
+                        title={
+                          isActive
+                            ? "AI Dial"
+                            : "Agent must be active for AI Dial"
+                        }
                       >
                         <FiPhoneCall className="w-4 h-4" />
                       </button>
@@ -2478,15 +2754,15 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
                       </div>
                     </div>
                   )}
-                                    <div className="space-y-3">
+                  <div className="space-y-3">
                     <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
                       <FiMessageSquare className="w-4 h-4 text-gray-600 flex-shrink-0" />
                       <div className="flex-1">
                         <div className="flex items-center justify-between">
-                        <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-                          First Message
-                        </span>
-                        <button
+                          <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                            First Message
+                          </span>
+                          <button
                             onClick={(e) => {
                               e.stopPropagation();
                               if (playingAgentId === agent._id && audioUrl) {
@@ -2496,20 +2772,29 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
                               }
                             }}
                             className="inline-flex items-center justify-center p-1 transition-colors duration-200 hover:scale-110 flex-shrink-0"
-                            title={playingAgentId === agent._id && audioUrl ? 'Stop Audio' : 'Play Audio'}
+                            title={
+                              playingAgentId === agent._id && audioUrl
+                                ? "Stop Audio"
+                                : "Play Audio"
+                            }
                           >
                             {playingAgentId === agent._id && audioUrl ? (
-                              <FiVolumeX className={`w-4 h-4 ${playingAgentId === agent._id && audioUrl ? 'text-red-500' : 'text-gray-600'}`} />
+                              <FiVolumeX
+                                className={`w-4 h-4 ${
+                                  playingAgentId === agent._id && audioUrl
+                                    ? "text-red-500"
+                                    : "text-gray-600"
+                                }`}
+                              />
                             ) : (
                               <FiVolume2 className="w-4 h-4 text-gray-600 hover:text-gray-800" />
                             )}
                           </button>
-                          </div>
+                        </div>
                         <div className="flex items-center justify-between mt-1">
                           <p className="text-sm font-medium text-gray-800 flex-1">
                             {agent.firstMessage || "Not specified"}
                           </p>
-                          
                         </div>
                       </div>
                     </div>
@@ -2550,7 +2835,6 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
                       "{agent.description}"
                     </p>
                   </div>
-                  
                 </div>
               </div>
             );
@@ -2593,22 +2877,23 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
             {/* QR Code Content */}
             <div className="p-8 text-center">
               <div className="mb-6">
-                                  <QRCodeDisplay
-                    value={`${window.location.origin}/agent/${selectedAgentForQR._id}/talk`}
-                    size={250}
-                    bgColor="#fff"
-                    fgColor="#000"
-                    logoUrl={QR_LOGO_CONFIG.logoUrl}
-                    logoSize={QR_LOGO_CONFIG.logoSize}
-                  />
+                <QRCodeDisplay
+                  value={`${window.location.origin}/agent/${selectedAgentForQR._id}/talk`}
+                  size={250}
+                  bgColor="#fff"
+                  fgColor="#000"
+                  logoUrl={QR_LOGO_CONFIG.logoUrl}
+                  logoSize={QR_LOGO_CONFIG.logoSize}
+                />
               </div>
-              
+
               <div className="space-y-3">
                 <h4 className="text-sm font-semibold text-gray-800">
                   Scan to Talk with AI Agent - {selectedAgentForQR.agentName}
                 </h4>
                 <p className="text-gray-600 text-sm">
-                  Scan this QR code with your mobile device to start a voice conversation with {selectedAgentForQR.agentName}
+                  Scan this QR code with your mobile device to start a voice
+                  conversation with {selectedAgentForQR.agentName}
                 </p>
               </div>
 
@@ -2654,12 +2939,12 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
                   </h3>
                   <div className="flex items-center gap-4 text-sm opacity-90">
                     <div className="flex items-center gap-1">
-                      {wsConnectionStatus === 'connected' ? (
+                      {wsConnectionStatus === "connected" ? (
                         <>
                           <FiWifi className="w-3 h-3" />
                           <span className="text-green-200">Connected</span>
                         </>
-                      ) : wsConnectionStatus === 'connecting' ? (
+                      ) : wsConnectionStatus === "connecting" ? (
                         <>
                           <FiLoader className="w-3 h-3 animate-spin" />
                           <span className="text-yellow-200">Connecting...</span>
@@ -2673,12 +2958,17 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
                     </div>
                     <div className="text-xs">
                       {isAudioStreaming ? (
-                        <span className="text-green-200">🎤 Active: {audioStats.chunksRecorded} chunks generated, {audioStats.chunksSent} sent</span>
+                        <span className="text-green-200">
+                          🎤 Active: {audioStats.chunksRecorded} chunks
+                          generated, {audioStats.chunksSent} sent
+                        </span>
                       ) : (
                         <span className="text-gray-300">🎤 Inactive</span>
                       )}
                       {isAITalking && (
-                        <span className="text-blue-200 ml-2">🔊 Buffer: {audioBufferQueueRef.current.length} chunks</span>
+                        <span className="text-blue-200 ml-2">
+                          🔊 Buffer: {audioBufferQueueRef.current.length} chunks
+                        </span>
                       )}
                     </div>
                   </div>
@@ -2695,37 +2985,44 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
             <div className="p-8 flex flex-col items-center justify-center min-h-[500px] space-y-8">
               {/* Connection Status */}
               <div className="text-center">
-                <div className={`text-lg font-semibold mb-2 ${
-                  wsConnectionStatus === 'connected' ? 'text-green-600' :
-                  wsConnectionStatus === 'connecting' ? 'text-yellow-600' :
-                  'text-red-600'
-                }`}>
-                  {wsConnectionStatus === 'connected' ? 'Voice Chat Active - Click mic to disconnect' :
-                   wsConnectionStatus === 'connecting' ? 'Connecting...' :
-                   'Click mic to connect'}
+                <div
+                  className={`text-lg font-semibold mb-2 ${
+                    wsConnectionStatus === "connected"
+                      ? "text-green-600"
+                      : wsConnectionStatus === "connecting"
+                      ? "text-yellow-600"
+                      : "text-red-600"
+                  }`}
+                >
+                  {wsConnectionStatus === "connected"
+                    ? "Voice Chat Active - Click mic to disconnect"
+                    : wsConnectionStatus === "connecting"
+                    ? "Connecting..."
+                    : "Click mic to connect"}
                 </div>
                 <div className="text-gray-600 text-sm">
-                  {wsConnectionStatus === 'connected' 
-                    ? 'Speak naturally - the AI will respond in real-time'
-                    : wsConnectionStatus === 'connecting'
-                    ? 'Please wait while we establish the connection'
-                    : 'Click the microphone to start voice chat'
-                  }
+                  {wsConnectionStatus === "connected"
+                    ? "Speak naturally - the AI will respond in real-time"
+                    : wsConnectionStatus === "connecting"
+                    ? "Please wait while we establish the connection"
+                    : "Click the microphone to start voice chat"}
                 </div>
-                
+
                 {/* Show reconnection status */}
                 {isReconnecting && (
                   <div className="text-yellow-600 text-sm mt-2">
-                    🔄 Reconnecting... (Attempt {reconnectAttempts}/{maxReconnectAttempts})
+                    🔄 Reconnecting... (Attempt {reconnectAttempts}/
+                    {maxReconnectAttempts})
                   </div>
                 )}
-                
+
                 {/* Show last disconnect reason */}
-                {wsConnectionStatus === 'disconnected' && lastDisconnectReason && (
-                  <div className="text-red-600 text-xs mt-1">
-                    Last disconnect: {lastDisconnectReason}
-                  </div>
-                )}
+                {wsConnectionStatus === "disconnected" &&
+                  lastDisconnectReason && (
+                    <div className="text-red-600 text-xs mt-1">
+                      Last disconnect: {lastDisconnectReason}
+                    </div>
+                  )}
               </div>
 
               {/* Large Microphone Visualization */}
@@ -2733,44 +3030,71 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
                 {/* Main microphone circle - clickable to connect/disconnect */}
                 <button
                   onClick={() => {
-                    addDebugLog(`Mic clicked - Current state: isAudioStreaming=${isAudioStreaming}, isStoppingAudio=${isStoppingAudio}, wsStatus=${wsConnectionStatus}, justConnected=${justConnected}`, 'info');
-                    
-                    if (wsConnectionStatus === 'connected') {
+                    addDebugLog(
+                      `Mic clicked - Current state: isAudioStreaming=${isAudioStreaming}, isStoppingAudio=${isStoppingAudio}, wsStatus=${wsConnectionStatus}, justConnected=${justConnected}`,
+                      "info"
+                    );
+
+                    if (wsConnectionStatus === "connected") {
                       if (isAudioStreaming) {
                         // If already streaming, stop audio streaming
-                        addDebugLog('Mic clicked while streaming - stopping audio...', 'info');
+                        addDebugLog(
+                          "Mic clicked while streaming - stopping audio...",
+                          "info"
+                        );
                         setIsStoppingAudio(true);
-                        addDebugLog('Set stopping state to true', 'info');
+                        addDebugLog("Set stopping state to true", "info");
                         stopContinuousAudioStreaming();
                         // Force immediate state update to ensure UI reflects the change
                         setTimeout(() => {
                           if (isAudioStreaming) {
-                            addDebugLog('Forcing isAudioStreaming to false', 'warning');
+                            addDebugLog(
+                              "Forcing isAudioStreaming to false",
+                              "warning"
+                            );
                             setIsAudioStreaming(false);
                           }
                           setIsStoppingAudio(false);
-                          addDebugLog('Set stopping state to false', 'info');
+                          addDebugLog("Set stopping state to false", "info");
                         }, 100);
                       } else if (justConnected) {
                         // If just connected and not streaming, start audio streaming
-                        addDebugLog('Mic clicked after connection - starting audio streaming...', 'info');
+                        addDebugLog(
+                          "Mic clicked after connection - starting audio streaming...",
+                          "info"
+                        );
                         setJustConnected(false);
                         startContinuousAudioStreaming();
-                        addDebugLog('Started audio streaming after mic click', 'info');
+                        addDebugLog(
+                          "Started audio streaming after mic click",
+                          "info"
+                        );
                       } else {
                         // If connected but not streaming and not just connected, disconnect WebSocket
-                        addDebugLog('Mic clicked while connected but not streaming - disconnecting WebSocket...', 'info');
+                        addDebugLog(
+                          "Mic clicked while connected but not streaming - disconnecting WebSocket...",
+                          "info"
+                        );
                         disconnectWebSocket();
-                        addDebugLog('Disconnected from WebSocket via mic click', 'info');
+                        addDebugLog(
+                          "Disconnected from WebSocket via mic click",
+                          "info"
+                        );
                       }
                     } else {
                       // If not connected, connect
                       connectToWebSocket(false, selectedAgentForChat);
                       setJustConnected(true);
-                      addDebugLog('Connected to WebSocket via mic click', 'info');
-                      
+                      addDebugLog(
+                        "Connected to WebSocket via mic click",
+                        "info"
+                      );
+
                       // Don't start audio streaming automatically - wait for user to click mic again
-                      addDebugLog('WebSocket connected. Click the microphone again to start audio streaming.', 'info');
+                      addDebugLog(
+                        "WebSocket connected. Click the microphone again to start audio streaming.",
+                        "info"
+                      );
                     }
                   }}
                   className={`w-32 h-32 rounded-full flex items-center justify-center transition-all duration-300 cursor-pointer hover:scale-105 ${
@@ -2778,16 +3102,20 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
                       ? "bg-red-500 scale-95"
                       : isAudioStreaming
                       ? "bg-green-500 scale-110"
-                      : wsConnectionStatus === 'connected'
+                      : wsConnectionStatus === "connected"
                       ? "bg-blue-600"
                       : "bg-gray-400"
                   }`}
                   title={
                     isStoppingAudio
-                      ? 'Stopping audio...'
-                      : wsConnectionStatus === 'connected' 
-                      ? (isAudioStreaming ? 'Click to stop audio' : justConnected ? 'Click to start audio' : 'Click to disconnect')
-                      : 'Click to connect'
+                      ? "Stopping audio..."
+                      : wsConnectionStatus === "connected"
+                      ? isAudioStreaming
+                        ? "Click to stop audio"
+                        : justConnected
+                        ? "Click to start audio"
+                        : "Click to disconnect"
+                      : "Click to connect"
                   }
                 >
                   {isStoppingAudio ? (
@@ -2802,25 +3130,25 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
                 {/* Microphone level indicator rings */}
                 {isAudioStreaming && (
                   <>
-                    <div 
+                    <div
                       className="absolute inset-0 rounded-full border-4 border-green-300 animate-ping"
                       style={{
-                        animationDuration: '2s',
-                        opacity: Math.min(0.8, micLevel / 100)
+                        animationDuration: "2s",
+                        opacity: Math.min(0.8, micLevel / 100),
                       }}
                     />
-                    <div 
+                    <div
                       className="absolute inset-[-8px] rounded-full border-2 border-green-200 animate-pulse"
                       style={{
-                        animationDuration: '1.5s',
-                        opacity: Math.min(0.6, micLevel / 100)
+                        animationDuration: "1.5s",
+                        opacity: Math.min(0.6, micLevel / 100),
                       }}
                     />
                   </>
                 )}
 
                 {/* Simple connection status indicator */}
-                {wsConnectionStatus === 'connected' && (
+                {wsConnectionStatus === "connected" && (
                   <div className="absolute -top-2 -right-2 w-4 h-4 bg-green-500 rounded-full flex items-center justify-center">
                     <div className="w-2 h-2 bg-white rounded-full"></div>
                   </div>
@@ -2831,8 +3159,14 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
                   <div className="absolute -bottom-4 -right-4 bg-blue-500 text-white px-3 py-1 rounded-full text-sm flex items-center gap-1">
                     <div className="flex space-x-1">
                       <div className="w-1 h-3 bg-white rounded animate-pulse"></div>
-                      <div className="w-1 h-3 bg-white rounded animate-pulse" style={{animationDelay: '0.1s'}}></div>
-                      <div className="w-1 h-3 bg-white rounded animate-pulse" style={{animationDelay: '0.2s'}}></div>
+                      <div
+                        className="w-1 h-3 bg-white rounded animate-pulse"
+                        style={{ animationDelay: "0.1s" }}
+                      ></div>
+                      <div
+                        className="w-1 h-3 bg-white rounded animate-pulse"
+                        style={{ animationDelay: "0.2s" }}
+                      ></div>
                     </div>
                     <span className="ml-1">AI Speaking</span>
                   </div>
@@ -2841,7 +3175,7 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
                 {/* Microphone level bar */}
                 {isAudioStreaming && (
                   <div className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 w-24 h-2 bg-gray-200 rounded-full overflow-hidden">
-                    <div 
+                    <div
                       className="h-full bg-green-500 transition-all duration-100 ease-out rounded-full"
                       style={{ width: `${Math.min(100, micLevel)}%` }}
                     />
@@ -2855,15 +3189,17 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
                   <div className="text-red-600 font-medium">
                     🔴 Stopping audio stream...
                   </div>
-                ) : wsConnectionStatus === 'connected' && isAudioStreaming ? (
+                ) : wsConnectionStatus === "connected" && isAudioStreaming ? (
                   <div className="text-green-600 font-medium">
                     🎤 Listening... Speak to the AI
                   </div>
-                ) : wsConnectionStatus === 'connected' && !isAudioStreaming ? (
+                ) : wsConnectionStatus === "connected" && !isAudioStreaming ? (
                   <div className="text-blue-600 font-medium">
-                    {justConnected ? '🎤 Click microphone to start audio streaming' : '🎤 Click microphone to disconnect'}
+                    {justConnected
+                      ? "🎤 Click microphone to start audio streaming"
+                      : "🎤 Click microphone to disconnect"}
                   </div>
-                ) : wsConnectionStatus === 'connecting' ? (
+                ) : wsConnectionStatus === "connecting" ? (
                   <div className="text-yellow-600 font-medium">
                     🔄 Establishing voice connection...
                   </div>
@@ -2872,43 +3208,41 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
                     🎤 Click microphone to connect
                   </div>
                 )}
-                
+
                 {/* AI Status Messages */}
-                {aiStatus === 'listening' && (
+                {aiStatus === "listening" && (
                   <div className="text-blue-600 font-medium">
                     👂 AI is listening...
                   </div>
                 )}
-                
-                {aiStatus === 'thinking' && (
+
+                {aiStatus === "thinking" && (
                   <div className="text-purple-600 font-medium">
                     🤔 AI is thinking...
                   </div>
                 )}
-                
-                {aiStatus === 'speaking' && (
+
+                {aiStatus === "speaking" && (
                   <div className="text-green-600 font-medium">
                     🔊 AI is speaking...
                   </div>
                 )}
-                
-                {aiStatus === 'idle' && isUserSpeaking && (
+
+                {aiStatus === "idle" && isUserSpeaking && (
                   <div className="text-yellow-600 font-medium">
                     ⏳ Waiting for your question...
                   </div>
                 )}
 
                 {/* Fallback for old isAITalking state */}
-                {isAITalking && aiStatus === 'idle' && (
-                  <div className="text-blue-600">
-                    🔊 AI is responding...
-                  </div>
+                {isAITalking && aiStatus === "idle" && (
+                  <div className="text-blue-600">🔊 AI is responding...</div>
                 )}
               </div>
 
               {/* Manual Controls for Debugging and Reconnection */}
               <div className="flex flex-wrap gap-4 text-sm justify-center">
-                {wsConnectionStatus === 'disconnected' && !isReconnecting && (
+                {wsConnectionStatus === "disconnected" && !isReconnecting && (
                   <button
                     onClick={manualReconnect}
                     className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 font-medium"
@@ -2923,20 +3257,24 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
               {isAudioStreaming && (
                 <div className="text-center text-xs text-gray-500 space-y-1">
                   <div>
-                    <span className="font-medium">Audio Processing:</span> {audioStats.chunksRecorded} chunks generated | 
-                    <span className="font-medium text-green-600"> {audioStats.chunksSent} sent</span> | 
-                    {audioStats.bytesProcessed} bytes total
+                    <span className="font-medium">Audio Processing:</span>{" "}
+                    {audioStats.chunksRecorded} chunks generated |
+                    <span className="font-medium text-green-600">
+                      {" "}
+                      {audioStats.chunksSent} sent
+                    </span>{" "}
+                    |{audioStats.bytesProcessed} bytes total
                   </div>
                   {audioStats.lastChunkTime && (
                     <div>Last Activity: {audioStats.lastChunkTime}</div>
                   )}
                   <div className="text-xs text-blue-600">
-                    {audioStats.chunksRecorded > 0 && audioStats.chunksSent === 0 
+                    {audioStats.chunksRecorded > 0 &&
+                    audioStats.chunksSent === 0
                       ? "⚠️ Generating audio but WebSocket not ready"
-                      : audioStats.chunksSent > 0 
+                      : audioStats.chunksSent > 0
                       ? "✅ Successfully streaming to server"
-                      : "🔄 Initializing audio capture..."
-                    }
+                      : "🔄 Initializing audio capture..."}
                   </div>
                 </div>
               )}
@@ -2950,7 +3288,8 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
                   <span className="text-xs">({debugLogs.length} entries)</span>
                   {reconnectAttempts > 0 && (
                     <span className="text-xs text-yellow-600">
-                      | Reconnect attempts: {reconnectAttempts}/{maxReconnectAttempts}
+                      | Reconnect attempts: {reconnectAttempts}/
+                      {maxReconnectAttempts}
                     </span>
                   )}
                 </summary>
@@ -2960,17 +3299,23 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
                       <div
                         key={index}
                         className={`${
-                          log.type === 'error' ? 'text-red-600' :
-                          log.type === 'success' ? 'text-green-600' :
-                          log.type === 'warning' ? 'text-yellow-600' :
-                          'text-gray-700'
+                          log.type === "error"
+                            ? "text-red-600"
+                            : log.type === "success"
+                            ? "text-green-600"
+                            : log.type === "warning"
+                            ? "text-yellow-600"
+                            : "text-gray-700"
                         }`}
                       >
-                        <span className="text-gray-400">[{log.timestamp}]</span> {log.message}
+                        <span className="text-gray-400">[{log.timestamp}]</span>{" "}
+                        {log.message}
                       </div>
                     ))}
                     {debugLogs.length === 0 && (
-                      <div className="text-gray-400 italic">Debug logs will appear here...</div>
+                      <div className="text-gray-400 italic">
+                        Debug logs will appear here...
+                      </div>
                     )}
                   </div>
                 </div>
@@ -2989,18 +3334,22 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
               <div className="flex justify-between items-center">
                 <div>
                   <h3 className="text-lg font-semibold">
-                    {callStage === "input" && `AI Call by agent ${selectedAgentForCall.agentName}`}
+                    {callStage === "input" &&
+                      `AI Call by agent ${selectedAgentForCall.agentName}`}
                     {callStage === "connecting" && "Connecting..."}
                     {callStage === "connected" && `Call in Progress`}
                     {callStage === "timeout" && "Connection Timeout"}
                     {callStage === "terminated" && "Call Ended"}
                   </h3>
                   {/* Call Duration Display in Header */}
-                        {(callStage === "connecting" || callStage === "connected" || callStage === "timeout") && callDuration > 0 && (
-        <div className="text-sm text-green-100 mt-1 font-mono">
-          ⏱️ {formatCallDuration(callDuration)}
-        </div>
-      )}
+                  {(callStage === "connecting" ||
+                    callStage === "connected" ||
+                    callStage === "timeout") &&
+                    callDuration > 0 && (
+                      <div className="text-sm text-green-100 mt-1 font-mono">
+                        ⏱️ {formatCallDuration(callDuration)}
+                      </div>
+                    )}
                 </div>
                 <button
                   onClick={cancelCall}
@@ -3032,7 +3381,7 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
                       User Phone Number
                     </label>
                     <input
-                      type="tel"  
+                      type="tel"
                       value={phoneNumber}
                       onChange={(e) => setPhoneNumber(e.target.value)}
                       placeholder="example: 8873987243"
@@ -3076,11 +3425,10 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
                     <h4 className="text-lg font-semibold text-gray-800 mb-2">
                       Connecting...
                     </h4>
-                          <p className="text-gray-600 mb-3">
-        Establishing connection to {phoneNumber}
-      </p>
-      {/* Call Duration during connection - Only show when timer is running */}
-      
+                    <p className="text-gray-600 mb-3">
+                      Establishing connection to {phoneNumber}
+                    </p>
+                    {/* Call Duration during connection - Only show when timer is running */}
                   </div>
                 </div>
               )}
@@ -3099,130 +3447,168 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
                         🔄 Live monitoring
                       </div>
                     </div>
-                                      <div className="flex items-center gap-4">
-                    {/* Call Duration - Only show when timer is running */}
+                    <div className="flex items-center gap-4">
+                      {/* Call Duration - Only show when timer is running */}
                       {callDuration > 0 && (
                         <div className="text-sm text-green-600 font-mono">
                           ⏱️ {formatCallDuration(callDuration)}
                         </div>
                       )}
-                    <FiCheckCircle className="w-5 h-5 text-green-600" />
-                  </div>
-                  </div>
-
-
-                         {/* End Call Button - Only show when call is active and not terminated */}
-                         {callStage === "connected" && !isTerminatingCall && (
-       <div className="flex justify-center space-x-4">
-         <button
-           onClick={terminateCall}
-           disabled={isTerminatingCall}
-           className={`px-8 py-3 text-white rounded-lg transition-colors font-medium ${
-             isTerminatingCall
-               ? "bg-red-400 cursor-not-allowed"
-               : "bg-red-600 hover:bg-red-700"
-           }`}
-         >
-             <div className="flex items-center gap-2">
-               <FiPhoneCall className="w-5 h-5" />
-               End Call
-             </div>
-         </button>
-                           </div>
-                         )}
-                         
-                         {/* Show terminating status when call is being terminated */}
-                         {isTerminatingCall && (
-                           <div className="flex justify-center space-x-4">
-                             <div className="px-8 py-3 bg-red-400 text-white rounded-lg font-medium flex items-center gap-2">
-                               <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                               Terminating Call...
-       </div>
-                           </div>
-                         )}
-
-
-                                    {/* Live Transcript - Show for all stages except input */}
-                                    {callStage !== "input" && (
-                  <div className="space-y-2">
-                    <div className="text-sm font-semibold text-gray-700">
-                      {callStage === "terminated" ? "Call History" : "Live Transcript"}
+                      <FiCheckCircle className="w-5 h-5 text-green-600" />
                     </div>
-                    <div className="h-64 overflow-y-auto border border-gray-200 rounded-lg p-4 bg-white">
-                      {liveTranscriptLines.length === 0 ? (
-                        <div className="text-gray-500 text-sm">Waiting for conversation...</div>
-                      ) : (
-                                            <>
-                                              {liveTranscriptLines.map((line, idx) => {
-                          const isUser = line.includes('] User (');
-                          const text = line.replace(/^\[[^\]]+\]\s(User|AI)\s\([^\)]+\):\s*/, '');
-                                                
-                                                // Extract timestamp from the line if available, otherwise use current time
-                                                let messageTime = new Date();
-                                                const timestampMatch = line.match(/\[([^\]]+)\]/);
-                                                if (timestampMatch) {
-                                                  try {
-                                                    // Try to parse the timestamp from the log format
-                                                    const timestampStr = timestampMatch[1];
-                                                    if (timestampStr.includes('T') || timestampStr.includes('-')) {
-                                                      messageTime = new Date(timestampStr);
-                                                    } else {
-                                                      // If it's a simple timestamp, use current time
-                                                      messageTime = new Date();
-                                                    }
-                                                  } catch (e) {
-                                                    // If parsing fails, use current time
-                                                    messageTime = new Date();
-                                                  }
-                                                }
-                                                
-                                                // Format time using the new function for better display
-                                                const timeString = formatMessageTime(messageTime);
-                                                
-                          return (
-                            <div key={idx} className={`flex mb-2 ${isUser ? 'justify-end' : 'justify-start'}`}>
-                                                    <div className={`max-w-[80%] px-3 py-2 rounded-lg text-sm ${isUser ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-800'} relative`}>
-                                                      <div className="mb-1">{text}</div>
-                                                      <div className={`text-xs ${isUser ? 'text-green-100' : 'text-gray-500'} text-right flex items-center gap-1`}>
-                                                        {timeString}
-                                                        {/* Show checkmark for user messages to indicate delivery */}
-                                                        {isUser && (
-                                                          <span className="text-green-200">✓</span>
-                                                        )}
-                                                      </div>
+                  </div>
+
+                  {/* End Call Button - Only show when call is active and not terminated */}
+                  {callStage === "connected" && !isTerminatingCall && (
+                    <div className="flex justify-center space-x-4">
+                      <button
+                        onClick={terminateCall}
+                        disabled={isTerminatingCall}
+                        className={`px-8 py-3 text-white rounded-lg transition-colors font-medium ${
+                          isTerminatingCall
+                            ? "bg-red-400 cursor-not-allowed"
+                            : "bg-red-600 hover:bg-red-700"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <FiPhoneCall className="w-5 h-5" />
+                          End Call
+                        </div>
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Show terminating status when call is being terminated */}
+                  {isTerminatingCall && (
+                    <div className="flex justify-center space-x-4">
+                      <div className="px-8 py-3 bg-red-400 text-white rounded-lg font-medium flex items-center gap-2">
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        Terminating Call...
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Live Transcript - Show for all stages except input */}
+                  {callStage !== "input" && (
+                    <div className="space-y-2">
+                      <div className="text-sm font-semibold text-gray-700">
+                        {callStage === "terminated"
+                          ? "Call History"
+                          : "Live Transcript"}
+                      </div>
+                      <div className="h-64 overflow-y-auto border border-gray-200 rounded-lg p-4 bg-white">
+                        {liveTranscriptLines.length === 0 ? (
+                          <div className="text-gray-500 text-sm">
+                            Waiting for conversation...
+                          </div>
+                        ) : (
+                          <>
+                            {liveTranscriptLines.map((line, idx) => {
+                              const isUser = line.includes("] User (");
+                              const text = line
+                                // Remove full prefix like: [timestamp] User (xyz):
+                                .replace(
+                                  /^\[[^\]]+\]\s(User|AI)\s\([^\)]+\):\s*/,
+                                  ""
+                                )
+                                // Also remove only a leading [timestamp] if present
+                                .replace(/^\[[^\]]+\]\s*/, "");
+
+                              // Extract timestamp from the line if available, otherwise use current time
+                              let messageTime = new Date();
+                              const timestampMatch = line.match(/\[([^\]]+)\]/);
+                              if (timestampMatch) {
+                                try {
+                                  // Try to parse the timestamp from the log format
+                                  const timestampStr = timestampMatch[1];
+                                  if (
+                                    timestampStr.includes("T") ||
+                                    timestampStr.includes("-")
+                                  ) {
+                                    messageTime = new Date(timestampStr);
+                                  } else {
+                                    // If it's a simple timestamp, use current time
+                                    messageTime = new Date();
+                                  }
+                                } catch (e) {
+                                  // If parsing fails, use current time
+                                  messageTime = new Date();
+                                }
+                              }
+
+                              // Format time using the new function for better display
+                              const timeString = formatMessageTime(messageTime);
+
+                              return (
+                                <div
+                                  key={idx}
+                                  className={`flex mb-2 ${
+                                    isUser ? "justify-end" : "justify-start"
+                                  }`}
+                                >
+                                  <div
+                                    className={`max-w-[80%] px-3 py-2 rounded-lg text-sm ${
+                                      isUser
+                                        ? "bg-green-600 text-white"
+                                        : "bg-gray-100 text-gray-800"
+                                    } relative`}
+                                  >
+                                    <div className="mb-1">{text}</div>
+                                    <div
+                                      className={`text-xs ${
+                                        isUser
+                                          ? "text-green-100"
+                                          : "text-gray-500"
+                                      } text-right flex items-center gap-1`}
+                                    >
+                                      {timeString}
+                                      {/* Show checkmark for user messages to indicate delivery */}
+                                      {isUser && (
+                                        <span className="text-green-200">
+                                          ✓
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+
+                            {/* AI Typing Indicator - Show when there's recent activity but no new AI message */}
+                            {liveTranscriptLines.length > 0 && (
+                              <div className="flex mb-2 justify-start">
+                                <div className="max-w-[80%] px-3 py-2 rounded-lg text-sm bg-gray-100 text-gray-800 relative">
+                                  <div className="flex items-center gap-2">
+                                    <div className="flex space-x-1">
+                                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                                      <div
+                                        className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+                                        style={{ animationDelay: "0.1s" }}
+                                      ></div>
+                                      <div
+                                        className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+                                        style={{ animationDelay: "0.2s" }}
+                                      ></div>
+                                    </div>
+                                    <span className="text-gray-500 text-xs">
+                                      AI is speaking
+                                    </span>
+                                  </div>
+                                  <div className="text-xs text-gray-400 text-right mt-1">
+                                    {new Date().toLocaleTimeString("en-US", {
+                                      hour: "2-digit",
+                                      minute: "2-digit",
+                                      hour12: false,
+                                    })}
+                                  </div>
+                                </div>
                               </div>
-                            </div>
-                          );
-                                              })}
-                                              
-                                              {/* AI Typing Indicator - Show when there's recent activity but no new AI message */}
-                                              {liveTranscriptLines.length > 0 && (
-                                                <div className="flex mb-2 justify-start">
-                                                  <div className="max-w-[80%] px-3 py-2 rounded-lg text-sm bg-gray-100 text-gray-800 relative">
-                                                    <div className="flex items-center gap-2">
-                                                      <div className="flex space-x-1">
-                                                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                                                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
-                                                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
-                                                      </div>
-                                                      <span className="text-gray-500 text-xs">AI is speaking</span>
-                                                    </div>
-                                                    <div className="text-xs text-gray-400 text-right mt-1">
-                                                      {new Date().toLocaleTimeString('en-US', {
-                                                        hour: '2-digit',
-                                                        minute: '2-digit',
-                                                        hour12: false
-                                                      })}
-                                                    </div>
-                                                  </div>
-                                                </div>
-                                              )}
-                                            </>
-                      )}
+                            )}
+                          </>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                                    )}
-
+                  )}
                 </div>
               )}
 
@@ -3241,14 +3627,15 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
                       Connection Timeout
                     </h4>
                     <p className="text-gray-600 mb-3">
-                      No activity detected within 40 seconds. The call may not have connected properly.
+                      No activity detected within 40 seconds. The call may not
+                      have connected properly.
                     </p>
-                          {/* Call Duration at timeout - Only show when timer was running */}
-      {callDuration > 0 && (
-        <div className="text-sm text-red-600 font-mono bg-red-50 px-3 py-1 rounded-md border border-red-200 mb-4">
-          ⏱️ {formatCallDuration(callDuration)}
-        </div>
-      )}
+                    {/* Call Duration at timeout - Only show when timer was running */}
+                    {callDuration > 0 && (
+                      <div className="text-sm text-red-600 font-mono bg-red-50 px-3 py-1 rounded-md border border-red-200 mb-4">
+                        ⏱️ {formatCallDuration(callDuration)}
+                      </div>
+                    )}
                     <div className="text-sm text-gray-500">
                       <p>Possible reasons:</p>
                       <ul className="list-disc list-inside mt-2 space-y-1">
@@ -3268,19 +3655,20 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
                     </button>
                     <button
                       onClick={() => {
-                        setCallStage("input");
-                        setIsCallConnected(false);
-                        setCallDuration(0);
-                        setLiveTranscript("");
-                        setLiveTranscriptLines([]);
+                        // Clear any previous timeout and immediately redial
                         if (callTimeoutRef.current) {
                           clearTimeout(callTimeoutRef.current);
                           callTimeoutRef.current = null;
                         }
+                        if (phoneNumber && selectedAgentForCall) {
+                          initiateCall();
+                        }
                       }}
-                      className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                      className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
+                      title="Call again"
                     >
-                      Try Again
+                      <FiPhoneCall className="w-5 h-5" />
+                      Call again
                     </button>
                   </div>
                 </div>
@@ -3301,12 +3689,32 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
                         </div>
                       )}
                     </div>
-                    <button
-                      onClick={cancelCall}
-                      className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm"
-                    >
-                      Close
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => {
+                          if (!phoneNumber || !selectedAgentForCall) return;
+                          initiateCall();
+                        }}
+                        title="Redial same number"
+                        className="p-2 bg-green-600 text-white rounded-full hover:bg-green-700 transition-colors text-sm flex items-center justify-center"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          viewBox="0 0 24 24"
+                          fill="currentColor"
+                          className="w-5 h-5"
+                        >
+                          <path d="M2 5a1 1 0 011-1h3a1 1 0 011 .78l.72 3.23a1 1 0 01-.27.95l-1.72 1.72a15.94 15.94 0 007.07 7.07l1.72-1.72a1 1 0 01.95-.27l3.23.72A1 1 0 0120 18v3a1 1 0 01-1 1c-9.39 0-17-7.61-17-17z" />
+                          <path d="M13.5 6a.75.75 0 010-1.5h5.19l-1.72-1.72a.75.75 0 111.06-1.06l3 3a.75.75 0 010 1.06l-3 3a.75.75 0 11-1.06-1.06L18.69 6H13.5z" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={cancelCall}
+                        className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm"
+                      >
+                        Close
+                      </button>
+                    </div>
                   </div>
 
                   {/* Call Logs/Transcripts - Show after call termination */}
@@ -3316,13 +3724,22 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
                     </div>
                     <div className="h-64 overflow-y-auto border border-gray-200 rounded-lg p-4 bg-white">
                       {liveTranscriptLines.length === 0 ? (
-                        <div className="text-gray-500 text-sm">No call logs available...</div>
+                        <div className="text-gray-500 text-sm">
+                          No call logs available...
+                        </div>
                       ) : (
                         <>
                           {liveTranscriptLines.map((line, idx) => {
-                            const isUser = line.includes('] User (');
-                            const text = line.replace(/^\[[^\]]+\]\s(User|AI)\s\([^\)]+\):\s*/, '');
-                            
+                            const isUser = line.includes("] User (");
+                            const text = line
+                              // Remove full prefix like: [timestamp] User (xyz):
+                              .replace(
+                                /^\[[^\]]+\]\s(User|AI)\s\([^\)]+\):\s*/,
+                                ""
+                              )
+                              // Also remove only a leading [timestamp] if present
+                              .replace(/^\[[^\]]+\]\s*/, "");
+
                             // Extract timestamp from the line if available, otherwise use current time
                             let messageTime = new Date();
                             const timestampMatch = line.match(/\[([^\]]+)\]/);
@@ -3330,7 +3747,10 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
                               try {
                                 // Try to parse the timestamp from the log format
                                 const timestampStr = timestampMatch[1];
-                                if (timestampStr.includes('T') || timestampStr.includes('-')) {
+                                if (
+                                  timestampStr.includes("T") ||
+                                  timestampStr.includes("-")
+                                ) {
                                   messageTime = new Date(timestampStr);
                                 } else {
                                   // If it's a simple timestamp, use current time
@@ -3341,15 +3761,32 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
                                 messageTime = new Date();
                               }
                             }
-                            
+
                             // Format time using the new function for better display
                             const timeString = formatMessageTime(messageTime);
-                            
+
                             return (
-                              <div key={idx} className={`flex mb-2 ${isUser ? 'justify-end' : 'justify-start'}`}>
-                                <div className={`max-w-[80%] px-3 py-2 rounded-lg text-sm ${isUser ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-800'} relative`}>
+                              <div
+                                key={idx}
+                                className={`flex mb-2 ${
+                                  isUser ? "justify-end" : "justify-start"
+                                }`}
+                              >
+                                <div
+                                  className={`max-w-[80%] px-3 py-2 rounded-lg text-sm ${
+                                    isUser
+                                      ? "bg-green-600 text-white"
+                                      : "bg-gray-100 text-gray-800"
+                                  } relative`}
+                                >
                                   <div className="mb-1">{text}</div>
-                                  <div className={`text-xs ${isUser ? 'text-green-100' : 'text-gray-500'} text-right flex items-center gap-1`}>
+                                  <div
+                                    className={`text-xs ${
+                                      isUser
+                                        ? "text-green-100"
+                                        : "text-gray-500"
+                                    } text-right flex items-center gap-1`}
+                                  >
                                     {timeString}
                                     {/* Show checkmark for user messages to indicate delivery */}
                                     {isUser && (
