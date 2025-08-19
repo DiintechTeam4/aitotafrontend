@@ -20,9 +20,11 @@ import {
   FaUsers,
   FaFileInvoiceDollar,
   FaClipboardList,
+  FaUserTie,
 } from "react-icons/fa";
 import ApprovalFormDetails from "./components/ApprovalFormDetails";
 import HumanAgentManagement from "./components/HumanAgentManagement";
+import AdminAgents from "./components/AdminAgents";
 
 const AdminDashboard = ({ user, onLogout }) => {
   const navigate = useNavigate();
@@ -239,6 +241,7 @@ const AdminDashboard = ({ user, onLogout }) => {
   const navItems = [
     { name: "Overview", icon: <FaChartBar /> },
     { name: "Client", icon: <FaUsers /> },
+    { name: "Agents", icon: <FaUserTie /> },
     { name: "Tools", icon: <FaCog /> },
     { name: "Datastore", icon: <FaDatabase /> },
     { name: "AI Agent", icon: <FaRobot /> },
@@ -403,6 +406,7 @@ const AdminDashboard = ({ user, onLogout }) => {
 
       // Get admin token from localStorage
       const adminToken = localStorage.getItem("admintoken");
+      console.log("Admin token:", adminToken);
       if (!adminToken) {
         alert("Admin token not found. Please login again.");
         return;
@@ -889,6 +893,10 @@ const AdminDashboard = ({ user, onLogout }) => {
                   </p>
                 </div>
               </div>
+            )}
+            {/* Dashboard Content based on active tab */}
+            {activeTab === "Agents" && (
+              <AdminAgents/>
             )}
 
             {/* Client Table */}

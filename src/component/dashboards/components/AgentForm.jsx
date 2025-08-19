@@ -5,7 +5,15 @@ import VoiceSynthesizer from "./VoiceSynthesizer";
 import AudioRecorder from "./AudioRecorder";
 import { API_BASE_URL } from "../../../config";
 
-const AgentForm = ({ agent, onSave, onCancel, clientId }) => {
+const AgentForm = ({
+  agent,
+  onSave,
+  onCancel,
+  clientId,
+  initialServiceProvider,
+  lockServiceProvider = false,
+  clientToken,
+}) => {
   const [selectedTab, setSelectedTab] = useState("starting");
   const [formData, setFormData] = useState({
     agentName: "",
@@ -17,7 +25,7 @@ const AgentForm = ({ agent, onSave, onCancel, clientId }) => {
     systemPrompt: "",
     sttSelection: "google",
     ttsSelection: "sarvam",
-    voiceSelection: "",
+    voiceSelection: "anushka",
     accountSid: "",
     serviceProvider: "",
     callingType: "both",
@@ -72,13 +80,29 @@ const AgentForm = ({ agent, onSave, onCancel, clientId }) => {
     }
   }, [agent]);
 
+  // If parent sets an initial provider (e.g. Admin flow), apply it
+  useEffect(() => {
+    if (initialServiceProvider) {
+      setFormData((prev) => ({
+        ...prev,
+        serviceProvider: initialServiceProvider,
+      }));
+    }
+  }, [initialServiceProvider]);
+
   const fetchAudio = async (agentId) => {
     try {
+      const authToken =
+        clientToken ||
+        sessionStorage.getItem("clienttoken") ||
+        localStorage.getItem("admintoken");
       const response = await fetch(
-        `${API_BASE_URL}client/agents/${agentId}/audio?clientId=${clientId}`,
+        `${API_BASE_URL}client/agents/${agentId}/audio${
+          clientId ? `?clientId=${clientId}` : ""
+        }`,
         {
           headers: {
-            Authorization: `Bearer ${sessionStorage.getItem("clienttoken")}`,
+            Authorization: `Bearer ${authToken}`,
           },
         }
       );
@@ -226,6 +250,26 @@ const AgentForm = ({ agent, onSave, onCancel, clientId }) => {
         setIsLoading(false);
         return;
       }
+      // Ensure default for voiceSelection if empty
+      if (!formData.voiceSelection || !formData.voiceSelection.trim()) {
+        formData.voiceSelection = "anushka";
+      }
+
+      // Provider-specific validation: require Account SID and Caller ID for C-zentrix only
+      if (
+        (formData.serviceProvider || initialServiceProvider) === "c-zentrix"
+      ) {
+        if (!formData.accountSid.trim()) {
+          alert("Account SID is required for C-zentrix");
+          setIsLoading(false);
+          return;
+        }
+        if (!formData.callerId.trim()) {
+          alert("Caller ID is required for C-zentrix");
+          setIsLoading(false);
+          return;
+        }
+      }
 
       // Create payload without empty serviceProvider
       const { serviceProvider, ...formDataWithoutServiceProvider } = formData;
@@ -243,17 +287,31 @@ const AgentForm = ({ agent, onSave, onCancel, clientId }) => {
         payload.serviceProvider = serviceProvider;
       }
 
+      // For TATA, omit accountSid and callerId
+      if (payload.serviceProvider === "tata") {
+        delete payload.accountSid;
+        delete payload.callerId;
+      }
+
       const url = agent
-        ? `${API_BASE_URL}/client/agents/${agent._id}?clientId=${clientId}`
-        : `${API_BASE_URL}/client/agents?clientId=${clientId}`;
+        ? `${API_BASE_URL}/client/agents/${agent._id}${
+            clientId ? `?clientId=${clientId}` : ""
+          }`
+        : `${API_BASE_URL}/client/agents${
+            clientId ? `?clientId=${clientId}` : ""
+          }`;
 
       const method = agent ? "PUT" : "POST";
 
+      const authToken =
+        clientToken ||
+        sessionStorage.getItem("clienttoken") ||
+        localStorage.getItem("admintoken");
       const response = await fetch(url, {
         method,
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${sessionStorage.getItem("clienttoken")}`,
+          Authorization: `Bearer ${authToken}`,
         },
         body: JSON.stringify(payload),
       });
@@ -648,24 +706,6 @@ const AgentForm = ({ agent, onSave, onCancel, clientId }) => {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label
-            htmlFor="accountSid"
-            className="block mb-2 font-semibold text-gray-700"
-          >
-            Account SID
-          </label>
-          <input
-            type="text"
-            id="accountSid"
-            name="accountSid"
-            value={formData.accountSid}
-            onChange={handleInputChange}
-            placeholder="Enter your account SID"
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors"
-          />
-        </div>
-
-        <div>
-          <label
             htmlFor="serviceProvider"
             className="block mb-2 font-semibold text-gray-700"
           >
@@ -676,9 +716,14 @@ const AgentForm = ({ agent, onSave, onCancel, clientId }) => {
             name="serviceProvider"
             value={formData.serviceProvider}
             onChange={handleInputChange}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors"
+            disabled={lockServiceProvider}
+            className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors ${
+              lockServiceProvider ? "bg-gray-100 cursor-not-allowed" : ""
+            }`}
           >
             <option value="">Select Provider</option>
+            <option value="c-zentrix">C-zentrix</option>
+            <option value="tata">TATA</option>
             <option value="twilio">Twilio</option>
             <option value="vonage">Vonage</option>
             <option value="aws">AWS Connect</option>
@@ -686,21 +731,49 @@ const AgentForm = ({ agent, onSave, onCancel, clientId }) => {
         </div>
 
         <div>
-          <label
-            htmlFor="callerId"
-            className="block mb-2 font-semibold text-gray-700"
-          >
-            Caller ID
-          </label>
-          <input
-            type="text"
-            id="callerId"
-            name="callerId"
-            value={formData.callerId}
-            onChange={handleInputChange}
-            placeholder="Enter caller ID (phone number)"
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors"
-          />
+          {(!formData.serviceProvider ||
+            formData.serviceProvider !== "tata") && (
+            <>
+              <label
+                htmlFor="accountSid"
+                className="block mb-2 font-semibold text-gray-700"
+              >
+                Account SID
+              </label>
+              <input
+                type="text"
+                id="accountSid"
+                name="accountSid"
+                value={formData.accountSid}
+                onChange={handleInputChange}
+                placeholder="Enter your account SID"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors"
+              />
+            </>
+          )}
+        </div>
+
+        <div>
+          {(!formData.serviceProvider ||
+            formData.serviceProvider !== "tata") && (
+            <>
+              <label
+                htmlFor="callerId"
+                className="block mb-2 font-semibold text-gray-700"
+              >
+                Caller ID
+              </label>
+              <input
+                type="text"
+                id="callerId"
+                name="callerId"
+                value={formData.callerId}
+                onChange={handleInputChange}
+                placeholder="Enter caller ID (phone number)"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors"
+              />
+            </>
+          )}
         </div>
 
         <div>
