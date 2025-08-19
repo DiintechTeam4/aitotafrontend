@@ -39,6 +39,7 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
     propClientId || sessionClientId || ""
   );
   const [agents, setAgents] = useState([]);
+  const [agentsLoading, setAgentsLoading] = useState(false);
   const [editingAgent, setEditingAgent] = useState(null);
   const [activeSection, setActiveSection] = useState(() => {
     // Get persisted section from localStorage, default to "agents"
@@ -101,6 +102,7 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
 
   const fetchAgents = async () => {
     try {
+      setAgentsLoading(true);
       const response = await fetch(
         `${API_BASE_URL}/client/agents?clientId=${currentClient}`,
         {
@@ -118,6 +120,8 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
     } catch (error) {
       console.error("Error fetching agents:", error);
       setAgents([]);
+    } finally {
+      setAgentsLoading(false);
     }
   };
 
@@ -425,6 +429,7 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
               {activeTab === "list" && (
                 <AgentList
                   agents={agents}
+                  isLoading={agentsLoading}
                   onEdit={handleEditAgent}
                   onDelete={handleDeleteAgent}
                   clientId={currentClient}

@@ -245,7 +245,7 @@ const generateQRCodeWithLogo = async (
   });
 };
 
-const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
+const AgentList = ({ agents, isLoading, onEdit, onDelete, clientId }) => {
   const [audioUrl, setAudioUrl] = useState(null);
   const [playingAgentId, setPlayingAgentId] = useState(null);
   const [openMenuId, setOpenMenuId] = useState(null);
@@ -311,6 +311,10 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
   const [callTerminationReason, setCallTerminationReason] = useState("");
   const logsPollRef = useRef(null);
   const callTimeoutRef = useRef(null);
+
+  // Recent calls for quick selection
+  const [recentCalls, setRecentCalls] = useState([]);
+  const [recentCallsLoading, setRecentCallsLoading] = useState(false);
 
   // Refs for audio handling
   const micIntervalRef = useRef(null);
@@ -1586,6 +1590,11 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
     setTimeout(() => {
       fetchCallTerminationData();
     }, 100);
+
+    // Fetch last 3 recent calls for quick fill
+    setTimeout(() => {
+      fetchRecentCalls();
+    }, 0);
   };
 
   const makeAIDialCall = async (
@@ -1640,6 +1649,65 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
     } catch (error) {
       console.error("Error making AI Dial call:", error);
       return { success: false, error: error.message };
+    }
+  };
+
+  // Fetch recent 3 calls for this client
+  const fetchRecentCalls = async () => {
+    try {
+      if (!clientId) return;
+      setRecentCallsLoading(true);
+      const params = new URLSearchParams({
+        clientId: String(clientId),
+        limit: "15",
+        sortBy: "createdAt",
+        sortOrder: "desc",
+      });
+      // Prefer agent-specific logs by filtering on customParams.agentId
+      if (selectedAgentForCall?._id) {
+        params.set("customField", "agentId");
+        params.set("customValue", String(selectedAgentForCall._id));
+      }
+      const response = await fetch(`${API_BASE_URL}/logs?${params.toString()}`);
+      if (!response.ok) throw new Error("Failed to fetch recent calls");
+      const data = await response.json();
+      const logs = Array.isArray(data?.logs) ? data.logs : [];
+      // Map to {phoneNumber, contactName} and dedupe by phoneNumber
+      const mapped = logs
+        .map((l) => ({
+          phoneNumber:
+            l.mobile ||
+            l?.metadata?.customParams?.phoneNumber ||
+            l?.metadata?.customParams?.phone_num ||
+            "",
+          contactName:
+            l?.metadata?.customParams?.contactName ||
+            l?.metadata?.customParams?.contact_name ||
+            "",
+          createdAt: l.createdAt,
+        }))
+        .filter((x) => x.phoneNumber);
+
+      const seen = new Set();
+      const unique = [];
+      for (const item of mapped) {
+        const key = String(item.phoneNumber).replace(/[^\d]/g, "");
+        if (!seen.has(key)) {
+          seen.add(key);
+          unique.push({
+            phoneNumber: key,
+            contactName: item.contactName,
+            createdAt: item.createdAt,
+          });
+        }
+        if (unique.length >= 3) break;
+      }
+      setRecentCalls(unique);
+    } catch (e) {
+      console.error("Failed to fetch recent calls:", e);
+      setRecentCalls([]);
+    } finally {
+      setRecentCallsLoading(false);
     }
   };
 
@@ -2540,7 +2608,8 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
     };
   }, []);
 
-  // Ensure agents is always an array
+  // Determine loading state and ensure agents is always an array when loaded
+  const isAgentsLoading = Boolean(isLoading);
   const agentsArray = Array.isArray(agents) ? agents : [];
   // Active first sorting using current UI state when available
   const sortedAgents = agentsArray.slice().sort((a, b) => {
@@ -2556,7 +2625,17 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
 
   return (
     <div className="w-full">
-      {agentsArray.length === 0 ? (
+      {isAgentsLoading ? (
+        <div className="text-center py-20 px-8">
+          <div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-4 border border-green-100">
+            <FiLoader className="w-8 h-8 text-green-600 animate-spin" />
+          </div>
+          <h3 className="text-lg font-semibold text-gray-700 mb-1">
+            Fetching agents…
+          </h3>
+          <p className="text-gray-500 text-sm">This may take a few seconds.</p>
+        </div>
+      ) : agentsArray.length === 0 ? (
         <div className="text-center py-16 px-8 bg-gradient-to-br from-gray-50 to-white rounded-xl shadow-sm border border-gray-100">
           <div className="max-w-md mx-auto">
             <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -3407,6 +3486,46 @@ const AgentList = ({ agents, onEdit, onDelete, clientId }) => {
                     >
                       Call
                     </button>
+                  </div>
+                  {/* Recent calls quick fill */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="block text-sm font-medium text-gray-700">
+                        Recent
+                      </label>
+                      {recentCallsLoading && (
+                        <span className="text-xs text-gray-500">Loading…</span>
+                      )}
+                    </div>
+                    {recentCalls.length > 0 ? (
+                      <div className="flex gap-2 flex-wrap">
+                        {recentCalls.map((rc, idx) => (
+                          <button
+                            key={idx}
+                            onClick={() => {
+                              setPhoneNumber(rc.phoneNumber);
+                              if (rc.contactName)
+                                setContactName(rc.contactName);
+                            }}
+                            className="px-3 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-sm text-gray-800 border border-gray-200"
+                            title={`${rc.contactName || "Unknown"} • ${
+                              rc.phoneNumber
+                            }`}
+                          >
+                            <span className="font-medium">
+                              {rc.contactName || "Unknown"}
+                            </span>
+                            <span className="text-gray-500 ml-2">
+                              {rc.phoneNumber}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-xs text-gray-500">
+                        No recent calls
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
