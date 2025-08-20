@@ -50,6 +50,9 @@ const AgentMobileTalkUI = ({ agent, clientId, onClose }) => {
   const [showConversation, setShowConversation] = useState(false);
   const [currentUserMessage, setCurrentUserMessage] = useState('');
   const [currentAIResponse, setCurrentAIResponse] = useState('');
+  const [userMessageCount, setUserMessageCount] = useState(0);
+  const [showLoginPrompt, setShowLoginPrompt] = useState(false);
+  const lastPromptCountRef = useRef(0);
   
   // Server logs from backend (STT/LLM/TTS + errors)
   const [serverLogs, setServerLogs] = useState([]);
@@ -63,15 +66,43 @@ const AgentMobileTalkUI = ({ agent, clientId, onClose }) => {
     }
   };
 
-  // Add message to conversation
+  // Add message to conversation (deduplicated)
   const addToConversation = (role, content, timestamp = new Date()) => {
-    const message = {
-      id: Date.now() + Math.random(),
-      role,
-      content,
-      timestamp
-    };
-    setConversation(prev => [...prev, message]);
+    const normalized = (content || '').trim();
+    if (!normalized) return;
+    setConversation(prev => {
+      // Avoid duplicate consecutive messages
+      const last = prev[prev.length - 1];
+      if (last && last.role === role && (last.content || '').trim() === normalized) {
+        return prev;
+      }
+      // Also avoid duplicates within the last few messages (server may resend)
+      const recent = prev.slice(-10);
+      if (recent.some(msg => msg.role === role && (msg.content || '').trim() === normalized)) {
+        return prev;
+      }
+      return [
+        ...prev,
+        {
+          id: Date.now() + Math.random(),
+          role,
+          content: normalized,
+          timestamp
+        }
+      ];
+    });
+
+    // Track user messages and trigger login prompt after every 3
+    if (role === 'user') {
+      setUserMessageCount(prev => {
+        const next = prev + 1;
+        if (next % 3 === 0 && lastPromptCountRef.current !== next) {
+          lastPromptCountRef.current = next;
+          setShowLoginPrompt(true);
+        }
+        return next;
+      });
+    }
   };
   
   // --- Refs ---
@@ -258,11 +289,15 @@ const AgentMobileTalkUI = ({ agent, clientId, onClose }) => {
           setCurrentUserMessage(data.userMessage);
           addToConversation('user', data.userMessage);
           addDebugLog(`User said: "${data.userMessage}"`, 'info');
+          // Clear current user message once committed to conversation to avoid double display
+          setCurrentUserMessage('');
         }
         if (data.aiResponse) {
           setCurrentAIResponse(data.aiResponse);
           addToConversation('assistant', data.aiResponse);
           addDebugLog(`AI responded: "${data.aiResponse}"`, 'info');
+          // Clear current AI response once committed to conversation to avoid double display
+          setCurrentAIResponse('');
         }
         break;
 
@@ -273,6 +308,8 @@ const AgentMobileTalkUI = ({ agent, clientId, onClose }) => {
           setCurrentUserMessage(data.final ? text : `${text} …`);
           if (data.final) {
             addToConversation('user', text);
+            // Clear the ephemeral banner now that it's in the conversation
+            setCurrentUserMessage('');
           }
         }
         break;
@@ -291,13 +328,11 @@ const AgentMobileTalkUI = ({ agent, clientId, onClose }) => {
         
       case 'redirect':
         addDebugLog(`Redirect event: ${data.message}`, 'warning');
-        // Show redirect message to user
-        setCurrentAIResponse(data.message || 'Please visit our website to continue.');
-        addToConversation('system', data.message || 'Please visit our website to continue.');
-        // Optionally redirect to login page after a delay
-        setTimeout(() => {
-          window.location.href = '/login';
-        }, 5000);
+        // Show login prompt card instead of auto-redirect
+        setShowLoginPrompt(true);
+        if (data.message) {
+          addToConversation('system', data.message);
+        }
         break;
         
       case 'stop':
@@ -986,8 +1021,39 @@ const AgentMobileTalkUI = ({ agent, clientId, onClose }) => {
       {/* Audio Stats & Debug (collapsible) */}
       
 
-      {/* Conversation Display */}
-      <div className="px-4 pb-3">
+             {/* Conversation Display */}
+       <div className="px-4 pb-3">
+                   {/* Login Prompt Modal Overlay */}
+          {showLoginPrompt && (
+            <div className="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50">
+             <div className="bg-white rounded-lg shadow-xl p-6 max-w-sm mx-4 relative">
+               {/* Close Button */}
+               <button
+                 onClick={() => setShowLoginPrompt(false)}
+                 className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
+               >
+                 ✕
+               </button>
+               <div className="text-center">
+                 <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                   <span className="text-2xl">🔐</span>
+                 </div>
+                 <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                   Login Required
+                 </h3>
+                 <p className="text-gray-600 mb-6">
+                   Kindly login to assist you better.
+                 </p>
+                 <button
+                   onClick={() => { window.location.href = '/login'; }}
+                   className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                 >
+                   Login Now
+                 </button>
+               </div>
+             </div>
+           </div>
+         )}
         <div className="w-full max-w-md mx-auto">
           <button
             onClick={() => setShowConversation(!showConversation)}
