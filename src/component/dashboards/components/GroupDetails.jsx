@@ -395,45 +395,53 @@ function GroupDetails({ groupId, onBack }) {
 
   // CSV/Excel Import Functions
   const parseCSV = (csvText) => {
-    const lines = csvText.split("\n");
-    const headers = lines[0].split(",").map((h) => h.trim().toLowerCase());
+    const lines = csvText.split(/\r?\n/);
     const data = [];
     const errors = [];
 
-    for (let i = 1; i < lines.length; i++) {
+    const looksLikeHeader = (values) => {
+      const first = (values[0] || "").toLowerCase();
+      if (first.includes("phone") || first.includes("number")) return true;
+      const phoneLike = /^[+\d][\d\s\-()]*$/;
+      return !phoneLike.test(values[0] || "");
+    };
+
+    let startIndex = 0;
+    if (lines.length > 0) {
+      const firstValues = lines[0].split(",").map((v) => v.trim());
+      if (looksLikeHeader(firstValues)) {
+        startIndex = 1;
+      }
+    }
+
+    for (let i = startIndex; i < lines.length; i++) {
       if (!lines[i].trim()) continue;
 
       const values = lines[i].split(",").map((v) => v.trim());
-      const row = {};
+      const phoneRaw = values[0] || "";
+      const nameRaw = values[1] || "";
+      const emailRaw = values[2] || "";
 
-      headers.forEach((header, index) => {
-        row[header] = values[index] || "";
-      });
-
-      // Validate required fields
-      if (!row.name || !row.phone) {
-        errors.push(`Row ${i + 1}: Missing required fields (name or phone)`);
+      const cleanPhone = phoneRaw.replace(/[^\d+]/g, "");
+      const phoneRegex = /^[\+]?[0-9]{6,16}$/;
+      if (!cleanPhone) {
+        errors.push(`Row ${i + 1}: Missing required field (phone)`);
         continue;
       }
-
-      // Validate phone number format
-      const phoneRegex = /^[\+]?[1-9][\d]{0,15}$/;
-      const cleanPhone = row.phone.replace(/[^\d+]/g, "");
       if (!phoneRegex.test(cleanPhone)) {
         errors.push(`Row ${i + 1}: Invalid phone number format`);
         continue;
       }
 
-      // Validate email if provided
-      if (row.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row.email)) {
+      if (emailRaw && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailRaw)) {
         errors.push(`Row ${i + 1}: Invalid email format`);
         continue;
       }
 
       data.push({
-        name: row.name,
+        name: nameRaw || "",
         phone: cleanPhone,
-        email: row.email || "",
+        email: emailRaw || "",
       });
     }
 
@@ -442,36 +450,72 @@ function GroupDetails({ groupId, onBack }) {
 
   const parseExcel = async (file) => {
     try {
-      // Read Excel file as ArrayBuffer
       const data = await file.arrayBuffer();
-
-      // Parse workbook
       const workbook = XLSX.read(data, { type: "array" });
-
-      // Get first sheet
       const sheetName = workbook.SheetNames[0];
       const sheet = workbook.Sheets[sheetName];
 
-      // Convert to JSON
-      const jsonData = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+      const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
 
-      // Extract contacts
-      const contacts = jsonData.map((row) => ({
-        name: row["Name"] || row["Full Name"] || row["Contact Name"] || "",
-        email: row["Email"] || row["E-mail"] || "",
-        phone: row["Phone"] || row["Mobile"] || row["Contact Number"] || "",
-      }));
+      const dataOut = [];
+      const errors = [];
 
-      return {
-        data: contacts,
-        errors: [],
+      const looksLikeHeader = (firstRow) => {
+        if (!firstRow || firstRow.length === 0) return false;
+        const first = String(firstRow[0] || "").toLowerCase();
+        if (first.includes("phone") || first.includes("number")) return true;
+        const phoneLike = /^[+\d][\d\s\-()]*$/;
+        return !phoneLike.test(String(firstRow[0] || ""));
       };
+
+      let startIndex = 0;
+      if (rows.length > 0 && looksLikeHeader(rows[0])) {
+        startIndex = 1;
+      }
+
+      for (let i = startIndex; i < rows.length; i++) {
+        const row = rows[i];
+        if (
+          !row ||
+          row.length === 0 ||
+          row.every((c) => String(c).trim() === "")
+        )
+          continue;
+
+        const phoneRaw = String(row[0] ?? "").trim();
+        const nameRaw = String(row[1] ?? "").trim();
+        const emailRaw = String(row[2] ?? "").trim();
+
+        const cleanPhone = phoneRaw.replace(/[^\d+]/g, "");
+        const phoneRegex = /^[\+]?[0-9]{6,16}$/;
+        if (!cleanPhone) {
+          errors.push(`Row ${i + 1}: Missing required field (phone)`);
+          continue;
+        }
+        if (!phoneRegex.test(cleanPhone)) {
+          errors.push(`Row ${i + 1}: Invalid phone number format`);
+          continue;
+        }
+
+        if (emailRaw && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailRaw)) {
+          errors.push(`Row ${i + 1}: Invalid email format`);
+          continue;
+        }
+
+        dataOut.push({
+          name: nameRaw || "",
+          phone: cleanPhone,
+          email: emailRaw || "",
+        });
+      }
+
+      return { data: dataOut, errors };
     } catch (error) {
       console.error("Error parsing Excel file:", error);
       return {
         data: [],
         errors: [
-          "Error parsing Excel file. Please ensure it contains columns: Name, Email, Phone.",
+          "Error parsing Excel file. Use 3 columns: Phone (required), Name (optional), Email (optional).",
         ],
       };
     }
@@ -1024,7 +1068,7 @@ function GroupDetails({ groupId, onBack }) {
             <form onSubmit={handleAddContact} className="p-6">
               <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Name *
+                  Name
                 </label>
                 <input
                   type="text"
@@ -1032,7 +1076,6 @@ function GroupDetails({ groupId, onBack }) {
                   onChange={(e) =>
                     setContactForm({ ...contactForm, name: e.target.value })
                   }
-                  required
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors"
                 />
               </div>
@@ -1147,34 +1190,31 @@ function GroupDetails({ groupId, onBack }) {
                 </h5>
                 <ul className="text-sm text-gray-600 space-y-1">
                   <li>
-                    • First row should contain headers:{" "}
+                    • Use 3 columns in order:{" "}
                     <code className="bg-gray-200 px-1 rounded">
-                      name, phone, email
-                    </code>
+                      phone, name, email
+                    </code>{" "}
+                    (header optional)
                   </li>
                   <li>
-                    • <strong>Name</strong> and <strong>Phone</strong> are
-                    required fields
+                    • Only <strong>Phone</strong> is required.{" "}
+                    <strong>Name</strong> and <strong>Email</strong> are
+                    optional
                   </li>
                   <li>
-                    • <strong>Email</strong> is optional
-                  </li>
-                  <li>
-                    • Phone numbers should be in international format (e.g.,
-                    +1234567890)
+                    • Phone numbers may be in international or local format (min
+                    6 digits)
                   </li>
                   <li>• Maximum file size: 5MB</li>
                 </ul>
                 <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded">
                   <p className="text-sm text-blue-700">
-                    <strong>Example CSV format:</strong>
+                    <strong>Example CSV format (no header required):</strong>
                     <br />
                     <code className="text-xs">
-                      name,phone,email
+                      +1234567890,John Doe,john@example.com
                       <br />
-                      John Doe,+1234567890,john@example.com
-                      <br />
-                      Jane Smith,+1987654321,jane@example.com
+                      +1987654321,Jane Smith,jane@example.com
                     </code>
                   </p>
                 </div>
@@ -1183,14 +1223,14 @@ function GroupDetails({ groupId, onBack }) {
                   <p className="text-sm text-green-700">
                     <strong>Excel File Format:</strong>
                     <br />
-                    Create an Excel file with these columns:
+                    Create an Excel file with these columns (header optional):
                     <br />
                     <code className="text-xs">
-                      A1: name | B1: phone | C1: email
+                      A: phone | B: name | C: email
                       <br />
-                      A2: John Doe | B2: +1234567890 | C2: john@example.com
+                      +1234567890 | John Doe | john@example.com
                       <br />
-                      A3: Jane Smith | B3: +1987654321 | C3: jane@example.com
+                      +1987654321 | Jane Smith | jane@example.com
                     </code>
                     <br />
                   </p>

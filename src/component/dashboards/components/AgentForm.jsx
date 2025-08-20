@@ -731,6 +731,24 @@ const AgentForm = ({
         </div>
 
         <div>
+          <label
+            htmlFor="X_API_KEY"
+            className="block mb-2 font-semibold text-gray-700"
+          >
+            X API Key
+          </label>
+          <input
+            type="password"
+            id="X_API_KEY"
+            name="X_API_KEY"
+            value={formData.X_API_KEY}
+            onChange={handleInputChange}
+            placeholder="Enter X API Key"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors"
+          />
+        </div>
+
+        <div>
           {(!formData.serviceProvider ||
             formData.serviceProvider !== "tata") && (
             <>
@@ -776,23 +794,6 @@ const AgentForm = ({
           )}
         </div>
 
-        <div>
-          <label
-            htmlFor="X_API_KEY"
-            className="block mb-2 font-semibold text-gray-700"
-          >
-            X API Key
-          </label>
-          <input
-            type="password"
-            id="X_API_KEY"
-            name="X_API_KEY"
-            value={formData.X_API_KEY}
-            onChange={handleInputChange}
-            placeholder="Enter X API Key"
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors"
-          />
-        </div>
       </div>
     </div>
   );
