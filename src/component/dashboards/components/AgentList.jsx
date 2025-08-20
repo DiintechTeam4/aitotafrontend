@@ -3524,7 +3524,7 @@ const AgentList = ({ agents, isLoading, onEdit, onDelete, clientId }) => {
                     ) : (
                       <div className="text-xs text-gray-500">
                         No recent calls
-                      </div>
+                      </div> 
                     )}
                   </div>
                 </div>
