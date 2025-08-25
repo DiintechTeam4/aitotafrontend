@@ -48,7 +48,7 @@ const AuthLayout = ({ onLogin }) => {
     <div className="min-h-screen flex items-center justify-center bg-gray-100">
       <div className="max-w-xl w-full bg-white rounded-lg shadow-md p-8">
         <h1 className="text-2xl font-bold text-center mb-6 text-black">
-          {authState.step === "role-selection" && "Select Your Role"}
+          {authState.step === "role-selection" && "Welcome to Aitota"}
           {authState.step === "login" && `Login as ${authState.userType}`}
           {authState.step === "register" && `Register as ${authState.userType}`}
         </h1>
@@ -74,7 +74,7 @@ const AuthLayout = ({ onLogin }) => {
         )}
 
         <div className="mt-6 border-t border-gray-200 pt-4 flex justify-between text-sm">
-          <Link to="/admin" className="text-blue-500 hover:text-blue-700">
+          {/* <Link to="/admin" className="text-blue-500 hover:text-blue-700">
             Admin Portal
           </Link>
           <Link
@@ -82,7 +82,7 @@ const AuthLayout = ({ onLogin }) => {
             className="text-purple-500 hover:text-purple-700"
           >
             Super Admin Portal
-          </Link>
+          </Link> */}
         </div>
       </div>
     </div>
