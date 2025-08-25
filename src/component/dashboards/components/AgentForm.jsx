@@ -350,7 +350,7 @@ const AgentForm = ({
               name="defaultStartingMessage"
               checked={defaultStartingMessageIndex === idx}
               onChange={() => setDefaultStartingMessageIndex(idx)}
-              className="mr-2"
+              className="mr-2 "
             />
             <span className="text-xs text-gray-600">Set as default</span>
             {startingMessages.length > 1 && (
@@ -367,9 +367,9 @@ const AgentForm = ({
             <textarea
               value={msg.text}
               onChange={(e) => handleStartingMessageChange(idx, e.target.value)}
-              rows="1"
+              rows="3"
               required
-              className="flex-1 px-2 py-1 border border-gray-300 rounded focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 text-sm resize-none"
+              className="flex-1 px-2 py-5 border border-gray-300 rounded focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 text-sm resize-none"
               placeholder={`Message ${idx + 1}`}
             />
             <VoiceSynthesizer
