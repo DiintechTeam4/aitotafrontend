@@ -592,7 +592,7 @@ const AgentForm = ({
       </h3>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
+        {/* <div>
           <label
             htmlFor="sttSelection"
             className="block mb-2 font-semibold text-gray-700"
@@ -630,7 +630,7 @@ const AgentForm = ({
             <option value="elevenlabs">ElevenLabs</option>
             <option value="azure">Azure Speech Services</option>
           </select>
-        </div>
+        </div> */}
 
         <div>
           <label
@@ -704,7 +704,7 @@ const AgentForm = ({
       </h3>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
+        {/* <div>
           <label
             htmlFor="serviceProvider"
             className="block mb-2 font-semibold text-gray-700"
@@ -728,7 +728,7 @@ const AgentForm = ({
             <option value="vonage">Vonage</option>
             <option value="aws">AWS Connect</option>
           </select>
-        </div>
+        </div> */}
 
         <div>
           <label
