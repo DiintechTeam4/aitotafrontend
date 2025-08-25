@@ -1,5 +1,12 @@
 import { useState, useEffect } from "react";
-import { FiX, FiEye } from "react-icons/fi";
+import {
+  FiX,
+  FiEye,
+  FiMoreVertical,
+  FiUsers,
+  FiGrid,
+  FiList,
+} from "react-icons/fi";
 import GroupDetails from "./GroupDetails";
 import CampaignDetails from "./CampaignDetails";
 import { API_BASE_URL } from "../../../config";
@@ -29,9 +36,29 @@ function OutboundSection({ tenantId }) {
   // Navigation state
   const [selectedGroupId, setSelectedGroupId] = useState(null);
   const [selectedCampaignId, setSelectedCampaignId] = useState(null);
+  const [viewMode, setViewMode] = useState("grid");
+  const [campaignViewMode, setCampaignViewMode] = useState("grid");
+
+  // Group editing UI state
+  const [openMenuGroupId, setOpenMenuGroupId] = useState(null);
+  const [openMenuCampaignId, setOpenMenuCampaignId] = useState(null);
+  const [showEditGroupForm, setShowEditGroupForm] = useState(false);
+  const [editingGroup, setEditingGroup] = useState(null);
+  const [groupEditForm, setGroupEditForm] = useState({
+    name: "",
+    description: "",
+  });
+  const [savingGroupEdit, setSavingGroupEdit] = useState(false);
 
   // API base URL
   const API_BASE = `${API_BASE_URL}/client`;
+
+  // Derived stats
+  const totalGroups = contactGroups.length;
+  const totalContacts = contactGroups.reduce(
+    (sum, g) => sum + (g.contacts?.length || 0),
+    0
+  );
 
   useEffect(() => {
     fetchGroups();
@@ -203,6 +230,53 @@ function OutboundSection({ tenantId }) {
     }
   };
 
+  // Edit group handlers
+  const openEditGroup = (group) => {
+    setEditingGroup(group);
+    setGroupEditForm({
+      name: group.name || "",
+      description: group.description || "",
+    });
+    setShowEditGroupForm(true);
+    setOpenMenuGroupId(null);
+  };
+
+  const handleUpdateGroup = async (e) => {
+    e.preventDefault();
+    if (!editingGroup?._id || !groupEditForm.name.trim()) {
+      alert("Group name is required");
+      return;
+    }
+    try {
+      setSavingGroupEdit(true);
+      const response = await fetch(`${API_BASE}/groups/${editingGroup._id}`, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${sessionStorage.getItem("clienttoken")}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: groupEditForm.name,
+          description: groupEditForm.description,
+        }),
+      });
+      const result = await response.json();
+      if (result.success) {
+        setShowEditGroupForm(false);
+        setEditingGroup(null);
+        // Refresh groups list
+        fetchGroups();
+      } else {
+        alert("Failed to update group: " + (result.error || "Unknown error"));
+      }
+    } catch (error) {
+      console.error("Error updating group:", error);
+      alert("Error updating group. Please try again.");
+    } finally {
+      setSavingGroupEdit(false);
+    }
+  };
+
   // Delete campaign
   const handleDeleteCampaign = async (campaignId) => {
     if (window.confirm("Are you sure you want to delete this campaign?")) {
@@ -254,10 +328,8 @@ function OutboundSection({ tenantId }) {
 
   return (
     <div className="flex flex-col h-full bg-white rounded-lg shadow-lg">
-      <div className="border-b-2 border-black p-6 mb-4">
-        <h2 className="text-2xl font-bold text-gray-800 mb-2">
-          Contact Groups & Outbound
-        </h2>
+      <div className="p-6 bg-gradient-to-r from-gray-50 to-gray-100 rounded-t-lg">
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">Outbound</h2>
         <p className="text-gray-600 text-base">
           Manage contact groups and configure outbound communications for your
           campaigns.
@@ -265,32 +337,83 @@ function OutboundSection({ tenantId }) {
       </div>
 
       <div className="flex-1 p-6 overflow-y-auto">
-        <div className="flex gap-4 mb-6">
-          <button
-            className={`px-4 py-2 rounded font-semibold transition-colors ${
-              activeTab === "groups"
-                ? "bg-black text-white"
-                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-            }`}
-            onClick={() => setActiveTab("groups")}
-          >
-            Groups ({contactGroups.length})
-          </button>
-          <button
-            className={`px-4 py-2 rounded font-semibold transition-colors ${
-              activeTab === "campaigns"
-                ? "bg-black text-white"
-                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-            }`}
-            onClick={() => setActiveTab("campaigns")}
-          >
-            Campaigns ({campaigns.length})
-          </button>
-        </div>
-
-        {activeTab === "groups" && (
-          <div>
-            <div className="flex justify-end mb-4">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex gap-4">
+            <button
+              className={`px-4 py-2 rounded font-semibold transition-colors ${
+                activeTab === "groups"
+                  ? "bg-black text-white"
+                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+              }`}
+              onClick={() => setActiveTab("groups")}
+            >
+              Groups ({contactGroups.length})
+            </button>
+            <button
+              className={`px-4 py-2 rounded font-semibold transition-colors ${
+                activeTab === "campaigns"
+                  ? "bg-black text-white"
+                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+              }`}
+              onClick={() => setActiveTab("campaigns")}
+            >
+              Campaigns ({campaigns.length})
+            </button>
+          </div>
+          <div className="flex items-center gap-2">
+            {activeTab === "groups" && (
+              <div className="flex items-center gap-1 mr-2">
+                <button
+                  className={`p-2 rounded-lg border ${
+                    viewMode === "grid"
+                      ? "bg-blue-600 text-white border-blue-600"
+                      : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"
+                  }`}
+                  title="Grid view"
+                  onClick={() => setViewMode("grid")}
+                >
+                  <FiGrid />
+                </button>
+                <button
+                  className={`p-2 rounded-lg border ${
+                    viewMode === "list"
+                      ? "bg-blue-600 text-white border-blue-600"
+                      : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"
+                  }`}
+                  title="List view"
+                  onClick={() => setViewMode("list")}
+                >
+                  <FiList />
+                </button>
+              </div>
+            )}
+            {activeTab === "campaigns" && (
+              <div className="flex items-center gap-1 mr-2">
+                <button
+                  className={`p-2 rounded-lg border ${
+                    campaignViewMode === "grid"
+                      ? "bg-blue-600 text-white border-blue-600"
+                      : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"
+                  }`}
+                  title="Grid view"
+                  onClick={() => setCampaignViewMode("grid")}
+                >
+                  <FiGrid />
+                </button>
+                <button
+                  className={`p-2 rounded-lg border ${
+                    campaignViewMode === "list"
+                      ? "bg-blue-600 text-white border-blue-600"
+                      : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"
+                  }`}
+                  title="List view"
+                  onClick={() => setCampaignViewMode("list")}
+                >
+                  <FiList />
+                </button>
+              </div>
+            )}
+            {activeTab === "groups" ? (
               <button
                 className="px-4 py-2 bg-black text-white rounded hover:bg-gray-800 transition-colors"
                 onClick={() => setShowAddGroupForm(true)}
@@ -298,6 +421,64 @@ function OutboundSection({ tenantId }) {
               >
                 {loading ? "Loading..." : "+ Create Group"}
               </button>
+            ) : (
+              <button
+                className="px-4 py-2 bg-black text-white rounded hover:bg-gray-800 transition-colors"
+                onClick={() => setShowAddCampaignForm(true)}
+                disabled={loading}
+              >
+                {loading ? "Loading..." : "+ Create Campaign"}
+              </button>
+            )}
+          </div>
+        </div>
+
+        {activeTab === "groups" && (
+          <div>
+            {/* Stats Row */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-2">
+              <div className="relative overflow-hidden rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50 to-blue-100 px-8 py-2 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-sm font-medium text-blue-700">
+                      Total Groups
+                    </div>
+                    <div className="text-3xl font-extrabold text-blue-900">
+                      {totalGroups}
+                    </div>
+                  </div>
+                  <div className="p-2 bg-blue-500 rounded-xl text-white">
+                    <FiUsers className="w-6 h-6" />
+                  </div>
+                </div>
+              </div>
+              <div className="relative overflow-hidden rounded-2xl border border-green-200 bg-gradient-to-br from-green-50 to-green-100 px-8 py-2 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-sm font-medium text-green-700">
+                      Total Contacts
+                    </div>
+                    <div className="text-3xl font-extrabold text-green-900 mt-1">
+                      {totalContacts}
+                    </div>
+                  </div>
+                  <div className="p-2 bg-green-500 rounded-xl text-white">
+                    <svg
+                      className="w-6 h-6"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"
+                      />
+                    </svg>
+                  </div>
+                </div>
+              </div>
             </div>
 
             {loading ? (
@@ -311,58 +492,145 @@ function OutboundSection({ tenantId }) {
                 </h3>
                 <p>Create your first group to start managing contacts</p>
               </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            ) : viewMode === "grid" ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
                 {contactGroups.map((group) => (
                   <div
                     key={group._id}
-                    className="bg-gray-50 border border-gray-200 rounded-lg p-6 shadow hover:shadow-lg transition-all h-64 flex flex-col"
+                    className="group bg-white border border-gray-200 rounded-2xl p-5 hover:shadow-lg hover:border-blue-300 transition-all duration-200 h-48 flex flex-col cursor-pointer relative hover:-translate-y-0.5"
+                    onClick={() => setSelectedGroupId(group._id)}
                   >
-                    <div className="flex justify-between items-center mb-2">
-                      <h3 className="text-lg font-bold text-gray-800 m-0">
+                    <div className="flex justify-between items-start mb-3">
+                      <h3 className="text-sm font-bold text-gray-900 m-0 group-hover:text-blue-600 transition-colors line-clamp-1">
                         {group.name}
                       </h3>
-                      <div className="flex gap-2">
+                      <div
+                        className="relative"
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         <button
-                          className="px-3 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 text-xs font-semibold flex items-center gap-1"
-                          onClick={() => setSelectedGroupId(group._id)}
+                          className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg"
+                          onClick={() =>
+                            setOpenMenuGroupId((prev) =>
+                              prev === group._id ? null : group._id
+                            )
+                          }
                           disabled={loading}
+                          aria-haspopup="menu"
+                          aria-expanded={openMenuGroupId === group._id}
+                          title="More actions"
                         >
-                          <FiEye className="text-xs" />
-                          View
+                          <FiMoreVertical />
                         </button>
-                        <button
-                          className="px-3 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 text-xs font-semibold flex items-center"
-                          onClick={() => handleDeleteGroup(group._id)}
-                          disabled={loading}
-                        >
-                          <FiX className="text-xs" />
-                        </button>
+                        {openMenuGroupId === group._id && (
+                          <div className="absolute right-0 mt-2 w-40 bg-white border border-gray-200 rounded-md shadow-lg z-10">
+                            <button
+                              className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50"
+                              onClick={() => openEditGroup(group)}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50"
+                              onClick={() => {
+                                setOpenMenuGroupId(null);
+                                handleDeleteGroup(group._id);
+                              }}
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
-                    <p className="text-gray-700 mb-2">{group.description}</p>
-                    <div className="text-sm text-gray-500 font-semibold">
-                      <span>{group.contacts?.length || 0} contacts</span>
+                    {group.description && (
+                      <p className="text-gray-600 mb-3 line-clamp-2">
+                        {group.description}
+                      </p>
+                    )}
+                    <div className="mt-auto flex items-center justify-between">
+                      <div className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                        {group.contacts?.length || 0} contacts
+                      </div>
+                      <div className="text-xs text-gray-400">
+                        <div>Created</div>
+                        <div>
+                          {new Date(group.createdAt).toLocaleDateString()}
+                        </div>
+                        <div>
+                          {new Date(group.createdAt).toLocaleTimeString()}
+                        </div>
+                      </div>
                     </div>
-                    <div className="mt-3 flex-1 overflow-hidden">
-                      <span className="text-sm text-gray-600 font-semibold">
-                        Contacts:
-                      </span>
-                      {!group.contacts || group.contacts.length === 0 ? (
-                        <span className="ml-2 text-gray-400">No contacts</span>
-                      ) : (
-                        <ul className="ml-4 mt-1 list-disc text-sm max-h-32 overflow-y-auto">
-                          {group.contacts.slice(0, 4).map((c, idx) => (
-                            <li key={idx} className="text-gray-700">
-                              {c.name} ({c.phone})
-                            </li>
-                          ))}
-                          {group.contacts.length > 4 && (
-                            <li className="text-blue-600 font-medium">
-                              +{group.contacts.length - 4} more contacts
-                            </li>
-                          )}
-                        </ul>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-200 border border-gray-200 rounded-xl bg-white">
+                {contactGroups.map((group) => (
+                  <div
+                    key={group._id}
+                    className="flex items-center justify-between p-4 hover:bg-gray-50"
+                  >
+                    <div
+                      className="flex-1 min-w-0 cursor-pointer"
+                      onClick={() => setSelectedGroupId(group._id)}
+                    >
+                      <div className="text-sm font-semibold text-gray-900 truncate">
+                        {group.name}
+                      </div>
+                      {group.description && (
+                        <div className="text-sm text-gray-600 truncate">
+                          {group.description}
+                        </div>
+                      )}
+                    </div>
+                    <div className="hidden sm:block w-32 text-sm text-gray-600">
+                      {group.contacts?.length || 0} contacts
+                    </div>
+                    <div className="hidden md:block w-40 text-xs text-gray-400">
+                      <div>Created</div>
+                      <div>
+                        {new Date(group.createdAt).toLocaleDateString()}
+                      </div>
+                      <div>
+                        {new Date(group.createdAt).toLocaleTimeString()}
+                      </div>
+                    </div>
+                    <div className="ml-2 relative">
+                      <button
+                        className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setOpenMenuGroupId((prev) =>
+                            prev === group._id ? null : group._id
+                          );
+                        }}
+                        disabled={loading}
+                        aria-haspopup="menu"
+                        aria-expanded={openMenuGroupId === group._id}
+                        title="More actions"
+                      >
+                        <FiMoreVertical />
+                      </button>
+                      {openMenuGroupId === group._id && (
+                        <div className="absolute right-0 mt-2 w-40 bg-white border border-gray-200 rounded-md shadow-lg z-10">
+                          <button
+                            className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50"
+                            onClick={() => openEditGroup(group)}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50"
+                            onClick={() => {
+                              setOpenMenuGroupId(null);
+                              handleDeleteGroup(group._id);
+                            }}
+                          >
+                            Delete
+                          </button>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -533,6 +801,74 @@ function OutboundSection({ tenantId }) {
                     disabled={loading}
                   >
                     {loading ? "Creating..." : "Create Group"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Edit Group Modal */}
+        {showEditGroupForm && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg w-11/12 max-w-md max-h-[90vh] overflow-y-auto shadow-2xl">
+              <div className="flex justify-between items-center p-6 border-b border-gray-200">
+                <h3 className="m-0 text-gray-800">Edit Group</h3>
+                <button
+                  className="bg-none border-none text-2xl cursor-pointer text-gray-500 hover:text-gray-700 p-0 w-8 h-8 flex items-center justify-center"
+                  onClick={() => setShowEditGroupForm(false)}
+                >
+                  <FiX />
+                </button>
+              </div>
+              <form onSubmit={handleUpdateGroup} className="p-6">
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Group Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={groupEditForm.name}
+                    onChange={(e) =>
+                      setGroupEditForm({
+                        ...groupEditForm,
+                        name: e.target.value,
+                      })
+                    }
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors"
+                  />
+                </div>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Description
+                  </label>
+                  <textarea
+                    rows="3"
+                    value={groupEditForm.description}
+                    onChange={(e) =>
+                      setGroupEditForm({
+                        ...groupEditForm,
+                        description: e.target.value,
+                      })
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors"
+                  />
+                </div>
+                <div className="flex gap-4 justify-end pt-4 border-t border-gray-200">
+                  <button
+                    type="button"
+                    className="px-4 py-2 bg-gray-100 text-gray-700 border border-gray-300 rounded hover:bg-gray-200 transition-colors"
+                    onClick={() => setShowEditGroupForm(false)}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 bg-black text-white rounded hover:bg-gray-800 transition-colors disabled:opacity-50"
+                    disabled={savingGroupEdit}
+                  >
+                    {savingGroupEdit ? "Saving..." : "Save Changes"}
                   </button>
                 </div>
               </form>

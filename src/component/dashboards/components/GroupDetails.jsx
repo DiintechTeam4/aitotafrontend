@@ -1150,6 +1150,26 @@ function GroupDetails({ groupId, onBack }) {
                 <h4 className="text-lg font-semibold text-gray-800 mb-4">
                   Upload File
                 </h4>
+                {/* Action Buttons */}
+                <div className="flex gap-4 justify-end pt-4">
+                  <button
+                    type="button"
+                    className="px-4 py-2 bg-gray-100 text-gray-700 border border-gray-300 rounded hover:bg-gray-200 transition-colors"
+                    onClick={() => setShowImportModal(false)}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+                    onClick={handleImportContacts}
+                    disabled={!importData.isValid || importingContacts}
+                  >
+                    {importingContacts
+                      ? "Importing..."
+                      : `Import ${importData.validRows} Contacts`}
+                  </button>
+                </div>
                 <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
                   <input
                     type="file"
@@ -1179,60 +1199,6 @@ function GroupDetails({ groupId, onBack }) {
                   </label>
                   <p className="text-sm text-gray-500 mt-2">
                     Supported formats: CSV, XLSX, XLS
-                  </p>
-                </div>
-              </div>
-
-              {/* File Format Instructions */}
-              <div className="mb-6 p-4 bg-gray-50 rounded-lg">
-                <h5 className="font-semibold text-gray-800 mb-2">
-                  File Format Requirements:
-                </h5>
-                <ul className="text-sm text-gray-600 space-y-1">
-                  <li>
-                    • Use 3 columns in order:{" "}
-                    <code className="bg-gray-200 px-1 rounded">
-                      phone, name, email
-                    </code>{" "}
-                    (header optional)
-                  </li>
-                  <li>
-                    • Only <strong>Phone</strong> is required.{" "}
-                    <strong>Name</strong> and <strong>Email</strong> are
-                    optional
-                  </li>
-                  <li>
-                    • Phone numbers may be in international or local format (min
-                    6 digits)
-                  </li>
-                  <li>• Maximum file size: 5MB</li>
-                </ul>
-                <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded">
-                  <p className="text-sm text-blue-700">
-                    <strong>Example CSV format (no header required):</strong>
-                    <br />
-                    <code className="text-xs">
-                      +1234567890,John Doe,john@example.com
-                      <br />
-                      +1987654321,Jane Smith,jane@example.com
-                    </code>
-                  </p>
-                </div>
-
-                <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded">
-                  <p className="text-sm text-green-700">
-                    <strong>Excel File Format:</strong>
-                    <br />
-                    Create an Excel file with these columns (header optional):
-                    <br />
-                    <code className="text-xs">
-                      A: phone | B: name | C: email
-                      <br />
-                      +1234567890 | John Doe | john@example.com
-                      <br />
-                      +1987654321 | Jane Smith | jane@example.com
-                    </code>
-                    <br />
                   </p>
                 </div>
               </div>
@@ -1312,25 +1278,58 @@ function GroupDetails({ groupId, onBack }) {
                 </div>
               )}
 
-              {/* Action Buttons */}
-              <div className="flex gap-4 justify-end pt-4 border-t border-gray-200">
-                <button
-                  type="button"
-                  className="px-4 py-2 bg-gray-100 text-gray-700 border border-gray-300 rounded hover:bg-gray-200 transition-colors"
-                  onClick={() => setShowImportModal(false)}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
-                  onClick={handleImportContacts}
-                  disabled={!importData.isValid || importingContacts}
-                >
-                  {importingContacts
-                    ? "Importing..."
-                    : `Import ${importData.validRows} Contacts`}
-                </button>
+              {/* File Format Instructions */}
+              <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+                <h5 className="font-semibold text-gray-800 mb-2">
+                  File Format Requirements:
+                </h5>
+                <ul className="text-sm text-gray-600 space-y-1">
+                  <li>
+                    • Use 3 columns in order:{" "}
+                    <code className="bg-gray-200 px-1 rounded">
+                      phone, name, email
+                    </code>{" "}
+                    (header optional)
+                  </li>
+                  <li>
+                    • Only <strong>Phone</strong> is required.{" "}
+                    <strong>Name</strong> and <strong>Email</strong> are
+                    optional
+                  </li>
+                  <li>
+                    • Phone numbers may be in international or local format (min
+                    6 digits)
+                  </li>
+                  <li>• Maximum file size: 5MB</li>
+                </ul>
+                <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded">
+                  <p className="text-sm text-blue-700">
+                    <strong>Example CSV format (no header required):</strong>
+                    <br />
+                    <code className="text-xs">
+                      +1234567890,John Doe,john@example.com
+                      <br />
+                      +1987654321,Jane Smith,jane@example.com
+                    </code>
+                  </p>
+                </div>
+
+                <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded">
+                  <p className="text-sm text-green-700">
+                    <strong>Excel File Format:</strong>
+                    <br />
+                    Create an Excel file with these columns (header optional):
+                    <br />
+                    <code className="text-xs">
+                      A: phone | B: name | C: email
+                      <br />
+                      +1234567890 | John Doe | john@example.com
+                      <br />
+                      +1987654321 | Jane Smith | jane@example.com
+                    </code>
+                    <br />
+                  </p>
+                </div>
               </div>
             </div>
           </div>

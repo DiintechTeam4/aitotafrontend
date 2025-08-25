@@ -73,6 +73,8 @@ function CampaignDetails({ campaignId, onBack }) {
   });
   const [loadingContacts, setLoadingContacts] = useState(false);
   const [showRestoreNotification, setShowRestoreNotification] = useState(false);
+  // Tracks whether calling state was restored from storage to gate auto-resume
+  const restoredFromStorageRef = useRef(false);
 
   // API base URL
   const API_BASE = `${API_BASE_URL}/client`;
@@ -119,6 +121,8 @@ function CampaignDetails({ campaignId, onBack }) {
           }
 
           setSelectedAgent(state.selectedAgent || null);
+          // Mark that we restored from storage; used to gate auto-resume
+          restoredFromStorageRef.current = true;
           return true;
         } else {
           // Clear old state
@@ -259,26 +263,29 @@ function CampaignDetails({ campaignId, onBack }) {
     }
   }, [campaignContacts, campaignId]);
 
-  // Auto-resume calling if status was 'calling' before reload
+  // Auto-resume calling ONLY if restored from storage (not on manual start)
   useEffect(() => {
     if (
+      restoredFromStorageRef.current &&
       callingStatus === "calling" &&
       campaignContacts.length > 0 &&
-      selectedAgent
+      selectedAgent &&
+      !isStartingCall
     ) {
-      // Resume calling automatically after a short delay
       const timer = setTimeout(() => {
+        // Reset the flag so this runs only once after restore
+        restoredFromStorageRef.current = false;
         if (callingStatus === "calling") {
-          console.log("Auto-resuming calling session...");
+          console.log("Auto-resuming calling session after restore...");
           resumeCalling();
         }
       }, 2000);
 
       return () => clearTimeout(timer);
     }
-  }, [callingStatus, campaignContacts, selectedAgent]);
+  }, [callingStatus, campaignContacts, selectedAgent, isStartingCall]);
 
-  // Check connection status for call results after 40 seconds
+  // Check connection status for call results after 40 seconds AND automatically update campaign status
   useEffect(() => {
     callResults.forEach((result, index) => {
       if (result.success && result.uniqueId) {
@@ -289,15 +296,23 @@ function CampaignDetails({ campaignId, onBack }) {
         }));
 
         // Check connection status after 40 seconds
-        const timer = setTimeout(() => {
-          checkCallResultConnection(result.uniqueId, index);
+        const timer = setTimeout(async () => {
+          await checkCallResultConnection(result.uniqueId, index);
+
+          // AUTOMATIC: Also update campaign status after checking connection
+          if (campaign?._id) {
+            console.log(
+              `Automatically updating campaign status for ${result.uniqueId} after connection check...`
+            );
+            updateCallStatus(result.uniqueId);
+          }
         }, 40000);
 
         // Cleanup timer on unmount
         return () => clearTimeout(timer);
       }
     });
-  }, [callResults]);
+  }, [callResults, campaign?._id]);
 
   // Debug: Monitor callResults changes to identify duplicates
   useEffect(() => {
@@ -448,7 +463,10 @@ function CampaignDetails({ campaignId, onBack }) {
               Authorization: `Bearer ${token}`,
               "Content-Type": "application/json",
             },
-            body: JSON.stringify({ uniqueId }),
+            body: JSON.stringify({
+              uniqueId,
+              contactId: contact._id || null, // Include contactId if available
+            }),
           });
         } catch (error) {
           console.error("Failed to store unique ID in campaign:", error);
@@ -584,6 +602,19 @@ function CampaignDetails({ campaignId, onBack }) {
     }
 
     console.log("Calling process completed. Final callResults:", callResults);
+
+    // AUTOMATIC: Update all call statuses when calling process completes
+    if (campaign?._id) {
+      console.log(
+        "Calling process completed, automatically updating all call statuses..."
+      );
+      callResults.forEach((result) => {
+        if (result.uniqueId) {
+          updateCallStatus(result.uniqueId);
+        }
+      });
+    }
+
     setCallingStatus("completed");
     setIsStartingCall(false);
   };
@@ -698,6 +729,34 @@ function CampaignDetails({ campaignId, onBack }) {
       );
       return uniqueResults;
     });
+  };
+
+  // Function to update call status based on isActive from external service
+  const updateCallStatus = async (uniqueId) => {
+    try {
+      if (!campaign?._id) return;
+
+      const token = sessionStorage.getItem("clienttoken");
+      const response = await fetch(
+        `${API_BASE}/campaigns/${campaign._id}/call-status/${uniqueId}/update`,
+        {
+          method: "PUT",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      const result = await response.json();
+      if (result.success) {
+        console.log(`Call status updated for ${uniqueId}:`, result.data);
+        // Refresh campaign data to get updated status
+        fetchCampaignDetails();
+      }
+    } catch (error) {
+      console.error("Error updating call status:", error);
+    }
   };
 
   // Get current progress
@@ -935,6 +994,12 @@ function CampaignDetails({ campaignId, onBack }) {
   const syncContactsFromGroups = async () => {
     try {
       if (!campaign?._id) return;
+      if (!campaign?.groupIds || campaign.groupIds.length === 0) {
+        alert(
+          "Add at least one group to the campaign before syncing contacts."
+        );
+        return;
+      }
       setLoadingContacts(true);
       const token = sessionStorage.getItem("clienttoken");
       const response = await fetch(
@@ -1281,6 +1346,14 @@ function CampaignDetails({ campaignId, onBack }) {
               clearTimeout(connectionTimeoutRef.current);
               connectionTimeoutRef.current = null;
             }
+
+            // AUTOMATIC: Update campaign call status when call ends
+            if (callLog.metadata?.customParams?.uniqueid) {
+              console.log(
+                `Call ended for ${callLog.metadata.customParams.uniqueid}, automatically updating campaign status...`
+              );
+              updateCallStatus(callLog.metadata.customParams.uniqueid);
+            }
           }
 
           if (callLog.transcript) {
@@ -1561,137 +1634,6 @@ function CampaignDetails({ campaignId, onBack }) {
       {/* Scrollable Content Area */}
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          {/* Campaign Overview Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow duration-200">
-              <div className="flex items-center">
-                <div className="p-2 bg-blue-100 rounded-lg">
-                  <svg
-                    className="w-6 h-6 text-blue-600"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-                    />
-                  </svg>
-                </div>
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">
-                    Start Date
-                  </p>
-                  <p className="text-lg font-semibold text-gray-900">
-                    {new Date(campaign.startDate).toLocaleDateString("en-US", {
-                      month: "short",
-                      day: "numeric",
-                      year: "numeric",
-                    })}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow duration-200">
-              <div className="flex items-center">
-                <div className="p-2 bg-green-100 rounded-lg">
-                  <svg
-                    className="w-6 h-6 text-green-600"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                    />
-                  </svg>
-                </div>
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">End Date</p>
-                  <p className="text-lg font-semibold text-gray-900">
-                    {new Date(campaign.endDate).toLocaleDateString("en-US", {
-                      month: "short",
-                      day: "numeric",
-                      year: "numeric",
-                    })}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow duration-200">
-              <div className="flex items-center">
-                <div className="p-2 bg-purple-100 rounded-lg">
-                  <svg
-                    className="w-6 h-6 text-purple-600"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-                    />
-                  </svg>
-                </div>
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Status</p>
-                  <span
-                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                      campaign.status === "active"
-                        ? "bg-green-100 text-green-800"
-                        : campaign.status === "expired"
-                        ? "bg-red-100 text-red-800"
-                        : "bg-gray-100 text-gray-800"
-                    }`}
-                  >
-                    {campaign.status.charAt(0).toUpperCase() +
-                      campaign.status.slice(1)}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow duration-200">
-              <div className="flex items-center">
-                <div className="p-2 bg-orange-100 rounded-lg">
-                  <svg
-                    className="w-6 h-6 text-orange-600"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
-                    />
-                  </svg>
-                </div>
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">
-                    Total Contacts
-                  </p>
-                  <p className="text-lg font-semibold text-gray-900">
-                    {campaignGroups.reduce(
-                      (total, group) => total + (group.contacts?.length || 0),
-                      0
-                    )}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-
           {/* Action Buttons Section */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
             <div className="flex items-center justify-between mb-6">
@@ -2433,6 +2375,35 @@ function CampaignDetails({ campaignId, onBack }) {
                           </svg>
                           Clean Duplicates
                         </button>
+
+                        {/* Update Call Status Button */}
+                        <button
+                          onClick={() => {
+                            // Update status for all call results with uniqueIds
+                            callResults.forEach((result) => {
+                              if (result.uniqueId) {
+                                updateCallStatus(result.uniqueId);
+                              }
+                            });
+                          }}
+                          className="inline-flex items-center px-4 py-2 text-sm text-blue-600 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 hover:border-blue-300 transition-all duration-200"
+                          title="Update call status from external service"
+                        >
+                          <svg
+                            className="w-4 h-4 mr-1"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                            />
+                          </svg>
+                          Update Status
+                        </button>
                       </div>
                     )}
 
@@ -2642,7 +2613,7 @@ function CampaignDetails({ campaignId, onBack }) {
                                           : callResultsConnectionStatus[
                                               result.uniqueId
                                             ] === "not_connected"
-                                          ? "Not Connected"
+                                          ? "Not Accepted / Busy / Disconnected"
                                           : "Checking..."}
                                       </div>
                                     </div>
@@ -2823,7 +2794,11 @@ function CampaignDetails({ campaignId, onBack }) {
                 </button>
                 <button
                   onClick={syncContactsFromGroups}
-                  disabled={loadingContacts}
+                  disabled={
+                    loadingContacts ||
+                    !campaign?.groupIds ||
+                    campaign.groupIds.length === 0
+                  }
                   className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
                 >
                   {loadingContacts ? (
@@ -3258,7 +3233,7 @@ function CampaignDetails({ campaignId, onBack }) {
                   ></div>
                   {callConnectionStatus === "connected"
                     ? "Call Connected"
-                    : "Call Disconnected"}
+                    : "Not Accepted / Busy / Disconnected"}
                   {callConnectionStatus === "not_connected" && (
                     <span className="ml-2 text-xs opacity-75">
                       {liveCallDetails?.metadata?.isActive === false
