@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import CallLogs from "./CallLogs";
 import {
   FiEdit,
   FiTrash2,
@@ -27,6 +28,7 @@ import {
   FiArrowLeft,
   FiRefreshCw,
 } from "react-icons/fi";
+import { FaHistory } from "react-icons/fa";
 import { QrCode } from "lucide-react";
 
 import { API_BASE_URL } from "../../../config";
@@ -249,6 +251,8 @@ const AgentList = ({ agents, isLoading, onEdit, onDelete, clientId }) => {
   const [audioUrl, setAudioUrl] = useState(null);
   const [playingAgentId, setPlayingAgentId] = useState(null);
   const [openMenuId, setOpenMenuId] = useState(null);
+  const [showCallHistoryModal, setShowCallHistoryModal] = useState(false);
+  const [historyAgent, setHistoryAgent] = useState(null);
   const [selectedAgent, setSelectedAgent] = useState(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [agentStates, setAgentStates] = useState({});
@@ -2777,6 +2781,27 @@ const AgentList = ({ agents, isLoading, onEdit, onDelete, clientId }) => {
                         <FiPhoneCall className="w-4 h-4" />
                       </button>
 
+                      {/* Call History Button */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setHistoryAgent(agent);
+                          setShowCallHistoryModal(true);
+                        }}
+                        className={`p-2 rounded-lg transition-colors ${
+                          isActive
+                            ? "text-white/70 hover:text-white hover:bg-white/10"
+                            : "text-white/30 cursor-not-allowed"
+                        }`}
+                        title={
+                          isActive
+                            ? "Call History"
+                            : "Agent must be active for Call History"
+                        }
+                      >
+                        <FaHistory className="w-4 h-4" />
+                      </button>
+
                       {/* More Options Button */}
                       <div className="relative">
                         <button
@@ -3004,6 +3029,28 @@ const AgentList = ({ agents, isLoading, onEdit, onDelete, clientId }) => {
         clientId={clientId}
         onEdit={onEdit}
       />
+
+      {/* Call History Modal (standalone) */}
+      {showCallHistoryModal && historyAgent && (
+        <div className="fixed top-0 right-0 bottom-0 left-64 bg-black/50 flex items-center justify-center z-60">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-5xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center p-6 border-b border-gray-200">
+              <h3 className="text-2xl font-bold text-gray-800 m-0">
+                Call History - {historyAgent.agentName}
+              </h3>
+              <button
+                className="bg-none border-none text-2xl cursor-pointer text-gray-500 hover:text-gray-700 p-2 w-10 h-10 flex items-center justify-center rounded-lg hover:bg-gray-200 transition-colors duration-200"
+                onClick={() => setShowCallHistoryModal(false)}
+              >
+                <FiX />
+              </button>
+            </div>
+            <div className="p-0">
+              <CallLogs agentId={historyAgent._id} clientId={clientId} />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Voice Chat Modal - Pure Voice-to-Voice Interface - AGENT LIST MODAL */}
       {showVoiceChatModal && selectedAgentForChat && (
@@ -3524,7 +3571,7 @@ const AgentList = ({ agents, isLoading, onEdit, onDelete, clientId }) => {
                     ) : (
                       <div className="text-xs text-gray-500">
                         No recent calls
-                      </div> 
+                      </div>
                     )}
                   </div>
                 </div>

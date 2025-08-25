@@ -390,27 +390,6 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
                   >
                     Agents ({agents.length})
                   </button>
-
-                  <button
-                    className={`px-5 py-3 text-sm font-medium rounded-md transition-all ${
-                      activeTab === "api-keys"
-                        ? "bg-black text-white"
-                        : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
-                    }`}
-                    onClick={() => persistTabChange("api-keys")}
-                  >
-                    API Keys
-                  </button>
-                  <button
-                    className={`px-5 py-3 text-sm font-medium rounded-md transition-all ${
-                      activeTab === "settings"
-                        ? "bg-black text-white"
-                        : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
-                    }`}
-                    onClick={() => persistTabChange("settings")}
-                  >
-                    Settings
-                  </button>
                 </div>
 
                 <button

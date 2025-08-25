@@ -26,9 +26,59 @@ function OutboundSection({ tenantId }) {
   const [campaignForm, setCampaignForm] = useState({
     name: "",
     description: "",
-    startDate: "",
-    endDate: "",
+    category: "",
   });
+
+  // Initialize campaign view mode to mirror groups by default
+  useEffect(() => {
+    setCampaignViewMode(viewMode);
+  }, []);
+
+  // Update campaign handlers
+  const handleUpdateCampaign = async (e) => {
+    e.preventDefault();
+    if (!editingCampaign?._id || !campaignEditForm.name.trim()) {
+      alert("Campaign name is required");
+      return;
+    }
+    try {
+      setSavingCampaignEdit(true);
+      const token = sessionStorage.getItem("clienttoken");
+      const response = await fetch(
+        `${API_BASE}/campaigns/${editingCampaign._id}`,
+        {
+          method: "PUT",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            name: campaignEditForm.name,
+            description: campaignEditForm.description,
+            category: campaignEditForm.category,
+          }),
+        }
+      );
+      const result = await response.json();
+      if (!response.ok || result.success === false) {
+        throw new Error(result.error || "Failed to update campaign");
+      }
+
+      // Update local state
+      setCampaigns((prev) =>
+        prev.map((c) =>
+          c._id === editingCampaign._id ? { ...c, ...result.data } : c
+        )
+      );
+      setShowEditCampaignForm(false);
+      setEditingCampaign(null);
+    } catch (err) {
+      console.error("Error updating campaign:", err);
+      alert(err.message || "Failed to update campaign");
+    } finally {
+      setSavingCampaignEdit(false);
+    }
+  };
 
   // Loading states
   const [loading, setLoading] = useState(false);
@@ -49,6 +99,16 @@ function OutboundSection({ tenantId }) {
     description: "",
   });
   const [savingGroupEdit, setSavingGroupEdit] = useState(false);
+
+  // Campaign editing UI state
+  const [showEditCampaignForm, setShowEditCampaignForm] = useState(false);
+  const [editingCampaign, setEditingCampaign] = useState(null);
+  const [campaignEditForm, setCampaignEditForm] = useState({
+    name: "",
+    description: "",
+    category: "",
+  });
+  const [savingCampaignEdit, setSavingCampaignEdit] = useState(false);
 
   // API base URL
   const API_BASE = `${API_BASE_URL}/client`;
@@ -170,8 +230,7 @@ function OutboundSection({ tenantId }) {
         body: JSON.stringify({
           name: campaignForm.name,
           description: campaignForm.description,
-          startDate: campaignForm.startDate,
-          endDate: campaignForm.endDate,
+          category: campaignForm.category,
         }),
       });
 
@@ -180,8 +239,7 @@ function OutboundSection({ tenantId }) {
         setCampaignForm({
           name: "",
           description: "",
-          startDate: "",
-          endDate: "",
+          category: "",
         });
         setShowAddCampaignForm(false);
         fetchCampaigns(); // Refresh the list
@@ -258,6 +316,7 @@ function OutboundSection({ tenantId }) {
         body: JSON.stringify({
           name: groupEditForm.name,
           description: groupEditForm.description,
+          category: groupEditForm.category,
         }),
       });
       const result = await response.json();
@@ -642,16 +701,6 @@ function OutboundSection({ tenantId }) {
 
         {activeTab === "campaigns" && (
           <div>
-            <div className="flex justify-end mb-4">
-              <button
-                className="px-4 py-2 bg-black text-white rounded hover:bg-gray-800 transition-colors"
-                onClick={() => setShowAddCampaignForm(true)}
-                disabled={loading}
-              >
-                {loading ? "Loading..." : "+ Create Campaign"}
-              </button>
-            </div>
-
             {loading ? (
               <div className="text-center py-12">
                 <div className="text-gray-600">Loading campaigns...</div>
@@ -667,85 +716,264 @@ function OutboundSection({ tenantId }) {
                 </p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {campaigns.map((campaign) => (
-                  <div
-                    key={campaign._id}
-                    className="bg-gray-50 border border-gray-200 rounded-lg p-6 shadow hover:shadow-lg transition-all"
-                  >
-                    <div className="flex justify-between items-center mb-2">
-                      <h3 className="text-lg font-bold text-gray-800 m-0">
-                        {campaign.name}
-                      </h3>
-                      <div className="flex gap-2">
-                        <button
-                          className="px-3 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 text-xs font-semibold flex items-center gap-1"
-                          onClick={() => setSelectedCampaignId(campaign._id)}
-                          disabled={loading}
+              <div
+                className={
+                  campaignViewMode === "grid"
+                    ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5"
+                    : "divide-y divide-gray-200 border border-gray-200 rounded-xl bg-white"
+                }
+              >
+                {campaigns.map((campaign) =>
+                  campaignViewMode === "grid" ? (
+                    <div
+                      key={campaign._id}
+                      className="group bg-white border border-gray-200 rounded-2xl p-5 hover:shadow-lg hover:border-blue-300 transition-all duration-200 h-48 flex flex-col cursor-pointer relative hover:-translate-y-0.5"
+                      onClick={() => setSelectedCampaignId(campaign._id)}
+                    >
+                      <div className="flex justify-between items-start mb-3">
+                        <h3 className="text-sm font-bold text-gray-900 m-0 group-hover:text-blue-600 transition-colors line-clamp-1">
+                          {campaign.name}
+                        </h3>
+                        <div
+                          className="relative"
+                          onClick={(e) => e.stopPropagation()}
                         >
-                          <FiEye className="text-xs" />
-                          View
-                        </button>
-                        <button
-                          className="px-3 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 text-xs font-semibold flex items-center"
-                          onClick={() => handleDeleteCampaign(campaign._id)}
-                          disabled={loading}
-                        >
-                          <FiX className="text-xs" />
-                        </button>
+                          <button
+                            className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg"
+                            onClick={() =>
+                              setOpenMenuCampaignId((prev) =>
+                                prev === campaign._id ? null : campaign._id
+                              )
+                            }
+                            disabled={loading}
+                            aria-haspopup="menu"
+                            aria-expanded={openMenuCampaignId === campaign._id}
+                            title="More actions"
+                          >
+                            <FiMoreVertical />
+                          </button>
+                          {openMenuCampaignId === campaign._id && (
+                            <div className="absolute right-0 mt-2 w-40 bg-white border border-gray-200 rounded-md shadow-lg z-10">
+                              <button
+                                className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50"
+                                onClick={() => {
+                                  setEditingCampaign(campaign);
+                                  setCampaignEditForm({
+                                    name: campaign.name || "",
+                                    description: campaign.description || "",
+                                    category: campaign.category || "",
+                                  });
+                                  setShowEditCampaignForm(true);
+                                  setOpenMenuCampaignId(null);
+                                }}
+                              >
+                                Edit
+                              </button>
+                              <button
+                                className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50"
+                                onClick={() => {
+                                  setOpenMenuCampaignId(null);
+                                  handleDeleteCampaign(campaign._id);
+                                }}
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                    <p className="text-gray-700 mb-2">{campaign.description}</p>
-                    <div className="text-sm text-gray-500 font-semibold mb-2">
-                      Status:{" "}
-                      <span
-                        className={`px-2 py-1 rounded text-xs ${
-                          campaign.status === "active"
-                            ? "bg-green-100 text-green-700"
-                            : campaign.status === "expired"
-                            ? "bg-red-100 text-red-700"
-                            : "bg-gray-100 text-gray-700"
-                        }`}
-                      >
-                        {campaign.status}
-                      </span>
-                    </div>
-                    <div className="text-sm text-gray-500 mb-2">
-                      <div>
-                        Start: {new Date(campaign.startDate).toLocaleString()}
-                      </div>
-                      <div>
-                        End: {new Date(campaign.endDate).toLocaleString()}
-                      </div>
-                    </div>
-                    <div>
-                      <span className="text-sm text-gray-600 font-semibold">
-                        Groups:
-                      </span>
-                      {!campaign.groupIds || campaign.groupIds.length === 0 ? (
-                        <span className="ml-2 text-gray-400">
-                          No groups added
-                        </span>
-                      ) : (
-                        <ul className="ml-4 mt-1 list-disc text-sm">
-                          {campaign.groupIds.map((g) => (
-                            <li key={g._id} className="text-gray-700">
-                              {g.name}
-                            </li>
-                          ))}
-                        </ul>
+                      {campaign.description && (
+                        <p className="text-gray-600 mb-3 line-clamp-2">
+                          {campaign.description}
+                        </p>
                       )}
+                      <div className="mt-auto flex items-center justify-between">
+                        <div className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                          {(campaign.groupIds && campaign.groupIds.length) || 0}{" "}
+                          groups
+                        </div>
+                        <div className="text-xs text-gray-400">
+                          <div>Created</div>
+                          <div>
+                            {new Date(campaign.createdAt).toLocaleDateString()}
+                          </div>
+                          <div>
+                            {new Date(campaign.createdAt).toLocaleTimeString()}
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ) : (
+                    <div
+                      key={campaign._id}
+                      className="flex items-center justify-between p-4 hover:bg-gray-50"
+                    >
+                      <div
+                        className="flex-1 min-w-0 cursor-pointer"
+                        onClick={() => setSelectedCampaignId(campaign._id)}
+                      >
+                        <div className="text-sm font-semibold text-gray-900 truncate">
+                          {campaign.name}
+                        </div>
+                        {campaign.description && (
+                          <div className="text-sm text-gray-600 truncate">
+                            {campaign.description}
+                          </div>
+                        )}
+                      </div>
+                      <div className="hidden sm:block w-32 text-sm text-gray-600">
+                        {(campaign.groupIds && campaign.groupIds.length) || 0}{" "}
+                        groups
+                      </div>
+                      <div className="hidden md:block w-40 text-xs text-gray-400">
+                        <div>Created</div>
+                        <div>
+                          {new Date(campaign.createdAt).toLocaleDateString()}
+                        </div>
+                        <div>
+                          {new Date(campaign.createdAt).toLocaleTimeString()}
+                        </div>
+                      </div>
+                      <div className="ml-2 relative">
+                        <button
+                          className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setOpenMenuCampaignId((prev) =>
+                              prev === campaign._id ? null : campaign._id
+                            );
+                          }}
+                          disabled={loading}
+                          aria-haspopup="menu"
+                          aria-expanded={openMenuCampaignId === campaign._id}
+                          title="More actions"
+                        >
+                          <FiMoreVertical />
+                        </button>
+                        {openMenuCampaignId === campaign._id && (
+                          <div className="absolute right-0 mt-2 w-40 bg-white border border-gray-200 rounded-md shadow-lg z-10">
+                            <button
+                              className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50"
+                              onClick={() => {
+                                setEditingCampaign(campaign);
+                                setCampaignEditForm({
+                                  name: campaign.name || "",
+                                  description: campaign.description || "",
+                                  category: campaign.category || "",
+                                });
+                                setShowEditCampaignForm(true);
+                                setOpenMenuCampaignId(null);
+                              }}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50"
+                              onClick={() => {
+                                setOpenMenuCampaignId(null);
+                                handleDeleteCampaign(campaign._id);
+                              }}
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )
+                )}
               </div>
             )}
           </div>
         )}
 
+        {/* Edit Campaign Modal */}
+        {showEditCampaignForm && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg w-11/12 max-w-md max-h-[90vh] overflow-y-auto shadow-2xl">
+              <div className="flex justify-between items-center p-6 border-b border-gray-200">
+                <h3 className="m-0 text-gray-800">Edit Campaign</h3>
+                <button
+                  className="bg-none border-none text-2xl cursor-pointer text-gray-500 hover:text-gray-700 p-0 w-8 h-8 flex items-center justify-center"
+                  onClick={() => setShowEditCampaignForm(false)}
+                >
+                  <FiX />
+                </button>
+              </div>
+              <form onSubmit={handleUpdateCampaign} className="p-6">
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Campaign Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={campaignEditForm.name}
+                    onChange={(e) =>
+                      setCampaignEditForm({
+                        ...campaignEditForm,
+                        name: e.target.value,
+                      })
+                    }
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors"
+                  />
+                </div>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Description
+                  </label>
+                  <textarea
+                    value={campaignEditForm.description}
+                    onChange={(e) =>
+                      setCampaignEditForm({
+                        ...campaignEditForm,
+                        description: e.target.value,
+                      })
+                    }
+                    rows="3"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors"
+                  />
+                </div>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Category
+                  </label>
+                  <input
+                    type="text"
+                    value={campaignEditForm.category}
+                    onChange={(e) =>
+                      setCampaignEditForm({
+                        ...campaignEditForm,
+                        category: e.target.value,
+                      })
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors"
+                  />
+                </div>
+                <div className="flex gap-4 justify-end pt-4 border-t border-gray-200">
+                  <button
+                    type="button"
+                    className="px-4 py-2 bg-gray-100 text-gray-700 border border-gray-300 rounded hover:bg-gray-200 transition-colors"
+                    onClick={() => setShowEditCampaignForm(false)}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={savingCampaignEdit}
+                    className="px-4 py-2 bg-black text-white rounded hover:bg-gray-800 transition-colors"
+                  >
+                    {savingCampaignEdit ? "Saving..." : "Save Changes"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
         {/* Add Group Modal */}
         {showAddGroupForm && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
             <div className="bg-white rounded-lg w-11/12 max-w-md max-h-[90vh] overflow-y-auto shadow-2xl">
               <div className="flex justify-between items-center p-6 border-b border-gray-200">
                 <h3 className="m-0 text-gray-800">Create Group</h3>
@@ -878,7 +1106,7 @@ function OutboundSection({ tenantId }) {
 
         {/* Add Campaign Modal */}
         {showAddCampaignForm && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
             <div className="bg-white rounded-lg w-11/12 max-w-md max-h-[90vh] overflow-y-auto shadow-2xl">
               <div className="flex justify-between items-center p-6 border-b border-gray-200">
                 <h3 className="m-0 text-gray-800">Create Campaign</h3>
@@ -922,38 +1150,21 @@ function OutboundSection({ tenantId }) {
                 </div>
                 <div className="mb-4">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Start Date *
+                    Category
                   </label>
                   <input
-                    type="datetime-local"
-                    value={campaignForm.startDate}
+                    type="text"
+                    value={campaignForm.category}
                     onChange={(e) =>
                       setCampaignForm({
                         ...campaignForm,
-                        startDate: e.target.value,
+                        category: e.target.value,
                       })
                     }
-                    required
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors"
                   />
                 </div>
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    End Date *
-                  </label>
-                  <input
-                    type="datetime-local"
-                    value={campaignForm.endDate}
-                    onChange={(e) =>
-                      setCampaignForm({
-                        ...campaignForm,
-                        endDate: e.target.value,
-                      })
-                    }
-                    required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors"
-                  />
-                </div>
+
                 <div className="flex gap-4 justify-end pt-4 border-t border-gray-200">
                   <button
                     type="button"
