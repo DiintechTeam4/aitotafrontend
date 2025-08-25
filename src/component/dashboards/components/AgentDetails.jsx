@@ -24,6 +24,7 @@ import {
   FiArrowUpRight,
   FiRefreshCw,
 } from "react-icons/fi";
+
 import { API_BASE_URL } from "../../../config";
 import QRCode from "qrcode";
 import CallLogs from "./CallLogs";
@@ -1923,6 +1924,17 @@ const AgentDetails = ({
     };
   }, []);
 
+  // Allow external trigger from AgentList to open/close history panel
+  useEffect(() => {
+    const handler = (e) => {
+      const { open } = e.detail || {};
+      setShowCallLogs(Boolean(open));
+    };
+    window.addEventListener("agent-details:toggle-history", handler);
+    return () =>
+      window.removeEventListener("agent-details:toggle-history", handler);
+  }, []);
+
   if (!isOpen || !agent) return null;
 
   // Debug: Log API_BASE_URL and QR code value
@@ -2303,7 +2315,7 @@ const AgentDetails = ({
       <div className="h-full overflow-y-auto">
         {/* Updated Header */}
         <div className="bg-gradient-to-r from-gray-800 to-black px-6 py-2">
-          <div className="flex justify-between items-start">
+          <div className="flex justify-between items-center">
             {/* Left Side - Agent Information */}
             <div className="flex items-start gap-4">
               {/* Back Arrow */}
@@ -2396,6 +2408,19 @@ const AgentDetails = ({
                   )}
                 </div>
               </div>
+            </div>
+
+            <div className="flex justify-center mt-4">
+              <button
+                onClick={() => setShowCallLogs(!showCallLogs)}
+                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                  showCallLogs
+                    ? "bg-gray-600 text-white hover:bg-gray-700"
+                    : "bg-blue-600 text-white hover:bg-blue-700"
+                }`}
+              >
+                {showCallLogs ? "Hide History " : "Call History "}
+              </button>
             </div>
 
             {/* Right Side - AI Interaction */}
@@ -2574,8 +2599,11 @@ const AgentDetails = ({
         </div>
       </div>
 
-      {/* Fixed Bottom Call History Section */}
-      <div className="fixed bottom-0 left-64 right-0 bg-white border-t border-gray-200 shadow-lg z-40">
+      {/* Fixed Call History Section (slides up to fill page, sidebar remains visible) */}
+      <div
+        className="fixed bottom-0 left-64 right-0 bg-white border-t border-gray-200 shadow-lg z-40 transition-[height] duration-300 ease-in-out"
+        style={{ height: showCallLogs ? "100vh" : "56px" }}
+      >
         <div className="bg-gray-50 px-6 py-3">
           <div className="flex justify-between items-center">
             <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
@@ -2590,13 +2618,13 @@ const AgentDetails = ({
                   : "bg-blue-600 text-white hover:bg-blue-700"
               }`}
             >
-              {showCallLogs ? "Hide History Logs" : "Show History Logs"}
+              {showCallLogs ? "Hide History " : "Call History "}
             </button>
           </div>
         </div>
 
         {showCallLogs && (
-          <div className="max-h-96 overflow-y-auto bg-white">
+          <div className="bg-white h-[calc(100vh-56px)] overflow-y-auto">
             <CallLogs agentId={agent._id} clientId={clientId} />
           </div>
         )}

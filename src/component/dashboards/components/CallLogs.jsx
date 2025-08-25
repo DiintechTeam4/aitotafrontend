@@ -487,7 +487,7 @@ const CallLogs = ({ agentId, clientId }) => {
 
       {/* Transcript Popup */}
       {showTranscriptPopup && selectedTranscript && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
             {/* Header */}
             <div className="flex items-center justify-between p-6 border-b border-gray-200">
@@ -512,18 +512,119 @@ const CallLogs = ({ agentId, clientId }) => {
             </div>
 
             {/* Content */}
-            <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
+            <div className="p-6 pb-4">
               {selectedTranscript.transcript ? (
                 <div className="space-y-4">
-                  <div>
-                    <h4 className="font-medium text-gray-900 mb-3">
-                      Conversation Transcript
-                    </h4>
-                    <div className="bg-gray-50 rounded-lg p-4">
-                      <pre className="whitespace-pre-wrap text-sm text-gray-800 font-mono leading-relaxed">
-                        {selectedTranscript.transcript}
-                      </pre>
-                    </div>
+                  <h4 className="font-medium text-gray-900 mb-1">
+                    Conversation Transcript
+                  </h4>
+                  <div className="bg-gray-50 rounded-lg p-4 overflow-y-auto max-h-[calc(90vh-120px)] pb-10">
+                    {(() => {
+                      const rawLines = selectedTranscript.transcript
+                        .split("\n")
+                        .filter((line) => line.trim());
+
+                      const messages = [];
+                      let current = null;
+
+                      for (const line of rawLines) {
+                        // Try to extract timestamp like [2025-08-16T07:20:20.885Z]
+                        const tsMatch = line.match(/\[([^\]]+)\]/);
+                        let ts = null;
+                        if (tsMatch) {
+                          const d = new Date(tsMatch[1]);
+                          if (!isNaN(d.getTime())) {
+                            ts = d.toLocaleTimeString();
+                          }
+                        }
+
+                        // Remove timestamp prefix
+                        const withoutTs = line.replace(/\[[^\]]+\]\s*/, "");
+
+                        // Determine speaker and text
+                        const colonIdx = withoutTs.indexOf(":");
+                        let speaker = "System";
+                        let text = withoutTs;
+                        if (colonIdx !== -1) {
+                          speaker = withoutTs.substring(0, colonIdx).trim();
+                          text = withoutTs.substring(colonIdx + 1).trim();
+                        }
+
+                        const isAgent = /^(ai|agent)/i.test(speaker);
+                        const isUser = /^(user|customer)/i.test(speaker);
+
+                        // Group consecutive lines from same speaker
+                        if (
+                          current &&
+                          current.role ===
+                            (isAgent ? "agent" : isUser ? "user" : "system")
+                        ) {
+                          current.text += (current.text ? " " : "") + text;
+                          current.ts = ts || current.ts;
+                        } else {
+                          if (current) messages.push(current);
+                          current = {
+                            role: isAgent
+                              ? "agent"
+                              : isUser
+                              ? "user"
+                              : "system",
+                            text,
+                            ts,
+                          };
+                        }
+                      }
+                      if (current) messages.push(current);
+
+                      return (
+                        <div className="space-y-3 pb-8">
+                          {messages.map((m, idx) => (
+                            <div
+                              key={idx}
+                              className={`flex ${
+                                m.role === "user"
+                                  ? "justify-end"
+                                  : m.role === "agent"
+                                  ? "justify-start"
+                                  : "justify-center"
+                              }`}
+                            >
+                              {m.role === "system" ? (
+                                <div className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                                  {m.text}
+                                </div>
+                              ) : (
+                                <div
+                                  className={`max-w-[80%] px-3 py-2 rounded-lg text-sm shadow-sm ${
+                                    m.role === "agent"
+                                      ? "bg-white border border-gray-200 text-gray-800"
+                                      : "bg-blue-600 text-white"
+                                  }`}
+                                >
+                                  <div className="font-medium mb-1 text-xs opacity-75">
+                                    {m.role === "agent" ? "Agent" : "User"}
+                                    {m.ts && (
+                                      <span
+                                        className={`ml-2 ${
+                                          m.role === "agent"
+                                            ? "text-gray-400"
+                                            : "text-blue-100"
+                                        }`}
+                                      >
+                                        {m.ts}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="leading-relaxed">
+                                    {m.text}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
               ) : (
