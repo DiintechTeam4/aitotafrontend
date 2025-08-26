@@ -9,7 +9,7 @@ export default function CreditsOverview() {
   const [showPlansModal, setShowPlansModal] = useState(false);
   const [selectedFilter, setSelectedFilter] = useState('all');
   const [dateFilter, setDateFilter] = useState('all');
-  const [showPayModal, setShowPayModal] = useState(false);
+  const [paymentLoading, setPaymentLoading] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState(null);
 
   const token = sessionStorage.getItem("clienttoken");
@@ -106,18 +106,92 @@ export default function CreditsOverview() {
     filterHistory();
   }, [selectedFilter, dateFilter, history]);
 
-  const handlePurchase = async (plan) => {
+  // Load Cashfree SDK
+  const loadCashfreeSDK = () => {
+    return new Promise((resolve, reject) => {
+      if (window.Cashfree) {
+        resolve(window.Cashfree);
+        return;
+      }
+
+      const script = document.createElement('script');
+      script.src = 'https://sdk.cashfree.com/js/v3/cashfree.js';
+      script.onload = () => {
+        if (window.Cashfree) {
+          resolve(window.Cashfree);
+        } else {
+          reject(new Error('Cashfree SDK failed to load'));
+        }
+      };
+      script.onerror = () => reject(new Error('Failed to load Cashfree SDK'));
+      document.head.appendChild(script);
+    });
+  };
+
+  const handleCashfreePurchase = async (plan) => {
+    try {
+      setPaymentLoading(true);
+      setSelectedPlan(plan);
+
+      const base = Number(plan.priceINR) || 0;
+      const tax = Math.round(base * 0.18 * 100) / 100;
+      const total = Math.round((base + tax) * 100) / 100;
+
+      // Create order with backend
+      const response = await fetch(`${API_BASE_URL}/client/payments/initiate/cashfree`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          amount: total,
+          planKey: plan.name.toLowerCase()
+        })
+      });
+
+      const orderData = await response.json();
+
+      if (!orderData.success) {
+        throw new Error(orderData.message || 'Failed to create order');
+      }
+
+      // Load Cashfree SDK
+      const cashfree = await loadCashfreeSDK();
+
+      // Initialize Cashfree
+      cashfree.checkout({
+        paymentSessionId: orderData.data.sessionId,
+        returnUrl: `${window.location.origin}/auth/dashboard?payment=success`
+      }).then(() => {
+        console.log('✅ Payment initiated successfully');
+      }).catch((error) => {
+        console.error('❌ Payment failed:', error);
+        alert('Payment failed: ' + (error.message || 'Unknown error'));
+      });
+
+    } catch (error) {
+      console.error('❌ Payment error:', error);
+      alert(error.message || 'Payment initiation failed');
+    } finally {
+      setPaymentLoading(false);
+      setSelectedPlan(null);
+    }
+  };
+
+  // Fallback to direct URL method (similar to Paytm)
+  const handleDirectPurchase = async (plan) => {
     try {
       const base = Number(plan.priceINR) || 0;
       const tax = Math.round(base * 0.18 * 100) / 100;
       const total = Math.round((base + tax) * 100) / 100;
       
       const t = encodeURIComponent(token || '');
-      try { 
-        localStorage.setItem('paytm_last_plan', plan.name.toLowerCase()); 
-      } catch {}
       
-      window.location.href = `${API_BASE_URL}/client/payments/initiate/direct?t=${t}&amount=${encodeURIComponent(total)}&planKey=${encodeURIComponent(plan.name.toLowerCase())}`;
+      // Store plan info in memory (since we can't use localStorage)
+      window.lastSelectedPlan = plan.name.toLowerCase();
+      
+      window.location.href = `${API_BASE_URL}/client/payments/initiate/cashfree-direct?t=${t}&amount=${encodeURIComponent(total)}&planKey=${encodeURIComponent(plan.name.toLowerCase())}`;
     } catch (e) {
       console.error(e);
       alert(e.message || 'Payment initiation failed');
@@ -368,42 +442,95 @@ export default function CreditsOverview() {
                       ))}
                     </ul>
 
-                    <button
-                      onClick={() => handlePurchase(plan)}
-                      className={`w-full py-4 px-6 rounded-xl font-semibold text-lg transition-all duration-200 ${
-                        plan.popular
-                          ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-lg hover:shadow-xl'
-                          : 'bg-gray-900 text-white hover:bg-gray-800'
-                      }`}
-                    >
-                      Purchase Plan
-                    </button>
+                    <div className="space-y-3">
+                      <button
+                        onClick={() => handleCashfreePurchase(plan)}
+                        disabled={paymentLoading}
+                        className={`w-full py-4 px-6 rounded-xl font-semibold text-lg transition-all duration-200 ${
+                          plan.popular
+                            ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-lg hover:shadow-xl'
+                            : 'bg-gray-900 text-white hover:bg-gray-800'
+                        } ${paymentLoading && selectedPlan?.name === plan.name ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      >
+                        {paymentLoading && selectedPlan?.name === plan.name ? (
+                          <div className="flex items-center justify-center">
+                            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                            Processing...
+                          </div>
+                        ) : (
+                          <>
+                            <span className="flex items-center justify-center">
+                              <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4zm2 6a2 2 0 012-2h8a2 2 0 012 2v4a2 2 0 01-2 2H8a2 2 0 01-2-2v-4zm6 4a2 2 0 100-4 2 2 0 000 4z" />
+                              </svg>
+                              Pay with Cashfree
+                            </span>
+                          </>
+                        )}
+                      </button>
+                      
+                      <button
+                        onClick={() => handleDirectPurchase(plan)}
+                        disabled={paymentLoading}
+                        className="w-full py-3 px-6 rounded-xl font-medium text-sm border-2 border-gray-300 text-gray-700 hover:border-gray-400 hover:bg-gray-50 transition-all duration-200"
+                      >
+                        Alternative Payment Method
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
 
               <div className="mt-8 p-6 bg-gray-50 rounded-xl">
-                <h4 className="font-semibold text-gray-900 mb-4">Credit Usage Rates:</h4>
+                <h4 className="font-semibold text-gray-900 mb-4 flex items-center">
+                  <svg className="w-5 h-5 mr-2 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
+                  </svg>
+                  Credit Usage Rates:
+                </h4>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                  <div className="text-center">
-                    <div className="font-semibold text-blue-600">2 Credits</div>
+                  <div className="text-center p-3 bg-white rounded-lg">
+                    <div className="font-semibold text-blue-600 text-lg">2 Credits</div>
                     <div className="text-gray-600">per minute call</div>
                   </div>
-                  <div className="text-center">
-                    <div className="font-semibold text-green-600">1 Credit</div>
+                  <div className="text-center p-3 bg-white rounded-lg">
+                    <div className="font-semibold text-green-600 text-lg">1 Credit</div>
                     <div className="text-gray-600">WhatsApp message</div>
                   </div>
-                  <div className="text-center">
-                    <div className="font-semibold text-purple-600">0.25 Credits</div>
+                  <div className="text-center p-3 bg-white rounded-lg">
+                    <div className="font-semibold text-purple-600 text-lg">0.25 Credits</div>
                     <div className="text-gray-600">Telegram message</div>
                   </div>
-                  <div className="text-center">
-                    <div className="font-semibold text-orange-600">0.10 Credits</div>
+                  <div className="text-center p-3 bg-white rounded-lg">
+                    <div className="font-semibold text-orange-600 text-lg">0.10 Credits</div>
                     <div className="text-gray-600">Email</div>
                   </div>
                 </div>
               </div>
+
+              <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                <div className="flex items-start">
+                  <svg className="w-5 h-5 text-blue-600 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                  </svg>
+                  <div className="text-sm text-blue-800">
+                    <p className="font-medium mb-1">Secure Payment Processing</p>
+                    <p>All payments are processed securely through Cashfree Payment Gateway. Your data is encrypted and protected. GST will be added at checkout.</p>
+                  </div>
+                </div>
+              </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Payment Loading Overlay */}
+      {paymentLoading && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[60]">
+          <div className="bg-white rounded-2xl p-8 shadow-2xl text-center max-w-sm w-full mx-4">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Processing Payment</h3>
+            <p className="text-gray-600 text-sm">Please wait while we redirect you to the payment gateway...</p>
           </div>
         </div>
       )}
