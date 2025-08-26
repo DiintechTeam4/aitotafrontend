@@ -28,6 +28,9 @@ import PerformanceKPIs from "./components/PerformanceKPIs";
 import MyBusiness from "./components/MyBusiness";
 import { API_BASE_URL } from "../../config";
 import MyDials from "./components/MyDials";
+import CreditsOverview from "./components/CreditsOverview";
+import PlansBrowse from "./components/PlansBrowse";
+import Pricing from "./components/Pricing";
 
 function ClientDashboard({ onLogout, clientId: propClientId }) {
   // Try to get clientId from props, sessionStorage, or clientData
@@ -463,6 +466,15 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
       case "mydials":
         return <MyDials />;
 
+      case "credits":
+        return <CreditsOverview />;
+
+      case "plans":
+        return <PlansBrowse />;
+
+      case "pricing":
+        return <Pricing />;
+
       default:
         return <div>Select a section from the sidebar</div>;
     }
@@ -639,6 +651,42 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
             >
               <FiPhone className="text-xl w-6 text-center" />
               <span className="flex-1 font-medium">My Dials</span>
+            </button>
+
+            <button
+              className={`flex items-center w-full px-6 py-4 text-left transition-all duration-200 gap-3 ${
+                activeSection === "credits"
+                  ? "bg-black text-white border-r-4 border-white"
+                  : "text-gray-300 hover:bg-gray-800 hover:text-white"
+              }`}
+              onClick={() => handleSectionChange("credits")}
+            >
+              <FiTrendingUp className="text-xl w-6 text-center" />
+              <span className="flex-1 font-medium">Credits</span>
+            </button>
+
+            <button
+              className={`flex items-center w-full px-6 py-4 text-left transition-all duration-200 gap-3 ${
+                activeSection === "plans"
+                  ? "bg-black text-white border-r-4 border-white"
+                  : "text-gray-300 hover:bg-gray-800 hover:text-white"
+              }`}
+              onClick={() => handleSectionChange("plans")}
+            >
+              <FiBriefcase className="text-xl w-6 text-center" />
+              <span className="flex-1 font-medium">Plans</span>
+            </button>
+
+            <button
+              className={`flex items-center w-full px-6 py-4 text-left transition-all duration-200 gap-3 ${
+                activeSection === "pricing"
+                  ? "bg-black text-white border-r-4 border-white"
+                  : "text-gray-300 hover:bg-gray-800 hover:text-white"
+              }`}
+              onClick={() => handleSectionChange("pricing")}
+            >
+              <FiBriefcase className="text-xl w-6 text-center" />
+              <span className="flex-1 font-medium">Pricing</span>
             </button>
           </nav>
 

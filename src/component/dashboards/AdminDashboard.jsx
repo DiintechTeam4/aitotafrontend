@@ -21,10 +21,14 @@ import {
   FaFileInvoiceDollar,
   FaClipboardList,
   FaUserTie,
+  FaDollarSign,
 } from "react-icons/fa";
 import ApprovalFormDetails from "./components/ApprovalFormDetails";
 import HumanAgentManagement from "./components/HumanAgentManagement";
 import AdminAgents from "./components/AdminAgents";
+import PlanManagement from "./components/PlanManagement";
+import CreditManagement from "./components/CreditManagement";
+import CouponManagement from "./components/CouponManagement";
 
 const AdminDashboard = ({ user, onLogout }) => {
   const navigate = useNavigate();
@@ -242,6 +246,9 @@ const AdminDashboard = ({ user, onLogout }) => {
     { name: "Overview", icon: <FaChartBar /> },
     { name: "Client", icon: <FaUsers /> },
     { name: "Agents", icon: <FaUserTie /> },
+    { name: "Plans", icon: <FaDollarSign /> },
+    { name: "Credits", icon: <FaChartBar /> },
+    { name: "Coupons", icon: <FaFileInvoiceDollar /> },
     { name: "Tools", icon: <FaCog /> },
     { name: "Datastore", icon: <FaDatabase /> },
     { name: "AI Agent", icon: <FaRobot /> },
@@ -897,6 +904,18 @@ const AdminDashboard = ({ user, onLogout }) => {
             {/* Dashboard Content based on active tab */}
             {activeTab === "Agents" && (
               <AdminAgents/>
+            )}
+
+            {activeTab === "Plans" && (
+              <PlanManagement />
+            )}
+
+            {activeTab === "Credits" && (
+              <CreditManagement />
+            )}
+
+            {activeTab === "Coupons" && (
+              <CouponManagement />
             )}
 
             {/* Client Table */}
