@@ -106,27 +106,7 @@ export default function CreditsOverview() {
     filterHistory();
   }, [selectedFilter, dateFilter, history]);
 
-  // Load Cashfree SDK
-  const loadCashfreeSDK = () => {
-    return new Promise((resolve, reject) => {
-      if (window.Cashfree) {
-        resolve(window.Cashfree);
-        return;
-      }
 
-      const script = document.createElement('script');
-      script.src = 'https://sdk.cashfree.com/js/v3/cashfree.js';
-      script.onload = () => {
-        if (window.Cashfree) {
-          resolve(window.Cashfree);
-        } else {
-          reject(new Error('Cashfree SDK failed to load'));
-        }
-      };
-      script.onerror = () => reject(new Error('Failed to load Cashfree SDK'));
-      document.head.appendChild(script);
-    });
-  };
 
   const handleCashfreePurchase = async (plan) => {
     try {
@@ -137,38 +117,14 @@ export default function CreditsOverview() {
       const tax = Math.round(base * 0.18 * 100) / 100;
       const total = Math.round((base + tax) * 100) / 100;
 
-      // Create order with backend
-      const response = await fetch(`${API_BASE_URL}/client/payments/initiate/cashfree`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          amount: total,
-          planKey: plan.name.toLowerCase()
-        })
-      });
-
-      const orderData = await response.json();
-
-      if (!orderData.success) {
-        throw new Error(orderData.message || 'Failed to create order');
-      }
-
-      // Load Cashfree SDK
-      const cashfree = await loadCashfreeSDK();
-
-      // Initialize Cashfree
-      cashfree.checkout({
-        paymentSessionId: orderData.data.sessionId,
-        returnUrl: `${window.location.origin}/auth/dashboard?payment=success`
-      }).then(() => {
-        console.log('✅ Payment initiated successfully');
-      }).catch((error) => {
-        console.error('❌ Payment failed:', error);
-        alert('Payment failed: ' + (error.message || 'Unknown error'));
-      });
+      // Use the working direct payment method that redirects to Cashfree
+      const t = encodeURIComponent(token || '');
+      
+      // Store plan info in memory (since we can't use localStorage)
+      window.lastSelectedPlan = plan.name.toLowerCase();
+      
+      // Redirect to the working backend endpoint
+      window.location.href = `${API_BASE_URL}/client/payments/initiate/direct?t=${t}&amount=${encodeURIComponent(total)}&planKey=${encodeURIComponent(plan.name.toLowerCase())}`;
 
     } catch (error) {
       console.error('❌ Payment error:', error);
@@ -463,7 +419,7 @@ export default function CreditsOverview() {
                               <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
                                 <path d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4zm2 6a2 2 0 012-2h8a2 2 0 012 2v4a2 2 0 01-2 2H8a2 2 0 01-2-2v-4zm6 4a2 2 0 100-4 2 2 0 000 4z" />
                               </svg>
-                              Pay with Cashfree
+                              Pay with Cashfree (Direct)
                             </span>
                           </>
                         )}
