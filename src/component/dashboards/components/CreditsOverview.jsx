@@ -124,6 +124,18 @@ export default function CreditsOverview() {
       const cashfree = await ensureCashfreeInstance();
       const result = await cashfree.checkout({ paymentSessionId: sessionId, redirectTarget: '_modal' });
       if (result?.error) throw new Error(result.error?.message || 'Checkout failed');
+      // After checkout completes/redirects back, verify and credit
+      try {
+        const verifyResp = await fetch(`${API_BASE_URL}/payments/cashfree/verify-and-credit`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ order_id: result?.order && result.order.orderId ? result.order.orderId : undefined })
+        });
+        const verifyData = await verifyResp.json();
+        if (!verifyResp.ok) console.warn('Verify-and-credit failed', verifyData);
+        // Refresh balances
+        fetchAll();
+      } catch (vErr) { console.warn('Post-payment verify failed', vErr); }
     } catch (e) {
       console.error('Cashfree SDK checkout failed:', e);
       alert('Unable to open Cashfree checkout. Please retry.');
