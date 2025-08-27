@@ -149,7 +149,7 @@ export default function CreditsOverview() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ amount: total, customerName: 'Client', customerEmail: 'client@example.com', customerPhone: '9999999999' })
+        body: JSON.stringify({ amount: total, planKey: plan.name.toLowerCase() })
       });
       const data = await resp.json();
       if (!resp.ok || !data?.payment_session_id) {
@@ -182,7 +182,7 @@ export default function CreditsOverview() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ amount: total, customerName: 'Client', customerEmail: 'client@example.com', customerPhone: '9999999999' })
+        body: JSON.stringify({ amount: total, planKey: plan.name.toLowerCase() })
       });
       const data = await resp.json();
       if (!resp.ok || !data?.payment_session_id) {
