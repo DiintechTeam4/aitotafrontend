@@ -108,13 +108,30 @@ export default function CreditsOverview() {
 
 
 
-  const launchCashfreeCheckout = (sessionId) => {
+  const loadCashfreeSdk = () => new Promise((resolve, reject) => {
+    if (window.Cashfree) return resolve(window.Cashfree);
+    const script = document.createElement('script');
+    // Always use production SDK as backend uses production keys
+    script.src = 'https://sdk.cashfree.com/js/ui/2.0.0/cashfree.prod.js';
+    script.async = true;
+    script.onload = () => resolve(window.Cashfree);
+    script.onerror = () => reject(new Error('Failed to load Cashfree SDK'));
+    document.body.appendChild(script);
+  });
+
+  const launchCashfreeCheckout = async (sessionId) => {
     if (!sessionId) {
       throw new Error('Missing payment session id');
     }
-    const cleaned = sessionId.endsWith('payment') ? sessionId.replace(/payment$/, '') : sessionId;
-    const target = `https://payments.cashfree.com/order?session_id=${encodeURIComponent(cleaned)}`;
-    window.location.href = target;
+    try {
+      const Cashfree = await loadCashfreeSdk();
+      const cashfree = new Cashfree({ mode: 'PROD' });
+      await cashfree.checkout({ paymentSessionId: sessionId });
+    } catch (e) {
+      // Fallback to hosted URL if SDK fails
+      const target = `https://cashfree.com/pg/orders/${encodeURIComponent(sessionId)}`;
+      window.location.href = target;
+    }
   };
 
   const handleCashfreePurchase = async (plan) => {
