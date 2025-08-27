@@ -126,20 +126,10 @@ export default function CreditsOverview() {
     try {
       const Cashfree = await loadCashfreeSdk();
       const cashfree = new Cashfree({ mode: 'production' });
-      const cleaned = sessionId.endsWith('payment') ? sessionId.replace(/payment$/, '') : sessionId;
-      try {
-        await cashfree.checkout({ paymentSessionId: cleaned });
-        return;
-      } catch (inner) {
-        // Retry once with original session id
-        await cashfree.checkout({ paymentSessionId: sessionId });
-        return;
-      }
+      await cashfree.checkout({ paymentSessionId: sessionId });
     } catch (e) {
-      // Final fallback to hosted URL (use cleaned id)
-      const cleaned = sessionId.endsWith('payment') ? sessionId.replace(/payment$/, '') : sessionId;
-      const target = `https://payments.cashfree.com/order?session_id=${encodeURIComponent(cleaned)}`;
-      window.location.href = target;
+      console.error('Cashfree SDK checkout failed:', e);
+      alert('Unable to open Cashfree checkout. Please retry.');
     }
   };
 
