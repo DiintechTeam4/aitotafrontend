@@ -112,7 +112,7 @@ export default function CreditsOverview() {
     if (window.Cashfree) return resolve(window.Cashfree);
     const script = document.createElement('script');
     // Always use production SDK as backend uses production keys
-    script.src = 'https://sdk.cashfree.com/js/ui/2.0.0/cashfree.prod.js';
+    script.src = 'https://sdk.cashfree.com/js/ui/2.0/cashfree.prod.js';
     script.async = true;
     script.onload = () => resolve(window.Cashfree);
     script.onerror = () => reject(new Error('Failed to load Cashfree SDK'));
@@ -125,11 +125,20 @@ export default function CreditsOverview() {
     }
     try {
       const Cashfree = await loadCashfreeSdk();
-      const cashfree = new Cashfree({ mode: 'PROD' });
-      await cashfree.checkout({ paymentSessionId: sessionId });
+      const cashfree = new Cashfree({ mode: 'production' });
+      const cleaned = sessionId.endsWith('payment') ? sessionId.replace(/payment$/, '') : sessionId;
+      try {
+        await cashfree.checkout({ paymentSessionId: cleaned });
+        return;
+      } catch (inner) {
+        // Retry once with original session id
+        await cashfree.checkout({ paymentSessionId: sessionId });
+        return;
+      }
     } catch (e) {
-      // Fallback to hosted URL if SDK fails
-      const target = `https://cashfree.com/pg/orders/${encodeURIComponent(sessionId)}`;
+      // Final fallback to hosted URL (use cleaned id)
+      const cleaned = sessionId.endsWith('payment') ? sessionId.replace(/payment$/, '') : sessionId;
+      const target = `https://payments.cashfree.com/order?session_id=${encodeURIComponent(cleaned)}`;
       window.location.href = target;
     }
   };
