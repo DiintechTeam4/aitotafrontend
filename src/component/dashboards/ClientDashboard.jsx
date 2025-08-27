@@ -662,17 +662,7 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
               <span className="flex-1 font-medium">Credits</span>
             </button>
 
-            <button
-              className={`flex items-center w-full px-6 py-4 text-left transition-all duration-200 gap-3 ${
-                activeSection === "plans"
-                  ? "bg-black text-white border-r-4 border-white"
-                  : "text-gray-300 hover:bg-gray-800 hover:text-white"
-              }`}
-              onClick={() => handleSectionChange("plans")}
-            >
-              <FiBriefcase className="text-xl w-6 text-center" />
-              <span className="flex-1 font-medium">Plans</span>
-            </button>
+            
 
             <button
               className={`flex items-center w-full px-6 py-4 text-left transition-all duration-200 gap-3 ${
