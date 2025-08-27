@@ -8,13 +8,12 @@ export default function CreditsOverview() {
   const [history, setHistory] = useState([]);
   const [filteredHistory, setFilteredHistory] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [showPlansModal, setShowPlansModal] = useState(false);
-  const [selectedFilter, setSelectedFilter] = useState('credit'); // Changed default to 'credit'
+  const [activeTab, setActiveTab] = useState('overview');
+  const [selectedFilter, setSelectedFilter] = useState('credit');
   const [dateFilter, setDateFilter] = useState('all');
-  const [graphDateFilter, setGraphDateFilter] = useState('7days'); // New filter for graphs
+  const [graphDateFilter, setGraphDateFilter] = useState('7days');
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState(null);
-  const [showFullHistory, setShowFullHistory] = useState(false);
 
   const token = sessionStorage.getItem("clienttoken");
 
@@ -45,63 +44,21 @@ export default function CreditsOverview() {
     },
   ];
 
-  // Get type icon for credits added
-  const getCreditIcon = () => {
-    return (
-      <div className="w-8 h-8 rounded-lg bg-green-100 flex items-center justify-center">
-        <svg className="w-4 h-4 text-green-600" fill="currentColor" viewBox="0 0 20 20">
-          <path d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4zm2 6a2 2 0 012-2h8a2 2 0 012 2v4a2 2 0 01-2 2H8a2 2 0 01-2-2v-4zm6 4a2 2 0 100-4 2 2 0 000 4z" />
-        </svg>
-      </div>
-    );
-  };
-
-  // Calculate credit statistics (only for credits added)
-  const getCreditStats = () => {
-    const creditTypes = {
-      'Basic': { count: 0, credits: 0, color: '#10B981' },
-      'Professional': { count: 0, credits: 0, color: '#3B82F6' },
-      'Enterprise': { count: 0, credits: 0, color: '#8B5CF6' },
-      'Manual': { count: 0, credits: 0, color: '#F59E0B' }
-    };
-
-    // Filter for date range based on graphDateFilter
-    const filteredForGraph = getFilteredDataForGraph();
-
-    filteredForGraph.forEach(item => {
-      if (item.amount > 0) { // Only count credits
-        const type = item.planType || 'Manual';
-        if (creditTypes[type]) {
-          creditTypes[type].count++;
-          creditTypes[type].credits += item.amount;
-        }
-      }
-    });
-
-    return Object.entries(creditTypes)
-      .filter(([_, data]) => data.credits > 0)
-      .map(([type, data]) => ({
-        name: type,
-        credits: data.credits,
-        count: data.count,
-        color: data.color
-      }));
-  };
-
   // Get filtered data based on graph date filter
   const getFilteredDataForGraph = () => {
     const now = new Date();
     let filterDate = null;
 
     switch (graphDateFilter) {
+      case 'today':
+        filterDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        break;
+      case 'yesterday':
+        filterDate = new Date(now.getTime() - (24 * 60 * 60 * 1000));
+        filterDate = new Date(filterDate.getFullYear(), filterDate.getMonth(), filterDate.getDate());
+        break;
       case '7days':
         filterDate = new Date(now.getTime() - (7 * 24 * 60 * 60 * 1000));
-        break;
-      case '30days':
-        filterDate = new Date(now.getTime() - (30 * 24 * 60 * 60 * 1000));
-        break;
-      case '90days':
-        filterDate = new Date(now.getTime() - (90 * 24 * 60 * 60 * 1000));
         break;
       case 'all':
       default:
@@ -113,29 +70,86 @@ export default function CreditsOverview() {
 
   // Get daily credit additions for line chart
   const getDailyCreditAdditions = () => {
-    const days = graphDateFilter === '7days' ? 7 : graphDateFilter === '30days' ? 30 : 90;
+    const days = graphDateFilter === 'today' ? 1 : graphDateFilter === 'yesterday' ? 1 : 7;
     const dailyData = [];
     const now = new Date();
     
-    for (let i = days - 1; i >= 0; i--) {
-      const date = new Date(now);
-      date.setDate(date.getDate() - i);
-      const dateStr = date.toISOString().split('T')[0];
-      
-      const dayCredits = history
+    if (graphDateFilter === 'today') {
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const todayCredits = history
         .filter(item => {
-          const itemDate = new Date(item.timestamp).toISOString().split('T')[0];
-          return itemDate === dateStr && item.amount > 0;
+          const itemDate = new Date(item.timestamp);
+          return itemDate >= today && item.amount > 0;
         })
         .reduce((sum, item) => sum + item.amount, 0);
       
       dailyData.push({
-        date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-        credits: dayCredits
+        date: 'Today',
+        credits: todayCredits
       });
+    } else if (graphDateFilter === 'yesterday') {
+      const yesterday = new Date(now.getTime() - (24 * 60 * 60 * 1000));
+      const yesterdayStart = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate());
+      const yesterdayEnd = new Date(yesterdayStart.getTime() + (24 * 60 * 60 * 1000));
+      
+      const yesterdayCredits = history
+        .filter(item => {
+          const itemDate = new Date(item.timestamp);
+          return itemDate >= yesterdayStart && itemDate < yesterdayEnd && item.amount > 0;
+        })
+        .reduce((sum, item) => sum + item.amount, 0);
+      
+      dailyData.push({
+        date: 'Yesterday',
+        credits: yesterdayCredits
+      });
+    } else {
+      for (let i = days - 1; i >= 0; i--) {
+        const date = new Date(now);
+        date.setDate(date.getDate() - i);
+        const dateStr = date.toISOString().split('T')[0];
+        
+        const dayCredits = history
+          .filter(item => {
+            const itemDate = new Date(item.timestamp).toISOString().split('T')[0];
+            return itemDate === dateStr && item.amount > 0;
+          })
+          .reduce((sum, item) => sum + item.amount, 0);
+        
+        dailyData.push({
+          date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+          credits: dayCredits
+        });
+      }
     }
     
     return dailyData;
+  };
+
+  // Usage breakdown pie chart: how much used for call, whatsapp, email, telegram
+  const getUsageBreakdown = () => {
+    const usageTypes = {
+      call: { name: 'Mobile Calls', color: '#0ea5e9', total: 0 },
+      whatsapp: { name: 'WhatsApp', color: '#22c55e', total: 0 },
+      email: { name: 'Email', color: '#a855f7', total: 0 },
+      telegram: { name: 'Telegram', color: '#f59e0b', total: 0 }
+    };
+
+    const filteredForGraph = getFilteredDataForGraph();
+    
+    filteredForGraph.forEach(item => {
+      if (item.amount < 0 && item.usageType && usageTypes[item.usageType]) {
+        usageTypes[item.usageType].total += Math.abs(item.amount);
+      }
+    });
+
+    return Object.entries(usageTypes)
+      .map(([key, data]) => ({
+        name: data.name,
+        value: data.total,
+        color: data.color
+      }))
+      .filter(item => item.value > 0);
   };
 
   const fetchAll = async () => {
@@ -155,7 +169,7 @@ export default function CreditsOverview() {
       if (hist.success) {
         const rows = Array.isArray(hist.data?.history) ? hist.data.history : Array.isArray(hist.data) ? hist.data : [];
         setHistory(rows);
-        setFilteredHistory(rows.filter(item => item.amount > 0)); // Default to credits added
+        setFilteredHistory(rows.filter(item => item.amount > 0));
       }
     } catch (e) {
       console.error("Failed to load credits:", e);
@@ -265,11 +279,36 @@ export default function CreditsOverview() {
     }
   };
 
-  const creditStats = getCreditStats();
   const dailyCreditData = getDailyCreditAdditions();
+  const usageBreakdown = getUsageBreakdown();
   
-  // Filter only credit addition transactions for recent activity
-  const recentCreditHistory = history.filter(item => item.amount > 0).slice(0, 5);
+  // Get total used credits
+  const getTotalUsedCredits = () => {
+    return history
+      .filter(item => item.amount < 0)
+      .reduce((sum, item) => sum + Math.abs(item.amount), 0);
+  };
+
+  // Get usage breakdown for table
+  const getUsageTable = () => {
+    const usageTypes = {
+      call: { name: 'Mobile Calls', icon: '📞', total: 0, rate: '2 credits/min' },
+      whatsapp: { name: 'WhatsApp', icon: '📱', total: 0, rate: '1 credit/message' },
+      email: { name: 'Email', icon: '📧', total: 0, rate: '0.1 credits/email' },
+      telegram: { name: 'Telegram', icon: '💬', total: 0, rate: '0.25 credits/message' }
+    };
+
+    history.forEach(item => {
+      if (item.amount < 0 && item.usageType && usageTypes[item.usageType]) {
+        usageTypes[item.usageType].total += Math.abs(item.amount);
+      }
+    });
+
+    return Object.entries(usageTypes).map(([key, data]) => ({
+      ...data,
+      key
+    }));
+  };
 
   if (loading) {
     return (
@@ -282,29 +321,10 @@ export default function CreditsOverview() {
     );
   }
 
-  return (
-    <div className="h-full flex flex-col bg-white">
-      {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-8 py-6">
-        <div className="flex justify-between items-center">
-          <div>
-            <h2 className="text-2xl font-semibold text-gray-900 mb-2">Credits Overview</h2>
-            <p className="text-gray-600 text-sm">Monitor your usage and manage credits efficiently</p>
-          </div>
-          <button
-            onClick={() => setShowPlansModal(true)}
-            className="bg-black text-white px-6 py-3 rounded-lg font-medium text-sm shadow-sm hover:bg-gray-800 transition-all duration-200"
-          >
-            <svg className="w-4 h-4 mr-2 inline" fill="currentColor" viewBox="0 0 20 20">
-              <path d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4zm2 6a2 2 0 012-2h8a2 2 0 012 2v4a2 2 0 01-2 2H8a2 2 0 01-2-2v-4zm6 4a2 2 0 100-4 2 2 0 000 4z" />
-            </svg>
-            Purchase Credits
-          </button>
-        </div>
-      </div>
-
-      <div className="flex-1 p-8 overflow-y-auto space-y-6">
-        {/* Balance Card */}
+  const OverviewTab = () => (
+    <div className="space-y-6">
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-gradient-to-r from-gray-900 to-black rounded-xl shadow-sm p-6 text-white border border-gray-200">
           <div className="flex items-center justify-between">
             <div>
@@ -320,141 +340,93 @@ export default function CreditsOverview() {
           </div>
         </div>
 
-        {/* Graph Filter */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="text-lg font-semibold text-gray-900">Credit Analytics</h3>
-            <select
-              value={graphDateFilter}
-              onChange={(e) => setGraphDateFilter(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm font-medium focus:ring-2 focus:ring-black focus:border-black"
-            >
-              <option value="7days">Last 7 Days</option>
-              <option value="30days">Last 30 Days</option>
-              <option value="90days">Last 90 Days</option>
-              <option value="all">All Time</option>
-            </select>
-          </div>
-
-          {/* Credit Analytics */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Credit Distribution */}
+        <div 
+          className="bg-white rounded-xl shadow-sm p-6 border border-gray-200 cursor-pointer hover:shadow-md transition-all duration-300"
+          onClick={() => setActiveTab('history')}
+        >
+          <div className="flex items-center justify-between">
             <div>
-              <h4 className="text-base font-medium text-gray-900 mb-4">Credit Distribution by Plan</h4>
-              {creditStats.length > 0 ? (
-                <div className="h-60">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={creditStats}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={50}
-                        outerRadius={90}
-                        dataKey="credits"
-                      >
-                        {creditStats.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.color} />
-                        ))}
-                      </Pie>
-                      <Tooltip 
-                        formatter={(value, name) => [`${value} credits`, 'Added']}
-                        contentStyle={{
-                          backgroundColor: '#000',
-                          color: '#fff',
-                          border: 'none',
-                          borderRadius: '8px',
-                          fontSize: '12px'
-                        }}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-              ) : (
-                <div className="h-60 flex items-center justify-center text-gray-500">
-                  <div className="text-center">
-                    <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                      </svg>
-                    </div>
-                    <p className="text-sm font-medium text-gray-700">No credit data available</p>
-                    <p className="text-xs text-gray-500 mt-1">Purchase credits to see analytics</p>
-                  </div>
-                </div>
-              )}
-              
-              {creditStats.length > 0 && (
-                <div className="mt-4 grid grid-cols-1 gap-3">
-                  {creditStats.map((stat, idx) => (
-                    <div key={idx} className="flex items-center p-3 bg-gray-50 rounded-lg">
-                      <div 
-                        className="w-3 h-3 rounded-full mr-3"
-                        style={{ backgroundColor: stat.color }}
-                      ></div>
-                      <div className="flex-1">
-                        <div className="text-sm font-medium text-gray-900">{stat.name}</div>
-                        <div className="text-xs text-gray-600">{stat.credits} credits • {stat.count} purchases</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+              <div className="text-gray-500 text-sm font-medium mb-2">Payment History</div>
+              <div className="text-3xl font-bold text-gray-900 mb-1">{history.filter(item => item.amount > 0).length}</div>
+              <div className="text-gray-500 text-sm">Total Transactions</div>
             </div>
-
-            {/* Daily Credit Additions Trend */}
-            <div>
-              <h4 className="text-base font-medium text-gray-900 mb-4">Daily Credit Additions</h4>
-              <div className="h-60">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={dailyCreditData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                    <XAxis 
-                      dataKey="date" 
-                      axisLine={false}
-                      tickLine={false}
-                      tick={{ fontSize: 11, fill: '#6B7280' }}
-                    />
-                    <YAxis 
-                      axisLine={false}
-                      tickLine={false}
-                      tick={{ fontSize: 11, fill: '#6B7280' }}
-                    />
-                    <Tooltip 
-                      contentStyle={{
-                        backgroundColor: '#000',
-                        color: '#fff',
-                        border: 'none',
-                        borderRadius: '8px',
-                        fontSize: '12px'
-                      }}
-                      formatter={(value) => [`${value} credits`, 'Added']}
-                    />
-                    <Line 
-                      type="monotone" 
-                      dataKey="credits" 
-                      stroke="#000" 
-                      strokeWidth={3}
-                      dot={{ fill: '#000', strokeWidth: 2, r: 4 }}
-                      activeDot={{ r: 6, fill: '#000', stroke: '#fff', strokeWidth: 2 }}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
+            <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
+              <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
             </div>
           </div>
         </div>
 
-        {/* Credit Breakdown Bar Chart */}
-        {creditStats.length > 0 && (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Credit Purchases by Plan</h3>
-            <div className="h-64">
+        <div 
+          className="bg-white rounded-xl shadow-sm p-6 border border-gray-200 cursor-pointer hover:shadow-md transition-all duration-300"
+          onClick={() => setActiveTab('purchase')}
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-gray-500 text-sm font-medium mb-2">Purchase Credits</div>
+              <div className="text-3xl font-bold text-gray-900 mb-1">₹{plans[0].priceINR}</div>
+              <div className="text-gray-500 text-sm">Starting from</div>
+            </div>
+            <div className="bg-green-50 p-4 rounded-lg border border-green-100">
+              <svg className="w-8 h-8 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4zm2 6a2 2 0 012-2h8a2 2 0 012 2v4a2 2 0 01-2 2H8a2 2 0 01-2-2v-4zm6 4a2 2 0 100-4 2 2 0 000 4z" />
+              </svg>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Charts Section */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className="mb-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Usage</h3>
+          
+          {/* Filter Buttons */}
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setGraphDateFilter('today')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                graphDateFilter === 'today'
+                  ? 'bg-black text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              Today
+            </button>
+            <button
+              onClick={() => setGraphDateFilter('yesterday')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                graphDateFilter === 'yesterday'
+                  ? 'bg-black text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              Yesterday
+            </button>
+            <button
+              onClick={() => setGraphDateFilter('7days')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                graphDateFilter === '7days'
+                  ? 'bg-black text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              Last 7 Days
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Daily Credit Additions Line Chart */}
+          <div>
+            <h4 className="text-base font-medium text-gray-900 mb-4">Daily Credit Usage</h4>
+            <div className="h-60">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={creditStats} barCategoryGap="20%">
+                <LineChart data={dailyCreditData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                   <XAxis 
-                    dataKey="name" 
+                    dataKey="date" 
                     axisLine={false}
                     tickLine={false}
                     tick={{ fontSize: 11, fill: '#6B7280' }}
@@ -472,407 +444,393 @@ export default function CreditsOverview() {
                       borderRadius: '8px',
                       fontSize: '12px'
                     }}
-                    formatter={(value, name) => [
-                      `${value} credits`,
-                      'Total Purchased'
-                    ]}
+                    formatter={(value) => [`${value} credits`, 'Added']}
                   />
-                  <Bar 
+                  <Line 
+                    type="monotone" 
                     dataKey="credits" 
-                    fill="#000"
-                    radius={[6, 6, 0, 0]}
+                    stroke="#000" 
+                    strokeWidth={3}
+                    dot={{ fill: '#000', strokeWidth: 2, r: 4 }}
+                    activeDot={{ r: 6, fill: '#000', stroke: '#fff', strokeWidth: 2 }}
                   />
-                </BarChart>
+                </LineChart>
               </ResponsiveContainer>
             </div>
           </div>
-        )}
 
-        {/* Recent Credit Additions */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900">Recent Credit Additions</h3>
-                <p className="text-gray-500 text-sm mt-1">Latest credit purchases and additions</p>
-              </div>
-              <button
-                onClick={() => setShowFullHistory(true)}
-                className="text-black hover:text-white text-sm border border-gray-300 px-4 py-2 rounded-lg hover:bg-black hover:border-black transition-all duration-200"
-              >
-                <svg className="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                View All
-              </button>
-            </div>
-          </div>
-
-          <div className="p-6">
-            {recentCreditHistory.length > 0 ? (
-              <div className="space-y-3">
-                {recentCreditHistory.map((h, idx) => (
-                  <div key={idx} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors border border-gray-100">
-                    <div className="flex items-center space-x-4">
-                      {getCreditIcon()}
-                      <div>
-                        <div className="font-medium text-gray-900 text-sm">{h.description}</div>
-                        <div className="text-gray-500 text-xs mt-1 flex items-center">
-                          <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
-                          </svg>
-                          {new Date(h.timestamp).toLocaleDateString('en-US', {
-                            month: 'short',
-                            day: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit'
-                          })}
-                        </div>
-                        {h.planType && (
-                          <div className="mt-2">
-                            <span className="inline-flex items-center px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-md font-medium">
-                              {h.planType} Plan
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-xl font-bold text-green-600 mb-1">
-                        +{h.amount}
-                      </div>
-                      <div className="text-gray-500 text-xs font-medium">credits</div>
-                    </div>
-                  </div>
-                ))}
+          {/* Usage Breakdown Pie Chart */}
+          <div>
+            <h4 className="text-base font-medium text-gray-900 mb-4">Credits Usage Breakdown</h4>
+            {usageBreakdown.length > 0 ? (
+              <div className="h-60">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={usageBreakdown}
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={80}
+                      dataKey="value"
+                      label={({ name, value, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                      labelLine={false}
+                      fontSize={10}
+                    >
+                      {usageBreakdown.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip 
+                      contentStyle={{
+                        backgroundColor: '#000',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '8px',
+                        fontSize: '12px'
+                      }}
+                      formatter={(value) => [`${value} credits`, 'Used']}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
               </div>
             ) : (
-              <div className="text-center py-12">
-                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                  </svg>
+              <div className="h-60 flex items-center justify-center text-gray-500">
+                <div className="text-center">
+                  <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                    </svg>
+                  </div>
+                  <p className="text-sm font-medium text-gray-700">No usage data available</p>
+                  <p className="text-xs text-gray-500 mt-1">Start using services to see analytics</p>
                 </div>
-                <h4 className="text-base font-medium text-gray-700 mb-2">No Credit History</h4>
-                <p className="text-gray-500 text-sm mb-4">Purchase credits to see your transaction history</p>
-                <button
-                  onClick={() => setShowPlansModal(true)}
-                  className="bg-black text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-800 transition-colors"
-                >
-                  Purchase Credits
-                </button>
               </div>
             )}
           </div>
         </div>
       </div>
 
-      {/* Full Transaction History Modal */}
-      {showFullHistory && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-6xl max-h-[90vh] overflow-hidden">
-            <div className="bg-white border-b border-gray-200 px-6 py-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-xl font-semibold text-gray-900">Complete Transaction History</h3>
-                  <p className="text-gray-600 text-sm mt-1">Detailed record of all credit transactions</p>
-                </div>
-                <button
-                  onClick={() => setShowFullHistory(false)}
-                  className="text-gray-400 hover:text-gray-600 p-2 hover:bg-gray-100 rounded-lg transition-all"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-              
-              {/* Filters */}
-              <div className="flex flex-col sm:flex-row gap-3 mt-4">
-                <select
-                  value={selectedFilter}
-                  onChange={(e) => setSelectedFilter(e.target.value)}
-                  className="px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm font-medium focus:ring-2 focus:ring-black focus:border-black"
-                >
-                  <option value="all">All Transactions</option>
-                  <option value="credit">Credits Added</option>
-                  <option value="debit">Credits Used</option>
-                </select>
-
-                <select
-                  value={dateFilter}
-                  onChange={(e) => setDateFilter(e.target.value)}
-                  className="px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm font-medium focus:ring-2 focus:ring-black focus:border-black"
-                >
-                  <option value="all">All Time</option>
-                  <option value="7days">Last 7 Days</option>
-                  <option value="30days">Last 30 Days</option>
-                  <option value="90days">Last 90 Days</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="max-h-[60vh] overflow-y-auto">
-              <table className="min-w-full">
-                <thead className="bg-gray-50 sticky top-0 border-b border-gray-200">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date & Time</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Credits</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-100">
-                  {filteredHistory.map((h, idx) => (
-                    <tr key={idx} className="hover:bg-gray-50 transition-colors duration-200">
-                      <td className="px-6 py-4 text-sm">
-                        <div className="font-medium text-gray-900 text-sm">
-                          {new Date(h.timestamp).toLocaleDateString('en-US', {
-                            month: 'short',
-                            day: 'numeric',
-                            year: 'numeric'
-                          })}
-                        </div>
-                        <div className="text-gray-500 text-xs mt-1">
-                          {new Date(h.timestamp).toLocaleTimeString('en-US', {
-                            hour: '2-digit',
-                            minute: '2-digit'
-                          })}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-sm">
-                        <div className="flex items-center space-x-3">
-                          {h.amount > 0 ? (
-                            <div className="w-6 h-6 rounded-lg bg-green-100 flex items-center justify-center">
-                              <svg className="w-3 h-3 text-green-600" fill="currentColor" viewBox="0 0 20 20">
-                                <path d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4zm2 6a2 2 0 012-2h8a2 2 0 012 2v4a2 2 0 01-2 2H8a2 2 0 01-2-2v-4zm6 4a2 2 0 100-4 2 2 0 000 4z" />
-                              </svg>
-                            </div>
-                          ) : (
-                            <div className="w-6 h-6 rounded-lg bg-red-100 flex items-center justify-center">
-                              <svg className="w-3 h-3 text-red-600" fill="currentColor" viewBox="0 0 20 20">
-                                <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3z" />
-                              </svg>
-                            </div>
-                          )}
-                          <div>
-                            <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-md ${
-                              h.amount > 0 
-                                ? 'bg-green-100 text-green-800 border border-green-200' 
-                                : 'bg-red-100 text-red-800 border border-red-200'
-                            }`}>
-                              {h.amount > 0 ? 'Credit Added' : 'Credit Used'}
-                            </span>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-sm">
-                        <div className="font-medium text-gray-900 text-sm mb-1">{h.description}</div>
-                        {h.planType && (
-                          <span className="inline-flex items-center px-2 py-1 bg-blue-50 text-blue-700 text-xs rounded-md border border-blue-200 font-medium">
-                            {h.planType} Plan
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 text-sm">
-                        <div className="text-right">
-                          <div className={`text-lg font-bold ${h.amount < 0 ? 'text-red-600' : 'text-green-600'} mb-1`}>
-                            {h.amount > 0 ? '+' : ''}{h.amount}
-                          </div>
-                          <div className="text-gray-500 text-xs font-medium">credits</div>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                  {filteredHistory.length === 0 && (
-                    <tr>
-                      <td className="px-6 py-12 text-center text-gray-500" colSpan={4}>
-                        <div className="flex flex-col items-center">
-                          <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                            <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                            </svg>
-                          </div>
-                          <h4 className="text-base font-medium text-gray-700 mb-2">No transactions found</h4>
-                          <p className="text-gray-500 text-sm">Adjust filters or purchase credits to see activity</p>
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
+      {/* Usage Table */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Credits Usage Breakdown</h3>
+        <div className="overflow-x-auto">
+          <table className="min-w-full">
+            <thead>
+              <tr className="border-b border-gray-200">
+                <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Platform</th>
+                <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Credits Used</th>
+                <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Rate</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {getUsageTable().map((usage) => (
+                <tr key={usage.key} className="hover:bg-gray-50 transition-colors duration-200">
+                  <td className="py-4 px-4">
+                    <div className="flex items-center">
+                      <span className="text-xl mr-3">{usage.icon}</span>
+                      <span className="font-medium text-gray-900">{usage.name}</span>
+                    </div>
+                  </td>
+                  <td className="py-4 px-4">
+                    <div className="text-lg font-bold text-gray-900">{usage.total}</div>
+                    <div className="text-xs text-gray-500">credits</div>
+                  </td>
+                  <td className="py-4 px-4">
+                    <div className="text-sm text-gray-600">{usage.rate}</div>
+                  </td>
+                </tr>
+              ))}
+              {getUsageTable().every(usage => usage.total === 0) && (
+                <tr>
+                  <td className="py-8 px-4 text-center text-gray-500" colSpan={3}>
+                    <div className="flex flex-col items-center">
+                      <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                        <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                        </svg>
+                      </div>
+                      <p className="text-sm font-medium text-gray-700">No usage data available</p>
+                      <p className="text-xs text-gray-500 mt-1">Start using our services to see your usage breakdown</p>
+                    </div>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
-      )}
+      </div>
+    </div>
+  );
 
-      {/* Plans Modal */}
-      {showPlansModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-5xl max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-xl font-semibold text-gray-900">Choose Your Plan</h3>
-                  <p className="text-gray-600 text-sm mt-1">Select the perfect credit package for your needs</p>
-                </div>
-                <button
-                  onClick={() => setShowPlansModal(false)}
-                  className="text-gray-400 hover:text-gray-600 p-2 hover:bg-gray-100 rounded-lg transition-all"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-            </div>
+  const PaymentHistoryTab = () => (
+    <div className="space-y-6">
+      {/* Filters */}
+      <div className="flex flex-col sm:flex-row gap-3">
+        <select
+          value={selectedFilter}
+          onChange={(e) => setSelectedFilter(e.target.value)}
+          className="px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm font-medium focus:ring-2 focus:ring-black focus:border-black"
+        >
+          <option value="all">All Transactions</option>
+          <option value="credit">Credits Added</option>
+          <option value="debit">Credits Used</option>
+        </select>
 
-            <div className="p-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {plans.map((plan) => (
-                  <div
-                    key={plan.name}
-                    className={`relative rounded-xl border p-6 shadow-sm hover:shadow-md transition-all duration-300 ${
-                      plan.popular 
-                        ? 'border-black bg-gray-50' 
-                        : 'border-gray-200 bg-white hover:border-gray-300'
-                    }`}
-                  >
-                    {plan.popular && (
-                      <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
-                        <span className="bg-black text-white px-3 py-1 rounded-full text-xs font-medium">
-                          Most Popular
-                        </span>
+        <select
+          value={dateFilter}
+          onChange={(e) => setDateFilter(e.target.value)}
+          className="px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm font-medium focus:ring-2 focus:ring-black focus:border-black"
+        >
+          <option value="all">All Time</option>
+          <option value="7days">Last 7 Days</option>
+          <option value="30days">Last 30 Days</option>
+          <option value="90days">Last 90 Days</option>
+        </select>
+      </div>
+
+      {/* Transaction History Table */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <table className="min-w-full">
+          <thead className="bg-gray-50 border-b border-gray-200">
+            <tr>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date & Time</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Credits</th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-100">
+            {filteredHistory.map((h, idx) => (
+              <tr key={idx} className="hover:bg-gray-50 transition-colors duration-200">
+                <td className="px-6 py-4 text-sm">
+                  <div className="font-medium text-gray-900 text-sm">
+                    {new Date(h.timestamp).toLocaleDateString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric'
+                    })}
+                  </div>
+                  <div className="text-gray-500 text-xs mt-1">
+                    {new Date(h.timestamp).toLocaleTimeString('en-US', {
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
+                  </div>
+                </td>
+                <td className="px-6 py-4 text-sm">
+                  <div className="flex items-center space-x-3">
+                    {h.amount > 0 ? (
+                      <div className="w-6 h-6 rounded-lg bg-green-100 flex items-center justify-center">
+                        <svg className="w-3 h-3 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                          <path d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4zm2 6a2 2 0 012-2h8a2 2 0 012 2v4a2 2 0 01-2 2H8a2 2 0 01-2-2v-4zm6 4a2 2 0 100-4 2 2 0 000 4z" />
+                        </svg>
+                      </div>
+                    ) : (
+                      <div className="w-6 h-6 rounded-lg bg-red-100 flex items-center justify-center">
+                        <svg className="w-3 h-3 text-red-600" fill="currentColor" viewBox="0 0 20 20">
+                          <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3z" />
+                        </svg>
                       </div>
                     )}
-
-                    <div className="text-center mb-6">
-                      <h4 className="text-xl font-bold text-gray-900 mb-3">{plan.name}</h4>
-                      <div className="text-3xl font-bold text-gray-900 mb-2">
-                        ₹{plan.priceINR.toLocaleString()}
-                      </div>
-                      <p className="text-gray-500 text-sm">+ 18% GST</p>
+                    <div>
+                      <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-md ${
+                        h.amount > 0 
+                          ? 'bg-green-100 text-green-800 border border-green-200' 
+                          : 'bg-red-100 text-red-800 border border-red-200'
+                      }`}>
+                        {h.amount > 0 ? 'Credit Added' : 'Credit Used'}
+                      </span>
                     </div>
-
-                    <div className="text-center mb-6 p-4 bg-gray-50 rounded-lg">
-                      <div className="text-2xl font-bold text-gray-900 mb-1">
-                        {(plan.credits + plan.bonus).toLocaleString()}
-                      </div>
-                      <div className="text-gray-600 text-sm font-medium">Total Credits</div>
-                      {plan.bonus > 0 && (
-                        <div className="text-green-600 font-medium text-sm mt-2">
-                          +{plan.bonus} Bonus Credits!
-                        </div>
-                      )}
-                    </div>
-
-                    <ul className="space-y-3 mb-6">
-                      {plan.features.map((feature, idx) => (
-                        <li key={idx} className="flex items-center text-xs text-gray-700">
-                          <div className="w-4 h-4 bg-green-100 rounded-full flex items-center justify-center mr-2 flex-shrink-0">
-                            <svg className="w-2 h-2 text-green-600" fill="currentColor" viewBox="0 0 20 20">
-                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                            </svg>
-                          </div>
-                          <span className="font-medium">{feature}</span>
-                        </li>
-                      ))}
-                    </ul>
-
-                    <button
-                      onClick={() => handleCashfreePurchase(plan)}
-                      disabled={paymentLoading}
-                      className={`w-full py-3 px-4 rounded-lg font-medium text-sm transition-all duration-300 ${
-                        plan.popular
-                          ? 'bg-black text-white hover:bg-gray-800'
-                          : 'bg-gray-900 text-white hover:bg-black'
-                      } ${paymentLoading && selectedPlan?.name === plan.name ? 'opacity-50 cursor-not-allowed' : 'hover:shadow-md'}`}
-                    >
-                      {paymentLoading && selectedPlan?.name === plan.name ? (
-                        <div className="flex items-center justify-center">
-                          <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
-                          Processing...
-                        </div>
-                      ) : (
-                        <span className="flex items-center justify-center">
-                          <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                            <path d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4zm2 6a2 2 0 012-2h8a2 2 0 012 2v4a2 2 0 01-2 2H8a2 2 0 01-2-2v-4zm6 4a2 2 0 100-4 2 2 0 000 4z" />
-                          </svg>
-                          Pay with Cashfree
-                        </span>
-                      )}
-                    </button>
                   </div>
-                ))}
+                </td>
+                <td className="px-6 py-4 text-sm">
+                  <div className="font-medium text-gray-900 text-sm mb-1">{h.description}</div>
+                  {h.planType && (
+                    <span className="inline-flex items-center px-2 py-1 bg-blue-50 text-blue-700 text-xs rounded-md border border-blue-200 font-medium">
+                      {h.planType} Plan
+                    </span>
+                  )}
+                </td>
+                <td className="px-6 py-4 text-sm">
+                  <div className="text-right">
+                    <div className={`text-lg font-bold ${h.amount < 0 ? 'text-red-600' : 'text-green-600'} mb-1`}>
+                      {h.amount > 0 ? '+' : ''}{h.amount}
+                    </div>
+                    <div className="text-gray-500 text-xs font-medium">credits</div>
+                  </div>
+                </td>
+              </tr>
+            ))}
+            {filteredHistory.length === 0 && (
+              <tr>
+                <td className="px-6 py-12 text-center text-gray-500" colSpan={4}>
+                  <div className="flex flex-col items-center">
+                    <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                    </div>
+                    <h4 className="text-base font-medium text-gray-700 mb-2">No transactions found</h4>
+                    <p className="text-gray-500 text-sm">Adjust filters or purchase credits to see activity</p>
+                  </div>
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+
+  const PurchaseCreditsTab = () => (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {plans.map((plan) => (
+          <div
+            key={plan.name}
+            className={`relative rounded-xl border p-6 shadow-sm hover:shadow-md transition-all duration-300 ${
+              plan.popular 
+                ? 'border-black bg-gray-50' 
+                : 'border-gray-200 bg-white hover:border-gray-300'
+            }`}
+          >
+            {plan.popular && (
+              <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
+                <span className="bg-black text-white px-3 py-1 rounded-full text-xs font-medium">
+                  Most Popular
+                </span>
               </div>
+            )}
 
-              <div className="mt-8 p-6 bg-gray-50 rounded-xl border border-gray-200">
-                <h4 className="font-semibold text-gray-900 mb-4 flex items-center text-base">
-                  <div className="w-6 h-6 bg-black rounded-lg flex items-center justify-center mr-3">
-                    <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
-                    </svg>
-                  </div>
-                  Credit Usage Rates
-                </h4>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                  <div className="text-center p-4 bg-white rounded-lg border border-gray-200">
-                    <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-2">
-                      <svg className="w-4 h-4 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
-                        <path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z" />
-                      </svg>
-                    </div>
-                    <div className="font-bold text-gray-900 text-lg mb-1">2</div>
-                    <div className="text-gray-600 text-xs font-medium">Credits per minute call</div>
-                  </div>
-                  <div className="text-center p-4 bg-white rounded-lg border border-gray-200">
-                    <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-2">
-                      <svg className="w-4 h-4 text-green-600" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893A11.821 11.821 0 0020.885 3.488"/>
-                      </svg>
-                    </div>
-                    <div className="font-bold text-gray-900 text-lg mb-1">1</div>
-                    <div className="text-gray-600 text-xs font-medium">Credit per WhatsApp message</div>
-                  </div>
-                  <div className="text-center p-4 bg-white rounded-lg border border-gray-200">
-                    <div className="w-8 h-8 bg-sky-100 rounded-full flex items-center justify-center mx-auto mb-2">
-                      <svg className="w-4 h-4 text-sky-600" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/>
-                      </svg>
-                    </div>
-                    <div className="font-bold text-gray-900 text-lg mb-1">0.25</div>
-                    <div className="text-gray-600 text-xs font-medium">Credits per Telegram message</div>
-                  </div>
-                  <div className="text-center p-4 bg-white rounded-lg border border-gray-200">
-                    <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-2">
-                      <svg className="w-4 h-4 text-purple-600" fill="currentColor" viewBox="0 0 20 20">
-                        <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
-                        <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
-                      </svg>
-                    </div>
-                    <div className="font-bold text-gray-900 text-lg mb-1">0.10</div>
-                    <div className="text-gray-600 text-xs font-medium">Credits per Email</div>
-                  </div>
-                </div>
+            <div className="text-center mb-6">
+              <h4 className="text-xl font-bold text-gray-900 mb-3">{plan.name}</h4>
+              <div className="text-3xl font-bold text-gray-900 mb-2">
+                ₹{plan.priceINR.toLocaleString()}
               </div>
-
-              <div className="mt-6 p-6 bg-gray-900 rounded-xl border border-gray-800">
-                <div className="flex items-start text-white">
-                  <div className="w-6 h-6 bg-white/20 rounded-lg flex items-center justify-center mr-3 flex-shrink-0">
-                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                    </svg>
-                  </div>
-                  <div>
-                    <p className="font-medium mb-2 text-sm">Secure Payment Processing</p>
-                    <p className="text-gray-300 text-xs leading-relaxed">All payments are processed securely through Cashfree Payment Gateway. Your data is encrypted and protected. GST will be added at checkout.</p>
-                  </div>
-                </div>
-              </div>
+              <p className="text-gray-500 text-sm">+ 18% GST</p>
             </div>
+
+            <div className="text-center mb-6 p-4 bg-gray-50 rounded-lg">
+              <div className="text-2xl font-bold text-gray-900 mb-1">
+                {(plan.credits + plan.bonus).toLocaleString()}
+              </div>
+              <div className="text-gray-600 text-sm font-medium">Total Credits</div>
+              {plan.bonus > 0 && (
+                <div className="text-green-600 font-medium text-sm mt-2">
+                  +{plan.bonus} Bonus Credits!
+                </div>
+              )}
+            </div>
+
+            <ul className="space-y-3 mb-6">
+              {plan.features.map((feature, idx) => (
+                <li key={idx} className="flex items-center text-xs text-gray-700">
+                  <div className="w-4 h-4 bg-green-100 rounded-full flex items-center justify-center mr-2 flex-shrink-0">
+                    <svg className="w-2 h-2 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <span className="font-medium">{feature}</span>
+                </li>
+              ))}
+            </ul>
+
+            <button
+              onClick={() => handleCashfreePurchase(plan)}
+              disabled={paymentLoading}
+              className={`w-full py-3 px-4 rounded-lg font-medium text-sm transition-all duration-300 ${
+                plan.popular
+                  ? 'bg-black text-white hover:bg-gray-800'
+                  : 'bg-gray-900 text-white hover:bg-black'
+              } ${paymentLoading && selectedPlan?.name === plan.name ? 'opacity-50 cursor-not-allowed' : 'hover:shadow-md'}`}
+            >
+              {paymentLoading && selectedPlan?.name === plan.name ? (
+                <div className="flex items-center justify-center">
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
+                  Processing...
+                </div>
+              ) : (
+                <span className="flex items-center justify-center">
+                  <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4zm2 6a2 2 0 012-2h8a2 2 0 012 2v4a2 2 0 01-2 2H8a2 2 0 01-2-2v-4zm6 4a2 2 0 100-4 2 2 0 000 4z" />
+                  </svg>
+                  Pay with Cashfree
+                </span>
+              )}
+            </button>
+          </div>
+        ))}
+      </div>
+
+      <div className="p-6 bg-gray-50 rounded-xl border border-gray-200">
+        <h4 className="font-semibold text-gray-900 mb-4 flex items-center text-base">
+          <div className="w-6 h-6 bg-black rounded-lg flex items-center justify-center mr-3">
+            <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
+            </svg>
+          </div>
+          Credit Usage Rates
+        </h4>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+          <div className="text-center p-4 bg-white rounded-lg border border-gray-200">
+            <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-2">
+              <svg className="w-4 h-4 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z" />
+              </svg>
+            </div>
+            <div className="font-bold text-gray-900 text-lg mb-1">2</div>
+            <div className="text-gray-600 text-xs font-medium">Credits per minute call</div>
+          </div>
+          <div className="text-center p-4 bg-white rounded-lg border border-gray-200">
+            <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-2">
+              <svg className="w-4 h-4 text-green-600" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893A11.821 11.821 0 0020.885 3.488"/>
+              </svg>
+            </div>
+            <div className="font-bold text-gray-900 text-lg mb-1">1</div>
+            <div className="text-gray-600 text-xs font-medium">Credit per WhatsApp message</div>
+          </div>
+          <div className="text-center p-4 bg-white rounded-lg border border-gray-200">
+            <div className="w-8 h-8 bg-sky-100 rounded-full flex items-center justify-center mx-auto mb-2">
+              <svg className="w-4 h-4 text-sky-600" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/>
+              </svg>
+            </div>
+            <div className="font-bold text-gray-900 text-lg mb-1">0.25</div>
+            <div className="text-gray-600 text-xs font-medium">Credits per Telegram message</div>
+          </div>
+          <div className="text-center p-4 bg-white rounded-lg border border-gray-200">
+            <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-2">
+              <svg className="w-4 h-4 text-purple-600" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
+                <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
+              </svg>
+            </div>
+            <div className="font-bold text-gray-900 text-lg mb-1">0.10</div>
+            <div className="text-gray-600 text-xs font-medium">Credits per Email</div>
           </div>
         </div>
-      )}
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="h-full flex flex-col bg-white rounded-lg shadow-sm border border-gray-200">
+      {/* Header */}
+      <div className="bg-white border-b border-gray-200 px-8 py-6 flex-shrink-0">
+        <div>
+          <h2 className="text-sm font-semibold text-gray-900 mb-2">Credits Overview</h2>
+          <p className="text-gray-600 text-sm">Monitor your usage and manage credits efficiently</p>
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="flex-1 overflow-y-auto p-6">
+        {activeTab === "overview" && <OverviewTab />}
+        {activeTab === "history" && <PaymentHistoryTab />}
+        {activeTab === "purchase" && <PurchaseCreditsTab />}
+      </div>
+
       {/* Payment Loading Overlay */}
       {paymentLoading && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60]">
