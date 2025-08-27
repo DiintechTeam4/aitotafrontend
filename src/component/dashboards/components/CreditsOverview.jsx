@@ -117,13 +117,13 @@ export default function CreditsOverview() {
       const tax = Math.round(base * 0.18 * 100) / 100;
       const total = Math.round((base + tax) * 100) / 100;
 
-      // Use the working direct payment method that redirects to Cashfree
+      // Use the direct payment method that redirects to Cashfree
       const t = encodeURIComponent(token || '');
       
       // Store plan info in memory (since we can't use localStorage)
       window.lastSelectedPlan = plan.name.toLowerCase();
       
-      // Redirect to the working backend endpoint
+      // Redirect to the backend direct payment endpoint
       window.location.href = `${API_BASE_URL}/client/payments/initiate/direct?t=${t}&amount=${encodeURIComponent(total)}&planKey=${encodeURIComponent(plan.name.toLowerCase())}`;
 
     } catch (error) {
@@ -147,7 +147,8 @@ export default function CreditsOverview() {
       // Store plan info in memory (since we can't use localStorage)
       window.lastSelectedPlan = plan.name.toLowerCase();
       
-      window.location.href = `${API_BASE_URL}/client/payments/initiate/cashfree-direct?t=${t}&amount=${encodeURIComponent(total)}&planKey=${encodeURIComponent(plan.name.toLowerCase())}`;
+      // Use the same direct payment endpoint for consistency
+      window.location.href = `${API_BASE_URL}/client/payments/initiate/direct?t=${t}&amount=${encodeURIComponent(total)}&planKey=${encodeURIComponent(plan.name.toLowerCase())}`;
     } catch (e) {
       console.error(e);
       alert(e.message || 'Payment initiation failed');
