@@ -108,6 +108,15 @@ export default function CreditsOverview() {
 
 
 
+  const launchCashfreeCheckout = (sessionId) => {
+    if (!sessionId) {
+      throw new Error('Missing payment session id');
+    }
+    const cleaned = sessionId.endsWith('payment') ? sessionId.replace(/payment$/, '') : sessionId;
+    const target = `https://payments.cashfree.com/order?session_id=${encodeURIComponent(cleaned)}`;
+    window.location.href = target;
+  };
+
   const handleCashfreePurchase = async (plan) => {
     try {
       setPaymentLoading(true);
@@ -117,15 +126,23 @@ export default function CreditsOverview() {
       const tax = Math.round(base * 0.18 * 100) / 100;
       const total = Math.round((base + tax) * 100) / 100;
 
-      // Use the direct payment method that redirects to Cashfree
-      const t = encodeURIComponent(token || '');
-      
       // Store plan info in memory (since we can't use localStorage)
       window.lastSelectedPlan = plan.name.toLowerCase();
-      
-      // Redirect to the backend direct payment endpoint
-      window.location.href = `${API_BASE_URL}/client/payments/initiate/direct?t=${t}&amount=${encodeURIComponent(total)}&planKey=${encodeURIComponent(plan.name.toLowerCase())}`;
 
+      // Initiate via backend SDK endpoint
+      const resp = await fetch(`${API_BASE_URL}/client/payments/initiate/sdk`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ t: token, amount: total, planKey: plan.name.toLowerCase() })
+      });
+      const data = await resp.json();
+      if (!resp.ok || !data?.payment_session_id) {
+        throw new Error(data?.message || 'Failed to create payment');
+      }
+      launchCashfreeCheckout(data.payment_session_id);
     } catch (error) {
       console.error('❌ Payment error:', error);
       alert(error.message || 'Payment initiation failed');
@@ -141,14 +158,24 @@ export default function CreditsOverview() {
       const base = Number(plan.priceINR) || 0;
       const tax = Math.round(base * 0.18 * 100) / 100;
       const total = Math.round((base + tax) * 100) / 100;
-      
-      const t = encodeURIComponent(token || '');
-      
+
       // Store plan info in memory (since we can't use localStorage)
       window.lastSelectedPlan = plan.name.toLowerCase();
-      
-      // Use the same direct payment endpoint for consistency
-      window.location.href = `${API_BASE_URL}/client/payments/initiate/direct?t=${t}&amount=${encodeURIComponent(total)}&planKey=${encodeURIComponent(plan.name.toLowerCase())}`;
+
+      // Reuse SDK initiation for reliability
+      const resp = await fetch(`${API_BASE_URL}/client/payments/initiate/sdk`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ t: token, amount: total, planKey: plan.name.toLowerCase() })
+      });
+      const data = await resp.json();
+      if (!resp.ok || !data?.payment_session_id) {
+        throw new Error(data?.message || 'Failed to create payment');
+      }
+      launchCashfreeCheckout(data.payment_session_id);
     } catch (e) {
       console.error(e);
       alert(e.message || 'Payment initiation failed');
