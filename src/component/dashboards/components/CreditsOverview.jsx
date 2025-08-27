@@ -44,13 +44,83 @@ export default function CreditsOverview() {
     },
   ];
 
+  // Get type icon based on usage type
+  const getTypeIcon = (type, usageType) => {
+    const actualType = usageType || type;
+    
+    switch (actualType) {
+      case 'voice_call':
+      case 'Call':
+        return (
+          <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center">
+            <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+              <path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z" />
+            </svg>
+          </div>
+        );
+      case 'whatsapp':
+      case 'WhatsApp':
+        return (
+          <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center">
+            <svg className="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893A11.821 11.821 0 0020.885 3.488"/>
+            </svg>
+          </div>
+        );
+      case 'telegram':
+      case 'Telegram':
+        return (
+          <div className="w-10 h-10 rounded-xl bg-sky-100 flex items-center justify-center">
+            <svg className="w-5 h-5 text-sky-600" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/>
+            </svg>
+          </div>
+        );
+      case 'email':
+      case 'Email':
+        return (
+          <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center">
+            <svg className="w-5 h-5 text-purple-600" fill="currentColor" viewBox="0 0 20 20">
+              <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
+              <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
+            </svg>
+          </div>
+        );
+      default:
+        return (
+          <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center">
+            <svg className="w-5 h-5 text-gray-600" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4zm2 6a2 2 0 012-2h8a2 2 0 012 2v4a2 2 0 01-2 2H8a2 2 0 01-2-2v-4zm6 4a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
+            </svg>
+          </div>
+        );
+    }
+  };
+
+  // Format usage type display name
+  const formatUsageType = (type, usageType) => {
+    const actualType = usageType || type;
+    switch (actualType) {
+      case 'voice_call':
+        return 'Voice Call';
+      case 'whatsapp':
+        return 'WhatsApp';
+      case 'telegram':
+        return 'Telegram';
+      case 'email':
+        return 'Email';
+      default:
+        return actualType;
+    }
+  };
+
   // Calculate usage statistics
   const getUsageStats = () => {
     const usageTypes = {
-      'Call': { count: 0, credits: 0, color: '#000000' },
-      'WhatsApp': { count: 0, credits: 0, color: '#374151' },
-      'Telegram': { count: 0, credits: 0, color: '#6B7280' },
-      'Email': { count: 0, credits: 0, color: '#9CA3AF' }
+      'Call': { count: 0, credits: 0, color: '#3B82F6' },
+      'WhatsApp': { count: 0, credits: 0, color: '#10B981' },
+      'Telegram': { count: 0, credits: 0, color: '#06B6D4' },
+      'Email': { count: 0, credits: 0, color: '#8B5CF6' }
     };
 
     history.forEach(item => {
@@ -260,31 +330,37 @@ export default function CreditsOverview() {
 
   const usageStats = getUsageStats();
   const dailyUsage = getDailyUsage();
+  
+  // Filter only usage/debit transactions for recent activity
+  const recentUsageHistory = history.filter(item => item.amount < 0).slice(0, 5);
 
   if (loading) {
     return (
-      <div className="h-full flex items-center justify-center bg-white">
+      <div className="h-full flex items-center justify-center bg-gradient-to-br from-gray-50 to-white">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-black mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading credits...</p>
+          <div className="animate-spin rounded-full h-16 w-16 border-4 border-gray-200 border-t-black mx-auto"></div>
+          <p className="mt-4 text-gray-600 font-medium">Loading credits...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="h-full flex flex-col bg-white">
+    <div className="h-full flex flex-col bg-gradient-to-br from-gray-50 to-white">
       {/* Header */}
-      <div className="bg-black border-b border-gray-200 px-8 py-6">
+      <div className="bg-gradient-to-r from-black to-gray-900 border-b border-gray-200 px-8 py-8">
         <div className="flex justify-between items-center">
           <div>
-            <h2 className="text-3xl font-bold text-white mb-2">Credits Overview</h2>
-            <p className="text-gray-300">Monitor your usage and manage credits efficiently</p>
+            <h2 className="text-4xl font-bold text-white mb-3">Credits Overview</h2>
+            <p className="text-gray-300 text-lg">Monitor your usage and manage credits efficiently</p>
           </div>
           <button
             onClick={() => setShowPlansModal(true)}
-            className="bg-white text-black px-6 py-3 rounded-lg font-semibold shadow-lg hover:bg-gray-100 transition-all duration-200 transform hover:scale-105"
+            className="bg-white text-black px-8 py-4 rounded-xl font-semibold text-lg shadow-lg hover:bg-gray-100 transition-all duration-300 transform hover:scale-105 hover:shadow-xl"
           >
+            <svg className="w-5 h-5 mr-2 inline" fill="currentColor" viewBox="0 0 20 20">
+              <path d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4zm2 6a2 2 0 012-2h8a2 2 0 012 2v4a2 2 0 01-2 2H8a2 2 0 01-2-2v-4zm6 4a2 2 0 100-4 2 2 0 000 4z" />
+            </svg>
             Purchase Credits
           </button>
         </div>
@@ -292,15 +368,17 @@ export default function CreditsOverview() {
 
       <div className="flex-1 p-8 overflow-y-auto space-y-8">
         {/* Balance Card */}
-        <div className="bg-black rounded-2xl shadow-xl p-8 text-white">
-          <div className="flex items-center justify-between">
+        <div className="bg-gradient-to-br from-black via-gray-900 to-black rounded-3xl shadow-2xl p-8 text-white relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -translate-y-16 translate-x-16"></div>
+          <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/5 rounded-full translate-y-12 -translate-x-12"></div>
+          <div className="relative flex items-center justify-between">
             <div>
-              <div className="text-gray-300 text-sm font-medium mb-2">Available Balance</div>
-              <div className="text-5xl font-bold">{balance?.currentBalance ?? 0}</div>
-              <div className="text-gray-300 text-sm mt-1">Credits Remaining</div>
+              <div className="text-gray-300 text-base font-medium mb-3">Available Balance</div>
+              <div className="text-6xl font-bold mb-2">{balance?.currentBalance ?? 0}</div>
+              <div className="text-gray-300 text-base">Credits Remaining</div>
             </div>
-            <div className="bg-white/10 p-4 rounded-full">
-              <svg className="w-10 h-10" fill="currentColor" viewBox="0 0 20 20">
+            <div className="bg-white/10 backdrop-blur-sm p-6 rounded-2xl border border-white/20">
+              <svg className="w-12 h-12" fill="currentColor" viewBox="0 0 20 20">
                 <path d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4zm2 6a2 2 0 012-2h8a2 2 0 012 2v4a2 2 0 01-2 2H8a2 2 0 01-2-2v-4zm6 4a2 2 0 100-4 2 2 0 000 4z" />
               </svg>
             </div>
@@ -310,18 +388,18 @@ export default function CreditsOverview() {
         {/* Usage Analytics */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Usage Distribution */}
-          <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-6">
-            <h3 className="text-xl font-semibold text-black mb-6">Usage Distribution</h3>
+          <div className="bg-white rounded-3xl shadow-xl border border-gray-100 p-8">
+            <h3 className="text-2xl font-semibold text-black mb-8">Usage Distribution</h3>
             {usageStats.length > 0 ? (
-              <div className="h-64">
+              <div className="h-72">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
                       data={usageStats}
                       cx="50%"
                       cy="50%"
-                      innerRadius={60}
-                      outerRadius={100}
+                      innerRadius={70}
+                      outerRadius={110}
                       dataKey="credits"
                     >
                       {usageStats.map((entry, index) => (
@@ -331,32 +409,42 @@ export default function CreditsOverview() {
                     <Tooltip 
                       formatter={(value, name) => [`${value} credits`, 'Usage']}
                       labelFormatter={(label) => `${label}`}
+                      contentStyle={{
+                        backgroundColor: '#000',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '12px',
+                        boxShadow: '0 10px 30px rgba(0,0,0,0.3)'
+                      }}
                     />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
             ) : (
-              <div className="h-64 flex items-center justify-center text-gray-500">
+              <div className="h-72 flex items-center justify-center text-gray-500">
                 <div className="text-center">
-                  <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                  </svg>
-                  <p>No usage data available</p>
+                  <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <svg className="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
+                  </div>
+                  <p className="text-lg font-medium text-gray-700">No usage data available</p>
+                  <p className="text-sm text-gray-500 mt-1">Start using services to see analytics</p>
                 </div>
               </div>
             )}
             
             {usageStats.length > 0 && (
-              <div className="mt-6 grid grid-cols-2 gap-4">
+              <div className="mt-8 grid grid-cols-2 gap-6">
                 {usageStats.map((stat, idx) => (
-                  <div key={idx} className="flex items-center">
+                  <div key={idx} className="flex items-center p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
                     <div 
-                      className="w-4 h-4 rounded mr-3"
+                      className="w-5 h-5 rounded-full mr-4 flex-shrink-0"
                       style={{ backgroundColor: stat.color }}
                     ></div>
                     <div>
                       <div className="text-sm font-semibold text-black">{stat.name}</div>
-                      <div className="text-xs text-gray-600">{stat.credits} credits</div>
+                      <div className="text-xs text-gray-600">{stat.credits} credits • {stat.count} uses</div>
                     </div>
                   </div>
                 ))}
@@ -365,9 +453,9 @@ export default function CreditsOverview() {
           </div>
 
           {/* Daily Usage Trend */}
-          <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-6">
-            <h3 className="text-xl font-semibold text-black mb-6">7-Day Usage Trend</h3>
-            <div className="h-64">
+          <div className="bg-white rounded-3xl shadow-xl border border-gray-100 p-8">
+            <h3 className="text-2xl font-semibold text-black mb-8">7-Day Usage Trend</h3>
+            <div className="h-72">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={dailyUsage}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -375,19 +463,20 @@ export default function CreditsOverview() {
                     dataKey="date" 
                     axisLine={false}
                     tickLine={false}
-                    tick={{ fontSize: 12, fill: '#6B7280' }}
+                    tick={{ fontSize: 13, fill: '#6B7280' }}
                   />
                   <YAxis 
                     axisLine={false}
                     tickLine={false}
-                    tick={{ fontSize: 12, fill: '#6B7280' }}
+                    tick={{ fontSize: 13, fill: '#6B7280' }}
                   />
                   <Tooltip 
                     contentStyle={{
                       backgroundColor: '#000',
                       color: '#fff',
                       border: 'none',
-                      borderRadius: '8px'
+                      borderRadius: '12px',
+                      boxShadow: '0 10px 30px rgba(0,0,0,0.3)'
                     }}
                     formatter={(value) => [`${value} credits`, 'Used']}
                   />
@@ -395,9 +484,9 @@ export default function CreditsOverview() {
                     type="monotone" 
                     dataKey="usage" 
                     stroke="#000" 
-                    strokeWidth={3}
-                    dot={{ fill: '#000', strokeWidth: 2, r: 4 }}
-                    activeDot={{ r: 6, fill: '#000' }}
+                    strokeWidth={4}
+                    dot={{ fill: '#000', strokeWidth: 2, r: 5 }}
+                    activeDot={{ r: 7, fill: '#000', stroke: '#fff', strokeWidth: 3 }}
                   />
                 </LineChart>
               </ResponsiveContainer>
@@ -407,29 +496,30 @@ export default function CreditsOverview() {
 
         {/* Usage Breakdown */}
         {usageStats.length > 0 && (
-          <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-6">
-            <h3 className="text-xl font-semibold text-black mb-6">Usage Breakdown</h3>
-            <div className="h-64">
+          <div className="bg-white rounded-3xl shadow-xl border border-gray-100 p-8">
+            <h3 className="text-2xl font-semibold text-black mb-8">Usage Breakdown</h3>
+            <div className="h-80">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={usageStats}>
+                <BarChart data={usageStats} barCategoryGap="20%">
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                   <XAxis 
                     dataKey="name" 
                     axisLine={false}
                     tickLine={false}
-                    tick={{ fontSize: 12, fill: '#6B7280' }}
+                    tick={{ fontSize: 13, fill: '#6B7280' }}
                   />
                   <YAxis 
                     axisLine={false}
                     tickLine={false}
-                    tick={{ fontSize: 12, fill: '#6B7280' }}
+                    tick={{ fontSize: 13, fill: '#6B7280' }}
                   />
                   <Tooltip 
                     contentStyle={{
                       backgroundColor: '#000',
                       color: '#fff',
                       border: 'none',
-                      borderRadius: '8px'
+                      borderRadius: '12px',
+                      boxShadow: '0 10px 30px rgba(0,0,0,0.3)'
                     }}
                     formatter={(value, name) => [
                       `${value} credits`,
@@ -439,7 +529,7 @@ export default function CreditsOverview() {
                   <Bar 
                     dataKey="credits" 
                     fill="#000"
-                    radius={[4, 4, 0, 0]}
+                    radius={[8, 8, 0, 0]}
                   />
                 </BarChart>
               </ResponsiveContainer>
@@ -447,42 +537,40 @@ export default function CreditsOverview() {
           </div>
         )}
 
-        {/* Recent Transactions */}
-        <div className="bg-white rounded-2xl shadow-lg border border-gray-200">
-          <div className="px-6 py-4 border-b border-gray-200">
+        {/* Recent Usage Activity */}
+        <div className="bg-white rounded-3xl shadow-xl border border-gray-100">
+          <div className="px-8 py-6 border-b border-gray-100">
             <div className="flex items-center justify-between">
-              <h3 className="text-xl font-semibold text-black">Recent Activity</h3>
+              <div>
+                <h3 className="text-2xl font-semibold text-black">Recent Usage</h3>
+                <p className="text-gray-500 mt-1">Latest credit consumption activity</p>
+              </div>
               <button
                 onClick={() => setShowFullHistory(true)}
-                className="text-black hover:text-gray-700 font-medium text-sm border border-black px-4 py-2 rounded-lg hover:bg-black hover:text-white transition-all duration-200"
+                className="text-black hover:text-white font-semibold text-sm border-2 border-black px-6 py-3 rounded-xl hover:bg-black transition-all duration-300 transform hover:scale-105"
               >
+                <svg className="w-4 h-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
                 View All Transactions
               </button>
             </div>
           </div>
 
-          <div className="p-6">
-            {history.slice(0, 5).length > 0 ? (
+          <div className="p-8">
+            {recentUsageHistory.length > 0 ? (
               <div className="space-y-4">
-                {history.slice(0, 5).map((h, idx) => (
-                  <div key={idx} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                    <div className="flex items-center space-x-4">
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                        h.amount > 0 ? 'bg-green-100' : 'bg-red-100'
-                      }`}>
-                        {h.amount > 0 ? (
-                          <svg className="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.293l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L9 9.414V13a1 1 0 102 0V9.414l1.293 1.293a1 1 0 001.414-1.414z" clipRule="evenodd" />
-                          </svg>
-                        ) : (
-                          <svg className="w-5 h-5 text-red-600" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v3.586L7.707 9.293a1 1 0 00-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L11 10.586V7z" clipRule="evenodd" />
-                          </svg>
-                        )}
-                      </div>
+                {recentUsageHistory.map((h, idx) => (
+                  <div key={idx} className="flex items-center justify-between p-6 bg-gradient-to-r from-gray-50 to-gray-100 rounded-2xl hover:from-gray-100 hover:to-gray-200 transition-all duration-300 border border-gray-200 hover:border-gray-300 hover:shadow-md">
+                    <div className="flex items-center space-x-5">
+                      {getTypeIcon(h.type, h.usageType)}
                       <div>
-                        <div className="font-medium text-black">{h.description}</div>
-                        <div className="text-sm text-gray-500">
+                        <div className="font-semibold text-black text-lg">{formatUsageType(h.type, h.usageType)}</div>
+                        <div className="text-gray-600 text-sm mt-1">{h.description}</div>
+                        <div className="text-gray-500 text-sm mt-1 flex items-center">
+                          <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+                          </svg>
                           {new Date(h.timestamp).toLocaleDateString('en-US', {
                             month: 'short',
                             day: 'numeric',
@@ -490,20 +578,60 @@ export default function CreditsOverview() {
                             minute: '2-digit'
                           })}
                         </div>
+                        {h.metadata && (
+                          <div className="flex flex-wrap gap-2 mt-2">
+                            {h.metadata.number && (
+                              <span className="inline-flex items-center px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-md">
+                                <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                  <path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z" />
+                                </svg>
+                                {h.metadata.number}
+                              </span>
+                            )}
+                            {h.metadata.direction && (
+                              <span className="inline-flex items-center px-2 py-1 bg-gray-100 text-gray-800 text-xs rounded-md">
+                                <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 11l5-5m0 0l5 5m-5-5v12" />
+                                </svg>
+                                {h.metadata.direction}
+                              </span>
+                            )}
+                            {(h.duration || h.metadata?.seconds) && (
+                              <span className="inline-flex items-center px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded-md">
+                                <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+                                </svg>
+                                {h.duration ? `${h.duration} min` : `${h.metadata.seconds}s`}
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
-                    <div className={`font-bold text-lg ${h.amount < 0 ? 'text-red-600' : 'text-green-600'}`}>
-                      {h.amount > 0 ? '+' : ''}{h.amount}
+                    <div className="text-right">
+                      <div className="text-2xl font-bold text-red-600 mb-1">
+                        {h.amount}
+                      </div>
+                      <div className="text-gray-500 text-sm font-medium">Credits</div>
                     </div>
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="text-center py-8">
-                <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                <p className="text-gray-500">No recent activity</p>
+              <div className="text-center py-16">
+                <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                  <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                </div>
+                <h4 className="text-xl font-semibold text-gray-700 mb-2">No Usage Activity</h4>
+                <p className="text-gray-500 mb-6">Start using our services to see your activity here</p>
+                <button
+                  onClick={() => setShowPlansModal(true)}
+                  className="bg-black text-white px-6 py-3 rounded-xl font-semibold hover:bg-gray-800 transition-colors"
+                >
+                  Get Started
+                </button>
               </div>
             )}
           </div>
@@ -512,119 +640,159 @@ export default function CreditsOverview() {
 
       {/* Full Transaction History Modal */}
       {showFullHistory && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden">
-            <div className="bg-black text-white px-8 py-6 rounded-t-2xl">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-lg flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-7xl max-h-[95vh] overflow-hidden">
+            <div className="bg-gradient-to-r from-black to-gray-900 text-white px-8 py-8 rounded-t-3xl">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-2xl font-bold">Transaction History</h3>
-                  <p className="text-gray-300 mt-1">Complete record of all credit transactions</p>
+                  <h3 className="text-3xl font-bold">Complete Transaction History</h3>
+                  <p className="text-gray-300 mt-2 text-lg">Detailed record of all credit transactions and usage</p>
                 </div>
                 <button
                   onClick={() => setShowFullHistory(false)}
-                  className="text-gray-300 hover:text-white p-2 hover:bg-white/10 rounded-full transition-colors"
+                  className="text-gray-300 hover:text-white p-3 hover:bg-white/10 rounded-full transition-all duration-200"
                 >
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </button>
               </div>
               
               {/* Filters */}
-              <div className="flex flex-col sm:flex-row gap-3 mt-6">
+              <div className="flex flex-col sm:flex-row gap-4 mt-8">
                 <select
                   value={selectedFilter}
                   onChange={(e) => setSelectedFilter(e.target.value)}
-                  className="px-4 py-2 border border-gray-600 rounded-lg bg-black text-white focus:ring-2 focus:ring-white/20 focus:border-white/30"
+                  className="px-5 py-3 border-2 border-white/20 rounded-xl bg-white/10 backdrop-blur-sm text-white focus:ring-2 focus:ring-white/30 focus:border-white/40 text-sm font-medium"
                 >
-                  <option value="all">All Transactions</option>
-                  <option value="credit">Credits Added</option>
-                  <option value="debit">Credits Used</option>
+                  <option value="all" className="text-black">All Transactions</option>
+                  <option value="credit" className="text-black">Credits Added</option>
+                  <option value="debit" className="text-black">Credits Used</option>
                 </select>
 
                 <select
                   value={dateFilter}
                   onChange={(e) => setDateFilter(e.target.value)}
-                  className="px-4 py-2 border border-gray-600 rounded-lg bg-black text-white focus:ring-2 focus:ring-white/20 focus:border-white/30"
+                  className="px-5 py-3 border-2 border-white/20 rounded-xl bg-white/10 backdrop-blur-sm text-white focus:ring-2 focus:ring-white/30 focus:border-white/40 text-sm font-medium"
                 >
-                  <option value="all">All Time</option>
-                  <option value="7days">Last 7 Days</option>
-                  <option value="30days">Last 30 Days</option>
-                  <option value="90days">Last 90 Days</option>
+                  <option value="all" className="text-black">All Time</option>
+                  <option value="7days" className="text-black">Last 7 Days</option>
+                  <option value="30days" className="text-black">Last 30 Days</option>
+                  <option value="90days" className="text-black">Last 90 Days</option>
                 </select>
               </div>
             </div>
 
-            <div className="max-h-[60vh] overflow-y-auto">
+            <div className="max-h-[65vh] overflow-y-auto">
               <table className="min-w-full">
-                <thead className="bg-gray-50 sticky top-0">
+                <thead className="bg-gray-50 sticky top-0 border-b border-gray-200">
                   <tr>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Date & Time</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Type</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Description</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Credits</th>
+                    <th className="px-8 py-5 text-left text-sm font-bold text-gray-700 uppercase tracking-wider">Date & Time</th>
+                    <th className="px-8 py-5 text-left text-sm font-bold text-gray-700 uppercase tracking-wider">Service</th>
+                    <th className="px-8 py-5 text-left text-sm font-bold text-gray-700 uppercase tracking-wider">Description</th>
+                    <th className="px-8 py-5 text-left text-sm font-bold text-gray-700 uppercase tracking-wider">Credits</th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
+                <tbody className="bg-white divide-y divide-gray-100">
                   {filteredHistory.map((h, idx) => (
-                    <tr key={idx} className="hover:bg-gray-50 transition-colors duration-150">
-                      <td className="px-6 py-4 text-sm text-black font-medium">
-                        {new Date(h.timestamp).toLocaleDateString('en-US', {
-                          month: 'short',
-                          day: 'numeric',
-                          year: 'numeric'
-                        })}
-                        <div className="text-xs text-gray-500">
+                    <tr key={idx} className="hover:bg-gray-50 transition-colors duration-200">
+                      <td className="px-8 py-6 text-sm">
+                        <div className="font-semibold text-black text-base">
+                          {new Date(h.timestamp).toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric'
+                          })}
+                        </div>
+                        <div className="text-gray-500 text-sm mt-1">
                           {new Date(h.timestamp).toLocaleTimeString('en-US', {
                             hour: '2-digit',
                             minute: '2-digit'
                           })}
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-sm">
-                        <div className="flex items-center">
-                          <span className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${
-                            h.amount > 0 
-                              ? 'bg-green-100 text-green-800 border border-green-200' 
-                              : 'bg-red-100 text-red-800 border border-red-200'
-                          }`}>
-                            {h.type}
-                          </span>
-                          {h.usageType && (
-                            <span className="ml-2 text-gray-500 text-xs bg-gray-100 px-2 py-1 rounded">
-                              {h.usageType}
-                            </span>
+                      <td className="px-8 py-6 text-sm">
+                        <div className="flex items-center space-x-3">
+                          {h.amount > 0 ? (
+                            <div className="w-8 h-8 rounded-lg bg-green-100 flex items-center justify-center">
+                              <svg className="w-4 h-4 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4zm2 6a2 2 0 012-2h8a2 2 0 012 2v4a2 2 0 01-2 2H8a2 2 0 01-2-2v-4zm6 4a2 2 0 100-4 2 2 0 000 4z" />
+                              </svg>
+                            </div>
+                          ) : (
+                            getTypeIcon(h.type, h.usageType)
                           )}
+                          <div>
+                            <span className={`inline-flex px-3 py-1.5 text-xs font-semibold rounded-lg ${
+                              h.amount > 0 
+                                ? 'bg-green-100 text-green-800 border border-green-200' 
+                                : 'bg-red-100 text-red-800 border border-red-200'
+                            }`}>
+                              {h.amount > 0 ? 'Credit Added' : formatUsageType(h.type, h.usageType)}
+                            </span>
+                          </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-sm text-black">
-                        <div className="font-medium">{h.description}</div>
+                      <td className="px-8 py-6 text-sm">
+                        <div className="font-medium text-black text-base mb-1">{h.description}</div>
                         {h.metadata && (
-                          <div className="text-xs text-gray-500 mt-1 space-y-1">
-                            {h.metadata.number && <div className="flex items-center"><span className="mr-1">📞</span>{h.metadata.number}</div>}
-                            {h.metadata.direction && <div className="flex items-center"><span className="mr-1">↗️</span>{h.metadata.direction}</div>}
-                            {h.duration && <div className="flex items-center"><span className="mr-1">⏱️</span>{h.duration} min</div>}
-                            {h.metadata.seconds && <div className="flex items-center"><span className="mr-1">⏱️</span>{h.metadata.seconds}s</div>}
-                            {h.metadata.uniqueId && <div className="flex items-center"><span className="mr-1">🆔</span>{h.metadata.uniqueId}</div>}
+                          <div className="flex flex-wrap gap-2 mt-2">
+                            {h.metadata.number && (
+                              <span className="inline-flex items-center px-2 py-1 bg-blue-50 text-blue-700 text-xs rounded-md border border-blue-200">
+                                <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                  <path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z" />
+                                </svg>
+                                {h.metadata.number}
+                              </span>
+                            )}
+                            {h.metadata.direction && (
+                              <span className="inline-flex items-center px-2 py-1 bg-gray-50 text-gray-700 text-xs rounded-md border border-gray-200">
+                                <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 11l5-5m0 0l5 5m-5-5v12" />
+                                </svg>
+                                {h.metadata.direction}
+                              </span>
+                            )}
+                            {(h.duration || h.metadata?.seconds) && (
+                              <span className="inline-flex items-center px-2 py-1 bg-yellow-50 text-yellow-700 text-xs rounded-md border border-yellow-200">
+                                <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+                                </svg>
+                                {h.duration ? `${h.duration} min` : `${h.metadata.seconds}s`}
+                              </span>
+                            )}
+                            {h.metadata.uniqueId && (
+                              <span className="inline-flex items-center px-2 py-1 bg-purple-50 text-purple-700 text-xs rounded-md border border-purple-200">
+                                <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
+                                </svg>
+                                {h.metadata.uniqueId}
+                              </span>
+                            )}
                           </div>
                         )}
                       </td>
-                      <td className="px-6 py-4 text-sm font-bold">
-                        <span className={`text-lg ${h.amount < 0 ? 'text-red-600' : 'text-green-600'}`}>
-                          {h.amount > 0 ? '+' : ''}{h.amount}
-                        </span>
+                      <td className="px-8 py-6 text-sm">
+                        <div className="text-right">
+                          <div className={`text-2xl font-bold ${h.amount < 0 ? 'text-red-600' : 'text-green-600'} mb-1`}>
+                            {h.amount > 0 ? '+' : ''}{h.amount}
+                          </div>
+                          <div className="text-gray-500 text-sm font-medium">credits</div>
+                        </div>
                       </td>
                     </tr>
                   ))}
                   {filteredHistory.length === 0 && (
                     <tr>
-                      <td className="px-6 py-12 text-center text-gray-500" colSpan={4}>
+                      <td className="px-8 py-16 text-center text-gray-500" colSpan={4}>
                         <div className="flex flex-col items-center">
-                          <svg className="w-16 h-16 text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                          </svg>
-                          <p className="text-lg font-medium text-gray-700">No transactions found</p>
-                          <p className="text-sm text-gray-500">Adjust filters or purchase credits to see activity</p>
+                          <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                          </div>
+                          <h4 className="text-xl font-semibold text-gray-700 mb-2">No transactions found</h4>
+                          <p className="text-gray-500">Adjust filters or purchase credits to see activity</p>
                         </div>
                       </td>
                     </tr>
@@ -638,19 +806,19 @@ export default function CreditsOverview() {
 
       {/* Plans Modal */}
       {showPlansModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-black text-white border-b border-gray-200 px-8 py-6 rounded-t-2xl">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-lg flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-7xl max-h-[95vh] overflow-y-auto">
+            <div className="sticky top-0 bg-gradient-to-r from-black to-gray-900 text-white border-b border-gray-200 px-8 py-8 rounded-t-3xl">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-2xl font-bold">Choose Your Plan</h3>
-                  <p className="text-gray-300 mt-1">Select the perfect credit package for your needs</p>
+                  <h3 className="text-3xl font-bold">Choose Your Plan</h3>
+                  <p className="text-gray-300 mt-2 text-lg">Select the perfect credit package for your needs</p>
                 </div>
                 <button
                   onClick={() => setShowPlansModal(false)}
-                  className="text-gray-300 hover:text-white p-2 hover:bg-white/10 rounded-full transition-colors"
+                  className="text-gray-300 hover:text-white p-3 hover:bg-white/10 rounded-full transition-all duration-200"
                 >
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </button>
@@ -662,46 +830,49 @@ export default function CreditsOverview() {
                 {plans.map((plan) => (
                   <div
                     key={plan.name}
-                    className={`relative rounded-2xl border-2 p-8 shadow-lg hover:shadow-xl transition-all duration-300 ${
+                    className={`relative rounded-3xl border-2 p-8 shadow-xl hover:shadow-2xl transition-all duration-300 ${
                       plan.popular 
-                        ? 'border-black bg-gray-50 transform scale-105' 
-                        : 'border-gray-200 bg-white hover:border-black'
+                        ? 'border-black bg-gradient-to-br from-gray-50 to-white transform scale-105 shadow-2xl' 
+                        : 'border-gray-200 bg-white hover:border-black hover:shadow-2xl'
                     }`}
                   >
                     {plan.popular && (
                       <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
-                        <span className="bg-black text-white px-4 py-1 rounded-full text-sm font-semibold">
-                          Most Popular
+                        <span className="bg-gradient-to-r from-black to-gray-800 text-white px-6 py-2 rounded-full text-sm font-bold shadow-lg">
+                          ⭐ Most Popular
                         </span>
                       </div>
                     )}
 
-                    <div className="text-center mb-6">
-                      <h4 className="text-2xl font-bold text-black mb-2">{plan.name}</h4>
-                      <div className="text-4xl font-bold text-black mb-1">
+                    <div className="text-center mb-8">
+                      <h4 className="text-3xl font-bold text-black mb-4">{plan.name}</h4>
+                      <div className="text-5xl font-bold text-black mb-2">
                         ₹{plan.priceINR.toLocaleString()}
                       </div>
-                      <p className="text-gray-600">+ 18% GST</p>
+                      <p className="text-gray-600 text-lg">+ 18% GST</p>
                     </div>
 
-                    <div className="text-center mb-6">
-                      <div className="text-3xl font-bold text-black mb-1">
-                        {(plan.credits + plan.bonus).toLocaleString()} Credits
+                    <div className="text-center mb-8 p-6 bg-gray-50 rounded-2xl">
+                      <div className="text-4xl font-bold text-black mb-2">
+                        {(plan.credits + plan.bonus).toLocaleString()}
                       </div>
+                      <div className="text-gray-600 font-medium">Total Credits</div>
                       {plan.bonus > 0 && (
-                        <div className="text-green-600 font-semibold">
-                          +{plan.bonus} Bonus Credits!
+                        <div className="text-green-600 font-bold text-lg mt-2">
+                          🎁 +{plan.bonus} Bonus Credits!
                         </div>
                       )}
                     </div>
 
-                    <ul className="space-y-3 mb-8">
+                    <ul className="space-y-4 mb-8">
                       {plan.features.map((feature, idx) => (
                         <li key={idx} className="flex items-center text-sm text-gray-700">
-                          <svg className="w-5 h-5 text-green-500 mr-3 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                          </svg>
-                          {feature}
+                          <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center mr-3 flex-shrink-0">
+                            <svg className="w-4 h-4 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                            </svg>
+                          </div>
+                          <span className="font-medium">{feature}</span>
                         </li>
                       ))}
                     </ul>
@@ -710,15 +881,15 @@ export default function CreditsOverview() {
                       <button
                         onClick={() => handleCashfreePurchase(plan)}
                         disabled={paymentLoading}
-                        className={`w-full py-4 px-6 rounded-xl font-semibold text-lg transition-all duration-200 ${
+                        className={`w-full py-5 px-6 rounded-2xl font-bold text-lg transition-all duration-300 ${
                           plan.popular
-                            ? 'bg-black text-white hover:bg-gray-800 shadow-lg hover:shadow-xl'
+                            ? 'bg-gradient-to-r from-black to-gray-800 text-white hover:from-gray-800 hover:to-gray-900 shadow-xl hover:shadow-2xl'
                             : 'bg-gray-900 text-white hover:bg-black'
-                        } ${paymentLoading && selectedPlan?.name === plan.name ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        } ${paymentLoading && selectedPlan?.name === plan.name ? 'opacity-50 cursor-not-allowed' : 'transform hover:scale-105'}`}
                       >
                         {paymentLoading && selectedPlan?.name === plan.name ? (
                           <div className="flex items-center justify-center">
-                            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                            <div className="animate-spin rounded-full h-6 w-6 border-2 border-white border-t-transparent mr-3"></div>
                             Processing...
                           </div>
                         ) : (
@@ -735,41 +906,66 @@ export default function CreditsOverview() {
                 ))}
               </div>
 
-              <div className="mt-8 p-6 bg-gray-50 rounded-xl border border-gray-200">
-                <h4 className="font-semibold text-black mb-4 flex items-center">
-                  <svg className="w-5 h-5 mr-2 text-black" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
-                  </svg>
-                  Credit Usage Rates:
+              <div className="mt-12 p-8 bg-gradient-to-br from-gray-50 to-gray-100 rounded-3xl border border-gray-200">
+                <h4 className="font-bold text-black mb-6 flex items-center text-xl">
+                  <div className="w-8 h-8 bg-black rounded-lg flex items-center justify-center mr-3">
+                    <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  Credit Usage Rates
                 </h4>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                  <div className="text-center p-3 bg-white rounded-lg border border-gray-200">
-                    <div className="font-bold text-black text-lg">2 Credits</div>
-                    <div className="text-gray-600">per minute call</div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-sm">
+                  <div className="text-center p-6 bg-white rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+                    <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                      <svg className="w-6 h-6 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z" />
+                      </svg>
+                    </div>
+                    <div className="font-bold text-black text-2xl mb-1">2</div>
+                    <div className="text-gray-600 font-medium">Credits per minute call</div>
                   </div>
-                  <div className="text-center p-3 bg-white rounded-lg border border-gray-200">
-                    <div className="font-bold text-black text-lg">1 Credit</div>
-                    <div className="text-gray-600">WhatsApp message</div>
+                  <div className="text-center p-6 bg-white rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+                    <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                      <svg className="w-6 h-6 text-green-600" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893A11.821 11.821 0 0020.885 3.488"/>
+                      </svg>
+                    </div>
+                    <div className="font-bold text-black text-2xl mb-1">1</div>
+                    <div className="text-gray-600 font-medium">Credit per WhatsApp message</div>
                   </div>
-                  <div className="text-center p-3 bg-white rounded-lg border border-gray-200">
-                    <div className="font-bold text-black text-lg">0.25 Credits</div>
-                    <div className="text-gray-600">Telegram message</div>
+                  <div className="text-center p-6 bg-white rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+                    <div className="w-12 h-12 bg-sky-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                      <svg className="w-6 h-6 text-sky-600" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/>
+                      </svg>
+                    </div>
+                    <div className="font-bold text-black text-2xl mb-1">0.25</div>
+                    <div className="text-gray-600 font-medium">Credits per Telegram message</div>
                   </div>
-                  <div className="text-center p-3 bg-white rounded-lg border border-gray-200">
-                    <div className="font-bold text-black text-lg">0.10 Credits</div>
-                    <div className="text-gray-600">Email</div>
+                  <div className="text-center p-6 bg-white rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+                    <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                      <svg className="w-6 h-6 text-purple-600" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
+                        <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
+                      </svg>
+                    </div>
+                    <div className="font-bold text-black text-2xl mb-1">0.10</div>
+                    <div className="text-gray-600 font-medium">Credits per Email</div>
                   </div>
                 </div>
               </div>
 
-              <div className="mt-6 p-4 bg-black rounded-lg border border-gray-800">
-                <div className="flex items-start">
-                  <svg className="w-5 h-5 text-white mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                  </svg>
-                  <div className="text-sm text-white">
-                    <p className="font-medium mb-1">Secure Payment Processing</p>
-                    <p className="text-gray-300">All payments are processed securely through Cashfree Payment Gateway. Your data is encrypted and protected. GST will be added at checkout.</p>
+              <div className="mt-8 p-8 bg-gradient-to-br from-black to-gray-900 rounded-2xl border border-gray-800">
+                <div className="flex items-start text-white">
+                  <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center mr-4 flex-shrink-0">
+                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="font-bold mb-2 text-lg">🔒 Secure Payment Processing</p>
+                    <p className="text-gray-300 text-base leading-relaxed">All payments are processed securely through Cashfree Payment Gateway. Your data is encrypted and protected. GST will be added at checkout.</p>
                   </div>
                 </div>
               </div>
@@ -780,11 +976,11 @@ export default function CreditsOverview() {
 
       {/* Payment Loading Overlay */}
       {paymentLoading && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[60]">
-          <div className="bg-white rounded-2xl p-8 shadow-2xl text-center max-w-sm w-full mx-4">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-black mx-auto mb-4"></div>
-            <h3 className="text-lg font-semibold text-black mb-2">Processing Payment</h3>
-            <p className="text-gray-600 text-sm">Please wait while we redirect you to the payment gateway...</p>
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-lg flex items-center justify-center z-[60]">
+          <div className="bg-white rounded-3xl p-10 shadow-2xl text-center max-w-md w-full mx-4">
+            <div className="animate-spin rounded-full h-16 w-16 border-4 border-gray-200 border-t-black mx-auto mb-6"></div>
+            <h3 className="text-2xl font-bold text-black mb-3">Processing Payment</h3>
+            <p className="text-gray-600 text-base leading-relaxed">Please wait while we redirect you to the secure payment gateway...</p>
           </div>
         </div>
       )}
