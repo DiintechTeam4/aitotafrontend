@@ -37,6 +37,19 @@ function CampaignDetails({ campaignId, onBack }) {
   const [loadingCampaignGroups, setLoadingCampaignGroups] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(null);
   const [showAddGroupsModal, setShowAddGroupsModal] = useState(false);
+  // Minimal leads list and transcript
+  const [leads, setLeads] = useState([]);
+  const [leadsLoading, setLeadsLoading] = useState(false);
+  const [leadsPage, setLeadsPage] = useState(1);
+  const [leadsTotalPages, setLeadsTotalPages] = useState(0);
+  const [leadsTotalItems, setLeadsTotalItems] = useState(0);
+  const [showTranscriptModal, setShowTranscriptModal] = useState(false);
+  const [transcriptDocId, setTranscriptDocId] = useState(null);
+  const [transcriptContent, setTranscriptContent] = useState("");
+  const [transcriptLoading, setTranscriptLoading] = useState(false);
+  // Missed calls
+  const [missedCalls, setMissedCalls] = useState([]);
+  const [missedLoading, setMissedLoading] = useState(false);
   // Call details states
   const [showCallDetailsModal, setShowCallDetailsModal] = useState(false);
   const [callDetails, setCallDetails] = useState([]);
@@ -241,6 +254,9 @@ function CampaignDetails({ campaignId, onBack }) {
     fetchAgents();
     fetchClientData();
     fetchCampaignGroups();
+    // Also load leads list initially
+    fetchLeads(1);
+    fetchMissedCalls();
   }, [campaignId]);
 
   // Fetch campaign contacts when campaign data is available
@@ -837,51 +853,9 @@ function CampaignDetails({ campaignId, onBack }) {
         setAvailableGroups(result.data);
       } else {
         console.error("Failed to fetch groups:", result.error);
-        // For demo purposes, create dummy groups if API fails
-        setAvailableGroups([
-          {
-            _id: "1",
-            name: "Demo Group 1",
-            description: "First demo group",
-            contacts: [],
-          },
-          {
-            _id: "2",
-            name: "Demo Group 2",
-            description: "Second demo group",
-            contacts: [],
-          },
-          {
-            _id: "3",
-            name: "Demo Group 3",
-            description: "Third demo group",
-            contacts: [],
-          },
-        ]);
       }
     } catch (error) {
       console.error("Error fetching groups:", error);
-      // For demo purposes, create dummy groups if API fails
-      setAvailableGroups([
-        {
-          _id: "1",
-          name: "Demo Group 1",
-          description: "First demo group",
-          contacts: [],
-        },
-        {
-          _id: "2",
-          name: "Demo Group 2",
-          description: "Second demo group",
-          contacts: [],
-        },
-        {
-          _id: "3",
-          name: "Demo Group 3",
-          description: "Third demo group",
-          contacts: [],
-        },
-      ]);
     }
   };
 
@@ -937,7 +911,9 @@ function CampaignDetails({ campaignId, onBack }) {
         sortOrder: "desc",
       });
       const resp = await fetch(
-        `${API_BASE}/campaigns/${campaign._id}/call-logs?${params.toString()}`,
+        `${API_BASE}/campaigns/${
+          campaign._id
+        }/call-logs-dashboard?${params.toString()}`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -958,6 +934,165 @@ function CampaignDetails({ campaignId, onBack }) {
       setCallDetailsMeta({ totalPages: 0, totalLogs: 0 });
     } finally {
       setCallDetailsLoading(false);
+    }
+  };
+
+  // Fetch minimal leads list for this campaign
+  const fetchLeads = async (page = 1) => {
+    try {
+      if (!campaignId) return;
+      setLeadsLoading(true);
+      const token = sessionStorage.getItem("clienttoken");
+      const params = new URLSearchParams({
+        page: String(page),
+        limit: String(25),
+      });
+      const resp = await fetch(
+        `${API_BASE}/campaigns/${campaignId}/leads?${params.toString()}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+      const result = await resp.json();
+      if (!resp.ok || result.success === false) {
+        throw new Error(result.error || "Failed to fetch leads");
+      }
+      setLeads(result.data || []);
+      setLeadsPage(result.pagination?.currentPage || page);
+      setLeadsTotalPages(result.pagination?.totalPages || 0);
+      setLeadsTotalItems(result.pagination?.totalItems || 0);
+    } catch (e) {
+      console.error("Error fetching leads:", e);
+      setLeads([]);
+      setLeadsPage(1);
+      setLeadsTotalPages(0);
+      setLeadsTotalItems(0);
+    } finally {
+      setLeadsLoading(false);
+    }
+  };
+
+  // Open transcript modal and fetch transcript by documentId
+  const openTranscript = async (documentId) => {
+    try {
+      if (!campaignId || !documentId) return;
+      setTranscriptDocId(documentId);
+      setTranscriptContent("");
+      setTranscriptLoading(true);
+      setShowTranscriptModal(true);
+      const token = sessionStorage.getItem("clienttoken");
+      const resp = await fetch(
+        `${API_BASE}/campaigns/${campaignId}/logs/${documentId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+      const result = await resp.json();
+      if (!resp.ok || result.success === false) {
+        throw new Error(result.error || "Failed to fetch transcript");
+      }
+      setTranscriptContent(result.transcript || "");
+    } catch (e) {
+      console.error("Error fetching transcript:", e);
+      setTranscriptContent("");
+    } finally {
+      setTranscriptLoading(false);
+    }
+  };
+
+  // Fetch missed calls: uniqueIds in campaign.details that have no CallLog
+  const fetchMissedCalls = async () => {
+    try {
+      if (!campaignId) return;
+      setMissedLoading(true);
+      const token = sessionStorage.getItem("clienttoken");
+      const resp = await fetch(
+        `${API_BASE}/campaigns/${campaignId}/missed-calls`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+      const result = await resp.json();
+      if (!resp.ok || result.success === false) {
+        throw new Error(result.error || "Failed to fetch missed calls");
+      }
+      setMissedCalls(result.data || []);
+    } catch (e) {
+      console.error("Error fetching missed calls:", e);
+      setMissedCalls([]);
+    } finally {
+      setMissedLoading(false);
+    }
+  };
+
+  // Call again: dial only the missed calls' contacts
+  const callMissedCalls = async () => {
+    try {
+      if (!selectedAgent) {
+        alert("Please select an agent first (top Make Calls card).");
+        return;
+      }
+      const retryContacts = (missedCalls || [])
+        .map((m) => m.contact)
+        .filter((c) => c && c.phone);
+      if (retryContacts.length === 0) {
+        alert("No retriable missed contacts found.");
+        return;
+      }
+
+      setCallingStatus("calling");
+
+      // Deduplicate by phone+name and avoid very recent calls (30s)
+      const seen = new Set();
+      for (let idx = 0; idx < retryContacts.length; idx++) {
+        const contact = retryContacts[idx];
+        const key = `${contact.phone}-${contact.name || ""}`;
+        if (seen.has(key)) continue;
+        const recent = callResults.find(
+          (r) =>
+            r.contact?.phone === contact.phone &&
+            r.timestamp &&
+            Date.now() - new Date(r.timestamp).getTime() < 30000
+        );
+        if (recent) continue;
+        seen.add(key);
+
+        const result = await makeVoiceBotCall(contact, selectedAgent);
+        setCallResults((prev) => [...prev, result]);
+
+        // small pacing like startCalling
+        if (idx < retryContacts.length - 1) {
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+        }
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+
+      // After retries, update statuses like elsewhere
+      if (campaign?._id) {
+        callResults.forEach((result) => {
+          if (result.uniqueId) {
+            updateCallStatus(result.uniqueId);
+          }
+        });
+      }
+
+      // Refresh lists
+      fetchLeads(1);
+      fetchMissedCalls();
+
+      setCallingStatus("completed");
+    } catch (e) {
+      console.error("Error calling missed contacts:", e);
+      setCallingStatus("paused");
     }
   };
 
@@ -1160,6 +1295,8 @@ function CampaignDetails({ campaignId, onBack }) {
         }));
         // Refresh campaign groups to show the updated list
         fetchCampaignGroups();
+        // Auto-sync contacts after adding groups
+        await syncContactsFromGroups();
         setShowAddGroupsModal(false);
         alert("Groups added to campaign successfully!");
       } else {
@@ -1207,6 +1344,8 @@ function CampaignDetails({ campaignId, onBack }) {
         }));
         // Refresh campaign groups to show the updated list
         fetchCampaignGroups();
+        // Auto-sync contacts after updating groups
+        await syncContactsFromGroups();
         alert("Groups updated successfully!");
       } else {
         console.error("Failed to add groups to campaign:", result.error);
@@ -1233,33 +1372,30 @@ function CampaignDetails({ campaignId, onBack }) {
     ) {
       try {
         setLoading(true);
-        const updatedGroups = campaignGroups.filter(
-          (group) => group._id !== groupId
-        );
-
         const token = sessionStorage.getItem("clienttoken");
         const response = await fetch(
-          `${API_BASE}/campaigns/${campaignId}/groups`,
+          `${API_BASE}/campaigns/${campaignId}/groups/${groupId}`,
           {
-            method: "POST",
+            method: "DELETE",
             headers: {
               Authorization: `Bearer ${token}`,
-              "Content-Type": "application/json",
             },
-            body: JSON.stringify({
-              groupIds: updatedGroups.map((group) => group._id),
-            }),
           }
         );
 
         const result = await response.json();
         if (result.success) {
+          const updatedGroups = campaignGroups.filter(
+            (group) => group._id !== groupId
+          );
           setCampaign((prev) => ({
             ...prev,
             groupIds: updatedGroups.map((group) => group._id),
           }));
-          // Refresh campaign groups to show the updated list
-          fetchCampaignGroups();
+          setCampaignGroups(updatedGroups);
+          setSelectedGroups((prev) => prev.filter((id) => id !== groupId));
+          // Auto-sync contacts after removing a group
+          await syncContactsFromGroups();
         } else {
           console.error("Failed to remove group:", result.error);
           alert("Failed to remove group: " + result.error);
@@ -1702,7 +1838,7 @@ function CampaignDetails({ campaignId, onBack }) {
                     )}
                   </div>
                   <div className="text-left">
-                    <div className="font-semibold">Make Calls</div>
+                    <div className="font-semibold">Start Campaign</div>
                     <div className="text-sm opacity-90">
                       {loadingContacts
                         ? "Loading contacts..."
@@ -1732,28 +1868,6 @@ function CampaignDetails({ campaignId, onBack }) {
                   <div className="text-left">
                     <div className="font-semibold">Call Details</div>
                     <div className="text-sm opacity-90">View call logs</div>
-                  </div>
-                </div>
-              </button>
-
-              <button
-                onClick={() => {
-                  setShowContactsModal(true);
-                  fetchCampaignContacts();
-                }}
-                className="group relative bg-gradient-to-r from-orange-500 to-orange-600 text-white px-6 py-4 rounded-xl hover:from-orange-600 hover:to-orange-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-1"
-                disabled={!campaign}
-              >
-                <div className="flex items-center">
-                  <div className="p-2 bg-white bg-opacity-20 rounded-lg mr-3">
-                    <FiUsers
-                      className="w-6 h-6 text-orange-700"
-                      style={{ minWidth: "24px", minHeight: "24px" }}
-                    />
-                  </div>
-                  <div className="text-left">
-                    <div className="font-semibold">Manage Contacts</div>
-                    <div className="text-sm opacity-90">Add, sync, remove</div>
                   </div>
                 </div>
               </button>
@@ -1823,192 +1937,235 @@ function CampaignDetails({ campaignId, onBack }) {
               </div>
             </div>
           )}
-
-          {/* Campaign Groups Section */}
+          {/* Minimal Leads + Transcript Section */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <h2 className="text-xl font-semibold text-gray-900">
-                  Campaign Groups
-                </h2>
-                <p className="text-gray-600 mt-1">
-                  Groups and contacts associated with this campaign
-                </p>
-              </div>
-              <div className="text-right">
-                <div className="text-3xl font-bold text-blue-600">
-                  {campaignGroups.length}
-                </div>
-                <div className="text-sm text-gray-500">Total Groups</div>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold text-gray-900">
+                Recent call logs
+              </h2>
+              <div className="text-sm text-gray-500">
+                {leadsLoading ? "Loading..." : `${leadsTotalItems} total`}
               </div>
             </div>
-
-            {loadingCampaignGroups ? (
-              <div className="text-center py-12">
-                <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                </div>
-                <p className="text-gray-500 mt-4 text-lg">
-                  Loading campaign groups...
-                </p>
-              </div>
-            ) : campaignGroups.length === 0 ? (
-              <div className="text-center py-16 bg-gray-50 rounded-xl border-2 border-dashed border-gray-300">
-                <div className="inline-flex items-center justify-center w-20 h-20 bg-gray-100 rounded-full mb-4">
-                  <FiUsers className="w-10 h-10 text-gray-400" />
-                </div>
-                <h3 className="text-lg font-medium text-gray-900 mb-2">
-                  No groups in campaign
-                </h3>
-                <p className="text-gray-500 mb-6">
-                  This campaign doesn't have any groups yet. Add groups to get
-                  started.
-                </p>
-                <button
-                  onClick={() => setShowAddGroupsModal(true)}
-                  className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors duration-200"
-                >
-                  <FiPlus className="w-4 h-4 mr-2" />
-                  Add Your First Group
-                </button>
+            {leadsLoading ? (
+              <div className="text-center py-10">Loading leads...</div>
+            ) : leads.length === 0 ? (
+              <div className="text-center py-10 text-gray-500">
+                No leads yet
               </div>
             ) : (
-              <>
-                {/* Summary Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                  <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-6 border border-blue-200">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-medium text-blue-600">
-                          Total Groups
-                        </p>
-                        <p className="text-3xl font-bold text-blue-900">
-                          {campaignGroups.length}
-                        </p>
-                      </div>
-                      <div className="p-3 bg-blue-500 rounded-lg">
-                        <FiUsers className="w-6 h-6 text-white" />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-6 border border-green-200">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-medium text-green-600">
-                          Total Contacts
-                        </p>
-                        <p className="text-3xl font-bold text-green-900">
-                          {campaignGroups.reduce(
-                            (total, group) =>
-                              total + (group.contacts?.length || 0),
-                            0
-                          )}
-                        </p>
-                      </div>
-                      <div className="p-3 bg-green-500 rounded-lg">
-                        <svg
-                          className="w-6 h-6 text-white"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-gray-600">
+                      <th className="py-2 pr-4">Time</th>
+                      <th className="py-2 pr-4">Name</th>
+                      <th className="py-2 pr-4">Number</th>
+                      <th className="py-2 pr-4">Status</th>
+                      <th className="py-2 pr-4">Conversation</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {leads
+                      .filter((lead) => {
+                        const name = (lead.name || "").toString().trim();
+                        const number = (lead.number || "").toString().trim();
+                        const hasRealName = name && name !== "-";
+                        const hasRealNumber =
+                          number && number !== "-" && /\d/.test(number);
+                        return hasRealName || hasRealNumber;
+                      })
+                      .map((lead) => (
+                        <tr
+                          key={lead.documentId}
+                          className="border-t border-gray-100"
                         >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
-                          />
-                        </svg>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-6 border border-purple-200">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-medium text-purple-600">
-                          Active Groups
-                        </p>
-                        <p className="text-3xl font-bold text-purple-900">
-                          {
-                            campaignGroups.filter(
-                              (group) =>
-                                group.contacts && group.contacts.length > 0
-                            ).length
-                          }
-                        </p>
-                      </div>
-                      <div className="p-3 bg-purple-500 rounded-lg">
-                        <svg
-                          className="w-6 h-6 text-white"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                          />
-                        </svg>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Groups Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {campaignGroups.map((group) => (
-                    <div
-                      key={group._id}
-                      className="group bg-white border border-gray-200 rounded-xl p-6 hover:shadow-lg hover:border-blue-300 transition-all duration-200"
-                    >
-                      <div className="flex items-start justify-between mb-4">
-                        <div className="flex-1">
-                          <h3 className="text-lg font-semibold text-gray-900 mb-2 group-hover:text-blue-600 transition-colors duration-200">
-                            {group.name}
-                          </h3>
-                          {group.description && (
-                            <p className="text-sm text-gray-600 mb-3 line-clamp-2">
-                              {group.description}
-                            </p>
-                          )}
-                          <div className="flex items-center text-sm text-gray-500">
-                            <svg
-                              className="w-4 h-4 mr-1"
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
+                          <td className="py-2 pr-4 text-gray-700">
+                            {lead.time
+                              ? new Date(lead.time).toLocaleString()
+                              : "-"}
+                          </td>
+                          <td className="py-2 pr-4 text-gray-900">
+                            {lead.name || "-"}
+                          </td>
+                          <td className="py-2 pr-4 text-gray-900">
+                            {lead.number || "-"}
+                          </td>
+                          <td className="py-2 pr-4 capitalize">
+                            <span
+                              className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
+                                lead.status === "ringing"
+                                  ? "bg-yellow-100 text-yellow-700"
+                                  : lead.status === "ongoing"
+                                  ? "bg-blue-100 text-blue-700"
+                                  : "bg-green-100 text-green-700"
+                              }`}
                             >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
-                              />
-                            </svg>
-                            {group.contacts?.length || 0} contacts
-                          </div>
-                        </div>
-                        <button
-                          onClick={() => handleRemoveGroup(group._id)}
-                          className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all duration-200 opacity-0 group-hover:opacity-100"
-                          disabled={loading}
-                          title="Remove from campaign"
-                        >
-                          <FiTrash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                              {lead.status}
+                            </span>
+                          </td>
+                          <td className="py-2 pr-4">
+                            <button
+                              className="inline-flex items-center px-3 py-1 text-xs bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100"
+                              title="View transcript"
+                              onClick={() => openTranscript(lead.documentId)}
+                            >
+                              <svg
+                                className="w-4 h-4 mr-1"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth="2"
+                                  d="M8 16h8M8 12h8M8 8h8M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H7l-2 2H3v12a2 2 0 002 2z"
+                                />
+                              </svg>
+                              Transcript
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+                <div className="flex items-center justify-between mt-4">
+                  <div className="text-sm text-gray-600">
+                    Page {leadsPage} of {leadsTotalPages || 1}
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 disabled:opacity-50"
+                      onClick={() => fetchLeads(Math.max(1, leadsPage - 1))}
+                      disabled={leadsLoading || leadsPage <= 1}
+                    >
+                      Prev
+                    </button>
+                    <button
+                      className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 disabled:opacity-50"
+                      onClick={() => fetchLeads(leadsPage + 1)}
+                      disabled={
+                        leadsLoading ||
+                        (leadsTotalPages && leadsPage >= leadsTotalPages)
+                      }
+                    >
+                      Next
+                    </button>
+                  </div>
                 </div>
-              </>
+              </div>
+            )}
+          </div>
+
+          {/* Missed Calls Section */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold text-gray-900">
+                Missed Calls
+              </h2>
+              <button
+                className="text-sm px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+                onClick={() => {
+                  if (!selectedAgent) {
+                    setShowCallModal(true);
+                    return;
+                  }
+                  callMissedCalls();
+                }}
+                disabled={missedLoading}
+                title={
+                  !selectedAgent
+                    ? "Choose an agent, then calls will start"
+                    : "Call all missed contacts"
+                }
+              >
+                Call Again
+              </button>
+            </div>
+            {missedLoading ? (
+              <div className="text-center py-8">Loading missed calls...</div>
+            ) : missedCalls.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                No missed calls
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-gray-600">
+                      <th className="py-2 pr-4">Name</th>
+                      <th className="py-2 pr-4">Number</th>
+                      <th className="py-2 pr-4">status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {missedCalls
+                      .filter((item) => {
+                        const name = (item.contact?.name || "")
+                          .toString()
+                          .trim();
+                        const phone = (item.contact?.phone || "")
+                          .toString()
+                          .trim();
+                        const hasRealName = name && name !== "-";
+                        const hasRealPhone =
+                          phone && phone !== "-" && /\d/.test(phone);
+                        return hasRealName || hasRealPhone;
+                      })
+                      .map((item, idx) => (
+                        <tr
+                          key={`${item.uniqueId}-${idx}`}
+                          className="border-t border-gray-100"
+                        >
+                          <td className="py-2 pr-4 text-gray-900">
+                            {item.contact?.name || "-"}
+                          </td>
+                          <td className="py-2 pr-4 text-gray-900">
+                            {item.contact?.phone || "-"}
+                          </td>
+                          <td className="py-2 pr-4 bg-green-1 00 text-red-700">
+                            Missed
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
         </div>
       </div>
+
+      {/* Transcript Modal */}
+      {showTranscriptModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl w-11/12 max-w-4xl max-h-[90vh] overflow-y-auto shadow-2xl">
+            <div className="flex justify-between items-center p-6 border-b border-gray-200">
+              <h3 className="text-2xl font-bold text-gray-800">Transcript</h3>
+              <button
+                className="bg-none border-none text-2xl cursor-pointer text-gray-500 hover:text-gray-700 p-2 w-10 h-10 flex items-center justify-center rounded-lg hover:bg-gray-200 transition-colors duration-200"
+                onClick={() => setShowTranscriptModal(false)}
+              >
+                <FiX />
+              </button>
+            </div>
+            <div className="p-6">
+              {transcriptLoading ? (
+                <div className="text-center py-10">Loading transcript...</div>
+              ) : transcriptContent ? (
+                <pre className="whitespace-pre-wrap text-sm text-gray-800 bg-gray-50 p-4 rounded-lg">
+                  {transcriptContent}
+                </pre>
+              ) : (
+                <div className="text-center py-10 text-gray-500">
+                  No transcript available
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Make Calls Modal */}
       {showCallModal && (
@@ -3003,6 +3160,45 @@ function CampaignDetails({ campaignId, onBack }) {
             </div>
 
             <div className="p-6">
+              {/* Current groups in campaign */}
+              <div className="mb-8">
+                <h4 className="text-lg font-semibold text-gray-800 mb-4">
+                  Current Groups in Campaign
+                </h4>
+                {campaignGroups.length === 0 ? (
+                  <div className="text-sm text-gray-500">
+                    No groups added yet.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {campaignGroups.map((group) => (
+                      <div
+                        key={`current-${group._id}`}
+                        className="border border-gray-200 rounded-lg p-4 bg-gray-50"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <div className="font-semibold text-gray-800">
+                              {group.name}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {group.contacts?.length || 0} contacts
+                            </div>
+                          </div>
+                          <button
+                            className="text-red-600 hover:text-red-700"
+                            title="Remove from campaign"
+                            onClick={() => handleRemoveGroup(group._id)}
+                          >
+                            <FiTrash2 />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               <div className="mb-6">
                 <h4 className="text-lg font-semibold text-gray-800 mb-4">
                   Available Groups
@@ -3111,10 +3307,7 @@ function CampaignDetails({ campaignId, onBack }) {
                       Adding...
                     </>
                   ) : (
-                    <>
-                      <FiPlus className="w-4 h-4" />
-                      Add to Campaign
-                    </>
+                    <>Update</>
                   )}
                 </button>
               </div>
