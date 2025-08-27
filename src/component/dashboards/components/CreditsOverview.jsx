@@ -17,7 +17,7 @@ export default function CreditsOverview() {
   const plans = [
     { 
       name: 'Basic', 
-      priceINR: 1000, 
+      priceINR: 1, 
       credits: 1000, 
       bonus: 0,
       popular: false,
