@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import {
   FiX,
   FiPlus,
@@ -50,6 +50,7 @@ function CampaignDetails({ campaignId, onBack }) {
   // Missed calls
   const [missedCalls, setMissedCalls] = useState([]);
   const [missedLoading, setMissedLoading] = useState(false);
+  const [callFilter, setCallFilter] = useState("all"); // all | connected | missed
   // Call details states
   const [showCallDetailsModal, setShowCallDetailsModal] = useState(false);
   const [callDetails, setCallDetails] = useState([]);
@@ -86,6 +87,39 @@ function CampaignDetails({ campaignId, onBack }) {
   });
   const [loadingContacts, setLoadingContacts] = useState(false);
   const [showRestoreNotification, setShowRestoreNotification] = useState(false);
+
+  // Build a merged list of calls: recent leads + missed calls, sorted by time desc
+  const mergedCalls = useMemo(() => {
+    const toTimestamp = (value) => {
+      if (!value) return 0;
+      const t = new Date(value).getTime();
+      return Number.isFinite(t) ? t : 0;
+    };
+
+    const normalizedLeads = (leads || []).map((lead) => ({
+      key: lead.documentId || `${lead.number || "-"}-${lead.time || ""}`,
+      time: lead.time || null,
+      name: lead.name || "-",
+      number: lead.number || "-",
+      status: (lead.status || "").toLowerCase(),
+      isMissed: false,
+      documentId: lead.documentId || null,
+    }));
+
+    const normalizedMissed = (missedCalls || []).map((item, idx) => ({
+      key: `missed-${item.uniqueId || idx}`,
+      time: item.time || item.createdAt || null,
+      name: item.contact?.name || "-",
+      number: item.contact?.phone || "-",
+      status: "missed",
+      isMissed: true,
+      documentId: null,
+    }));
+
+    return [...normalizedLeads, ...normalizedMissed].sort(
+      (a, b) => toTimestamp(b.time) - toTimestamp(a.time)
+    );
+  }, [leads, missedCalls]);
   // Tracks whether calling state was restored from storage to gate auto-resume
   const restoredFromStorageRef = useRef(false);
 
@@ -1943,8 +1977,39 @@ function CampaignDetails({ campaignId, onBack }) {
               <h2 className="text-xl font-semibold text-gray-900">
                 Recent call logs
               </h2>
-              <div className="text-sm text-gray-500">
-                {leadsLoading ? "Loading..." : `${leadsTotalItems} total`}
+              <div className="flex items-center gap-3">
+                <select
+                  className="text-sm border border-gray-300 rounded-md px-2 py-1"
+                  value={callFilter}
+                  onChange={(e) => setCallFilter(e.target.value)}
+                >
+                  <option value="all">All</option>
+                  <option value="connected">Connected</option>
+                  <option value="missed">Missed</option>
+                </select>
+                {callFilter === "missed" && (
+                  <button
+                    className="text-sm px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+                    onClick={() => {
+                      if (!selectedAgent) {
+                        setShowCallModal(true);
+                        return;
+                      }
+                      callMissedCalls();
+                    }}
+                    disabled={missedLoading}
+                    title={
+                      !selectedAgent
+                        ? "Choose an agent, then calls will start"
+                        : "Call all missed contacts"
+                    }
+                  >
+                    Call Again
+                  </button>
+                )}
+                <div className="text-sm text-gray-500">
+                  {leadsLoading ? "Loading..." : `${leadsTotalItems} total`}
+                </div>
               </div>
             </div>
             {leadsLoading ? (
@@ -1966,20 +2031,27 @@ function CampaignDetails({ campaignId, onBack }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {leads
+                    {mergedCalls
                       .filter((lead) => {
                         const name = (lead.name || "").toString().trim();
                         const number = (lead.number || "").toString().trim();
                         const hasRealName = name && name !== "-";
                         const hasRealNumber =
                           number && number !== "-" && /\d/.test(number);
-                        return hasRealName || hasRealNumber;
+                        const byData = hasRealName || hasRealNumber;
+                        const byStatus =
+                          callFilter === "all"
+                            ? true
+                            : callFilter === "connected"
+                            ? lead.status === "completed" ||
+                              lead.status === "ongoing"
+                            : lead.status === "missed" ||
+                              lead.status === "not_connected" ||
+                              lead.status === "failed";
+                        return byData && byStatus;
                       })
                       .map((lead) => (
-                        <tr
-                          key={lead.documentId}
-                          className="border-t border-gray-100"
-                        >
+                        <tr key={lead.key} className="border-t border-gray-100">
                           <td className="py-2 pr-4 text-gray-700">
                             {lead.time
                               ? new Date(lead.time).toLocaleString()
@@ -1998,6 +2070,10 @@ function CampaignDetails({ campaignId, onBack }) {
                                   ? "bg-yellow-100 text-yellow-700"
                                   : lead.status === "ongoing"
                                   ? "bg-blue-100 text-blue-700"
+                                  : lead.status === "missed" ||
+                                    lead.status === "not_connected" ||
+                                    lead.status === "failed"
+                                  ? "bg-red-100 text-red-700"
                                   : "bg-green-100 text-green-700"
                               }`}
                             >
@@ -2008,7 +2084,10 @@ function CampaignDetails({ campaignId, onBack }) {
                             <button
                               className="inline-flex items-center px-3 py-1 text-xs bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100"
                               title="View transcript"
-                              onClick={() => openTranscript(lead.documentId)}
+                              onClick={() =>
+                                lead.documentId &&
+                                openTranscript(lead.documentId)
+                              }
                             >
                               <svg
                                 className="w-4 h-4 mr-1"
@@ -2058,82 +2137,7 @@ function CampaignDetails({ campaignId, onBack }) {
             )}
           </div>
 
-          {/* Missed Calls Section */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold text-gray-900">
-                Missed Calls
-              </h2>
-              <button
-                className="text-sm px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
-                onClick={() => {
-                  if (!selectedAgent) {
-                    setShowCallModal(true);
-                    return;
-                  }
-                  callMissedCalls();
-                }}
-                disabled={missedLoading}
-                title={
-                  !selectedAgent
-                    ? "Choose an agent, then calls will start"
-                    : "Call all missed contacts"
-                }
-              >
-                Call Again
-              </button>
-            </div>
-            {missedLoading ? (
-              <div className="text-center py-8">Loading missed calls...</div>
-            ) : missedCalls.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
-                No missed calls
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="min-w-full text-sm">
-                  <thead>
-                    <tr className="text-left text-gray-600">
-                      <th className="py-2 pr-4">Name</th>
-                      <th className="py-2 pr-4">Number</th>
-                      <th className="py-2 pr-4">status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {missedCalls
-                      .filter((item) => {
-                        const name = (item.contact?.name || "")
-                          .toString()
-                          .trim();
-                        const phone = (item.contact?.phone || "")
-                          .toString()
-                          .trim();
-                        const hasRealName = name && name !== "-";
-                        const hasRealPhone =
-                          phone && phone !== "-" && /\d/.test(phone);
-                        return hasRealName || hasRealPhone;
-                      })
-                      .map((item, idx) => (
-                        <tr
-                          key={`${item.uniqueId}-${idx}`}
-                          className="border-t border-gray-100"
-                        >
-                          <td className="py-2 pr-4 text-gray-900">
-                            {item.contact?.name || "-"}
-                          </td>
-                          <td className="py-2 pr-4 text-gray-900">
-                            {item.contact?.phone || "-"}
-                          </td>
-                          <td className="py-2 pr-4 bg-green-1 00 text-red-700">
-                            Missed
-                          </td>
-                        </tr>
-                      ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
+          {/* Missed Calls list removed; use filter + Call Again button in header */}
         </div>
       </div>
 
