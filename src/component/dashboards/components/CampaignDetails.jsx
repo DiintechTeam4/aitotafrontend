@@ -1160,15 +1160,9 @@ function CampaignDetails({ campaignId, onBack }) {
     }
   };
 
-  const syncContactsFromGroups = async () => {
+  const syncContactsFromGroups = async (silent = false) => {
     try {
       if (!campaign?._id) return;
-      if (!campaign?.groupIds || campaign.groupIds.length === 0) {
-        alert(
-          "Add at least one group to the campaign before syncing contacts."
-        );
-        return;
-      }
       setLoadingContacts(true);
       const token = sessionStorage.getItem("clienttoken");
       const response = await fetch(
@@ -1183,16 +1177,28 @@ function CampaignDetails({ campaignId, onBack }) {
       );
       const result = await response.json();
       if (result.success) {
-        alert(
-          `Successfully synced ${result.data.totalContacts} contacts from ${result.data.totalGroups} groups`
-        );
+        if (!silent) {
+          alert(
+            `Successfully synced ${result.data.totalContacts} contacts from ${result.data.totalGroups} groups`
+          );
+        }
         fetchCampaignContacts(); // Refresh the contacts list
       } else {
-        alert("Failed to sync contacts: " + result.error);
+        // If backend reports no groups, treat it as success after last-group deletion
+        if (result.error === "No groups in campaign to sync from") {
+          await fetchCampaignContacts();
+          if (!silent) {
+            alert("Contacts cleared because no groups remain in the campaign.");
+          }
+        } else if (!silent) {
+          alert("Failed to sync contacts: " + result.error);
+        }
       }
     } catch (error) {
       console.error("Error syncing contacts:", error);
-      alert("Error syncing contacts: " + error.message);
+      if (!silent) {
+        alert("Error syncing contacts: " + error.message);
+      }
     } finally {
       setLoadingContacts(false);
     }
@@ -1329,8 +1335,8 @@ function CampaignDetails({ campaignId, onBack }) {
         }));
         // Refresh campaign groups to show the updated list
         fetchCampaignGroups();
-        // Auto-sync contacts after adding groups
-        await syncContactsFromGroups();
+        // Auto-sync contacts after adding groups (silent)
+        await syncContactsFromGroups(true);
         setShowAddGroupsModal(false);
         alert("Groups added to campaign successfully!");
       } else {
@@ -1378,8 +1384,8 @@ function CampaignDetails({ campaignId, onBack }) {
         }));
         // Refresh campaign groups to show the updated list
         fetchCampaignGroups();
-        // Auto-sync contacts after updating groups
-        await syncContactsFromGroups();
+        // Auto-sync contacts after updating groups (silent)
+        await syncContactsFromGroups(true);
         alert("Groups updated successfully!");
       } else {
         console.error("Failed to add groups to campaign:", result.error);
@@ -1428,8 +1434,8 @@ function CampaignDetails({ campaignId, onBack }) {
           }));
           setCampaignGroups(updatedGroups);
           setSelectedGroups((prev) => prev.filter((id) => id !== groupId));
-          // Auto-sync contacts after removing a group
-          await syncContactsFromGroups();
+          // Auto-sync contacts after removing a group (silent). Always run to clear stale contacts when no groups remain
+          await syncContactsFromGroups(true);
         } else {
           console.error("Failed to remove group:", result.error);
           alert("Failed to remove group: " + result.error);
@@ -2970,7 +2976,10 @@ function CampaignDetails({ campaignId, onBack }) {
                   Sync from Groups
                 </button>
                 <button
-                  onClick={fetchCampaignContacts}
+                  onClick={async () => {
+                    await syncContactsFromGroups(true);
+                    await fetchCampaignContacts();
+                  }}
                   disabled={loadingContacts}
                   className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 disabled:opacity-50 flex items-center gap-2"
                 >
