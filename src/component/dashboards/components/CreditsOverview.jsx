@@ -108,15 +108,40 @@ export default function CreditsOverview() {
 
 
 
-  const loadCashfreeSdk = () => new Promise((resolve, reject) => {
+  const loadCashfreeSdk = () => new Promise(async (resolve, reject) => {
     if (window.Cashfree) return resolve(window.Cashfree);
-    const script = document.createElement('script');
-    // Always use production SDK as backend uses production keys
-    script.src = 'https://sdk.cashfree.com/js/ui/2.0/cashfree.prod.js';
-    script.async = true;
-    script.onload = () => resolve(window.Cashfree);
-    script.onerror = () => reject(new Error('Failed to load Cashfree SDK'));
-    document.body.appendChild(script);
+    const urls = [
+      'https://sdk.cashfree.com/js/ui/2.0/cashfree.prod.js',
+      'https://sdk.cashfree.com/js/ui/2.0.0/cashfree.prod.js',
+      'https://sdk.cashfree.com/js/cashfree.sandbox.js' // last-resort fallback
+    ];
+    const tryLoad = (url, timeoutMs = 8000) => new Promise((res, rej) => {
+      const existing = Array.from(document.scripts || []).find(s => s.src === url);
+      if (existing) {
+        existing.addEventListener('load', () => res(window.Cashfree));
+        existing.addEventListener('error', () => rej(new Error('SDK script error')));
+        return;
+      }
+      const script = document.createElement('script');
+      script.src = url;
+      script.async = true;
+      let done = false;
+      const onLoad = () => { if (done) return; done = true; res(window.Cashfree); };
+      const onError = () => { if (done) return; done = true; rej(new Error('SDK script error')); };
+      const timer = setTimeout(() => { if (done) return; done = true; rej(new Error('SDK load timeout')); }, timeoutMs);
+      script.onload = () => { clearTimeout(timer); onLoad(); };
+      script.onerror = () => { clearTimeout(timer); onError(); };
+      (document.body || document.head || document.documentElement).appendChild(script);
+    });
+    for (const url of urls) {
+      try {
+        const lib = await tryLoad(url);
+        if (lib) return resolve(lib);
+      } catch (e) {
+        // try next url
+      }
+    }
+    reject(new Error('Failed to load Cashfree SDK'));
   });
 
   const launchCashfreeCheckout = async (sessionId) => {
