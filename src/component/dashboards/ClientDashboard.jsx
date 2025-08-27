@@ -469,9 +469,6 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
       case "credits":
         return <CreditsOverview />;
 
-      case "plans":
-        return <PlansBrowse />;
-
       case "pricing":
         return <Pricing />;
 

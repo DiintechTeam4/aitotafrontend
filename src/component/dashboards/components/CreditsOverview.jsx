@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { load as loadCashfree } from '@cashfreepayments/cashfree-js';
 import { API_BASE_URL } from "../../../config";
 
 export default function CreditsOverview() {
@@ -106,52 +107,23 @@ export default function CreditsOverview() {
     filterHistory();
   }, [selectedFilter, dateFilter, history]);
 
-
-
-  const loadCashfreeSdk = () => new Promise(async (resolve, reject) => {
-    if (window.Cashfree) return resolve(window.Cashfree);
-    const urls = [
-      'https://sdk.cashfree.com/js/ui/2.0/cashfree.prod.js',
-      'https://sdk.cashfree.com/js/ui/2.0.0/cashfree.prod.js',
-      'https://sdk.cashfree.com/js/cashfree.sandbox.js' // last-resort fallback
-    ];
-    const tryLoad = (url, timeoutMs = 8000) => new Promise((res, rej) => {
-      const existing = Array.from(document.scripts || []).find(s => s.src === url);
-      if (existing) {
-        existing.addEventListener('load', () => res(window.Cashfree));
-        existing.addEventListener('error', () => rej(new Error('SDK script error')));
-        return;
-      }
-      const script = document.createElement('script');
-      script.src = url;
-      script.async = true;
-      let done = false;
-      const onLoad = () => { if (done) return; done = true; res(window.Cashfree); };
-      const onError = () => { if (done) return; done = true; rej(new Error('SDK script error')); };
-      const timer = setTimeout(() => { if (done) return; done = true; rej(new Error('SDK load timeout')); }, timeoutMs);
-      script.onload = () => { clearTimeout(timer); onLoad(); };
-      script.onerror = () => { clearTimeout(timer); onError(); };
-      (document.body || document.head || document.documentElement).appendChild(script);
-    });
-    for (const url of urls) {
-      try {
-        const lib = await tryLoad(url);
-        if (lib) return resolve(lib);
-      } catch (e) {
-        // try next url
-      }
-    }
-    reject(new Error('Failed to load Cashfree SDK'));
-  });
+  // Cashfree Web SDK v2: initialize once and reuse
+  let cashfreeInstanceRef = null;
+  const ensureCashfreeInstance = async () => {
+    if (cashfreeInstanceRef) return cashfreeInstanceRef;
+    // Use production mode; Cashfree handles session environment
+    cashfreeInstanceRef = await loadCashfree({ mode: 'production' });
+    return cashfreeInstanceRef;
+  };
 
   const launchCashfreeCheckout = async (sessionId) => {
     if (!sessionId) {
       throw new Error('Missing payment session id');
     }
     try {
-      const Cashfree = await loadCashfreeSdk();
-      const cashfree = new Cashfree({ mode: 'production' });
-      await cashfree.checkout({ paymentSessionId: sessionId });
+      const cashfree = await ensureCashfreeInstance();
+      const result = await cashfree.checkout({ paymentSessionId: sessionId, redirectTarget: '_modal' });
+      if (result?.error) throw new Error(result.error?.message || 'Checkout failed');
     } catch (e) {
       console.error('Cashfree SDK checkout failed:', e);
       alert('Unable to open Cashfree checkout. Please retry.');
@@ -170,14 +142,14 @@ export default function CreditsOverview() {
       // Store plan info in memory (since we can't use localStorage)
       window.lastSelectedPlan = plan.name.toLowerCase();
 
-      // Initiate via backend SDK endpoint
-      const resp = await fetch(`${API_BASE_URL}/client/payments/initiate/sdk`, {
+      // Initiate via new Cashfree create-order endpoint
+      const resp = await fetch(`${API_BASE_URL}/payments/cashfree/create-order`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ t: token, amount: total, planKey: plan.name.toLowerCase() })
+        body: JSON.stringify({ amount: total, customerName: 'Client', customerEmail: 'client@example.com', customerPhone: '9999999999' })
       });
       const data = await resp.json();
       if (!resp.ok || !data?.payment_session_id) {
@@ -203,14 +175,14 @@ export default function CreditsOverview() {
       // Store plan info in memory (since we can't use localStorage)
       window.lastSelectedPlan = plan.name.toLowerCase();
 
-      // Reuse SDK initiation for reliability
-      const resp = await fetch(`${API_BASE_URL}/client/payments/initiate/sdk`, {
+      // Reuse new create-order endpoint for reliability
+      const resp = await fetch(`${API_BASE_URL}/payments/cashfree/create-order`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ t: token, amount: total, planKey: plan.name.toLowerCase() })
+        body: JSON.stringify({ amount: total, customerName: 'Client', customerEmail: 'client@example.com', customerPhone: '9999999999' })
       });
       const data = await resp.json();
       if (!resp.ok || !data?.payment_session_id) {
