@@ -2248,34 +2248,11 @@ function CampaignDetails({ campaignId, onBack }) {
           )}
 
           {/* Small cards for current groups */}
-          <h1 className="text-xl font-bold text-gray-900 pb-3">
-            Current Groups
-          </h1>
-          {campaignGroups && campaignGroups.length > 0 && (
-            <div className="mb-3 flex items-center gap-3 flex-wrap">
-              {campaignGroups.map((group) => (
-                <div
-                  key={`status-chip-${group._id}`}
-                  className="inline-flex items-start justify-between gap-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2"
-                >
-                  <div>
-                    <div className="text-sm font-semibold text-gray-800 leading-5">
-                      {group.name}
-                    </div>
-                    <div className="text-xs text-gray-500 leading-4">
-                      {group.contacts?.length || 0} contacts
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    title="Remove group"
-                    className="text-red-600 hover:text-red-700"
-                    onClick={() => handleRemoveGroup(group._id)}
-                  >
-                    <FiTrash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              ))}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-base font-medium text-gray-900">
+                Current Groups
+              </h2>
               <button
                 onClick={() => setShowAddGroupsModal(true)}
                 className="inline-flex items-center px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50"
@@ -2283,7 +2260,34 @@ function CampaignDetails({ campaignId, onBack }) {
                 <FiPlus className="w-4 h-4 mr-1.5" /> Add Group
               </button>
             </div>
-          )}
+            {campaignGroups && campaignGroups.length > 0 && (
+              <div className="flex items-center gap-3 flex-wrap">
+                {campaignGroups.map((group) => (
+                  <div
+                    key={`status-chip-${group._id}`}
+                    className="inline-flex items-start justify-between gap-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2"
+                  >
+                    <div>
+                      <div className="text-sm font-semibold text-gray-800 leading-5">
+                        {group.name}
+                      </div>
+                      <div className="text-xs text-gray-500 leading-4">
+                        {group.contacts?.length || 0} contacts
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      title="Remove group"
+                      className="text-red-600 hover:text-red-700"
+                      onClick={() => handleRemoveGroup(group._id)}
+                    >
+                      <FiTrash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
           {/* Campaign Progress Section - Always Visible */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-6">
