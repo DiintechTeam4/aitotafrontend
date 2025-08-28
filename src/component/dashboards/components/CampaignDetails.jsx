@@ -9,6 +9,7 @@ import {
   FiPlay,
   FiPause,
   FiSkipForward,
+  FiUser,
   FiBarChart2,
   FiUserPlus,
   FiFolder,
@@ -291,6 +292,8 @@ function CampaignDetails({ campaignId, onBack }) {
     // Also load leads list initially
     fetchLeads(1);
     fetchMissedCalls();
+    // Fetch initial campaign calling status
+    fetchCampaignCallingStatus();
   }, [campaignId]);
 
   // Fetch campaign contacts when campaign data is available
@@ -1068,6 +1071,63 @@ function CampaignDetails({ campaignId, onBack }) {
     }
   };
 
+  // Fetch campaign calling status and progress
+  const fetchCampaignCallingStatus = async () => {
+    try {
+      if (!campaignId) return;
+      const token = sessionStorage.getItem("clienttoken");
+      const response = await fetch(
+        `${API_BASE}/campaigns/${campaignId}/calling-status`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success && result.data) {
+          // Update campaign status if it's running
+          if (result.data.isRunning !== campaign?.isRunning) {
+            setCampaign((prev) =>
+              prev ? { ...prev, isRunning: result.data.isRunning } : null
+            );
+          }
+
+          // Update calling status based on backend data
+          if (result.data.progress) {
+            const progress = result.data.progress;
+            if (progress.totalContacts > 0) {
+              // Calculate percentage and update calling status
+              const completedPercentage =
+                (progress.completedCalls / progress.totalContacts) * 100;
+
+              if (completedPercentage === 100) {
+                setCallingStatus("completed");
+              } else if (progress.isRunning) {
+                setCallingStatus("calling");
+              } else if (progress.isPaused) {
+                setCallingStatus("paused");
+              }
+
+              // Update current contact index if available
+              if (progress.currentContactIndex !== undefined) {
+                setCurrentContactIndex(progress.currentContactIndex);
+              }
+            }
+          }
+
+          // Update last updated timestamp
+          setLastUpdated(new Date());
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching campaign calling status:", error);
+    }
+  };
+
   // Call again: dial only the missed calls' contacts
   const callMissedCalls = async () => {
     try {
@@ -1127,6 +1187,21 @@ function CampaignDetails({ campaignId, onBack }) {
     } catch (e) {
       console.error("Error calling missed contacts:", e);
       setCallingStatus("paused");
+    }
+  };
+
+  // Retry a single lead (row) directly from the table
+  const handleRetryLead = async (lead) => {
+    try {
+      const phone = (lead.number || "").toString().trim();
+      if (!phone) return;
+      if (!selectedAgent) {
+        setShowCallModal(true);
+        return;
+      }
+      await makeVoiceBotCall({ name: lead.name || "Unknown", phone });
+    } catch (e) {
+      console.error("Retry call failed:", e);
     }
   };
 
@@ -1713,6 +1788,17 @@ function CampaignDetails({ campaignId, onBack }) {
     };
   }, []);
 
+  // Periodically fetch campaign calling status for real-time updates
+  useEffect(() => {
+    if (!campaignId) return;
+
+    const interval = setInterval(() => {
+      fetchCampaignCallingStatus();
+    }, 5000); // Update every 5 seconds
+
+    return () => clearInterval(interval);
+  }, [campaignId]);
+
   const getStatusColor = (status) => {
     switch (status) {
       case "active":
@@ -1778,9 +1864,7 @@ function CampaignDetails({ campaignId, onBack }) {
                 <h1 className="text-3xl font-bold text-gray-900">
                   {campaign.name}
                 </h1>
-                <p className="text-gray-600 mt-1">
-                  Campaign Management Dashboard
-                </p>
+                <p className="text-gray-600 mt-1">{campaign.description}</p>
               </div>
             </div>
             <div className="text-right">
@@ -1791,16 +1875,6 @@ function CampaignDetails({ campaignId, onBack }) {
                   month: "long",
                   day: "numeric",
                 })}
-              </div>
-              <div className="inline-flex items-center px-3 py-1 bg-blue-100 text-blue-800 text-sm font-medium rounded-full">
-                <svg
-                  className="w-4 h-4 mr-2"
-                  fill="currentColor"
-                  viewBox="0 0 20 20"
-                >
-                  <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3z" />
-                </svg>
-                {campaignGroups.length} Groups
               </div>
             </div>
           </div>
@@ -1929,6 +2003,23 @@ function CampaignDetails({ campaignId, onBack }) {
                   </div>
                 </div>
               </button>
+              <button
+                onClick={() => setShowCallModal(true)}
+                className="group relative bg-gradient-to-r from-green-500 to-green-600 text-white px-6 py-4 rounded-xl hover:from-green-600 hover:to-green-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-1"
+              >
+                <div className="flex items-center">
+                  <div className="p-2 bg-white bg-opacity-20 rounded-lg mr-3">
+                    <FiUser
+                      className="w-6 h-6 text-green-700"
+                      style={{ minWidth: "24px", minHeight: "24px" }}
+                    />
+                  </div>
+                  <div className="text-left">
+                    <div className="font-semibold">Add Agent</div>
+                    <div className="text-sm opacity-90">Add AI Agent</div>
+                  </div>
+                </div>
+              </button>
             </div>
           </div>
 
@@ -1977,6 +2068,155 @@ function CampaignDetails({ campaignId, onBack }) {
               </div>
             </div>
           )}
+          {/* Campaign Progress Section - Always Visible */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center space-x-3">
+                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                <h3 className="text-base font-medium text-gray-900">
+                  Campaign Status
+                </h3>
+                <span
+                  className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                    callingStatus === "calling"
+                      ? "bg-green-50 text-green-700 border border-green-200"
+                      : callingStatus === "paused"
+                      ? "bg-yellow-50 text-yellow-700 border border-yellow-200"
+                      : callingStatus === "completed"
+                      ? "bg-blue-50 text-blue-700 border border-blue-200"
+                      : "bg-gray-50 text-gray-600 border border-gray-200"
+                  }`}
+                >
+                  {callingStatus === "calling"
+                    ? "🟢 Active"
+                    : callingStatus === "paused"
+                    ? "🟡 Paused"
+                    : callingStatus === "completed"
+                    ? "🔵 Done"
+                    : "⚪ Ready"}
+                </span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={fetchCampaignCallingStatus}
+                  className="text-xs px-2 py-1 bg-gray-50 text-gray-500 rounded-md hover:bg-gray-100 transition-colors border border-gray-200"
+                  title="Refresh status"
+                >
+                  <svg
+                    className="w-3 h-3"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                    />
+                  </svg>
+                </button>
+                {callingStatus !== "idle" && (
+                  <button
+                    onClick={() => setShowCallModal(true)}
+                    className="text-xs px-3 py-1 bg-blue-50 text-blue-600 rounded-md hover:bg-blue-100 transition-colors border border-blue-200"
+                  >
+                    View
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Metrics Grid */}
+            <div className="grid grid-cols-4 gap-4 mb-4">
+              <div className="text-center">
+                <div className="text-lg font-semibold text-gray-900">
+                  {campaignContacts.length || 0}
+                </div>
+                <div className="text-xs text-gray-500">Contacts</div>
+              </div>
+              <div className="text-center">
+                <div className="text-lg font-semibold text-green-600">
+                  {callResults.length || 0}
+                </div>
+                <div className="text-xs text-gray-500">Calls</div>
+              </div>
+              <div className="text-center">
+                <div className="text-lg font-semibold text-blue-600">
+                  {leads.filter(
+                    (lead) =>
+                      lead.status === "completed" || lead.status === "ongoing"
+                  ).length || 0}
+                </div>
+                <div className="text-xs text-gray-500">Connected</div>
+              </div>
+              <div className="text-center">
+                <div className="text-lg font-semibold text-orange-600">
+                  {missedCalls.length || 0}
+                </div>
+                <div className="text-xs text-gray-500">Missed</div>
+              </div>
+            </div>
+
+            {/* Progress Bar - Always Show */}
+            <div className="mb-3">
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-xs font-medium text-gray-700">
+                  Progress
+                </span>
+                <span className="text-xs text-gray-500">
+                  {callResults.length || 0} of {campaignContacts.length || 0}
+                </span>
+              </div>
+              <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
+                <div
+                  className={`h-2 rounded-full transition-all duration-500 ${
+                    campaignContacts.length > 0 && callResults.length > 0
+                      ? "bg-gradient-to-r from-green-400 to-green-500"
+                      : "bg-gray-300"
+                  }`}
+                  style={{
+                    width: `${
+                      campaignContacts.length > 0
+                        ? Math.max(
+                            (callResults.length / campaignContacts.length) *
+                              100,
+                            0
+                          )
+                        : 0
+                    }%`,
+                  }}
+                ></div>
+              </div>
+            </div>
+
+            {/* Current Contact Info - Enhanced */}
+            {callingStatus === "calling" &&
+              campaignContacts[currentContactIndex] && (
+                <div className="flex items-center justify-between text-xs bg-green-50 px-3 py-2 rounded-md border border-green-200">
+                  <span className="text-green-800 font-medium">
+                    Calling: {campaignContacts[currentContactIndex].name}
+                  </span>
+                  <span className="flex items-center space-x-2">
+                    <div className="animate-pulse w-2 h-2 bg-green-500 rounded-full"></div>
+                    <span className="text-green-700 font-medium">Live</span>
+                  </span>
+                </div>
+              )}
+
+            {callingStatus === "paused" && (
+              <div className="text-xs text-yellow-700 text-center py-2 bg-yellow-50 rounded-md border border-yellow-200">
+                Calling paused - resume anytime
+              </div>
+            )}
+
+            {callingStatus === "completed" && (
+              <div className="text-xs text-blue-700 text-center py-2 bg-blue-50 rounded-md border border-blue-200">
+                All calls completed successfully
+              </div>
+            )}
+          </div>
+
           {/* Minimal Leads + Transcript Section */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
             <div className="flex items-center justify-between mb-4">
@@ -2034,6 +2274,7 @@ function CampaignDetails({ campaignId, onBack }) {
                       <th className="py-2 pr-4">Number</th>
                       <th className="py-2 pr-4">Status</th>
                       <th className="py-2 pr-4">Conversation</th>
+                      <th className="py-2 pr-4">Redial</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -2109,6 +2350,20 @@ function CampaignDetails({ campaignId, onBack }) {
                                 />
                               </svg>
                               Transcript
+                            </button>
+                          </td>
+                          <td className="py-2 pr-4">
+                            <button
+                              className="inline-flex items-center px-3 py-1 text-xs bg-green-50 text-green-700 border border-green-200 rounded hover:bg-green-100 disabled:opacity-50"
+                              title="Retry this contact"
+                              onClick={() => handleRetryLead(lead)}
+                              disabled={!lead.number}
+                            >
+                              <FiPhone
+                                className="w-3 h-3 text-green-700 mx-2"
+                                style={{ minWidth: "16px", minHeight: "16px" }}
+                              />
+                              Retry
                             </button>
                           </td>
                         </tr>
