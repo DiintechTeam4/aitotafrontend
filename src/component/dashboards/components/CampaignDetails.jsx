@@ -86,6 +86,8 @@ function CampaignDetails({ campaignId, onBack }) {
   const [selectedAgentIdForAssign, setSelectedAgentIdForAssign] = useState("");
   // Backend start/stop calling toggle state
   const [isTogglingCampaign, setIsTogglingCampaign] = useState(false);
+  // Insufficient credits modal
+  const [showCreditsModal, setShowCreditsModal] = useState(false);
   // Minimal leads list and transcript
   const [leads, setLeads] = useState([]);
   const [leadsLoading, setLeadsLoading] = useState(false);
@@ -340,7 +342,6 @@ function CampaignDetails({ campaignId, onBack }) {
     // Also load leads list initially
     fetchLeads(1);
     fetchMissedCalls();
-    // Removed auto status fetch; use manual refresh button instead
   }, [campaignId]);
 
   // Ensure agent name is resolved when campaign agent changes
@@ -1163,6 +1164,31 @@ function CampaignDetails({ campaignId, onBack }) {
     }
   };
 
+  // Open transcript intelligently: if call is ongoing and we have uniqueId, show live logs; else load saved transcript
+  const openTranscriptSmart = async (lead) => {
+    try {
+      const status = (lead.status || lead.leadStatus || "").toLowerCase();
+      const uniqueId =
+        lead.uniqueId || lead.metadata?.customParams?.uniqueid || null;
+
+      if (status === "ongoing" && uniqueId) {
+        setShowCallModal(true);
+        // Seed selected call context for details panel
+        setSelectedCall(
+          lead.metadata ? { ...lead, metadata: lead.metadata } : { ...lead }
+        );
+        await startLiveCallPolling(uniqueId);
+        return;
+      }
+
+      if (lead.documentId) {
+        await openTranscript(lead.documentId);
+      }
+    } catch (e) {
+      console.error("Failed to open transcript smartly:", e);
+    }
+  };
+
   // Fetch missed calls: uniqueIds in campaign.details that have no CallLog
   const fetchMissedCalls = async () => {
     try {
@@ -1310,18 +1336,50 @@ function CampaignDetails({ campaignId, onBack }) {
     }
   };
 
-  // Retry a single lead (row) directly from the table
+  // Retry a single lead (row) via backend single-call API
   const handleRetryLead = async (lead) => {
     try {
       const phone = (lead.number || "").toString().trim();
       if (!phone) return;
-      if (!selectedAgent) {
-        setShowCallModal(true);
+
+      const { id: primaryAgentId } = getPrimaryAgentIdentity();
+      if (!primaryAgentId) {
+        alert("Please add/select an agent for this campaign first.");
         return;
       }
-      await makeVoiceBotCall({ name: lead.name || "Unknown", phone });
+
+      const token = sessionStorage.getItem("clienttoken");
+      const resp = await fetch(`${API_BASE}/calls/single`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          contact: {
+            name: lead.name || "",
+            phone,
+            contactId: lead._id || lead.contactId || null,
+          },
+          agentId: primaryAgentId,
+          campaignId: campaign?._id || null,
+        }),
+      });
+      // Handle insufficient credits with modal
+      if (resp.status === 402) {
+        setShowCreditsModal(true);
+        return;
+      }
+      const result = await resp.json();
+      if (!resp.ok || result.success === false) {
+        throw new Error(result.error || "Failed to initiate call");
+      }
+      // Success feedback
+      alert(`Calling to ${phone} started successfully`);
+      console.log("Single call initiated:", result.data?.uniqueId);
     } catch (e) {
       console.error("Retry call failed:", e);
+      alert("Failed to initiate call.");
     }
   };
 
@@ -1736,9 +1794,7 @@ function CampaignDetails({ campaignId, onBack }) {
       );
       const result = await resp.json();
       if (resp.status === 402) {
-        alert(
-          result.message || "Not sufficient credits. Please recharge first."
-        );
+        setShowCreditsModal(true);
         return;
       }
       if (!resp.ok || result.success === false) {
@@ -2354,7 +2410,7 @@ function CampaignDetails({ campaignId, onBack }) {
                       lead.status === "completed" || lead.status === "ongoing"
                   ).length || 0}
                 </div>
-                <div className="text-xs text-gray-500">Connected</div>
+                <div className="text-xs text-gray-500">Completed</div>
               </div>
               <div className="text-center">
                 <div className="text-lg font-semibold text-orange-600">
@@ -2412,10 +2468,34 @@ function CampaignDetails({ campaignId, onBack }) {
           {/* Minimal Leads + Transcript Section */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold text-gray-900">
+              <h2 className="text-base font-medium text-gray-900">
                 Recent call logs
               </h2>
               <div className="flex items-center gap-3">
+                <button
+                  className="inline-flex items-center px-2 py-1 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+                  onClick={() => {
+                    fetchCampaignCallLogs(1);
+                    fetchLeads(1);
+                    fetchMissedCalls();
+                  }}
+                  title="Refresh call logs"
+                >
+                  <svg
+                    className="w-4 h-4 mr-1"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                    />
+                  </svg>
+                  Refresh
+                </button>
                 <select
                   className="text-sm border border-gray-300 rounded-md px-2 py-1"
                   value={callFilter}
@@ -2523,10 +2603,7 @@ function CampaignDetails({ campaignId, onBack }) {
                             <button
                               className="inline-flex items-center px-3 py-1 text-xs bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100"
                               title="View transcript"
-                              onClick={() =>
-                                lead.documentId &&
-                                openTranscript(lead.documentId)
-                              }
+                              onClick={() => openTranscriptSmart(lead)}
                             >
                               <svg
                                 className="w-4 h-4 mr-1"
@@ -2619,6 +2696,48 @@ function CampaignDetails({ campaignId, onBack }) {
                   No transcript available
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Insufficient Credits Modal */}
+      {showCreditsModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl w-11/12 max-w-md shadow-2xl">
+            <div className="flex justify-between items-center p-5 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">
+                Insufficient Balance
+              </h3>
+              <button
+                className="bg-none border-none text-xl cursor-pointer text-gray-500 hover:text-gray-700 p-1 rounded-md hover:bg-gray-100"
+                onClick={() => setShowCreditsModal(false)}
+              >
+                <FiX />
+              </button>
+            </div>
+            <div className="p-6">
+              <p className="text-sm text-gray-700">
+                Not sufficient credits. Please recharge first to start calling.
+              </p>
+            </div>
+            <div className="flex justify-end gap-3 p-4 border-t border-gray-200">
+              <button
+                className="px-4 py-2 text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50"
+                onClick={() => setShowCreditsModal(false)}
+              >
+                Cancel
+              </button>
+              <button
+                className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+                onClick={() => {
+                  setShowCreditsModal(false);
+                  // Navigate to Credits/Recharge section (adjust route if different)
+                  window.location.href = "/auth/credits";
+                }}
+              >
+                Add Credits
+              </button>
             </div>
           </div>
         </div>
