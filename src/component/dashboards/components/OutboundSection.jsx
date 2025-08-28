@@ -14,7 +14,7 @@ import { API_BASE_URL } from "../../../config";
 function OutboundSection({ tenantId }) {
   // Original states
   const [contactGroups, setContactGroups] = useState([]);
-  const [activeTab, setActiveTab] = useState("groups");
+  const [activeTab, setActiveTab] = useState("campaigns");
   const [showAddGroupForm, setShowAddGroupForm] = useState(false);
 
   // New states for campaigns
@@ -398,6 +398,16 @@ function OutboundSection({ tenantId }) {
       <div className="flex-1 p-6 overflow-y-auto">
         <div className="flex items-center justify-between mb-6">
           <div className="flex gap-4">
+          <button
+              className={`px-4 py-2 rounded font-semibold transition-colors ${
+                activeTab === "campaigns"
+                  ? "bg-black text-white"
+                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+              }`}
+              onClick={() => setActiveTab("campaigns")}
+            >
+              Campaigns ({campaigns.length})
+            </button>
             <button
               className={`px-4 py-2 rounded font-semibold transition-colors ${
                 activeTab === "groups"
@@ -407,16 +417,6 @@ function OutboundSection({ tenantId }) {
               onClick={() => setActiveTab("groups")}
             >
               Groups ({contactGroups.length})
-            </button>
-            <button
-              className={`px-4 py-2 rounded font-semibold transition-colors ${
-                activeTab === "campaigns"
-                  ? "bg-black text-white"
-                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-              }`}
-              onClick={() => setActiveTab("campaigns")}
-            >
-              Campaigns ({campaigns.length})
             </button>
           </div>
           <div className="flex items-center gap-2">
