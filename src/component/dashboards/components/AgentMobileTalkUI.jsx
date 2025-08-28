@@ -57,6 +57,7 @@ const AgentMobileTalkUI = ({ agent, clientId, onClose }) => {
   // Server logs from backend (STT/LLM/TTS + errors)
   const [serverLogs, setServerLogs] = useState([]);
   const [showServerLogs, setShowServerLogs] = useState(false);
+  const [messageText, setMessageText] = useState('');
 
   const addServerLog = (level, message, meta = {}) => {
     const ts = new Date().toLocaleTimeString();
@@ -361,6 +362,24 @@ const AgentMobileTalkUI = ({ agent, clientId, onClose }) => {
     } else {
       addDebugLog(`Max reconnection attempts (${MAX_RECONNECT_ATTEMPTS}) reached. Please reconnect manually.`, "error");
       setIsReconnecting(false);
+    }
+  };
+
+  // --- Text Chat ---
+  const sendTextMessage = () => {
+    const text = (messageText || '').trim();
+    if (!text) return;
+    try {
+      const ws = wsRef.current;
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        addDebugLog('Cannot send message: WebSocket not connected', 'error');
+        return;
+      }
+      ws.send(JSON.stringify({ event: 'user_message', text }));
+      setMessageText('');
+      addDebugLog('User text message sent', 'success');
+    } catch (e) {
+      addDebugLog(`Failed to send message: ${e.message}`, 'error');
     }
   };
 
@@ -1113,6 +1132,25 @@ const AgentMobileTalkUI = ({ agent, clientId, onClose }) => {
             )}
           </div>
         )}
+
+        {/* Text Chat Input */}
+        <div className="w-full max-w-md mx-auto mt-4 flex gap-2">
+          <input
+            type="text"
+            value={messageText}
+            onChange={(e) => setMessageText(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') sendTextMessage(); }}
+            className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+            placeholder="Type a message..."
+          />
+          <button
+            onClick={sendTextMessage}
+            disabled={!messageText.trim() || wsStatus !== 'connected'}
+            className={`px-4 py-2 rounded-lg text-white text-sm font-medium ${messageText.trim() && wsStatus === 'connected' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-400 cursor-not-allowed'}`}
+          >
+            Send
+          </button>
+        </div>
       </div>
     </div>
   );

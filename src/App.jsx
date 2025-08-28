@@ -14,6 +14,8 @@ import Login from "./pages/Login";
 import AgentMobileTalk from "./component/dashboards/components/AgentMobileTalk";
 import PublicBusinessDetails from "./component/dashboards/components/PublicBusinessDetails";
 import Testing from "./component/dashboards/components/Testing";
+// import LandingPage2 from './pages/LandingComponents/LandingPage';
+// import LandingPage from './pages/LandingPage';
 
 const App = () => {
   useEffect(() => {
@@ -55,6 +57,7 @@ const App = () => {
   return (
     <Router>
       <Routes>
+        {/* <Route path="/" element={<Home />} /> */}
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
         <Route path="/auth/*" element={<User />} />
