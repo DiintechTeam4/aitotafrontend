@@ -2173,7 +2173,7 @@ function CampaignDetails({ campaignId, onBack }) {
                 <div className="mb-2 text-sm text-gray-700 flex items-center gap-4">
                   {Array.isArray(campaign?.agent) &&
                     campaign.agent.length > 0 && (
-                      <span className="inline-flex items-center gap-1">
+                      <span className="items-center gap-1">
                         <span className="text-gray-500">Agent:</span>
                         <span className="font-medium">
                           {(() => {
@@ -2251,7 +2251,7 @@ function CampaignDetails({ campaignId, onBack }) {
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-base font-medium text-gray-900">
-                Current Groups
+                Contact Groups
               </h2>
               <button
                 onClick={() => setShowAddGroupsModal(true)}
