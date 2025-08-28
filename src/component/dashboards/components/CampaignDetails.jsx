@@ -25,6 +25,49 @@ function CampaignDetails({ campaignId, onBack }) {
 
   // New states for calling functionality
   const [agents, setAgents] = useState([]);
+  // Cache for fetching single agent by id when not present in agents list
+  const [agentMap, setAgentMap] = useState({});
+
+  // Utility: robustly extract assigned agent id and optional name from various shapes
+  const getPrimaryAgentIdentity = () => {
+    // Case 1: campaign.agent is an array [id | object]
+    if (Array.isArray(campaign?.agent) && campaign.agent.length > 0) {
+      const raw = campaign.agent[0];
+      if (typeof raw === "string") return { id: raw, immediateName: "" };
+      const id = raw?._id || raw?.id || raw?.agentId || null;
+      const immediateName =
+        raw?.name || raw?.fullName || raw?.agentName || raw?.email || "";
+      return { id, immediateName };
+    }
+
+    // Case 2: campaign.agent is a single id string or object
+    if (campaign?.agent && !Array.isArray(campaign.agent)) {
+      if (typeof campaign.agent === "string") {
+        return { id: campaign.agent, immediateName: "" };
+      }
+      const id = campaign.agent?._id || campaign.agent?.id || null;
+      const immediateName =
+        campaign.agent?.name ||
+        campaign.agent?.fullName ||
+        campaign.agent?.agentName ||
+        campaign.agent?.email ||
+        "";
+      return { id, immediateName };
+    }
+
+    // Case 3: alternative fields commonly used
+    const alt =
+      campaign?.agentId || campaign?.assignedAgent || campaign?.agent_id;
+    if (alt) {
+      if (typeof alt === "string") return { id: alt, immediateName: "" };
+      const id = alt?._id || alt?.id || alt?.agentId || null;
+      const immediateName =
+        alt?.name || alt?.fullName || alt?.agentName || alt?.email || "";
+      return { id, immediateName };
+    }
+
+    return { id: null, immediateName: "" };
+  };
   const [selectedAgent, setSelectedAgent] = useState(null);
 
   const [showCallModal, setShowCallModal] = useState(false);
@@ -38,6 +81,11 @@ function CampaignDetails({ campaignId, onBack }) {
   const [loadingCampaignGroups, setLoadingCampaignGroups] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(null);
   const [showAddGroupsModal, setShowAddGroupsModal] = useState(false);
+  // Add Agent modal
+  const [showAddAgentModal, setShowAddAgentModal] = useState(false);
+  const [selectedAgentIdForAssign, setSelectedAgentIdForAssign] = useState("");
+  // Backend start/stop calling toggle state
+  const [isTogglingCampaign, setIsTogglingCampaign] = useState(false);
   // Minimal leads list and transcript
   const [leads, setLeads] = useState([]);
   const [leadsLoading, setLeadsLoading] = useState(false);
@@ -292,9 +340,24 @@ function CampaignDetails({ campaignId, onBack }) {
     // Also load leads list initially
     fetchLeads(1);
     fetchMissedCalls();
-    // Fetch initial campaign calling status
-    fetchCampaignCallingStatus();
+    // Removed auto status fetch; use manual refresh button instead
   }, [campaignId]);
+
+  // Ensure agent name is resolved when campaign agent changes
+  useEffect(() => {
+    const resolve = async () => {
+      const { id, immediateName } = getPrimaryAgentIdentity();
+      if (!id) return;
+      if (immediateName && !agentMap[id]) {
+        setAgentMap((m) => ({ ...m, [id]: immediateName }));
+      }
+      if (!agentMap[id]) {
+        const name = await getAgentNameById(id);
+        setAgentMap((m) => ({ ...m, [id]: name }));
+      }
+    };
+    resolve();
+  }, [campaign?.agent]);
 
   // Fetch campaign contacts when campaign data is available
   useEffect(() => {
@@ -452,6 +515,63 @@ function CampaignDetails({ campaignId, onBack }) {
     } finally {
       setLoadingAgents(false);
     }
+  };
+
+  // Resolve agent name by id using cached list or fetch single agent
+  const getAgentNameById = async (agentId) => {
+    if (!agentId) return "";
+    // Try local cache map
+    if (agentMap[agentId]) {
+      return agentMap[agentId];
+    }
+    // Try existing agents list
+    const found = (agents || []).find((a) => a._id === agentId);
+    if (found) {
+      const name =
+        found.name ||
+        found.fullName ||
+        found.email ||
+        String(agentId).slice(0, 6);
+      setAgentMap((m) => ({ ...m, [agentId]: name }));
+      return name;
+    }
+    // Fetch single agent from lightweight API
+    try {
+      const token = sessionStorage.getItem("clienttoken");
+      const resp = await fetch(`${API_BASE}/agents/${agentId}/name`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+      const result = await resp.json();
+      if (resp.ok && result?.data) {
+        const name = result.data.name || String(agentId).slice(0, 6);
+        setAgentMap((m) => ({ ...m, [agentId]: name }));
+        return name;
+      }
+    } catch (e) {
+      console.error("Failed to fetch agent by id", e);
+    }
+    // Fallback: try public agent endpoint without client scoping
+    try {
+      const resp2 = await fetch(`${API_BASE}/agents/${agentId}/public`);
+      const result2 = await resp2.json();
+      if (resp2.ok && result2?.data) {
+        const agent = result2.data;
+        const name =
+          agent.name ||
+          agent.fullName ||
+          agent.agentName ||
+          agent.email ||
+          String(agentId).slice(0, 6);
+        setAgentMap((m) => ({ ...m, [agentId]: name }));
+        return name;
+      }
+    } catch (e) {
+      console.error("Failed to fetch public agent by id", e);
+    }
+    return String(agentId).slice(0, 6);
   };
 
   const makeVoiceBotCall = async (contact, agent) => {
@@ -1531,6 +1651,148 @@ function CampaignDetails({ campaignId, onBack }) {
     }
   };
 
+  // Assign agent to campaign (PUT)
+  const saveSelectedAgentToCampaign = async () => {
+    try {
+      if (!campaign?._id || !selectedAgentIdForAssign) return;
+      const token = sessionStorage.getItem("clienttoken");
+      const resp = await fetch(`${API_BASE}/campaigns/${campaign._id}`, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ agent: [selectedAgentIdForAssign] }),
+      });
+      const result = await resp.json();
+      if (!resp.ok || result.success === false) {
+        alert(result.error || "Failed to assign agent");
+        return;
+      }
+      setCampaign(result.data);
+      // Optimistically set agent name so UI updates immediately without refresh
+      try {
+        const picked = (agents || []).find(
+          (a) => a._id === selectedAgentIdForAssign
+        );
+        if (picked) {
+          const displayName =
+            picked.agentName ||
+            picked.name ||
+            picked.fullName ||
+            picked.email ||
+            "";
+          if (displayName) {
+            setAgentMap((m) => ({
+              ...m,
+              [selectedAgentIdForAssign]: displayName,
+            }));
+          }
+        } else {
+          // Fallback: fetch name via helper
+          getAgentNameById(selectedAgentIdForAssign).then((nm) => {
+            if (nm) {
+              setAgentMap((m) => ({ ...m, [selectedAgentIdForAssign]: nm }));
+            }
+          });
+        }
+      } catch (_) {}
+      setShowAddAgentModal(false);
+      setSelectedAgentIdForAssign("");
+      alert("Agent assigned successfully");
+    } catch (e) {
+      console.error("Assign agent failed:", e);
+      alert("Failed to assign agent");
+    }
+  };
+
+  // Backend start/stop campaign calling (replace frontend calling flow)
+  const startCampaignCallingBackend = async () => {
+    try {
+      if (!campaign?._id) return;
+      const primaryAgentId =
+        Array.isArray(campaign.agent) && campaign.agent.length > 0
+          ? campaign.agent[0]
+          : null;
+      if (!primaryAgentId) {
+        alert("Please add/select an agent for this campaign first.");
+        return;
+      }
+      setIsTogglingCampaign(true);
+      const token = sessionStorage.getItem("clienttoken");
+      const resp = await fetch(
+        `${API_BASE}/campaigns/${campaign._id}/start-calling`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            agentId: primaryAgentId,
+            delayBetweenCalls: 2000,
+          }),
+        }
+      );
+      const result = await resp.json();
+      if (resp.status === 402) {
+        alert(
+          result.message || "Not sufficient credits. Please recharge first."
+        );
+        return;
+      }
+      if (!resp.ok || result.success === false) {
+        alert(result.error || "Failed to start campaign calling");
+        return;
+      }
+      setCampaign((prev) => (prev ? { ...prev, isRunning: true } : prev));
+      setLastUpdated(new Date());
+    } catch (e) {
+      console.error("Start calling failed:", e);
+      alert("Failed to start campaign calling");
+    } finally {
+      setIsTogglingCampaign(false);
+    }
+  };
+
+  const stopCampaignCallingBackend = async () => {
+    try {
+      if (!campaign?._id) return;
+      setIsTogglingCampaign(true);
+      const token = sessionStorage.getItem("clienttoken");
+      const resp = await fetch(
+        `${API_BASE}/campaigns/${campaign._id}/stop-calling`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+      const result = await resp.json();
+      if (!resp.ok || result.success === false) {
+        alert(result.error || "Failed to stop campaign calling");
+        return;
+      }
+      setCampaign((prev) => (prev ? { ...prev, isRunning: false } : prev));
+      setLastUpdated(new Date());
+    } catch (e) {
+      console.error("Stop calling failed:", e);
+      alert("Failed to stop campaign calling");
+    } finally {
+      setIsTogglingCampaign(false);
+    }
+  };
+
+  const handleToggleCampaignCalling = async () => {
+    if (campaign?.isRunning) {
+      await stopCampaignCallingBackend();
+    } else {
+      await startCampaignCallingBackend();
+    }
+  };
+
   // Live call logs functions
   const startLiveCallPolling = async (uniqueId) => {
     if (isPolling) {
@@ -1788,16 +2050,7 @@ function CampaignDetails({ campaignId, onBack }) {
     };
   }, []);
 
-  // Periodically fetch campaign calling status for real-time updates
-  useEffect(() => {
-    if (!campaignId) return;
-
-    const interval = setInterval(() => {
-      fetchCampaignCallingStatus();
-    }, 5000); // Update every 5 seconds
-
-    return () => clearInterval(interval);
-  }, [campaignId]);
+  // Removed periodic auto-refresh of campaign calling status; refresh manually via button
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -1884,142 +2137,67 @@ function CampaignDetails({ campaignId, onBack }) {
       {/* Scrollable Content Area */}
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          {/* Action Buttons Section */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <h2 className="text-xl font-semibold text-gray-900">
-                  Campaign Actions
-                </h2>
-                <p className="text-gray-600 mt-1">
-                  Manage your campaign operations and contacts
-                </p>
-              </div>
-              <div className="flex items-center space-x-3">
+          {/* Minimal Controls */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
+            <div className="flex items-center justify-between">
+              {/* Run / Stop toggle (small) */}
+              <div className="flex items-center gap-2">
                 <button
-                  onClick={fetchCampaignGroups}
-                  disabled={loadingCampaignGroups}
-                  className="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-sm"
+                  onClick={handleToggleCampaignCalling}
+                  disabled={isTogglingCampaign}
+                  title={
+                    campaign?.isRunning ? "Stop campaign" : "Start campaign"
+                  }
+                  className={`inline-flex items-center justify-center h-9 p-2 border rounded-md border-gray-200 transition-colors ${
+                    isTogglingCampaign
+                      ? "bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed"
+                      : campaign?.isRunning
+                      ? "bg-red-100 border-red-600 text-red-800 hover:bg-red-100"
+                      : "bg-green-100 border-green-600 text-green-800 hover:bg-green-100"
+                  }`}
                 >
-                  <svg
-                    className={`w-4 h-4 mr-2 ${
-                      loadingCampaignGroups ? "animate-spin" : ""
-                    }`}
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                    />
-                  </svg>
-                  {loadingCampaignGroups ? "Refreshing..." : "Refresh"}
+                  {campaign?.isRunning ? (
+                    <FiPause className="w-4 h-4" />
+                  ) : (
+                    <FiPlay className="w-4 h-4" />
+                  )}
+                  <span className="mx-2 text-lg text-gray-600">
+                    {campaign?.isRunning ? "Stop" : "Run"}
+                  </span>
                 </button>
               </div>
-            </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <button
-                onClick={() => {
-                  setShowCallModal(true);
-                  fetchCampaignContacts(); // Load campaign contacts when opening modal
-                }}
-                className={`group relative px-6 py-4 rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-1 ${
-                  campaignContacts.length === 0 ||
-                  loadingAgents ||
-                  loadingContacts
-                    ? "bg-gray-400 cursor-not-allowed"
-                    : "bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700"
-                } text-white`}
-                disabled={
-                  campaignContacts.length === 0 ||
-                  loadingAgents ||
-                  loadingContacts
-                }
-              >
-                <div className="flex items-center">
-                  <div className="p-2 bg-white bg-opacity-20 rounded-lg mr-3">
-                    {loadingContacts ? (
-                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
-                    ) : (
-                      <FiPhone
-                        className="w-6 h-6 text-green-700"
-                        style={{ minWidth: "24px", minHeight: "24px" }}
-                      />
+              {/* Add buttons */}
+
+              <div className="flex items-center gap-2">
+                <div className="mb-2 text-sm text-gray-700 flex items-center gap-4">
+                  {Array.isArray(campaign?.agent) &&
+                    campaign.agent.length > 0 && (
+                      <span className="inline-flex items-center gap-1">
+                        <span className="text-gray-500">Agent:</span>
+                        <span className="font-medium">
+                          {(() => {
+                            const { id, immediateName } =
+                              getPrimaryAgentIdentity();
+                            return immediateName || (id ? agentMap[id] : "");
+                          })()}
+                        </span>
+                      </span>
                     )}
-                  </div>
-                  <div className="text-left">
-                    <div className="font-semibold">Start Campaign</div>
-                    <div className="text-sm opacity-90">
-                      {loadingContacts
-                        ? "Loading contacts..."
-                        : campaignContacts.length === 0
-                        ? "No contacts available"
-                        : `Start campaign calling (${campaignContacts.length} contacts)`}
-                    </div>
-                  </div>
                 </div>
-              </button>
 
-              <button
-                onClick={() => {
-                  setShowCallDetailsModal(true);
-                  fetchCampaignCallLogs(1);
-                }}
-                className="group relative bg-gradient-to-r from-purple-500 to-purple-600 text-white px-6 py-4 rounded-xl hover:from-purple-600 hover:to-purple-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-1"
-                disabled={!campaign}
-              >
-                <div className="flex items-center">
-                  <div className="p-2 bg-white bg-opacity-20 rounded-lg mr-3">
-                    <FiBarChart2
-                      className="w-6 h-6 text-purple-700"
-                      style={{ minWidth: "24px", minHeight: "24px" }}
-                    />
-                  </div>
-                  <div className="text-left">
-                    <div className="font-semibold">Call Details</div>
-                    <div className="text-sm opacity-90">View call logs</div>
-                  </div>
-                </div>
-              </button>
-
-              <button
-                onClick={() => setShowAddGroupsModal(true)}
-                className="group relative bg-gradient-to-r from-blue-500 to-blue-600 text-white px-6 py-4 rounded-xl hover:from-blue-600 hover:to-blue-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-1"
-              >
-                <div className="flex items-center">
-                  <div className="p-2 bg-white bg-opacity-20 rounded-lg mr-3">
-                    <FiPlus
-                      className="w-6 h-6 text-blue-700"
-                      style={{ minWidth: "24px", minHeight: "24px" }}
-                    />
-                  </div>
-                  <div className="text-left">
-                    <div className="font-semibold">Add Groups</div>
-                    <div className="text-sm opacity-90">Include new groups</div>
-                  </div>
-                </div>
-              </button>
-              <button
-                onClick={() => setShowCallModal(true)}
-                className="group relative bg-gradient-to-r from-green-500 to-green-600 text-white px-6 py-4 rounded-xl hover:from-green-600 hover:to-green-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-1"
-              >
-                <div className="flex items-center">
-                  <div className="p-2 bg-white bg-opacity-20 rounded-lg mr-3">
-                    <FiUser
-                      className="w-6 h-6 text-green-700"
-                      style={{ minWidth: "24px", minHeight: "24px" }}
-                    />
-                  </div>
-                  <div className="text-left">
-                    <div className="font-semibold">Add Agent</div>
-                    <div className="text-sm opacity-90">Add AI Agent</div>
-                  </div>
-                </div>
-              </button>
+                <button
+                  onClick={() => {
+                    setShowAddAgentModal(true);
+                    if (!agents || agents.length === 0) {
+                      fetchAgents();
+                    }
+                  }}
+                  className="inline-flex items-center px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+                >
+                  <FiUserPlus className="w-4 h-4 mr-1.5" /> Add Agent
+                </button>
+              </div>
             </div>
           </div>
 
@@ -2068,6 +2246,45 @@ function CampaignDetails({ campaignId, onBack }) {
               </div>
             </div>
           )}
+
+          {/* Small cards for current groups */}
+          <h1 className="text-xl font-bold text-gray-900 pb-3">
+            Current Groups
+          </h1>
+          {campaignGroups && campaignGroups.length > 0 && (
+            <div className="mb-3 flex items-center gap-3 flex-wrap">
+              {campaignGroups.map((group) => (
+                <div
+                  key={`status-chip-${group._id}`}
+                  className="inline-flex items-start justify-between gap-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2"
+                >
+                  <div>
+                    <div className="text-sm font-semibold text-gray-800 leading-5">
+                      {group.name}
+                    </div>
+                    <div className="text-xs text-gray-500 leading-4">
+                      {group.contacts?.length || 0} contacts
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    title="Remove group"
+                    className="text-red-600 hover:text-red-700"
+                    onClick={() => handleRemoveGroup(group._id)}
+                  >
+                    <FiTrash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+              <button
+                onClick={() => setShowAddGroupsModal(true)}
+                className="inline-flex items-center px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+              >
+                <FiPlus className="w-4 h-4 mr-1.5" /> Add Group
+              </button>
+            </div>
+          )}
+
           {/* Campaign Progress Section - Always Visible */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-6">
             <div className="flex items-center justify-between mb-4">
@@ -2078,32 +2295,22 @@ function CampaignDetails({ campaignId, onBack }) {
                 </h3>
                 <span
                   className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                    callingStatus === "calling"
+                    campaign?.isRunning
                       ? "bg-green-50 text-green-700 border border-green-200"
-                      : callingStatus === "paused"
-                      ? "bg-yellow-50 text-yellow-700 border border-yellow-200"
-                      : callingStatus === "completed"
-                      ? "bg-blue-50 text-blue-700 border border-blue-200"
                       : "bg-gray-50 text-gray-600 border border-gray-200"
                   }`}
                 >
-                  {callingStatus === "calling"
-                    ? "🟢 Active"
-                    : callingStatus === "paused"
-                    ? "🟡 Paused"
-                    : callingStatus === "completed"
-                    ? "🔵 Done"
-                    : "⚪ Ready"}
+                  {campaign?.isRunning ? "🟢 Running" : "⚪ Not Running"}
                 </span>
               </div>
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center justify-between space-x-2">
                 <button
                   onClick={fetchCampaignCallingStatus}
-                  className="text-xs px-2 py-1 bg-gray-50 text-gray-500 rounded-md hover:bg-gray-100 transition-colors border border-gray-200"
+                  className="text-xs px-2 py-1 bg-gray-50 text-gray-500 rounded-md hover:bg-gray-100 transition-colors border border-gray-200 flex items-center justify-between"
                   title="Refresh status"
                 >
                   <svg
-                    className="w-3 h-3"
+                    className="w-3 h-3 mx-1"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -2115,6 +2322,7 @@ function CampaignDetails({ campaignId, onBack }) {
                       d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
                     />
                   </svg>
+                  <span>Refersh</span>
                 </button>
                 {callingStatus !== "idle" && (
                   <button
@@ -2128,18 +2336,12 @@ function CampaignDetails({ campaignId, onBack }) {
             </div>
 
             {/* Metrics Grid */}
-            <div className="grid grid-cols-4 gap-4 mb-4">
+            <div className="grid grid-cols-3 gap-4 mb-4">
               <div className="text-center">
                 <div className="text-lg font-semibold text-gray-900">
-                  {campaignContacts.length || 0}
+                  {callResults.length || 0} / {campaignContacts.length || 0}
                 </div>
-                <div className="text-xs text-gray-500">Contacts</div>
-              </div>
-              <div className="text-center">
-                <div className="text-lg font-semibold text-green-600">
-                  {callResults.length || 0}
-                </div>
-                <div className="text-xs text-gray-500">Calls</div>
+                <div className="text-xs text-gray-500">Progress</div>
               </div>
               <div className="text-center">
                 <div className="text-lg font-semibold text-blue-600">
@@ -2162,11 +2364,9 @@ function CampaignDetails({ campaignId, onBack }) {
             <div className="mb-3">
               <div className="flex justify-between items-center mb-2">
                 <span className="text-xs font-medium text-gray-700">
-                  Progress
+                  Progress Bar
                 </span>
-                <span className="text-xs text-gray-500">
-                  {callResults.length || 0} of {campaignContacts.length || 0}
-                </span>
+                <span className="text-xs text-gray-500"></span>
               </div>
               <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
                 <div
@@ -2190,19 +2390,7 @@ function CampaignDetails({ campaignId, onBack }) {
               </div>
             </div>
 
-            {/* Current Contact Info - Enhanced */}
-            {callingStatus === "calling" &&
-              campaignContacts[currentContactIndex] && (
-                <div className="flex items-center justify-between text-xs bg-green-50 px-3 py-2 rounded-md border border-green-200">
-                  <span className="text-green-800 font-medium">
-                    Calling: {campaignContacts[currentContactIndex].name}
-                  </span>
-                  <span className="flex items-center space-x-2">
-                    <div className="animate-pulse w-2 h-2 bg-green-500 rounded-full"></div>
-                    <span className="text-green-700 font-medium">Live</span>
-                  </span>
-                </div>
-              )}
+            {/* Removed live calling UI for frontend-controlled calls */}
 
             {callingStatus === "paused" && (
               <div className="text-xs text-yellow-700 text-center py-2 bg-yellow-50 rounded-md border border-yellow-200">
@@ -3577,6 +3765,87 @@ function CampaignDetails({ campaignId, onBack }) {
                   ) : (
                     <>Update</>
                   )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Agent Modal */}
+      {showAddAgentModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl w-11/12 max-w-md shadow-2xl">
+            <div className="flex justify-between items-center p-6 border-b border-gray-200">
+              <h3 className="text-2xl font-bold text-gray-800">Select Agent</h3>
+              <button
+                className="bg-none border-none text-2xl cursor-pointer text-gray-500 hover:text-gray-700 p-2 w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-200 transition-colors duration-200"
+                onClick={() => setShowAddAgentModal(false)}
+              >
+                <FiX />
+              </button>
+            </div>
+            <div className="p-6">
+              {loadingAgents ? (
+                <div className="text-center py-8">
+                  <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                  </div>
+                  <p className="text-gray-500 mt-2">Loading agents...</p>
+                </div>
+              ) : (agents || []).length === 0 ? (
+                <div className="text-center py-8 bg-gray-50 rounded-xl border-2 border-dashed border-gray-300">
+                  <FiUsers className="mx-auto text-4xl text-gray-400 mb-4" />
+                  <h5 className="text-lg font-medium text-gray-600 mb-2">
+                    No agents available
+                  </h5>
+                  <p className="text-gray-500">Create an agent to proceed.</p>
+                </div>
+              ) : (
+                <div className="space-y-3 max-h-80 overflow-y-auto">
+                  {agents.map((agent) => (
+                    <label
+                      key={agent._id}
+                      className={`flex items-center justify-between border rounded-lg p-3 cursor-pointer ${
+                        selectedAgentIdForAssign === agent._id
+                          ? "border-blue-400 bg-blue-50"
+                          : "border-gray-200 hover:border-gray-300"
+                      }`}
+                      onClick={() => setSelectedAgentIdForAssign(agent._id)}
+                    >
+                      <div>
+                        <div className="font-semibold text-gray-900">
+                          {agent.agentName}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {agent.description}
+                        </div>
+                      </div>
+                      <input
+                        type="radio"
+                        name="assignAgent"
+                        checked={selectedAgentIdForAssign === agent._id}
+                        onChange={() => setSelectedAgentIdForAssign(agent._id)}
+                      />
+                    </label>
+                  ))}
+                </div>
+              )}
+              <div className="flex justify-end gap-3 mt-6">
+                <button
+                  type="button"
+                  onClick={() => setShowAddAgentModal(false)}
+                  className="px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={!selectedAgentIdForAssign}
+                  onClick={saveSelectedAgentToCampaign}
+                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
+                >
+                  Save
                 </button>
               </div>
             </div>
