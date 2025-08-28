@@ -869,42 +869,6 @@ export default function CreditsOverview() {
         </div>
       </div>
 
-      {/* Tab Navigation */}
-      <div className="px-8 py-4 border-b border-gray-200">
-        <div className="flex gap-1">
-          <button
-            onClick={() => setActiveTab('overview')}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-              activeTab === 'overview'
-                ? 'bg-black text-white'
-                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-            }`}
-          >
-            Overview
-          </button>
-          <button
-            onClick={() => setActiveTab('history')}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-              activeTab === 'history'
-                ? 'bg-black text-white'
-                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-            }`}
-          >
-            History
-          </button>
-          <button
-            onClick={() => setActiveTab('purchase')}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-              activeTab === 'purchase'
-                ? 'bg-black text-white'
-                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-            }`}
-          >
-            Purchase
-          </button>
-        </div>
-      </div>
-
       {/* Main Content */
       }
       <div className="flex-1 overflow-y-auto p-6">
