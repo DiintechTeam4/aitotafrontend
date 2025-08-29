@@ -7,7 +7,7 @@ import aitota6 from "./LandingComponents/assets/aitota5.png";
 import aitota7 from "./LandingComponents/assets/aitota6.png";
 
 const Home = () => {
-  const navigate = useNavigate();
+    const navigate = useNavigate();
   const [formData, setFormData] = useState({
     name: "",
     phone: ""
@@ -32,6 +32,17 @@ const Home = () => {
 
   return (
     <div className="min-h-screen bg-black text-white">
+      <style>{`
+        .glow-img { border-radius: 12px; animation: multiGlow 4s infinite; }
+        .glow-mic { animation: multiGlow 4s infinite; }
+        @keyframes multiGlow {
+          0% { box-shadow: 0 0 20px 5px red; }
+          25% { box-shadow: 0 0 25px 8px blue; }
+          50% { box-shadow: 0 0 25px 8px limegreen; }
+          75% { box-shadow: 0 0 25px 8px orange; }
+          100% { box-shadow: 0 0 20px 5px violet; }
+        }
+      `}</style>
       {/* Header */}
       <header className="flex justify-between items-center px-6 py-6 lg:px-16">
         <div className="flex items-center gap-8">
@@ -56,16 +67,16 @@ const Home = () => {
         <div className="max-w-6xl mx-auto text-center">
           <h1 className="text-4xl md:text-6xl font-bold mb-6">
             Conversational AI for Businesses
-          </h1>
+      </h1>
           <p className="text-lg md:text-xl text-gray-300 mb-12 max-w-3xl mx-auto">
             Aitota is revolutionizing communication with cutting-edge conversational AI, 
             connecting people and businesses with AI Voice.
           </p>
           
-          <div className="flex flex-col lg:flex-row items-center justify-center gap-6 md:gap-8 mb-12">
+          <div className="flex flex-col lg:flex-row items-center justify-center gap-12 md:gap-14 mb-12">
             {/* Click to Talk Button */}
             <div className="flex flex-col items-center">
-              <button className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center shadow-lg hover:bg-green-400 transition-colors mb-2">
+              <button className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center shadow-lg hover:bg-green-400 transition-colors mb-2 glow-mic">
                 <svg className="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z" clipRule="evenodd" />
                 </svg>
@@ -76,7 +87,7 @@ const Home = () => {
             {/* Contact Form */}
             <form onSubmit={handleGetCall} className="flex flex-col gap-3 sm:gap-4 w-full max-w-md">
               <div className="relative">
-                <svg className="absolute left-3 top-3 w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                <svg className="absolute ml-50 left-3 top-3 w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
                 </svg>
                 <input
@@ -85,12 +96,12 @@ const Home = () => {
                   placeholder="Enter Your Name"
                   value={formData.name}
                   onChange={handleInputChange}
-                  className="w-full pl-10 pr-4 py-3 bg-gray-800 border border-gray-600 rounded-lg focus:outline-none focus:border-white"
+                  className="w-1/2 pl-10 ml-45 pr-4 py-3 bg-gray-800 border border-gray-600 rounded-lg focus:outline-none focus:border-white"
                   required
                 />
               </div>
               <div className="relative">
-                <svg className="absolute left-3 top-3 w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                <svg className="absolute ml-50 left-3 top-3 w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
                   <path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z" />
                 </svg>
                 <input
@@ -99,13 +110,13 @@ const Home = () => {
                   placeholder="Enter Mobile Number"
                   value={formData.phone}
                   onChange={handleInputChange}
-                  className="w-full pl-10 pr-4 py-3 bg-gray-800 border border-gray-600 rounded-lg focus:outline-none focus:border-white"
+                  className="w-1/2 pl-10 ml-45 py-3 bg-gray-800 border border-gray-600 rounded-lg focus:outline-none focus:border-white"
                   required
                 />
               </div>
               <button
                 type="submit"
-                className="bg-blue-600 text-white py-3 px-6 rounded-lg hover:bg-blue-700 transition-colors"
+                className="w-1/3 bg-blue-600 ml-60 text-white py-3 px-2 rounded-lg hover:bg-blue-700 transition-colors"
               >
                 Get a Call
               </button>
@@ -120,9 +131,14 @@ const Home = () => {
             >
               Try For Free
             </button>
-            <button className="text-white hover:text-gray-300 transition-colors flex items-center justify-center">
+            <a
+              href="https://web.whatsapp.com/send/?phone=8147540362&text=I%20want%20to%20enable%20my%20business%20with%20Aitota.%20My%20name%20is"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-white hover:text-gray-300 transition-colors flex items-center justify-center"
+            >
               Get in Touch <span className="ml-2">→</span>
-            </button>
+            </a>
           </div>
         </div>
       </section>
@@ -136,7 +152,7 @@ const Home = () => {
               <img 
                 src={aitota3} 
                 alt="Revolutionizing Communication" 
-                className="w-full h-auto max-h-72 md:max-h-96 lg:max-h-[28rem] object-contain rounded-lg"
+                className="w-full h-auto max-h-72 md:max-h-96 lg:max-h-[28rem] object-contain rounded-lg glow-img"
               />
             </div>
             <div className="lg:w-1/2 w-full">
@@ -163,7 +179,7 @@ const Home = () => {
               <img 
                 src={aitota4} 
                 alt="Empowering Voices" 
-                className="w-full h-auto max-h-72 md:max-h-96 lg:max-h-[28rem] object-contain rounded-lg"
+                className="w-full h-auto max-h-72 md:max-h-96 lg:max-h-[28rem] object-contain rounded-lg glow-img"
               />
             </div>
             <div className="lg:w-1/2 w-full">
@@ -190,7 +206,7 @@ const Home = () => {
               <img 
                 src={aitota5} 
                 alt="Cutting-Edge AI Technology" 
-                className="w-full h-auto max-h-72 md:max-h-96 lg:max-h-[28rem] object-contain rounded-lg"
+                className="w-full h-auto max-h-72 md:max-h-96 lg:max-h-[28rem] object-contain rounded-lg glow-img"
               />
             </div>
             <div className="lg:w-1/2 w-full">
@@ -217,7 +233,7 @@ const Home = () => {
               <img 
                 src={aitota7} 
                 alt="Global Connectivity" 
-                className="w-full h-auto max-h-72 md:max-h-96 lg:max-h-[28rem] object-contain rounded-lg"
+                className="w-full h-auto max-h-72 md:max-h-96 lg:max-h-[28rem] object-contain rounded-lg glow-img"
               />
             </div>
             <div className="lg:w-1/2 w-full">
@@ -244,7 +260,7 @@ const Home = () => {
               <img 
                 src={aitota6} 
                 alt="Seamless Integration Across Industries" 
-                className="w-full h-auto max-h-72 md:max-h-96 lg:max-h-[28rem] object-contain rounded-lg"
+                className="w-full h-auto max-h-72 md:max-h-96 lg:max-h-[28rem] object-contain rounded-lg glow-img"
               />
             </div>
             <div className="lg:w-1/2 w-full">
@@ -258,8 +274,8 @@ const Home = () => {
                   onClick={handleGetStarted}
                   className="bg-black border border-white text-white px-6 py-2 rounded hover:bg-white hover:text-black transition-colors"
                 >
-                  Get Started
-                </button>
+        Get Started
+      </button>
                 
               </div>
             </div>
