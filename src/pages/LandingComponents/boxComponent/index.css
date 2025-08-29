@@ -1,0 +1,240 @@
+/* src/components/index.css */
+
+/* Default Styles */
+.Box-container {
+    padding: 60px;
+    display: flex;
+    flex-direction: row; /* Default to row direction */
+    align-items: center; /* Center items vertically */
+    gap: 20px; /* Space between flex items */
+    text-align: justify; /* Justify text inside container */
+}
+
+.Box-content {
+    width: 50%;
+    display: flex;
+    flex-direction: column;
+    align-items: center; /* Center content inside Box-content */
+    text-align: justify; /* Justify text inside Box-content */
+    justify-content: flex-start;
+}
+
+.box-image {
+    width: 100%; /* Set to full width on smaller screens */
+    max-height: 400px; /* Adjust height restriction */
+    margin-bottom: 20px; /* Space below image */
+    border-radius: 15px;
+}
+
+.start-button {
+    background-color: #fff;
+    border: none;
+    border-radius: 7px;
+    color: #000;
+    cursor: pointer;
+    font-size: 15px;
+    font-weight: 600;
+    padding: 8px 18px;
+    display: inline-block;
+    text-align: center; /* Center text inside button */
+    transition: background-color 0.3s, transform 0.2s, box-shadow 0.3s;
+}
+
+.start-button:hover {
+    background-color: #f0f0f0; /* Slightly darker background on hover */
+    transform: scale(1.05); /* Slightly enlarge the button */
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); /* Add shadow on hover */
+}
+
+.start-button:focus {
+    outline: none; /* Remove default outline */
+    box-shadow: 0 0 5px #007bff; /* Add custom outline on focus */
+}
+
+.landing-buttons {
+    display: flex;
+    gap: 10px; /* Add space between buttons */
+    align-self: start;
+    margin-top: 20px;
+}
+
+.signin-button {
+    background-color: transparent;
+    border: none;
+    border-bottom: 0.1px solid #fff;
+    color: #fff;
+    cursor: pointer;
+    font-size: 17px;
+    padding-bottom: 0;
+    display: inline-block;
+    padding: 8px 16px; 
+    transition: color 0.3s, transform 0.2s;
+    margin-left: 35px;
+}
+
+.signin-button:hover {
+    color: #ddd; /* Change text color on hover */
+    transform: scale(1.05); /* Slightly enlarge the button */
+}
+
+.signin-button:focus {
+    outline: none; /* Remove default outline */
+    color: #ddd; /* Change text color on focus */
+}
+
+.Box-header {
+    font-size: 50px;
+    font-weight: bold;
+    font-family: Arial, Helvetica, sans-serif;
+    margin-bottom: 15px; /* Space below header */
+    text-align: left;
+    align-self: start;
+}
+
+.Box-Paragraph {
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 20px;
+    line-height: 1.5;
+    margin-bottom: 10px;
+    color: white;
+    text-align: justify; /* Justify text inside paragraph */
+    hyphens: auto; /* Enable hyphenation to improve justification */
+}
+
+.box-order-1 {
+    order: 1;
+}
+
+.box-order-2 {
+    order: 0;
+}
+
+/* Responsive Styles */
+@media (max-width: 768px) {
+    .Box-container {
+        flex-direction: column; /* Stack elements vertically */
+        padding: 30px; /* Adjust padding for smaller screens */
+        align-items: center; /* Center items horizontally */
+        text-align: justify; /* Justify text inside paragraph */
+        justify-content: center;
+    }
+
+    .Box-content {
+        width: 100%; /* Full width on smaller screens */
+        text-align: center; /* Center text inside Box-content for better readability */
+    }
+
+    .box-image {
+        width: 100%; /* Set to full width on smaller screens */
+        max-height: 300px; /* Adjust height restriction */
+        margin-bottom: 20px; /* Space below image */
+    }
+
+    .start-button {
+        font-size: 14px; /* Smaller font size */
+        padding: 8px 16px; /* Adjust padding */
+        margin-bottom: 20px; /* Space below button */
+    }
+
+    .signin-button {
+        font-size: 15px; /* Smaller font size */
+        margin-left: 0; /* Remove margin */
+        margin-bottom: 20px; /* Space below button */
+    }
+
+    .Box-header {
+        font-size: 1.5em; /* Smaller header font size */
+    }
+
+    .Box-Paragraph {
+        font-size: 1em; /* Smaller paragraph font size */
+        text-align: justify; /* Justify text inside paragraph */
+        hyphens: auto; /* Enable hyphenation to improve justification */
+    }
+
+    .box-order-1, .box-order-2 {
+        order: 1; /* Reset order */
+    }
+
+    .landing-buttons {
+        flex-direction: column; /* Stack buttons vertically */
+        align-self: center;
+        justify-content: center;
+    }
+}
+
+@media (max-width: 480px) {
+    .Box-header {
+        font-size: 24px; /* Further reduce header font size */
+    }
+
+    .Box-Paragraph {
+        font-size: 14px; /* Further reduce paragraph font size */
+    }
+
+    .start-button {
+        font-size: 12px; /* Further reduce font size */
+        padding: 8px 10px; /* Further adjust padding */ 
+        display: inline-block;
+        margin-bottom: 5px; /* Space below button */
+        flex-wrap: 1;
+    }
+
+    .signin-button {
+        font-size: 15px; /* Smaller font size */
+        margin-bottom: 5px; /* Space below button */
+    }
+
+    .box-order-1, .box-order-2 {
+        order: 1; /* Reset order */
+    }
+}
+
+.image-box {
+    padding: 20px;
+    position: relative;
+}
+
+.box-image {
+    background: transparent; /* Two-color gradient */
+    position: relative;
+    border-radius: 6px;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    display: flex;
+    font-size: 1.5em;
+    color: rgb(88 199 250 / 0%);
+    border: 0px;
+    cursor: pointer;
+    font-family: cursive;
+    height: 400px;
+    animation: glowing-border 3s infinite; /* Animation for glowing effect */
+    border-radius: 4px;
+}
+
+/* Glowing rainbow border effect */
+@keyframes glowing-border {
+    0% {
+        box-shadow: 0 0 5px #d56767;
+    }
+    16% {
+        box-shadow: 0 0 10px #adeae4;
+    }
+    32% {
+        box-shadow: 0 0 15px #cecec5;
+    }
+    48% {
+        box-shadow: 0 0 20px #a7ffa7;
+    }
+    64% {
+        box-shadow: 0 0 25px #8a8ad6;
+    }
+    80% {
+        box-shadow: 0 0 30px #4b0082;
+    }
+    100% {
+        box-shadow: 0 0 35px #d8baf1;
+    }
+}
+

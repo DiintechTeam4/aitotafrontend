@@ -1,0 +1,14 @@
+.Voice-header{
+    font-size: 50px;
+}
+.Voice-paragraph{
+    font-size:20px;
+}
+@media (max-width:767px){
+    .Voice-header{
+        font-size: 24px;
+    }
+    .Voice-paragraph{
+        font-size: 15px;
+    }
+}

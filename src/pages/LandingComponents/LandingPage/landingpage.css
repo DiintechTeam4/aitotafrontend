@@ -1,0 +1,11 @@
+.landingpage{
+    margin: 0;
+    
+
+    background-color: black;
+    
+    background-size: cover;
+    color:white;
+    display: flex;
+    flex-direction: column;
+  }

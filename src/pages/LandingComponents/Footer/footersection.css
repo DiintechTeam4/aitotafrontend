@@ -1,0 +1,85 @@
+.footer-section {
+    background-color: black;
+    color: #fff;
+    padding: 45px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    height: 100vh;
+    justify-content: center;
+  }
+  .heading-footer{
+    align-self: start;
+    padding-left: 20px;
+    font-size: 35px;
+    padding-bottom: 45px;
+   gap: 5px;
+  }
+  .heading-span{
+    font-size: 13px;
+  }
+  .footer-container {
+    display: flex;
+    justify-content: space-around;
+    width: 100%;
+    max-width: 1200px;
+    flex-wrap: wrap; /* Allows columns to wrap to the next line on smaller screens */
+    align-items: center;
+  }
+  
+  .footer-column {
+    flex: 1;
+    margin: 0 15px;
+    min-width: 200px; /* Ensures columns don't get too narrow */
+  }
+  
+  .footer-column h3 {
+    border-bottom: none; /* Removes the border */
+    padding-bottom: 10px;
+    margin-bottom: 15px;
+  }
+  
+  .footer-column ul {
+    list-style: none;
+    padding: 0;
+  }
+  
+  .footer-column ul li {
+    margin-bottom: 10px;
+  }
+  
+  .footer-column ul li a {
+    color: #fff;
+    text-decoration: none;
+  }
+  
+  .footer-column ul li a:hover {
+    text-decoration: underline; /* Keeps underline on hover */
+  }
+  
+  .footer-bottom {
+    align-self: start;
+    margin-top: 20px;
+    padding-left: 15px;
+  }
+  .tradmark {
+    height: 15px;
+    width: 15px;
+    filter: invert(1) brightness(2);
+  }
+  /* Media query for smaller devices */
+  @media (max-width: 768px) {
+    .footer-container {
+      flex-direction: column; /* Stacks columns vertically on smaller screens */
+      align-items: flex-start; /* Aligns columns to the start (left) */
+      text-align: left;
+      padding-left: 45px;
+  
+    }
+  
+    .footer-column {
+      margin: 10px 0; /* Adds margin between stacked columns */
+      width: 100%; /* Ensures columns take full width of container */
+    }
+  }
+  
