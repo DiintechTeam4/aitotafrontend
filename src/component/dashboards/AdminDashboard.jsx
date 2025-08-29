@@ -71,6 +71,126 @@ const AdminDashboard = ({ user, onLogout }) => {
   const [clientTokenForHumanAgent, setClientTokenForHumanAgent] =
     useState(null);
 
+  // Tools/Templates state
+  const [activeTool, setActiveTool] = useState(null); // 'whatsapp' | 'telegram' | 'email' | 'sms'
+  const [templates, setTemplates] = useState([]);
+  const [externalTemplates, setExternalTemplates] = useState(false);
+  const [selectedTemplateIds, setSelectedTemplateIds] = useState([]);
+  const [assignAgentId, setAssignAgentId] = useState("");
+  const [accessRequests, setAccessRequests] = useState([]);
+  const [loadingRequests, setLoadingRequests] = useState(false);
+  const [openMenuTemplateId, setOpenMenuTemplateId] = useState(null);
+
+  const fetchTemplates = async (platform) => {
+    try {
+      // For WhatsApp, load from external service provided
+      if (platform === 'whatsapp') {
+        const resp = await fetch('https://whatsapp-template-module.onrender.com/api/whatsapp/get-templates');
+        const json = await resp.json();
+        const arr = Array.isArray(json?.templates) ? json.templates : [];
+        // Normalize into a common shape used by the grid
+        const normalized = arr.map(t => {
+          const bodyComponent = (t.components || []).find(c => c.type === 'BODY');
+          const buttonsComp = (t.components || []).find(c => c.type === 'BUTTONS');
+          const firstUrl = buttonsComp && Array.isArray(buttonsComp.buttons) && buttonsComp.buttons[0]?.url;
+          return {
+            _id: t.id || t.name,
+            name: t.name,
+            url: firstUrl || '',
+            imageUrl: '',
+            description: bodyComponent?.text || '',
+            language: t.language,
+            status: t.status,
+            category: t.category
+          };
+        });
+        setTemplates(normalized);
+        setExternalTemplates(true);
+      } else {
+        const resp = await fetch(`${API_BASE_URL}/templates?platform=${platform}`);
+        const json = await resp.json();
+        setTemplates(json?.success ? json.data || [] : []);
+        setExternalTemplates(false);
+      }
+      setSelectedTemplateIds([]);
+    } catch (e) {
+      setTemplates([]);
+      setSelectedTemplateIds([]);
+      setExternalTemplates(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTool === 'whatsapp' || activeTool === 'telegram' || activeTool === 'email' || activeTool === 'sms') {
+      fetchTemplates(activeTool);
+      fetchAccessRequests({ status: 'pending', platform: activeTool });
+    }
+  }, [activeTool]);
+
+  const fetchAccessRequests = async (params = { status: 'pending' }) => {
+    try {
+      setLoadingRequests(true);
+      const qs = new URLSearchParams(params).toString();
+      const resp = await fetch(`${API_BASE_URL}/agent-access/requests${qs ? `?${qs}` : ''}`);
+      const json = await resp.json();
+      setAccessRequests(json?.success ? (json.data || []) : []);
+    } catch (e) {
+      setAccessRequests([]);
+    } finally {
+      setLoadingRequests(false);
+    }
+  };
+
+  const approveAccessRequest = async (requestId, templateName) => {
+    try {
+      const token = localStorage.getItem('admintoken') || sessionStorage.getItem('admintoken');
+      const resp = await fetch(`${API_BASE_URL}/agent-access/approve`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ requestId, templateName })
+      });
+      const json = await resp.json();
+      if (json?.success) {
+        await fetchAccessRequests({ status: 'pending', platform: activeTool });
+        alert('Approved and updated agent successfully');
+      } else {
+        alert(json?.message || 'Failed to approve');
+      }
+    } catch (e) {
+      alert('Failed to approve');
+    }
+  };
+
+  const toggleSelectTemplate = (id) => {
+    setSelectedTemplateIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  const assignTemplates = async () => {
+    try {
+      if (!assignAgentId || selectedTemplateIds.length === 0) {
+        alert("Enter Agent ID and select at least one template");
+        return;
+      }
+      const resp = await fetch(`${API_BASE_URL}/templates/assign`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ agentId: assignAgentId, templateIds: selectedTemplateIds }),
+      });
+      const json = await resp.json();
+      if (!resp.ok || !json.success) throw new Error(json.message || "Failed to assign");
+      alert("Templates assigned to agent");
+      setSelectedTemplateIds([]);
+      setAssignAgentId("");
+    } catch (e) {
+      alert(e.message || "Failed to assign templates");
+    }
+  };
+
   // Check if screen is mobile and handle resize events
   useEffect(() => {
     const checkIfMobile = () => {
@@ -916,6 +1036,176 @@ const AdminDashboard = ({ user, onLogout }) => {
 
             {activeTab === "Coupons" && (
               <CouponManagement />
+            )}
+
+            {activeTab === "Tools" && (
+              <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
+                <h3 className="text-xl font-semibold text-gray-800 mb-4">Tools</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                  {[
+                    { id: "whatsapp", label: "WhatsApp", color: "bg-green-600" },
+                    { id: "telegram", label: "Telegram", color: "bg-blue-500" },
+                    { id: "email", label: "Email", color: "bg-red-500" },
+                    { id: "sms", label: "SMS", color: "bg-purple-600" },
+                  ].map((t) => (
+                    <button
+                      key={t.id}
+                      onClick={() => setActiveTool(t.id)}
+                      className={`h-28 rounded-xl text-white text-2xl font-semibold shadow transition transform hover:-translate-y-0.5 ${t.color}`}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+
+                {activeTool && (
+                  <div>
+                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
+                      <h4 className="text-lg font-semibold capitalize">{activeTool} Templates</h4>
+                      {!externalTemplates && (
+                        <div className="flex gap-2 items-center">
+                          <input
+                            value={assignAgentId}
+                            onChange={(e) => setAssignAgentId(e.target.value)}
+                            placeholder="Agent ID to assign"
+                            className="px-3 py-2 border rounded w-72"
+                          />
+                          <button onClick={assignTemplates} className="px-4 py-2 bg-black text-white rounded">
+                            Assign Selected
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                      {templates.map((t) => (
+                        <div
+                          key={t._id}
+                          onClick={() => !externalTemplates && toggleSelectTemplate(t._id)}
+                          className={`cursor-pointer border rounded-lg p-5 bg-white shadow-sm hover:shadow-md transition ${
+                            !externalTemplates && selectedTemplateIds.includes(t._id) ? "ring-2 ring-black" : ""
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-3 mb-2">
+                            <div className="font-semibold text-gray-900 text-lg truncate">{t.name}</div>
+                            {t.status && (
+                              <span className={`text-xs px-2 py-0.5 rounded-full ${t.status === 'APPROVED' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}>{t.status}</span>
+                            )}
+                            <div className="relative">
+                              <button
+                                type="button"
+                                className="w-8 h-8 flex items-center justify-center rounded hover:bg-gray-100"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setOpenMenuTemplateId(openMenuTemplateId === t._id ? null : t._id);
+                                }}
+                                title="Requests"
+                              >
+                                <span className="text-xl leading-none">⋯</span>
+                              </button>
+                              {openMenuTemplateId === t._id && (
+                                <div className="absolute right-0 mt-2 w-80 bg-white border border-gray-200 rounded shadow-lg z-10" onClick={(e) => e.stopPropagation()}>
+                                  <div className="px-3 py-2 text-sm font-semibold text-gray-700 border-b">Pending Requests</div>
+                                  <div className="max-h-72 overflow-y-auto">
+                                    {loadingRequests ? (
+                                      <div className="p-3 text-sm text-gray-500">Loading...</div>
+                                    ) : (
+                                      (accessRequests || []).filter(r => r.platform === activeTool).length === 0 ? (
+                                        <div className="p-3 text-sm text-gray-500">No pending requests</div>
+                                      ) : (
+                                        (accessRequests || []).filter(r => r.platform === activeTool).map((r) => (
+                                          <div key={r._id} className="px-3 py-2 text-sm flex items-center justify-between hover:bg-gray-50">
+                                            <div className="pr-2 min-w-0">
+                                              <div className="text-gray-800 truncate">Agent: <span className="font-medium break-all">{typeof r.agentId === 'object' ? r.agentId?._id || r.agentId : r.agentId}</span></div>
+                                              <div className="text-gray-500 truncate">Client: <span className="break-all">{typeof r.clientId === 'object' ? r.clientId?._id || r.clientId : r.clientId}</span></div>
+                                            </div>
+                                            <button
+                                              className="flex-shrink-0 px-2 py-1 bg-green-600 text-white rounded text-xs hover:bg-green-700"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                // Pass template name for WhatsApp link formation
+                                                approveAccessRequest(r._id, t.name);
+                                              }}
+                                            >
+                                              Approve
+                                            </button>
+                                          </div>
+                                        ))
+                                      )
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          <div className="text-xs text-gray-500 mb-2">
+                            {(t.language || t.category) && (
+                              <span>{t.language}{t.language && t.category ? ' • ' : ''}{t.category}</span>
+                            )}
+                          </div>
+                          {t.imageUrl && (
+                            <img src={t.imageUrl} alt={t.name} className="w-full h-40 object-cover rounded mb-3" />
+                          )}
+                          {t.description && (
+                            <div className="text-sm text-gray-700 mt-2 whitespace-pre-wrap line-clamp-5">{t.description}</div>
+                          )}
+                          {t.url && (
+                            <a href={t.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center text-sm text-blue-600 hover:underline mt-3">
+                              Open Link
+                            </a>
+                          )}
+                        </div>
+                      ))}
+                      {templates.length === 0 && (
+                        <div className="text-gray-500">No templates found for this platform.</div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {activeTool === 'requests' && (
+                  <div>
+                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
+                      <h4 className="text-lg font-semibold">Pending Access Requests</h4>
+                      <div className="flex gap-2 items-center">
+                        <button onClick={() => fetchAccessRequests({ status: 'pending' })} className="px-4 py-2 bg-black text-white rounded">Refresh</button>
+                      </div>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Client ID</th>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Agent ID</th>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Platform</th>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Requested At</th>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Action</th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {loadingRequests ? (
+                            <tr><td className="px-4 py-6 text-center text-gray-500" colSpan={5}>Loading...</td></tr>
+                          ) : accessRequests.length === 0 ? (
+                            <tr><td className="px-4 py-6 text-center text-gray-500" colSpan={5}>No pending requests</td></tr>
+                          ) : (
+                            accessRequests.map((r) => (
+                              <tr key={r._id}>
+                                <td className="px-4 py-2 text-sm text-gray-700 break-all">{r.clientId}</td>
+                                <td className="px-4 py-2 text-sm text-gray-700 break-all">{r.agentId}</td>
+                                <td className="px-4 py-2 text-sm text-gray-700 capitalize">{r.platform}</td>
+                                <td className="px-4 py-2 text-sm text-gray-500">{new Date(r.createdAt).toLocaleString()}</td>
+                                <td className="px-4 py-2 text-sm">
+                                  <button onClick={() => approveAccessRequest(r._id)} className="px-3 py-1.5 bg-green-600 text-white rounded hover:bg-green-700">Approve</button>
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
 
             {/* Client Table */}
