@@ -135,8 +135,6 @@ function CampaignDetails({ campaignId, onBack }) {
     const intervalId = setInterval(() => {
       try {
         fetchCampaignCallLogs(1);
-        fetchLeads(1);
-        fetchMissedCalls();
       } catch (err) {
         // no-op
       }
