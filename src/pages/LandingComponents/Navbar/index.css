@@ -1,0 +1,78 @@
+/* Navbar Brand Custom Styling */
+.navbar-brand-custom {
+    color: white !important;
+    font-weight: bold;
+    font-size: 21px;
+    vertical-align: middle;
+  }
+  
+  /* Navigation Link Custom Styling */
+  .nav-link-custom {
+    color: white !important;
+    font-size: 16px;
+  }
+  
+  /* Custom Button Styling */
+  .signup-button {
+    background-color: transparent;
+    border: 1px solid #fff;
+    color: #fff;
+    border-radius: 10px;
+    height: 35px;
+    width: 90px;
+    margin-top: 6px;
+    transition: background-color 0.3s ease, color 0.3s ease; /* Smooth transition */
+  }
+  
+  /* Hover effect for signup-button */
+  .signup-button:hover {
+    background-color: #fff;
+    color: #000;
+  }
+  
+  /* Navbar Toggler Customization */
+  .navbar-toggler {
+    border: none; /* Remove border */
+    box-shadow: none; /* Remove focus outline */
+  }
+  
+  /* Hide default navbar-toggler icon */
+  .navbar-toggler-icon {
+    background-image: none; /* Remove default icon */
+  }
+  
+  /* Custom hamburger icon */
+  .navbar-toggler-icon::before {
+    content: '\2630'; /* Unicode for hamburger icon */
+    font-size: 1.5rem; /* Adjust size as needed */
+    color: white; /* Set color to white */
+  }
+  
+  /* Small Button Customization for Smaller Devices */
+  .small-btn-custom {
+    display: none !important;
+    transition: background-color 0.3s ease, color 0.3s ease; /* Smooth transition */
+  }
+  
+  /* Hover effect for small-btn-custom */
+  .small-btn-custom:hover {
+    background-color: #fff;
+    color: #000;
+  }
+  
+  @media (max-width: 768px) { /* Adjust max-width as needed for your breakpoint */
+    .small-btn-custom {
+      display: flex !important;
+      margin-left: auto;
+    }
+  
+    .btn-custom {
+      display: none !important;
+    }
+  
+    .signup-button {
+      height: 25px;
+      width: 70px;
+      font-size: 12px;
+    }
+  }
