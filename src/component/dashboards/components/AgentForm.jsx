@@ -44,6 +44,10 @@ const AgentForm = ({
   const [socialMediaLinks, setSocialMediaLinks] = useState([
     { platform: "", url: "" },
   ]);
+  const [assignedTemplates, setAssignedTemplates] = useState([]);
+  const [requesting, setRequesting] = useState(false);
+  const [myRequests, setMyRequests] = useState([]);
+  const [loadingRequests, setLoadingRequests] = useState(false);
 
   const tabs = [
     { key: "starting", label: "Starting Messages" },
@@ -51,7 +55,7 @@ const AgentForm = ({
     { key: "voice", label: "Voice Configuration" },
     { key: "system", label: "System Configuration" },
     { key: "integration", label: "Telephony Settings" },
-    { key: "social", label: "Social Media" },
+    { key: "social", label: "Action" },
   ];
 
   useEffect(() => {
@@ -84,6 +88,26 @@ const AgentForm = ({
     }
   }, [agent]);
 
+  // Hydrate social links from agent record when available
+  useEffect(() => {
+    if (!agent) return;
+    const hydrated = [];
+    if (agent.whatsappEnabled) {
+      const wa = agent.whatsapplink || (Array.isArray(agent.whatsapp) && agent.whatsapp[0]?.link) || "";
+      if (wa) hydrated.push({ platform: "whatsapp", url: wa });
+    }
+    if (agent.telegramEnabled && Array.isArray(agent.telegram) && agent.telegram[0]?.link) {
+      hydrated.push({ platform: "telegram", url: agent.telegram[0].link });
+    }
+    if (agent.emailEnabled && Array.isArray(agent.email) && agent.email[0]?.link) {
+      hydrated.push({ platform: "email", url: agent.email[0].link });
+    }
+    if (agent.smsEnabled && Array.isArray(agent.sms) && agent.sms[0]?.link) {
+      hydrated.push({ platform: "sms", url: agent.sms[0].link });
+    }
+    if (hydrated.length > 0) setSocialMediaLinks(hydrated);
+  }, [agent]);
+
   // If parent sets an initial provider (e.g. Admin flow), apply it
   useEffect(() => {
     if (initialServiceProvider) {
@@ -101,7 +125,7 @@ const AgentForm = ({
         sessionStorage.getItem("clienttoken") ||
         localStorage.getItem("admintoken");
       const response = await fetch(
-        `${API_BASE_URL}client/agents/${agentId}/audio${
+        `${API_BASE_URL}/client/agents/${agentId}/audio${
           clientId ? `?clientId=${clientId}` : ""
         }`,
         {
@@ -129,6 +153,41 @@ const AgentForm = ({
       fetchAudio(agent._id);
     }
   }, [agent, clientId]);
+
+  // Fetch templates assigned to this agent (admin assigns)
+  useEffect(() => {
+    const loadTemplates = async () => {
+      try {
+        if (!agent || !agent._id) return;
+        const resp = await fetch(`${API_BASE_URL}/templates/agent/${agent._id}`);
+        const json = await resp.json();
+        if (json.success) {
+          setAssignedTemplates(Array.isArray(json.data) ? json.data : []);
+        }
+      } catch (_) {
+        setAssignedTemplates([]);
+      }
+    };
+    loadTemplates();
+  }, [agent]);
+
+  // Fetch this agent's access requests for status display
+  useEffect(() => {
+    const loadRequests = async () => {
+      try {
+        if (!agent || !agent._id) return;
+        setLoadingRequests(true);
+        const resp = await fetch(`${API_BASE_URL}/agent-access/requests?agentId=${agent._id}`);
+        const json = await resp.json();
+        setMyRequests(json?.success ? (json.data || []) : []);
+      } catch (e) {
+        setMyRequests([]);
+      } finally {
+        setLoadingRequests(false);
+      }
+    };
+    loadRequests();
+  }, [agent]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -863,12 +922,11 @@ const AgentForm = ({
         placeholder: "sms:+1234567890",
       },
     ];
-
     return (
       <div className="space-y-6">
         <div className="flex items-center mb-6">
           <h3 className="text-xl font-semibold text-gray-800">
-            Social Media Integration
+            Integration
           </h3>
         </div>
         <div className="space-y-4">
@@ -880,6 +938,14 @@ const AgentForm = ({
               const currentLink = socialMediaLinks.find(
                 (link) => link.platform === platform.id
               );
+
+              // Determine latest request status for this platform
+              const requestsForPlatform = myRequests.filter(r => r.platform === platform.id);
+              const latestReq = requestsForPlatform.length > 0
+                ? requestsForPlatform.sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt))[0]
+                : null;
+              const status = latestReq?.status; // 'pending' | 'approved' | 'rejected'
+              const approvedTemplateName = latestReq?.templateName;
 
               return (
                 <div
@@ -899,6 +965,21 @@ const AgentForm = ({
                           {platform.name}
                         </h4>
                         <p className="text-xs text-gray-500">Social platform</p>
+                        {platform.id === 'whatsapp' && status && (
+                          <div className="mt-1">
+                            {status === 'pending' && (
+                              <span className="inline-block text-[11px] px-2 py-0.5 rounded bg-yellow-100 text-yellow-800">Request Pending</span>
+                            )}
+                            {status === 'approved' && (
+                              <span className="inline-block text-[11px] px-2 py-0.5 rounded bg-green-100 text-green-700">
+                                Approved{approvedTemplateName ? ` • ${approvedTemplateName}` : ''}
+                              </span>
+                            )}
+                            {status === 'rejected' && (
+                              <span className="inline-block text-[11px] px-2 py-0.5 rounded bg-red-100 text-red-700">Rejected</span>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -940,44 +1021,130 @@ const AgentForm = ({
                     </label>
                   </div>
 
-                  {/* URL Input (shown when enabled) */}
+                  {/* Templates or Contact Admin fallback */}
                   {isEnabled && (
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-gray-700">
-                        {platform.name} Link
-                      </label>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="text"
-                          value={currentLink?.url || ""}
-                          onChange={(e) => {
+                    <div className="space-y-3">
+                      {(() => {
+                        const items = assignedTemplates.filter(t => t.platform === platform.id);
+                        if (!items || items.length === 0) {
+                          return (
+                            <div className="p-3 rounded border border-dashed border-gray-300 bg-white">
+                              {platform.id === 'whatsapp' && agent?.whatsapplink && status === 'approved' ? (
+                                <div>
+                                  <div className="text-sm text-gray-800 mb-1">Approved Template{approvedTemplateName ? `: ${approvedTemplateName}` : ''}</div>
+                                  <div className="text-xs break-all text-gray-600 mb-2">{agent.whatsapplink}</div>
+                                  <button
+                                    type="button"
+                                    className="px-3 py-1 text-white text-xs rounded bg-green-600 hover:bg-green-700"
+                                    onClick={() => {
+                                      const next = socialMediaLinks.map((l) => l.platform === 'whatsapp' ? { ...l, url: agent.whatsapplink } : l);
+                                      if (!next.find(l => l.platform === 'whatsapp')) next.push({ platform: 'whatsapp', url: agent.whatsapplink });
+                                      setSocialMediaLinks(next);
+                                    }}
+                                  >
+                                    Use this link
+                                  </button>
+                                </div>
+                              ) : (
+                                <>
+                                  <div className="text-sm text-gray-700 mb-2">No templates available for this platform. Please contact admin.</div>
+                                  <a
+                                    href="https://web.whatsapp.com/send/?phone=8147540362&text=I%20want%20to%20enable%20my%20business%20with%20Aitota.%20My%20name%20is"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className={`inline-block px-4 py-2 text-white text-sm rounded ${platform.color} ${platform.hoverColor}`}
+                                  >
+                                    Contact Admin on WhatsApp
+                                  </a>
+                                  {platform.id === 'whatsapp' && (
+                                    <div className="mt-3">
+                                      <button
+                                        type="button"
+                                        disabled={requesting || !agent?._id || status === 'pending'}
+                                        onClick={async () => {
+                                          try {
+                                            setRequesting(true);
+                                            const authToken =
+                                              clientToken ||
+                                              sessionStorage.getItem("clienttoken") ||
+                                              localStorage.getItem("admintoken");
+                                            const resp = await fetch(`${API_BASE_URL}/agent-access/request`, {
+                                              method: 'POST',
+                                              headers: {
+                                                'Content-Type': 'application/json',
+                                                Authorization: `Bearer ${authToken}`,
+                                              },
+                                              body: JSON.stringify({
+                                                clientId: clientId || agent?.clientId || '',
+                                                agentId: agent?._id,
+                                                platform: 'whatsapp'
+                                              })
+                                            });
+                                            const json = await resp.json();
+                                            if (json.success) {
+                                              alert('Request submitted! Admin will review and approve.');
+                                              // refresh requests
+                                              try {
+                                                const r = await fetch(`${API_BASE_URL}/agent-access/requests?agentId=${agent._id}`);
+                                                const rj = await r.json();
+                                                setMyRequests(rj?.success ? (rj.data || []) : []);
+                                              } catch {}
+                                            } else {
+                                              alert(json.message || 'Failed to submit request');
+                                            }
+                                          } catch (e) {
+                                            alert('Failed to submit request');
+                                          } finally {
+                                            setRequesting(false);
+                                          }
+                                        }}
+                                        className={`px-4 py-2 bg-black text-white rounded disabled:bg-gray-400`}
+                                      >
+                                        {status === 'pending' ? 'Requested' : requesting ? 'Requesting...' : 'Request'}
+                                      </button>
+                                    </div>
+                                  )}
+                                </>
+                              )}
+                            </div>
+                          );
+                        }
+                        return (
+                          <div>
+                            <label className="text-sm font-medium text-gray-700">Choose Template</label>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2">
+                              {items.map(t => (
+                                <button
+                                  key={t._id}
+                                  type="button"
+                                  onClick={() => {
                             const newLinks = socialMediaLinks.map((link) =>
                               link.platform === platform.id
-                                ? { ...link, url: e.target.value }
+                                        ? { ...link, url: t.url }
                                 : link
                             );
+                                    // if not present yet, add entry
+                                    if (!newLinks.find(l => l.platform === platform.id)) {
+                                      newLinks.push({ platform: platform.id, url: t.url });
+                                    }
                             setSocialMediaLinks(newLinks);
                           }}
-                          placeholder={platform.placeholder}
-                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors text-sm"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (currentLink?.url) {
-                              window.open(currentLink.url, "_blank");
-                            }
-                          }}
-                          disabled={!currentLink?.url}
-                          className={`px-3 py-2 text-white text-sm rounded-lg transition-colors ${
-                            currentLink?.url
-                              ? `${platform.color} ${platform.hoverColor}`
-                              : "bg-gray-400 cursor-not-allowed"
-                          }`}
-                        >
-                          Add
+                                  className="border rounded-lg bg-white p-3 text-left hover:shadow"
+                                >
+                                  <div className="flex items-center gap-3">
+                                    {t.imageUrl && (<img src={t.imageUrl} alt={t.name} className="w-12 h-12 object-cover rounded" />)}
+                                    <div>
+                                      <div className="font-semibold text-sm">{t.name}</div>
+                                      <div className="text-xs text-gray-500 break-all">{t.url}</div>
+                                    </div>
+                                  </div>
+                                  {t.description && (<div className="text-xs text-gray-600 mt-1 line-clamp-2">{t.description}</div>)}
                         </button>
+                              ))}
                       </div>
+                          </div>
+                        );
+                      })()}
                     </div>
                   )}
                 </div>
