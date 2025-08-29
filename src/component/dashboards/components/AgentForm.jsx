@@ -55,7 +55,7 @@ const AgentForm = ({
     { key: "voice", label: "Voice Configuration" },
     { key: "system", label: "System Configuration" },
     { key: "integration", label: "Telephony Settings" },
-    { key: "social", label: "Tools" },
+    { key: "social", label: "Action" },
   ];
 
   useEffect(() => {
@@ -922,12 +922,11 @@ const AgentForm = ({
         placeholder: "sms:+1234567890",
       },
     ];
-
     return (
       <div className="space-y-6">
         <div className="flex items-center mb-6">
           <h3 className="text-xl font-semibold text-gray-800">
-            Tools
+            Integration
           </h3>
         </div>
         <div className="space-y-4">
