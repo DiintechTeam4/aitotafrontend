@@ -1,5 +1,5 @@
 "use client";
-
+import { FiMail, FiMessageSquare } from "react-icons/fi";
 import { useState, useEffect } from "react";
 import VoiceSynthesizer from "./VoiceSynthesizer";
 import AudioRecorder from "./AudioRecorder";
@@ -41,6 +41,9 @@ const AgentForm = ({
   const [defaultStartingMessageIndex, setDefaultStartingMessageIndex] =
     useState(0);
   const [isLoading, setIsLoading] = useState(false);
+  const [socialMediaLinks, setSocialMediaLinks] = useState([
+    { platform: "", url: "" },
+  ]);
 
   const tabs = [
     { key: "starting", label: "Starting Messages" },
@@ -48,6 +51,7 @@ const AgentForm = ({
     { key: "voice", label: "Voice Configuration" },
     { key: "system", label: "System Configuration" },
     { key: "integration", label: "Telephony Settings" },
+    { key: "social", label: "Social Media" },
   ];
 
   useEffect(() => {
@@ -273,6 +277,31 @@ const AgentForm = ({
 
       // Create payload without empty serviceProvider
       const { serviceProvider, ...formDataWithoutServiceProvider } = formData;
+      // Derive socials payload from current selections
+      const deriveSocials = () => {
+        const platforms = ["whatsapp", "telegram", "email", "sms"];
+        const socials = {
+          whatsappEnabled: false,
+          telegramEnabled: false,
+          emailEnabled: false,
+          smsEnabled: false,
+        };
+        const linkMap = Object.fromEntries(
+          socialMediaLinks
+            .filter((l) => l && l.platform && typeof l.url === "string")
+            .map((l) => [l.platform, l.url.trim()])
+        );
+        platforms.forEach((p) => {
+          const url = linkMap[p];
+          const enabled = !!url;
+          socials[`${p}Enabled`] = enabled;
+          if (enabled) {
+            socials[p] = [{ link: url }];
+          }
+        });
+        return socials;
+      };
+
       const payload = {
         ...formDataWithoutServiceProvider,
         startingMessages,
@@ -280,6 +309,7 @@ const AgentForm = ({
         firstMessage:
           startingMessages[defaultStartingMessageIndex]?.text ||
           formData.firstMessage,
+        ...deriveSocials(),
       };
 
       // Only add serviceProvider if it's not empty
@@ -793,10 +823,182 @@ const AgentForm = ({
             </>
           )}
         </div>
-
       </div>
     </div>
   );
+
+  const renderSocialMediaTab = () => {
+    // Define social media platforms with their icons and colors
+    const socialPlatforms = [
+      {
+        id: "whatsapp",
+        name: "WhatsApp",
+        icon: "📱",
+        color: "bg-green-500",
+        hoverColor: "hover:bg-green-600",
+        placeholder: "https://wa.me/1234567890",
+      },
+      {
+        id: "telegram",
+        name: "Telegram",
+        icon: "✈️",
+        color: "bg-blue-500",
+        hoverColor: "hover:bg-blue-600",
+        placeholder: "https://t.me/username",
+      },
+      {
+        id: "email",
+        name: "Email",
+        icon: <FiMail />,
+        color: "bg-red-500",
+        hoverColor: "hover:bg-red-600",
+        placeholder: "mailto:example@email.com",
+      },
+      {
+        id: "sms",
+        name: "SMS",
+        icon: <FiMessageSquare />,
+        color: "bg-purple-500",
+        hoverColor: "hover:bg-purple-600",
+        placeholder: "sms:+1234567890",
+      },
+    ];
+
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center mb-6">
+          <h3 className="text-xl font-semibold text-gray-800">
+            Social Media Integration
+          </h3>
+        </div>
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {socialPlatforms.map((platform) => {
+              const isEnabled = socialMediaLinks.some(
+                (link) => link.platform === platform.id
+              );
+              const currentLink = socialMediaLinks.find(
+                (link) => link.platform === platform.id
+              );
+
+              return (
+                <div
+                  key={platform.id}
+                  className="border border-gray-200 rounded-lg p-4 bg-gray-50"
+                >
+                  {/* Platform Header with Toggle */}
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={`w-10 h-10 ${platform.color} rounded-full flex items-center justify-center text-white text-lg shadow-sm`}
+                      >
+                        {platform.icon}
+                      </div>
+                      <div>
+                        <h4 className="font-medium text-gray-800">
+                          {platform.name}
+                        </h4>
+                        <p className="text-xs text-gray-500">Social platform</p>
+                      </div>
+                    </div>
+
+                    {/* Toggle Switch */}
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={isEnabled}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSocialMediaLinks([
+                              ...socialMediaLinks,
+                              {
+                                platform: platform.id,
+                                url: "",
+                              },
+                            ]);
+                          } else {
+                            setSocialMediaLinks(
+                              socialMediaLinks.filter(
+                                (link) => link.platform !== platform.id
+                              )
+                            );
+                          }
+                        }}
+                        className="sr-only"
+                      />
+                      <div
+                        className={`w-11 h-6 rounded-full transition-colors ${
+                          isEnabled ? platform.color : "bg-gray-300"
+                        }`}
+                      >
+                        <div
+                          className={`dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform ${
+                            isEnabled ? "translate-x-5" : "translate-x-0"
+                          }`}
+                        ></div>
+                      </div>
+                    </label>
+                  </div>
+
+                  {/* URL Input (shown when enabled) */}
+                  {isEnabled && (
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">
+                        {platform.name} Link
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={currentLink?.url || ""}
+                          onChange={(e) => {
+                            const newLinks = socialMediaLinks.map((link) =>
+                              link.platform === platform.id
+                                ? { ...link, url: e.target.value }
+                                : link
+                            );
+                            setSocialMediaLinks(newLinks);
+                          }}
+                          placeholder={platform.placeholder}
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors text-sm"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (currentLink?.url) {
+                              window.open(currentLink.url, "_blank");
+                            }
+                          }}
+                          disabled={!currentLink?.url}
+                          className={`px-3 py-2 text-white text-sm rounded-lg transition-colors ${
+                            currentLink?.url
+                              ? `${platform.color} ${platform.hoverColor}`
+                              : "bg-gray-400 cursor-not-allowed"
+                          }`}
+                        >
+                          Add
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const addSocialMediaLink = () => {
+    setSocialMediaLinks([...socialMediaLinks, { platform: "", url: "" }]);
+  };
+
+  const removeSocialMediaLink = (index) => {
+    if (socialMediaLinks.length > 1) {
+      const newLinks = socialMediaLinks.filter((_, i) => i !== index);
+      setSocialMediaLinks(newLinks);
+    }
+  };
 
   const renderTabContent = () => {
     switch (selectedTab) {
@@ -810,6 +1012,8 @@ const AgentForm = ({
         return renderSystemConfigTab();
       case "integration":
         return renderIntegrationSettingsTab();
+      case "social":
+        return renderSocialMediaTab();
       default:
         return renderStartingMessagesTab();
     }
