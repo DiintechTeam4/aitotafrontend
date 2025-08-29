@@ -14,6 +14,8 @@ import Login from "./pages/Login";
 import AgentMobileTalk from "./component/dashboards/components/AgentMobileTalk";
 import PublicBusinessDetails from "./component/dashboards/components/PublicBusinessDetails";
 import Testing from "./component/dashboards/components/Testing";
+import { ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 // import LandingPage2 from './pages/LandingComponents/LandingPage';
 // import LandingPage from './pages/LandingPage';
 
@@ -56,6 +58,12 @@ const App = () => {
 
   return (
     <Router>
+      <ToastContainer
+        position="top-right"
+        autoClose={3000}
+        hideProgressBar={false}
+        newestOnTop
+      />
       <Routes>
         {/* <Route path="/" element={<Home />} /> */}
         <Route path="/" element={<Home />} />
