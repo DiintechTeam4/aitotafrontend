@@ -10,6 +10,7 @@ import {
   FiPhone,
   FiPlay,
   FiPause,
+  FiClock,
   FiSkipForward,
   FiUser,
   FiBarChart2,
@@ -155,6 +156,15 @@ function CampaignDetails({ campaignId, onBack }) {
   const [loadingContacts, setLoadingContacts] = useState(false);
   const [showRestoreNotification, setShowRestoreNotification] = useState(false);
 
+  // Format seconds to M:SS
+  const formatDuration = (seconds) => {
+    if (!seconds || isNaN(seconds)) return "0:00";
+    const total = Math.round(seconds);
+    const mins = Math.floor(total / 60);
+    const secs = total % 60;
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
+  };
+
   // Build a merged list of calls: recent leads + missed calls, sorted by time desc
   const mergedCalls = useMemo(() => {
     const toTimestamp = (value) => {
@@ -171,6 +181,7 @@ function CampaignDetails({ campaignId, onBack }) {
       status: (lead.status || "").toLowerCase(),
       isMissed: false,
       documentId: lead.documentId || null,
+      duration: lead.duration || 0,
     }));
 
     const normalizedMissed = (missedCalls || []).map((item, idx) => ({
@@ -181,6 +192,7 @@ function CampaignDetails({ campaignId, onBack }) {
       status: "missed",
       isMissed: true,
       documentId: null,
+      duration: 0,
     }));
 
     return [...normalizedLeads, ...normalizedMissed].sort(
@@ -2452,7 +2464,7 @@ function CampaignDetails({ campaignId, onBack }) {
                       total,
                       completedCount + missedCount
                     );
-                    return `${callsMade || 0} / ${total || 0}`;
+                    return `${callsMade + 1 || 0} / ${total || 0}`;
                   })()}
                 </div>
                 <div className="text-xs text-gray-500">Progress</div>
@@ -2638,6 +2650,7 @@ function CampaignDetails({ campaignId, onBack }) {
                       <th className="py-2 pr-4">Name</th>
                       <th className="py-2 pr-4">Number</th>
                       <th className="py-2 pr-4">Status</th>
+                      <th className="py-2 pr-4"><FiClock/></th>
                       <th className="py-2 pr-4">Conversation</th>
                       <th className="py-2 pr-4">Redial</th>
                     </tr>
@@ -2725,6 +2738,9 @@ function CampaignDetails({ campaignId, onBack }) {
                             </span>
                           </td>
                           <td className="py-2 pr-4">
+                            {formatDuration(lead.duration)}
+                          </td>
+                          <td className="py-2 pr-4">
                             <button
                               className="inline-flex items-center px-3 py-1 text-xs bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100"
                               title="View transcript"
@@ -2798,7 +2814,7 @@ function CampaignDetails({ campaignId, onBack }) {
 
       {/* Transcript Modal */}
       {showTranscriptModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl w-11/12 max-w-4xl max-h-[90vh] overflow-y-auto shadow-2xl">
             <div className="flex justify-between items-center p-6 border-b border-gray-200">
               <h3 className="text-2xl font-bold text-gray-800">Transcript</h3>
