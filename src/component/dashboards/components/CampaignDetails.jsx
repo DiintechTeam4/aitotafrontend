@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from "react";
+import { toast, ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 import {
   FiX,
   FiPlus,
@@ -107,7 +109,7 @@ function CampaignDetails({ campaignId, onBack }) {
   const [callDetails, setCallDetails] = useState([]);
   const [callDetailsLoading, setCallDetailsLoading] = useState(false);
   const [callDetailsPage, setCallDetailsPage] = useState(1);
-  const [callDetailsLimit] = useState(20);
+  const [callDetailsLimit] = useState(50);
   const [callDetailsMeta, setCallDetailsMeta] = useState({
     totalPages: 0,
     totalLogs: 0,
@@ -123,8 +125,24 @@ function CampaignDetails({ campaignId, onBack }) {
   const [callConnectionStatus, setCallConnectionStatus] = useState("connected"); // connected, not_connected
   const [callResultsConnectionStatus, setCallResultsConnectionStatus] =
     useState({}); // Track connection status for each call result
+  const [statusLogsCollapsed, setStatusLogsCollapsed] = useState(false);
   const logsPollRef = useRef(null);
   const transcriptRef = useRef(null);
+
+  // Auto-refresh recent call logs every 2 seconds (pauses when collapsed)
+  useEffect(() => {
+    if (statusLogsCollapsed) return;
+    const intervalId = setInterval(() => {
+      try {
+        fetchCampaignCallLogs(1);
+        fetchLeads(1);
+        fetchMissedCalls();
+      } catch (err) {
+        // no-op
+      }
+    }, 2000);
+    return () => clearInterval(intervalId);
+  }, [statusLogsCollapsed]);
   const connectionTimeoutRef = useRef(null);
 
   // Campaign contacts management states
@@ -576,6 +594,12 @@ function CampaignDetails({ campaignId, onBack }) {
   };
 
   const makeVoiceBotCall = async (contact, agent) => {
+    // Ensure uniqueId is always defined, even if an error occurs before API calls
+    const uniqueId = `aidial-${Date.now()}-${performance
+      .now()
+      .toString(36)
+      .replace(".", "")}-${Math.random().toString(36).substr(2, 9)}`;
+
     try {
       // Get client API key from database
       const token = sessionStorage.getItem("clienttoken");
@@ -594,22 +618,13 @@ function CampaignDetails({ campaignId, onBack }) {
         apiKey = apiKeysResult.data[0].key;
       }
 
-      // Generate unique ID for this campaign call (same format as agent calls)
-      // Use performance.now() for higher precision and add a counter to ensure uniqueness
-      const uniqueId = `aidial-${Date.now()}-${performance
-        .now()
-        .toString(36)
-        .replace(".", "")}-${Math.random().toString(36).substr(2, 9)}`;
-
       const callPayload = {
         transaction_id: "CTI_BOT_DIAL",
         phone_num: contact.phone.replace(/[^\d]/g, ""), // Remove non-digits
         uniqueid: uniqueId,
         callerid: "168353225",
         uuid: clientData?.clientId || "client-uuid-001",
-        custom_param: {
-          uniqueid: uniqueId,
-        },
+        custom_param: { uniqueid: uniqueId },
         resFormat: 3,
       };
 
@@ -620,10 +635,7 @@ function CampaignDetails({ campaignId, onBack }) {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          apiKey: apiKey,
-          payload: callPayload,
-        }),
+        body: JSON.stringify({ apiKey, payload: callPayload }),
       });
 
       const result = await response.json();
@@ -637,10 +649,7 @@ function CampaignDetails({ campaignId, onBack }) {
               Authorization: `Bearer ${token}`,
               "Content-Type": "application/json",
             },
-            body: JSON.stringify({
-              uniqueId,
-              contactId: contact._id || null, // Include contactId if available
-            }),
+            body: JSON.stringify({ uniqueId, contactId: contact._id || null }),
           });
         } catch (error) {
           console.error("Failed to store unique ID in campaign:", error);
@@ -651,18 +660,18 @@ function CampaignDetails({ campaignId, onBack }) {
       return {
         success: result.success,
         data: result.data,
-        contact: contact,
+        contact,
         timestamp: new Date(),
-        uniqueId: uniqueId, // Include unique ID in result for tracking
+        uniqueId,
       };
     } catch (error) {
       console.error("Error making voice bot call:", error);
       return {
         success: false,
         error: error.message,
-        contact: contact,
+        contact,
         timestamp: new Date(),
-        uniqueId: uniqueId, // Include unique ID even for failed calls
+        uniqueId,
       };
     }
   };
@@ -677,7 +686,7 @@ function CampaignDetails({ campaignId, onBack }) {
     }
 
     if (!selectedAgent || campaignContacts.length === 0) {
-      alert(
+      toast.warn(
         "Please select an agent and ensure there are contacts in the campaign. Add contacts through 'Manage Contacts' first."
       );
       return;
@@ -1274,65 +1283,54 @@ function CampaignDetails({ campaignId, onBack }) {
     }
   };
 
-  // Call again: dial only the missed calls' contacts
+  // Call again via backend: dial missed contacts server-side
   const callMissedCalls = async () => {
     try {
-      if (!selectedAgent) {
-        alert("Please select an agent first (top Make Calls card).");
+      const { id: primaryAgentId } = getPrimaryAgentIdentity();
+      const resolvedAgentId =
+        (selectedAgent && (selectedAgent._id || selectedAgent)) ||
+        primaryAgentId ||
+        (Array.isArray(agents) && agents[0] && (agents[0]._id || agents[0].id));
+      if (!resolvedAgentId) {
+        toast.warn("No agent available. Please add/select an agent first.");
         return;
       }
-      const retryContacts = (missedCalls || [])
-        .map((m) => m.contact)
-        .filter((c) => c && c.phone);
-      if (retryContacts.length === 0) {
-        alert("No retriable missed contacts found.");
-        return;
+      if (!campaignId) return;
+
+      const token = sessionStorage.getItem("clienttoken");
+      const resp = await fetch(
+        `${API_BASE}/campaigns/${campaignId}/call-missed`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            agentId: resolvedAgentId,
+            delayBetweenCalls: 2000,
+          }),
+        }
+      );
+      const result = await resp.json();
+      if (!resp.ok || result.success === false) {
+        throw new Error(
+          result.error || "Failed to trigger missed-calls dialing"
+        );
       }
 
       setCallingStatus("calling");
-
-      // Deduplicate by phone+name and avoid very recent calls (30s)
-      const seen = new Set();
-      for (let idx = 0; idx < retryContacts.length; idx++) {
-        const contact = retryContacts[idx];
-        const key = `${contact.phone}-${contact.name || ""}`;
-        if (seen.has(key)) continue;
-        const recent = callResults.find(
-          (r) =>
-            r.contact?.phone === contact.phone &&
-            r.timestamp &&
-            Date.now() - new Date(r.timestamp).getTime() < 30000
-        );
-        if (recent) continue;
-        seen.add(key);
-
-        const result = await makeVoiceBotCall(contact, selectedAgent);
-        setCallResults((prev) => [...prev, result]);
-
-        // small pacing like startCalling
-        if (idx < retryContacts.length - 1) {
-          await new Promise((resolve) => setTimeout(resolve, 2000));
-        }
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-      }
-
-      // After retries, update statuses like elsewhere
-      if (campaign?._id) {
-        callResults.forEach((result) => {
-          if (result.uniqueId) {
-            updateCallStatus(result.uniqueId);
-          }
-        });
-      }
-
-      // Refresh lists
-      fetchLeads(1);
-      fetchMissedCalls();
-
-      setCallingStatus("completed");
+      // Notify user calls are being initiated
+      toast.warn(`Calling ${result.count || 0} missed contact(s) has started.`);
+      // Kick a status refresh shortly after
+      setTimeout(() => {
+        fetchCampaignCallingStatus();
+        fetchLeads(1);
+        fetchMissedCalls();
+      }, 3000);
     } catch (e) {
-      console.error("Error calling missed contacts:", e);
-      setCallingStatus("paused");
+      console.error("Error calling missed contacts via backend:", e);
+      toast.warn(e.message || "Failed to start missed-calls dialing");
     }
   };
 
@@ -1344,11 +1342,15 @@ function CampaignDetails({ campaignId, onBack }) {
 
       const { id: primaryAgentId } = getPrimaryAgentIdentity();
       if (!primaryAgentId) {
-        alert("Please add/select an agent for this campaign first.");
+        toast.warn("Please add/select an agent for this campaign first.");
         return;
       }
 
       const token = sessionStorage.getItem("clienttoken");
+      // Optimistic UI: mark this row as redialing
+      setLeads((prev) =>
+        prev.map((l) => (l.key === lead.key ? { ...l, _isRedialing: true } : l))
+      );
       const resp = await fetch(`${API_BASE}/calls/single`, {
         method: "POST",
         headers: {
@@ -1374,12 +1376,26 @@ function CampaignDetails({ campaignId, onBack }) {
       if (!resp.ok || result.success === false) {
         throw new Error(result.error || "Failed to initiate call");
       }
-      // Success feedback
-      alert(`Calling to ${phone} started successfully`);
+      // Success feedback and refresh
+      toast.success(`Calling to ${phone} started successfully`);
       console.log("Single call initiated:", result.data?.uniqueId);
+      setTimeout(() => {
+        setLeads((prev) =>
+          prev.map((l) =>
+            l.key === lead.key ? { ...l, _isRedialing: false } : l
+          )
+        );
+        fetchCampaignCallLogs(1);
+        fetchLeads(1);
+      }, 1500);
     } catch (e) {
       console.error("Retry call failed:", e);
-      alert("Failed to initiate call.");
+      toast.warn("Failed to initiate call.");
+      setLeads((prev) =>
+        prev.map((l) =>
+          l.key === lead.key ? { ...l, _isRedialing: false } : l
+        )
+      );
     }
   };
 
@@ -1431,7 +1447,7 @@ function CampaignDetails({ campaignId, onBack }) {
       const result = await response.json();
       if (result.success) {
         if (!silent) {
-          alert(
+          toast.warn(
             `Successfully synced ${result.data.totalContacts} contacts from ${result.data.totalGroups} groups`
           );
         }
@@ -1441,16 +1457,18 @@ function CampaignDetails({ campaignId, onBack }) {
         if (result.error === "No groups in campaign to sync from") {
           await fetchCampaignContacts();
           if (!silent) {
-            alert("Contacts cleared because no groups remain in the campaign.");
+            toast.warn(
+              "Contacts cleared because no groups remain in the campaign."
+            );
           }
         } else if (!silent) {
-          alert("Failed to sync contacts: " + result.error);
+          toast.warn("Failed to sync contacts: " + result.error);
         }
       }
     } catch (error) {
       console.error("Error syncing contacts:", error);
       if (!silent) {
-        alert("Error syncing contacts: " + error.message);
+        toast.warn("Error syncing contacts: " + error.message);
       }
     } finally {
       setLoadingContacts(false);
@@ -1460,7 +1478,7 @@ function CampaignDetails({ campaignId, onBack }) {
   const addContactToCampaign = async () => {
     try {
       if (!campaign?._id || !contactForm.name || !contactForm.phone) {
-        alert("Name and phone are required");
+        toast.warn("Name and phone are required");
         return;
       }
       setLoadingContacts(true);
@@ -1478,7 +1496,7 @@ function CampaignDetails({ campaignId, onBack }) {
       );
       const result = await response.json();
       if (result.success) {
-        alert("Contact added successfully");
+        toast.success("Contact added successfully");
         setContactForm({
           name: "",
           phone: "",
@@ -1487,11 +1505,11 @@ function CampaignDetails({ campaignId, onBack }) {
         setShowAddContactModal(false);
         fetchCampaignContacts(); // Refresh the contacts list
       } else {
-        alert("Failed to add contact: " + result.error);
+        toast.error("Failed to add contact: " + result.error);
       }
     } catch (error) {
       console.error("Error adding contact:", error);
-      alert("Error adding contact: " + error.message);
+      toast.error("Error adding contact: " + error.message);
     } finally {
       setLoadingContacts(false);
     }
@@ -1521,14 +1539,14 @@ function CampaignDetails({ campaignId, onBack }) {
       );
       const result = await response.json();
       if (result.success) {
-        alert("Contact removed successfully");
+        toast.success("Contact removed successfully");
         fetchCampaignContacts(); // Refresh the contacts list
       } else {
-        alert("Failed to remove contact: " + result.error);
+        toast.error("Failed to remove contact: " + result.error);
       }
     } catch (error) {
       console.error("Error removing contact:", error);
-      alert("Error removing contact: " + error.message);
+      toast.error("Error removing contact: " + error.message);
     } finally {
       setLoadingContacts(false);
     }
@@ -1553,7 +1571,7 @@ function CampaignDetails({ campaignId, onBack }) {
 
   const handleAddSpecificGroupsToCampaign = async (groupIdsToAdd) => {
     if (groupIdsToAdd.length === 0) {
-      alert("Please select at least one group to add to the campaign.");
+      toast.warn("Please select at least one group to add to the campaign.");
       return;
     }
 
@@ -1591,14 +1609,14 @@ function CampaignDetails({ campaignId, onBack }) {
         // Auto-sync contacts after adding groups (silent)
         await syncContactsFromGroups(true);
         setShowAddGroupsModal(false);
-        alert("Groups added to campaign successfully!");
+        toast.success("Groups added to campaign successfully!");
       } else {
         console.error("Failed to add groups to campaign:", result.error);
-        alert("Failed to add groups: " + result.error);
+        toast.warn("Failed to add groups: " + result.error);
       }
     } catch (error) {
       console.error("Error adding groups to campaign:", error);
-      alert("Error adding groups to campaign: " + error.message);
+      toast.error("Error adding groups to campaign: " + error.message);
     } finally {
       setAddingGroups(false);
     }
@@ -1606,7 +1624,7 @@ function CampaignDetails({ campaignId, onBack }) {
 
   const handleAddGroupsToCampaign = async () => {
     if (selectedGroups.length === 0) {
-      alert("Please select at least one group to add to the campaign.");
+      toast.warn("Please select at least one group to add to the campaign.");
       return;
     }
 
@@ -1639,10 +1657,10 @@ function CampaignDetails({ campaignId, onBack }) {
         fetchCampaignGroups();
         // Auto-sync contacts after updating groups (silent)
         await syncContactsFromGroups(true);
-        alert("Groups updated successfully!");
+        toast.success("Groups updated successfully!");
       } else {
         console.error("Failed to add groups to campaign:", result.error);
-        alert("Failed to update groups: " + result.error);
+        toast.error("Failed to update groups: " + result.error);
       }
     } catch (error) {
       console.error("Error adding groups to campaign:", error);
@@ -1691,7 +1709,7 @@ function CampaignDetails({ campaignId, onBack }) {
           await syncContactsFromGroups(true);
         } else {
           console.error("Failed to remove group:", result.error);
-          alert("Failed to remove group: " + result.error);
+          toast.warn("Failed to remove group: " + result.error);
         }
       } catch (error) {
         console.error("Error removing group:", error);
@@ -1724,7 +1742,7 @@ function CampaignDetails({ campaignId, onBack }) {
       });
       const result = await resp.json();
       if (!resp.ok || result.success === false) {
-        alert(result.error || "Failed to assign agent");
+        toast.error(result.error || "Failed to assign agent");
         return;
       }
       setCampaign(result.data);
@@ -1757,10 +1775,10 @@ function CampaignDetails({ campaignId, onBack }) {
       } catch (_) {}
       setShowAddAgentModal(false);
       setSelectedAgentIdForAssign("");
-      alert("Agent assigned successfully");
+      toast.success("Agent assigned successfully");
     } catch (e) {
       console.error("Assign agent failed:", e);
-      alert("Failed to assign agent");
+      toast.error("Failed to assign agent");
     }
   };
 
@@ -1773,7 +1791,7 @@ function CampaignDetails({ campaignId, onBack }) {
           ? campaign.agent[0]
           : null;
       if (!primaryAgentId) {
-        alert("Please add/select an agent for this campaign first.");
+        toast.warn("Please add/select an agent for this campaign first.");
         return;
       }
       setIsTogglingCampaign(true);
@@ -1798,14 +1816,14 @@ function CampaignDetails({ campaignId, onBack }) {
         return;
       }
       if (!resp.ok || result.success === false) {
-        alert(result.error || "Failed to start campaign calling");
+        toast.error(result.error || "Failed to start campaign calling");
         return;
       }
       setCampaign((prev) => (prev ? { ...prev, isRunning: true } : prev));
       setLastUpdated(new Date());
     } catch (e) {
       console.error("Start calling failed:", e);
-      alert("Failed to start campaign calling");
+      toast.error("Failed to start campaign calling");
     } finally {
       setIsTogglingCampaign(false);
     }
@@ -1828,14 +1846,14 @@ function CampaignDetails({ campaignId, onBack }) {
       );
       const result = await resp.json();
       if (!resp.ok || result.success === false) {
-        alert(result.error || "Failed to stop campaign calling");
+        toast.error(result.error || "Failed to stop campaign calling");
         return;
       }
       setCampaign((prev) => (prev ? { ...prev, isRunning: false } : prev));
       setLastUpdated(new Date());
     } catch (e) {
       console.error("Stop calling failed:", e);
-      alert("Failed to stop campaign calling");
+      toast.error("Failed to stop campaign calling");
     } finally {
       setIsTogglingCampaign(false);
     }
@@ -2351,7 +2369,7 @@ function CampaignDetails({ campaignId, onBack }) {
               <div className="flex items-center space-x-3">
                 <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
                 <h3 className="text-base font-medium text-gray-900">
-                  Campaign Status
+                  Campaign Instance
                 </h3>
                 <span
                   className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
@@ -2382,33 +2400,75 @@ function CampaignDetails({ campaignId, onBack }) {
                       d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
                     />
                   </svg>
-                  <span>Refersh</span>
+                  <span>Refresh</span>
                 </button>
-                {callingStatus !== "idle" && (
-                  <button
-                    onClick={() => setShowCallModal(true)}
-                    className="text-xs px-3 py-1 bg-blue-50 text-blue-600 rounded-md hover:bg-blue-100 transition-colors border border-blue-200"
+                <button
+                  onClick={() => setStatusLogsCollapsed((v) => !v)}
+                  className="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-md border border-gray-200"
+                  title={statusLogsCollapsed ? "Expand" : "Collapse"}
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className={`h-4 w-4 transition-transform ${
+                      statusLogsCollapsed ? "transform rotate-180" : ""
+                    }`}
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
                   >
-                    View
-                  </button>
-                )}
+                    <path
+                      fillRule="evenodd"
+                      d="M5.23 7.21a.75.75 0 011.06.02L10 11.094l3.71-3.864a.75.75 0 011.08 1.04l-4.24 4.41a.75.75 0 01-1.08 0l-4.24-4.41a.75.75 0 01.02-1.06z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                </button>
               </div>
             </div>
 
             {/* Metrics Grid */}
-            <div className="grid grid-cols-3 gap-4 mb-4">
+            <div
+              className={`grid grid-cols-3 gap-4 mb-4 ${
+                statusLogsCollapsed ? "hidden" : ""
+              }`}
+            >
               <div className="text-center">
                 <div className="text-lg font-semibold text-gray-900">
-                  {callResults.length || 0} / {campaignContacts.length || 0}
+                  {(() => {
+                    const total = Array.isArray(campaignContacts)
+                      ? campaignContacts.length
+                      : 0;
+                    const completedCount = Array.isArray(leads)
+                      ? leads.filter((lead) => {
+                          const s = (
+                            lead.status ||
+                            lead.leadStatus ||
+                            ""
+                          ).toLowerCase();
+                          return s === "completed";
+                        }).length
+                      : 0;
+                    const missedCount = Array.isArray(missedCalls)
+                      ? missedCalls.length
+                      : 0;
+                    const callsMade = Math.min(
+                      total,
+                      completedCount + missedCount
+                    );
+                    return `${callsMade || 0} / ${total || 0}`;
+                  })()}
                 </div>
                 <div className="text-xs text-gray-500">Progress</div>
               </div>
               <div className="text-center">
                 <div className="text-lg font-semibold text-blue-600">
-                  {leads.filter(
-                    (lead) =>
-                      lead.status === "completed" || lead.status === "ongoing"
-                  ).length || 0}
+                  {leads.filter((lead) => {
+                    const s = (
+                      lead.status ||
+                      lead.leadStatus ||
+                      ""
+                    ).toLowerCase();
+                    return s === "completed";
+                  }).length || 0}
                 </div>
                 <div className="text-xs text-gray-500">Completed</div>
               </div>
@@ -2420,8 +2480,8 @@ function CampaignDetails({ campaignId, onBack }) {
               </div>
             </div>
 
-            {/* Progress Bar - Always Show */}
-            <div className="mb-3">
+            {/* Progress Bar */}
+            <div className={`mb-3 ${statusLogsCollapsed ? "hidden" : ""}`}>
               <div className="flex justify-between items-center mb-2">
                 <span className="text-xs font-medium text-gray-700">
                   Progress Bar
@@ -2431,26 +2491,62 @@ function CampaignDetails({ campaignId, onBack }) {
               <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
                 <div
                   className={`h-2 rounded-full transition-all duration-500 ${
-                    campaignContacts.length > 0 && callResults.length > 0
+                    (() => {
+                      const total = Array.isArray(campaignContacts)
+                        ? campaignContacts.length
+                        : 0;
+                      const completedCount = Array.isArray(leads)
+                        ? leads.filter((lead) => {
+                            const s = (
+                              lead.status ||
+                              lead.leadStatus ||
+                              ""
+                            ).toLowerCase();
+                            return s === "completed" || s === "ongoing";
+                          }).length
+                        : 0;
+                      const missedCount = Array.isArray(missedCalls)
+                        ? missedCalls.length
+                        : 0;
+                      const callsMade = Math.min(
+                        total,
+                        completedCount + missedCount
+                      );
+                      return total > 0 && callsMade > 0;
+                    })()
                       ? "bg-gradient-to-r from-green-400 to-green-500"
                       : "bg-gray-300"
                   }`}
                   style={{
-                    width: `${
-                      campaignContacts.length > 0
-                        ? Math.max(
-                            (callResults.length / campaignContacts.length) *
-                              100,
-                            0
-                          )
-                        : 0
-                    }%`,
+                    width: (() => {
+                      const total = Array.isArray(campaignContacts)
+                        ? campaignContacts.length
+                        : 0;
+                      if (total === 0) return "0%";
+                      const completedCount = Array.isArray(leads)
+                        ? leads.filter((lead) => {
+                            const s = (
+                              lead.status ||
+                              lead.leadStatus ||
+                              ""
+                            ).toLowerCase();
+                            return s === "completed" || s === "ongoing";
+                          }).length
+                        : 0;
+                      const missedCount = Array.isArray(missedCalls)
+                        ? missedCalls.length
+                        : 0;
+                      const callsMade = Math.min(
+                        total,
+                        completedCount + missedCount
+                      );
+                      const pct = Math.max((callsMade / total) * 100, 0);
+                      return `${pct}%`;
+                    })(),
                   }}
                 ></div>
               </div>
             </div>
-
-            {/* Removed live calling UI for frontend-controlled calls */}
 
             {callingStatus === "paused" && (
               <div className="text-xs text-yellow-700 text-center py-2 bg-yellow-50 rounded-md border border-yellow-200">
@@ -2466,7 +2562,11 @@ function CampaignDetails({ campaignId, onBack }) {
           </div>
 
           {/* Minimal Leads + Transcript Section */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
+          <div
+            className={`bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8 ${
+              statusLogsCollapsed ? "hidden" : ""
+            }`}
+          >
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-base font-medium text-gray-900">
                 Recent call logs
@@ -2509,10 +2609,6 @@ function CampaignDetails({ campaignId, onBack }) {
                   <button
                     className="text-sm px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
                     onClick={() => {
-                      if (!selectedAgent) {
-                        setShowCallModal(true);
-                        return;
-                      }
                       callMissedCalls();
                     }}
                     disabled={missedLoading}
@@ -2525,9 +2621,6 @@ function CampaignDetails({ campaignId, onBack }) {
                     Call Again
                   </button>
                 )}
-                <div className="text-sm text-gray-500">
-                  {leadsLoading ? "Loading..." : `${leadsTotalItems} total`}
-                </div>
               </div>
             </div>
             {leadsLoading ? (
@@ -2541,6 +2634,8 @@ function CampaignDetails({ campaignId, onBack }) {
                 <table className="min-w-full text-sm">
                   <thead>
                     <tr className="text-left text-gray-600">
+                      <th className="py-2 pr-4">S. No.</th>
+                      <th className="py-2 pr-4">Date</th>
                       <th className="py-2 pr-4">Time</th>
                       <th className="py-2 pr-4">Name</th>
                       <th className="py-2 pr-4">Number</th>
@@ -2569,18 +2664,50 @@ function CampaignDetails({ campaignId, onBack }) {
                               lead.status === "failed";
                         return byData && byStatus;
                       })
-                      .map((lead) => (
+                      .map((lead, idx) => (
                         <tr key={lead.key} className="border-t border-gray-100">
+                          <td className="py-2 pr-4 text-gray-700">{idx + 1}</td>
                           <td className="py-2 pr-4 text-gray-700">
                             {lead.time
-                              ? new Date(lead.time).toLocaleString()
+                              ? new Date(lead.time).toLocaleDateString()
+                              : "-"}
+                          </td>
+                          <td className="py-2 pr-4 text-gray-700">
+                            {lead.time
+                              ? new Date(lead.time).toLocaleTimeString()
                               : "-"}
                           </td>
                           <td className="py-2 pr-4 text-gray-900">
                             {lead.name || "-"}
                           </td>
                           <td className="py-2 pr-4 text-gray-900">
-                            {lead.number || "-"}
+                            <span className="inline-flex items-center">
+                              {lead._isRedialing ? (
+                                <span className="inline-flex items-center text-green-600">
+                                  <svg
+                                    className="animate-spin h-4 w-4 mr-1"
+                                    viewBox="0 0 24 24"
+                                  >
+                                    <circle
+                                      className="opacity-25"
+                                      cx="12"
+                                      cy="12"
+                                      r="10"
+                                      stroke="currentColor"
+                                      strokeWidth="4"
+                                    ></circle>
+                                    <path
+                                      className="opacity-75"
+                                      fill="currentColor"
+                                      d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+                                    ></path>
+                                  </svg>
+                                  {lead.number || "-"}
+                                </span>
+                              ) : (
+                                lead.number || "-"
+                              )}
+                            </span>
                           </td>
                           <td className="py-2 pr-4 capitalize">
                             <span

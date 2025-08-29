@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { toast } from "react-toastify";
 import {
   FiX,
   FiPlus,
@@ -232,7 +233,9 @@ function GroupDetails({ groupId, onBack }) {
 
   const startCalling = async () => {
     if (!selectedAgent || contacts.length === 0) {
-      alert("Please select an agent and ensure there are contacts to call.");
+      toast.warn(
+        "Please select an agent and ensure there are contacts to call."
+      );
       return;
     }
 
@@ -338,7 +341,7 @@ function GroupDetails({ groupId, onBack }) {
         setShowAddContactForm(false);
       } else {
         console.error("Failed to add contact:", result.error);
-        alert("Failed to add contact: " + result.error);
+        toast.error("Failed to add contact: " + result.error);
       }
     } catch (error) {
       console.error("Error adding contact:", error);
@@ -567,7 +570,7 @@ function GroupDetails({ groupId, onBack }) {
 
   const handleImportContacts = async () => {
     if (!importData.isValid || importData.parsedData.length === 0) {
-      alert("No valid contacts to import");
+      toast.warn("No valid contacts to import");
       return;
     }
 
@@ -615,8 +618,8 @@ function GroupDetails({ groupId, onBack }) {
         }
       }
 
-      alert(
-        `Import completed!\nSuccessfully imported: ${successCount}\nFailed: ${errorCount}`
+      toast.success(
+        `Import completed! Imported: ${successCount}, Failed: ${errorCount}`
       );
 
       // Reset import data
@@ -631,7 +634,7 @@ function GroupDetails({ groupId, onBack }) {
       setShowImportModal(false);
     } catch (error) {
       console.error("Error during import:", error);
-      alert("Error during import. Please try again.");
+      toast.error("Error during import. Please try again.");
     } finally {
       setImportingContacts(false);
     }
@@ -669,7 +672,7 @@ function GroupDetails({ groupId, onBack }) {
         setContacts([...contacts, newContact]);
       } else {
         console.error("Failed to add dummy contact:", result.error);
-        alert("Failed to add contact: " + result.error);
+        toast.error("Failed to add contact: " + result.error);
       }
     } catch (error) {
       console.error("Error adding dummy contact:", error);

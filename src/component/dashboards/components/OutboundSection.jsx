@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { toast } from "react-toastify";
 import {
   FiX,
   FiEye,
@@ -38,7 +39,7 @@ function OutboundSection({ tenantId }) {
   const handleUpdateCampaign = async (e) => {
     e.preventDefault();
     if (!editingCampaign?._id || !campaignEditForm.name.trim()) {
-      alert("Campaign name is required");
+      toast.warn("Campaign name is required");
       return;
     }
     try {
@@ -74,7 +75,7 @@ function OutboundSection({ tenantId }) {
       setEditingCampaign(null);
     } catch (err) {
       console.error("Error updating campaign:", err);
-      alert(err.message || "Failed to update campaign");
+      toast.error(err.message || "Failed to update campaign");
     } finally {
       setSavingCampaignEdit(false);
     }
@@ -203,11 +204,11 @@ function OutboundSection({ tenantId }) {
         fetchGroups(); // Refresh the list
       } else {
         console.error("Failed to create group:", result.error);
-        alert("Failed to create group: " + result.error);
+        toast.error("Failed to create group: " + result.error);
       }
     } catch (error) {
       console.error("Error creating group:", error);
-      alert("Error creating group");
+      toast.error("Error creating group");
     } finally {
       setLoading(false);
     }
@@ -245,11 +246,11 @@ function OutboundSection({ tenantId }) {
         fetchCampaigns(); // Refresh the list
       } else {
         console.error("Failed to create campaign:", result.error);
-        alert("Failed to create campaign: " + result.error);
+        toast.error("Failed to create campaign: " + result.error);
       }
     } catch (error) {
       console.error("Error creating campaign:", error);
-      alert("Error creating campaign");
+      toast.error("Error creating campaign");
     } finally {
       setLoading(false);
     }
@@ -277,11 +278,11 @@ function OutboundSection({ tenantId }) {
           fetchGroups(); // Refresh the list
         } else {
           console.error("Failed to delete group:", result.error);
-          alert("Failed to delete group: " + result.error);
+          toast.error("Failed to delete group: " + result.error);
         }
       } catch (error) {
         console.error("Error deleting group:", error);
-        alert("Error deleting group");
+        toast.error("Error deleting group");
       } finally {
         setLoading(false);
       }
@@ -302,7 +303,7 @@ function OutboundSection({ tenantId }) {
   const handleUpdateGroup = async (e) => {
     e.preventDefault();
     if (!editingGroup?._id || !groupEditForm.name.trim()) {
-      alert("Group name is required");
+      toast.warn("Group name is required");
       return;
     }
     try {
@@ -326,11 +327,13 @@ function OutboundSection({ tenantId }) {
         // Refresh groups list
         fetchGroups();
       } else {
-        alert("Failed to update group: " + (result.error || "Unknown error"));
+        toast.error(
+          "Failed to update group: " + (result.error || "Unknown error")
+        );
       }
     } catch (error) {
       console.error("Error updating group:", error);
-      alert("Error updating group. Please try again.");
+      toast.error("Error updating group. Please try again.");
     } finally {
       setSavingGroupEdit(false);
     }
@@ -354,11 +357,11 @@ function OutboundSection({ tenantId }) {
           fetchCampaigns(); // Refresh the list
         } else {
           console.error("Failed to delete campaign:", result.error);
-          alert("Failed to delete campaign: " + result.error);
+          toast.error("Failed to delete campaign: " + result.error);
         }
       } catch (error) {
         console.error("Error deleting campaign:", error);
-        alert("Error deleting campaign");
+        toast.error("Error deleting campaign");
       } finally {
         setLoading(false);
       }
@@ -398,7 +401,7 @@ function OutboundSection({ tenantId }) {
       <div className="flex-1 p-6 overflow-y-auto">
         <div className="flex items-center justify-between mb-6">
           <div className="flex gap-4">
-          <button
+            <button
               className={`px-4 py-2 rounded font-semibold transition-colors ${
                 activeTab === "campaigns"
                   ? "bg-black text-white"
