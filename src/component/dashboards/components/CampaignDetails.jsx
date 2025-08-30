@@ -101,6 +101,7 @@ function CampaignDetails({ campaignId, onBack }) {
   const [transcriptDocId, setTranscriptDocId] = useState(null);
   const [transcriptContent, setTranscriptContent] = useState("");
   const [transcriptLoading, setTranscriptLoading] = useState(false);
+  const [viewedTranscripts, setViewedTranscripts] = useState(new Set());
   // Missed calls
   const [missedCalls, setMissedCalls] = useState([]);
   const [missedLoading, setMissedLoading] = useState(false);
@@ -219,6 +220,25 @@ function CampaignDetails({ campaignId, onBack }) {
       timestamp: Date.now(),
     };
     localStorage.setItem(getStorageKey("callingState"), JSON.stringify(state));
+  };
+
+  const saveViewedTranscripts = () => {
+    localStorage.setItem(
+      getStorageKey("viewedTranscripts"),
+      JSON.stringify(Array.from(viewedTranscripts))
+    );
+  };
+
+  const loadViewedTranscripts = () => {
+    try {
+      const saved = localStorage.getItem(getStorageKey("viewedTranscripts"));
+      if (saved) {
+        const viewedArray = JSON.parse(saved);
+        setViewedTranscripts(new Set(viewedArray));
+      }
+    } catch (error) {
+      console.error("Error loading viewed transcripts:", error);
+    }
   };
 
   const loadCallingState = () => {
@@ -361,6 +381,13 @@ function CampaignDetails({ campaignId, onBack }) {
     campaignId,
   ]);
 
+  // Save viewed transcripts whenever they change
+  useEffect(() => {
+    if (campaignId) {
+      saveViewedTranscripts();
+    }
+  }, [viewedTranscripts, campaignId]);
+
   useEffect(() => {
     fetchCampaignDetails();
     fetchAvailableGroups();
@@ -370,6 +397,8 @@ function CampaignDetails({ campaignId, onBack }) {
     // Also load leads list initially
     fetchLeads(1);
     fetchMissedCalls();
+    // Load viewed transcripts
+    loadViewedTranscripts();
   }, [campaignId]);
 
   // Ensure agent name is resolved when campaign agent changes
@@ -1160,6 +1189,10 @@ function CampaignDetails({ campaignId, onBack }) {
       setTranscriptContent("");
       setTranscriptLoading(true);
       setShowTranscriptModal(true);
+
+      // Mark this transcript as viewed
+      setViewedTranscripts((prev) => new Set([...prev, documentId]));
+
       const token = sessionStorage.getItem("clienttoken");
       const resp = await fetch(
         `${API_BASE}/campaigns/${campaignId}/logs/${documentId}`,
@@ -1201,6 +1234,8 @@ function CampaignDetails({ campaignId, onBack }) {
       }
 
       if (lead.documentId) {
+        // Mark this transcript as viewed
+        setViewedTranscripts((prev) => new Set([...prev, lead.documentId]));
         await openTranscript(lead.documentId);
       }
     } catch (e) {
@@ -2464,7 +2499,7 @@ function CampaignDetails({ campaignId, onBack }) {
                       total,
                       completedCount + missedCount
                     );
-                    return `${callsMade + 1 || 0} / ${total || 0}`;
+                    return `${callsMade || 0} / ${total || 0}`;
                   })()}
                 </div>
                 <div className="text-xs text-gray-500">Progress</div>
@@ -2650,7 +2685,9 @@ function CampaignDetails({ campaignId, onBack }) {
                       <th className="py-2 pr-4">Name</th>
                       <th className="py-2 pr-4">Number</th>
                       <th className="py-2 pr-4">Status</th>
-                      <th className="py-2 pr-4"><FiClock/></th>
+                      <th className="py-2 pr-4">
+                        <FiClock />
+                      </th>
                       <th className="py-2 pr-4">Conversation</th>
                       <th className="py-2 pr-4">Redial</th>
                     </tr>
@@ -2742,8 +2779,18 @@ function CampaignDetails({ campaignId, onBack }) {
                           </td>
                           <td className="py-2 pr-4">
                             <button
-                              className="inline-flex items-center px-3 py-1 text-xs bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100"
-                              title="View transcript"
+                              className={`inline-flex items-center px-3 py-1 text-xs border rounded hover:opacity-80 transition-all duration-200 ${
+                                lead.documentId &&
+                                viewedTranscripts.has(lead.documentId)
+                                  ? "bg-green-50 text-voilet-900 border-green-200"
+                                  : "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
+                              }`}
+                              title={
+                                lead.documentId &&
+                                viewedTranscripts.has(lead.documentId)
+                                  ? "Transcript viewed"
+                                  : "View transcript"
+                              }
                               onClick={() => openTranscriptSmart(lead)}
                             >
                               <svg
@@ -2759,7 +2806,10 @@ function CampaignDetails({ campaignId, onBack }) {
                                   d="M8 16h8M8 12h8M8 8h8M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H7l-2 2H3v12a2 2 0 002 2z"
                                 />
                               </svg>
-                              Transcript
+                              {lead.documentId &&
+                              viewedTranscripts.has(lead.documentId)
+                                ? "Viewed"
+                                : "Transcript"}
                             </button>
                           </td>
                           <td className="py-2 pr-4">
