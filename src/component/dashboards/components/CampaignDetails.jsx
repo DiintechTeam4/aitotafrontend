@@ -2621,22 +2621,24 @@ function CampaignDetails({ campaignId, onBack }) {
                     const total = Array.isArray(campaignContacts)
                       ? campaignContacts.length
                       : 0;
-                    const completedCount = Array.isArray(apiMergedCalls)
-                      ? apiMergedCalls.filter((call) => {
+                    // Calculate total calls made (completed + ongoing + missed)
+                    const totalCallsMade = (() => {
+                      if (apiMergedCallsTotalItems > 0) {
+                        // If we have API total, use it
+                        return apiMergedCallsTotalItems;
+                      } else {
+                        // Fallback to current page count
+                        return apiMergedCalls.filter((call) => {
                           const s = (call.status || "").toLowerCase();
-                          return s === "ongoing";
-                        }).length
-                      : 0;
-                    const missedCount = Array.isArray(apiMergedCalls)
-                      ? apiMergedCalls.filter((call) => {
-                          const s = (call.status || "").toLowerCase();
-                          return s === "missed";
-                        }).length
-                      : 0;
-                    const callsMade = Math.min(
-                      total,
-                      completedCount + missedCount
-                    );
+                          return (
+                            s === "ongoing" ||
+                            s === "completed" ||
+                            s === "missed"
+                          );
+                        }).length;
+                      }
+                    })();
+                    const callsMade = Math.min(total, totalCallsMade);
                     return `${callsMade || 0} / ${total || 0}`;
                   })()}
                 </div>
@@ -2644,19 +2646,58 @@ function CampaignDetails({ campaignId, onBack }) {
               </div>
               <div className="text-center">
                 <div className="text-lg font-semibold text-blue-600">
-                  {apiMergedCalls.filter((call) => {
-                    const s = (call.status || "").toLowerCase();
-                    return s === "ongoing";
-                  }).length || 0}
+                  {(() => {
+                    // Count completed calls (status: ongoing or completed)
+                    const completedCount = apiMergedCalls.filter((call) => {
+                      const s = (call.status || "").toLowerCase();
+                      return s === "ongoing" || s === "completed";
+                    }).length;
+
+                    // If we have API total, estimate completed based on current page ratio
+                    if (
+                      apiMergedCallsTotalItems > 0 &&
+                      apiMergedCalls.length > 0
+                    ) {
+                      const completedRatio =
+                        completedCount / apiMergedCalls.length;
+                      const estimatedTotalCompleted = Math.round(
+                        apiMergedCallsTotalItems * completedRatio
+                      );
+                      return estimatedTotalCompleted;
+                    }
+
+                    return completedCount;
+                  })()}
                 </div>
-                <div className="text-xs text-gray-500">Ongoing</div>
+                <div className="text-xs text-gray-500">Connected</div>
               </div>
               <div className="text-center">
                 <div className="text-lg font-semibold text-orange-600">
-                  {apiMergedCalls.filter((call) => {
-                    const s = (call.status || "").toLowerCase();
-                    return s === "missed";
-                  }).length || 0}
+                  {(() => {
+                    // Count missed calls (status: missed, not_connected, failed)
+                    const missedCount = apiMergedCalls.filter((call) => {
+                      const s = (call.status || "").toLowerCase();
+                      return (
+                        s === "missed" ||
+                        s === "not_connected" ||
+                        s === "failed"
+                      );
+                    }).length;
+
+                    // If we have API total, estimate missed based on current page ratio
+                    if (
+                      apiMergedCallsTotalItems > 0 &&
+                      apiMergedCalls.length > 0
+                    ) {
+                      const missedRatio = missedCount / apiMergedCalls.length;
+                      const estimatedTotalMissed = Math.round(
+                        apiMergedCallsTotalItems * missedRatio
+                      );
+                      return estimatedTotalMissed;
+                    }
+
+                    return missedCount;
+                  })()}
                 </div>
                 <div className="text-xs text-gray-500">Missed</div>
               </div>
@@ -2668,7 +2709,54 @@ function CampaignDetails({ campaignId, onBack }) {
                 <span className="text-xs font-medium text-gray-700">
                   Progress Bar
                 </span>
-                <span className="text-xs text-gray-500"></span>
+                <span className="text-xs text-gray-500">
+                  {(() => {
+                    const total = Array.isArray(campaignContacts)
+                      ? campaignContacts.length
+                      : 0;
+
+                    // Count different statuses from current page
+                    const connectedCount = apiMergedCalls.filter((call) => {
+                      const s = (call.status || "").toLowerCase();
+                      return s === "ongoing" || s === "completed";
+                    }).length;
+
+                    const missedCount = apiMergedCalls.filter((call) => {
+                      const s = (call.status || "").toLowerCase();
+                      return (
+                        s === "missed" ||
+                        s === "not_connected" ||
+                        s === "failed"
+                      );
+                    }).length;
+
+                    // If we have API total, estimate totals based on current page ratio
+                    if (
+                      apiMergedCallsTotalItems > 0 &&
+                      apiMergedCalls.length > 0
+                    ) {
+                      const connectedRatio =
+                        connectedCount / apiMergedCalls.length;
+                      const missedRatio = missedCount / apiMergedCalls.length;
+
+                      const estimatedTotalConnected = Math.round(
+                        apiMergedCallsTotalItems * connectedRatio
+                      );
+                      const estimatedTotalMissed = Math.round(
+                        apiMergedCallsTotalItems * missedRatio
+                      );
+
+                      return `${estimatedTotalConnected} connected, ${estimatedTotalMissed} missed of ${total} total`;
+                    }
+
+                    // Fallback to current page counts
+                    if (total > 0 && (connectedCount > 0 || missedCount > 0)) {
+                      return `${connectedCount} connected, ${missedCount} missed (current page)`;
+                    }
+
+                    return "";
+                  })()}
+                </span>
               </div>
               <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
                 <div
@@ -2677,22 +2765,24 @@ function CampaignDetails({ campaignId, onBack }) {
                       const total = Array.isArray(campaignContacts)
                         ? campaignContacts.length
                         : 0;
-                      const completedCount = Array.isArray(apiMergedCalls)
-                        ? apiMergedCalls.filter((call) => {
+                      // Calculate total calls made (completed + ongoing + missed)
+                      const totalCallsMade = (() => {
+                        if (apiMergedCallsTotalItems > 0) {
+                          // If we have API total, use it
+                          return apiMergedCallsTotalItems;
+                        } else {
+                          // Fallback to current page count
+                          return apiMergedCalls.filter((call) => {
                             const s = (call.status || "").toLowerCase();
-                            return s === "ongoing" || s === "completed";
-                          }).length
-                        : 0;
-                      const missedCount = Array.isArray(apiMergedCalls)
-                        ? apiMergedCalls.filter((call) => {
-                            const s = (call.status || "").toLowerCase();
-                            return s === "missed";
-                          }).length
-                        : 0;
-                      const callsMade = Math.min(
-                        total,
-                        completedCount + missedCount
-                      );
+                            return (
+                              s === "ongoing" ||
+                              s === "completed" ||
+                              s === "missed"
+                            );
+                          }).length;
+                        }
+                      })();
+                      const callsMade = Math.min(total, totalCallsMade);
                       return total > 0 && callsMade > 0;
                     })()
                       ? "bg-gradient-to-r from-green-400 to-green-500"
@@ -2704,22 +2794,24 @@ function CampaignDetails({ campaignId, onBack }) {
                         ? campaignContacts.length
                         : 0;
                       if (total === 0) return "0%";
-                      const completedCount = Array.isArray(apiMergedCalls)
-                        ? apiMergedCalls.filter((call) => {
+                      // Calculate total calls made (completed + ongoing + missed)
+                      const totalCallsMade = (() => {
+                        if (apiMergedCallsTotalItems > 0) {
+                          // If we have API total, use it
+                          return apiMergedCallsTotalItems;
+                        } else {
+                          // Fallback to current page count
+                          return apiMergedCalls.filter((call) => {
                             const s = (call.status || "").toLowerCase();
-                            return s === "ongoing" || s === "completed";
-                          }).length
-                        : 0;
-                      const missedCount = Array.isArray(apiMergedCalls)
-                        ? apiMergedCalls.filter((call) => {
-                            const s = (call.status || "").toLowerCase();
-                            return s === "missed";
-                          }).length
-                        : 0;
-                      const callsMade = Math.min(
-                        total,
-                        completedCount + missedCount
-                      );
+                            return (
+                              s === "ongoing" ||
+                              s === "completed" ||
+                              s === "missed"
+                            );
+                          }).length;
+                        }
+                      })();
+                      const callsMade = Math.min(total, totalCallsMade);
                       const pct = Math.max((callsMade / total) * 100, 0);
                       return `${pct}%`;
                     })(),
