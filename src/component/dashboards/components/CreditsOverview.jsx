@@ -14,6 +14,10 @@ export default function CreditsOverview() {
   const [graphDateFilter, setGraphDateFilter] = useState('today');
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState(null);
+  const [transcriptModal, setTranscriptModal] = useState({ isOpen: false, transcript: '', loading: false });
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(5);
+  const [invoiceModal, setInvoiceModal] = useState({ isOpen: false, transaction: null, loading: false });
 
   const token = sessionStorage.getItem("clienttoken");
 
@@ -68,8 +72,8 @@ export default function CreditsOverview() {
     return history.filter(item => new Date(item.timestamp) >= filterDate);
   };
 
-  // Get hourly credit additions for line chart (for today and yesterday)
-  const getHourlyCreditAdditions = () => {
+  // Get hourly credit usage for bar chart (for today and yesterday)
+  const getHourlyCreditUsage = () => {
     const now = new Date();
     const hourlyData = [];
     
@@ -86,9 +90,9 @@ export default function CreditsOverview() {
         const hourCredits = history
           .filter(item => {
             const itemDate = new Date(item.timestamp);
-            return itemDate >= hourStart && itemDate < hourEnd && item.amount > 0;
+            return itemDate >= hourStart && itemDate < hourEnd && item.amount < 0;
           })
-          .reduce((sum, item) => sum + item.amount, 0);
+          .reduce((sum, item) => sum + Math.abs(item.amount), 0);
         
         const hourLabel = hour === 0 ? '12 AM' : 
                          hour === 12 ? '12 PM' : 
@@ -114,9 +118,9 @@ export default function CreditsOverview() {
         const hourCredits = history
           .filter(item => {
             const itemDate = new Date(item.timestamp);
-            return itemDate >= hourStart && itemDate < hourEnd && item.amount > 0;
+            return itemDate >= hourStart && itemDate < hourEnd && item.amount < 0;
           })
-          .reduce((sum, item) => sum + item.amount, 0);
+          .reduce((sum, item) => sum + Math.abs(item.amount), 0);
         
         const hourLabel = hour === 0 ? '12 AM' : 
                          hour === 12 ? '12 PM' : 
@@ -139,9 +143,9 @@ export default function CreditsOverview() {
         const dayCredits = history
           .filter(item => {
             const itemDate = new Date(item.timestamp).toISOString().split('T')[0];
-            return itemDate === dateStr && item.amount > 0;
+            return itemDate === dateStr && item.amount < 0;
           })
-          .reduce((sum, item) => sum + item.amount, 0);
+          .reduce((sum, item) => sum + Math.abs(item.amount), 0);
         
         hourlyData.push({
           hour: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
@@ -186,6 +190,7 @@ export default function CreditsOverview() {
   const fetchAll = async () => {
     try {
       setLoading(true);
+      console.log(token)
       const [balRes, histRes] = await Promise.all([
         fetch(`${API_BASE_URL}/client/credits/balance`, {
           headers: { Authorization: `Bearer ${token}` },
@@ -310,25 +315,343 @@ export default function CreditsOverview() {
     }
   };
 
-  const dailyCreditData = getHourlyCreditAdditions();
+  const dailyCreditData = getHourlyCreditUsage();
   const usageBreakdown = getUsageBreakdown();
+
+  // Function to open transcript modal
+  const openTranscript = async (uniqueId) => {
+    if (!uniqueId) return;
+    
+    setTranscriptModal({ isOpen: true, transcript: '', loading: true });
+    
+    try {
+      const response = await fetch(`${API_BASE_URL}/client/call-logs/transcript/${uniqueId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      
+      const data = await response.json();
+      
+      if (data.success && data.data) {
+        setTranscriptModal({ 
+          isOpen: true, 
+          transcript: data.data.transcript || 'No transcript available', 
+          loading: false 
+        });
+      } else {
+        setTranscriptModal({ 
+          isOpen: true, 
+          transcript: 'No transcript available', 
+          loading: false 
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching transcript:', error);
+      setTranscriptModal({ 
+        isOpen: true, 
+        transcript: 'Error loading transcript', 
+        loading: false 
+      });
+    }
+  };
+
+  const closeTranscriptModal = () => {
+    setTranscriptModal({ isOpen: false, transcript: '', loading: false });
+  };
+
+  const openInvoiceModal = (transaction) => {
+    setInvoiceModal({ isOpen: true, transaction, loading: false });
+  };
+
+  const closeInvoiceModal = () => {
+    setInvoiceModal({ isOpen: false, transaction: null, loading: false });
+  };
+
+  const downloadInvoice = async (transaction) => {
+    try {
+      // Create a canvas element to render the invoice
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      
+      // Set canvas size for A4 paper (595 x 842 points at 72 DPI)
+      canvas.width = 595;
+      canvas.height = 842;
+      
+      // Create gradient background
+      const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+      gradient.addColorStop(0, '#f8fafc');
+      gradient.addColorStop(1, '#ffffff');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      // Header with background
+      ctx.fillStyle = '#1e293b';
+      ctx.fillRect(0, 0, canvas.width, 100);
+      
+      // Header text
+      ctx.fillStyle = 'white';
+      ctx.textAlign = 'center';
+      ctx.font = 'bold 32px Arial';
+      ctx.fillText('INVOICE', canvas.width / 2, 45);
+      
+      ctx.font = '14px Arial';
+      ctx.fillStyle = '#cbd5e1';
+      ctx.fillText('Aitota - AI Communication Platform', canvas.width / 2, 65);
+      
+      ctx.font = '12px Arial';
+      ctx.fillText('Professional AI Solutions', canvas.width / 2, 80);
+      
+      // Reset text alignment
+      ctx.textAlign = 'left';
+      
+      let yPosition = 130;
+      
+      // Invoice Details Section with background
+      ctx.fillStyle = '#f1f5f9';
+      ctx.fillRect(40, yPosition - 10, 515, 120);
+      
+      ctx.font = 'bold 18px Arial';
+      ctx.fillStyle = '#1e293b';
+      ctx.fillText('Invoice Details', 60, yPosition);
+      yPosition += 30;
+      
+      // Draw lines for better separation
+      ctx.strokeStyle = '#e2e8f0';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(60, yPosition - 5);
+      ctx.lineTo(535, yPosition - 5);
+      ctx.stroke();
+      
+      ctx.font = '12px Arial';
+      ctx.fillStyle = '#64748b';
+      ctx.fillText('Invoice Number:', 60, yPosition);
+      ctx.fillStyle = '#1e293b';
+      ctx.font = 'bold 12px Arial';
+      ctx.fillText(transaction.orderId || 'N/A', 200, yPosition);
+      yPosition += 20;
+      
+      ctx.font = '12px Arial';
+      ctx.fillStyle = '#64748b';
+      ctx.fillText('Date:', 60, yPosition);
+      ctx.fillStyle = '#1e293b';
+      ctx.font = 'bold 12px Arial';
+      ctx.fillText(new Date(transaction.timestamp).toLocaleDateString(), 200, yPosition);
+      yPosition += 20;
+      
+      ctx.fillStyle = '#64748b';
+      ctx.fillText('Time:', 60, yPosition);
+      ctx.fillStyle = '#1e293b';
+      ctx.font = 'bold 12px Arial';
+      ctx.fillText(new Date(transaction.timestamp).toLocaleTimeString(), 200, yPosition);
+      yPosition += 20;
+      
+      ctx.fillStyle = '#64748b';
+      ctx.fillText('Status:', 60, yPosition);
+      
+      // Status badge
+      const statusText = transaction.amount > 0 ? 'Credit Added' : 'Credit Used';
+      const statusColor = transaction.amount > 0 ? '#059669' : '#dc2626';
+      const statusBgColor = transaction.amount > 0 ? '#d1fae5' : '#fee2e2';
+      
+      // Draw status badge background
+      const statusWidth = ctx.measureText(statusText).width + 20;
+      ctx.fillStyle = statusBgColor;
+      ctx.fillRect(200, yPosition - 12, statusWidth, 20);
+      
+      // Draw status badge border
+      ctx.strokeStyle = statusColor;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(200, yPosition - 12, statusWidth, 20);
+      
+      // Draw status text
+      ctx.fillStyle = statusColor;
+      ctx.font = 'bold 11px Arial';
+      ctx.fillText(statusText, 210, yPosition);
+      
+      yPosition += 50;
+      
+      // Client Details Section with background
+      ctx.fillStyle = '#f1f5f9';
+      ctx.fillRect(40, yPosition - 10, 515, 80);
+      
+      ctx.font = 'bold 18px Arial';
+      ctx.fillStyle = '#1e293b';
+      ctx.fillText('Client Details', 60, yPosition);
+      yPosition += 30;
+      
+      ctx.strokeStyle = '#e2e8f0';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(60, yPosition - 5);
+      ctx.lineTo(535, yPosition - 5);
+      ctx.stroke();
+      
+      ctx.font = '12px Arial';
+      ctx.fillStyle = '#64748b';
+      ctx.fillText('Name:', 60, yPosition);
+      ctx.fillStyle = '#1e293b';
+      ctx.font = 'bold 12px Arial';
+      ctx.fillText(balance?.clientName || 'N/A', 200, yPosition);
+      yPosition += 20;
+      
+      ctx.fillStyle = '#64748b';
+      ctx.fillText('Email:', 60, yPosition);
+      ctx.fillStyle = '#1e293b';
+      ctx.font = 'bold 12px Arial';
+      ctx.fillText(balance?.clientEmail || 'N/A', 200, yPosition);
+      
+      yPosition += 50;
+      
+      // Transaction Details Section with background
+      ctx.fillStyle = '#f1f5f9';
+      ctx.fillRect(40, yPosition - 10, 515, 120);
+      
+      ctx.font = 'bold 18px Arial';
+      ctx.fillStyle = '#1e293b';
+      ctx.fillText('Transaction Details', 60, yPosition);
+      yPosition += 30;
+      
+      ctx.strokeStyle = '#e2e8f0';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(60, yPosition - 5);
+      ctx.lineTo(535, yPosition - 5);
+      ctx.stroke();
+      
+      ctx.font = '12px Arial';
+      ctx.fillStyle = '#64748b';
+      ctx.fillText('Order ID:', 60, yPosition);
+      ctx.fillStyle = '#1e293b';
+      ctx.font = 'bold 12px Arial';
+      ctx.fillText(transaction.orderId || 'N/A', 200, yPosition);
+      yPosition += 20;
+      
+      ctx.fillStyle = '#64748b';
+      ctx.fillText('Transaction ID:', 60, yPosition);
+      ctx.fillStyle = '#1e293b';
+      ctx.font = 'bold 12px Arial';
+      ctx.fillText(transaction.transactionId || 'N/A', 200, yPosition);
+      yPosition += 20;
+      
+      ctx.fillStyle = '#64748b';
+      ctx.fillText('Plan:', 60, yPosition);
+      ctx.fillStyle = '#1e293b';
+      ctx.font = 'bold 12px Arial';
+      ctx.fillText(transaction.planType || 'N/A', 200, yPosition);
+      yPosition += 20;
+      
+      ctx.fillStyle = '#64748b';
+      ctx.fillText('Description:', 60, yPosition);
+      ctx.fillStyle = '#1e293b';
+      ctx.font = 'bold 12px Arial';
+      ctx.fillText(transaction.description, 200, yPosition);
+      
+      yPosition += 50;
+      
+      // Amount Details Section with special styling
+      ctx.fillStyle = '#fef3c7';
+      ctx.fillRect(40, yPosition - 10, 515, 100);
+      
+      // Border for amount section
+      ctx.strokeStyle = '#f59e0b';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(40, yPosition - 10, 515, 100);
+      
+      ctx.font = 'bold 20px Arial';
+      ctx.fillStyle = '#92400e';
+      ctx.fillText('Amount Details', 60, yPosition);
+      yPosition += 35;
+      
+      // Credits row
+      ctx.font = '14px Arial';
+      ctx.fillStyle = '#92400e';
+      ctx.fillText('Credits:', 60, yPosition);
+      ctx.font = 'bold 20px Arial';
+      ctx.fillStyle = transaction.amount > 0 ? '#059669' : '#dc2626';
+      ctx.fillText(`${transaction.amount > 0 ? '+' : ''}${transaction.amount}`, 200, yPosition);
+      yPosition += 30;
+      
+      // Amount row
+      ctx.font = '14px Arial';
+      ctx.fillStyle = '#92400e';
+      ctx.fillText('Amount:', 60, yPosition);
+      ctx.font = 'bold 24px Arial';
+      ctx.fillStyle = transaction.amount > 0 ? '#059669' : '#dc2626';
+      ctx.fillText(`₹${Math.abs(transaction.amount)}`, 200, yPosition);
+      
+      yPosition += 80;
+      
+      // Footer with background
+      ctx.fillStyle = '#1e293b';
+      ctx.fillRect(0, canvas.height - 60, canvas.width, 60);
+      
+      // Footer text
+      ctx.font = '12px Arial';
+      ctx.fillStyle = '#cbd5e1';
+      ctx.textAlign = 'center';
+      ctx.fillText('Generated by Aitota - AI Communication Platform', canvas.width / 2, canvas.height - 35);
+      ctx.fillText('Thank you for your business!', canvas.width / 2, canvas.height - 20);
+      
+      // Add some decorative elements
+      ctx.strokeStyle = '#e2e8f0';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([5, 5]);
+      ctx.beginPath();
+      ctx.moveTo(50, 110);
+      ctx.lineTo(545, 110);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      
+      // Convert canvas to blob and download
+      canvas.toBlob((blob) => {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `invoice-${transaction.orderId || 'transaction'}-${new Date(transaction.timestamp).toISOString().split('T')[0]}.png`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+      }, 'image/png');
+      
+    } catch (error) {
+      console.error('Error generating invoice:', error);
+      alert('Error generating invoice. Please try again.');
+    }
+  };
   
-  // Get credits used history (last 10 usage transactions)
+  // Get credits used history with call details
   const getCreditsUsedHistory = () => {
-    return history
-      .filter(item => item.amount < 0)
-      .slice(0, 10)
-      .map(item => ({
-        ...item,
-        usageName: item.usageType === 'call' ? 'Mobile Call' : 
-                  item.usageType === 'whatsapp' ? 'WhatsApp Message' :
-                  item.usageType === 'email' ? 'Email' :
-                  item.usageType === 'telegram' ? 'Telegram Message' : 'Unknown',
-        usageIcon: item.usageType === 'call' ? '📞' : 
-                  item.usageType === 'whatsapp' ? '📱' :
-                  item.usageType === 'email' ? '📧' :
-                  item.usageType === 'telegram' ? '💬' : '❓'
-      }));
+    const filteredHistory = history.filter(item => item.amount < 0);
+    
+    // Calculate pagination
+    const indexOfLastItem = currentPage * itemsPerPage;
+    const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+    const currentItems = filteredHistory.slice(indexOfFirstItem, indexOfLastItem);
+    
+    return currentItems.map((item, index) => ({
+      ...item,
+      sNo: indexOfFirstItem + index + 1,
+      usageName: item.usageType === 'call' ? 'Mobile Call' : 
+                item.usageType === 'whatsapp' ? 'WhatsApp Message' :
+                item.usageType === 'email' ? 'Email' :
+                item.usageType === 'telegram' ? 'Telegram Message' : 'Unknown',
+      usageIcon: item.usageType === 'call' ? '📞' : 
+                item.usageType === 'whatsapp' ? '📱' :
+                item.usageType === 'email' ? '📧' :
+                item.usageType === 'telegram' ? '💬' : '❓',
+      // Extract mobile number and call direction from metadata
+      mobileNumber: item.metadata?.mobile || 'N/A',
+      callDirection: item.metadata?.callDirection || 'unknown',
+      duration: item.duration || 0,
+      uniqueId: item.metadata?.uniqueid || null
+    }));
+  };
+
+  // Get total pages for pagination
+  const getTotalPages = () => {
+    const filteredHistory = history.filter(item => item.amount < 0);
+    return Math.ceil(filteredHistory.length / itemsPerPage);
   };
 
   if (loading) {
@@ -384,15 +707,15 @@ export default function CreditsOverview() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Daily Credit Additions Line Chart */}
+        <div className="relative grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Daily Credit Usage Bar Chart */}
           <div>
             <h4 className="text-base font-medium text-gray-900 mb-4">
               {graphDateFilter === 'today' || graphDateFilter === 'yesterday' ? 'Hourly Credit Usage' : 'Daily Credit Usage'}
             </h4>
             <div className="h-60">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={dailyCreditData}>
+                <BarChart data={dailyCreditData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                   <XAxis 
                     dataKey="hour" 
@@ -414,20 +737,20 @@ export default function CreditsOverview() {
                       fontSize: '12px',
                       boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
                     }}
-                    formatter={(value) => [`${value} credits`, 'Added']}
+                    formatter={(value) => [`${value} credits`, 'Used']}
                   />
-                  <Line 
-                    type="monotone" 
+                  <Bar 
                     dataKey="credits" 
-                    stroke="#000" 
-                    strokeWidth={3}
-                    dot={{ fill: '#000', strokeWidth: 2, r: 4 }}
-                    activeDot={{ r: 6, fill: '#000', stroke: '#fff', strokeWidth: 2 }}
+                    fill="#000" 
+                    radius={[4, 4, 0, 0]}
                   />
-                </LineChart>
+                </BarChart>
               </ResponsiveContainer>
             </div>
           </div>
+
+          {/* Divider Line */}
+          <div className="hidden lg:block absolute left-1/2 top-0 bottom-0 w-px bg-gray-200"></div>
 
           {/* Usage Breakdown Pie Chart with Breakdown Values */}
           <div>
@@ -509,27 +832,36 @@ export default function CreditsOverview() {
           <table className="min-w-full">
             <thead>
               <tr className="border-b border-gray-200">
-                <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Service</th>
-                <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
-                <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Credits Used</th>
+                <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">S.No</th>
+                <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Mobile Number</th>
                 <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Date & Time</th>
+                <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Duration</th>
+                <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Credits Used</th>
+                <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Transcript</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {getCreditsUsedHistory().map((usage, idx) => (
                 <tr key={idx} className="hover:bg-gray-50 transition-colors duration-200">
                   <td className="py-4 px-4">
+                    <div className="text-sm font-medium text-gray-900">{usage.sNo}</div>
+                  </td>
+                  <td className="py-4 px-4">
                     <div className="flex items-center">
-                      <span className="text-xl mr-3">{usage.usageIcon}</span>
-                      <span className="font-medium text-gray-900 text-sm">{usage.usageName}</span>
+                      {usage.callDirection === 'inbound' ? (
+                        <div className="flex items-center">
+                          <span className="text-black font-bold mr-1">↓</span>
+                          <span className="text-sm text-gray-900">{usage.mobileNumber}</span>
+                        </div>
+                      ) : usage.callDirection === 'outbound' ? (
+                        <div className="flex items-center">
+                          <span className="text-black font-bold mr-1">↑</span>
+                          <span className="text-sm text-gray-900">{usage.mobileNumber}</span>
+                        </div>
+                      ) : (
+                        <div className="text-sm text-gray-900">{usage.mobileNumber}</div>
+                      )}
                     </div>
-                  </td>
-                  <td className="py-4 px-4">
-                    <div className="text-sm text-gray-900">{usage.description}</div>
-                  </td>
-                  <td className="py-4 px-4">
-                    <div className="text-lg font-bold text-red-600">{Math.abs(usage.amount)}</div>
-                    <div className="text-xs text-gray-500">credits</div>
                   </td>
                   <td className="py-4 px-4 text-sm">
                     <div className="font-medium text-gray-900 text-sm">
@@ -546,11 +878,30 @@ export default function CreditsOverview() {
                       })}
                     </div>
                   </td>
+                  <td className="py-4 px-4">
+                    <div className="text-sm text-gray-900">{usage.metadata.durationFormatted} mins</div>
+                  </td>
+                  <td className="py-4 px-4">
+                    <div className="text-sm">{Math.abs(usage.amount)}</div>
+                    <div className="text-xs text-gray-500">credits</div>
+                  </td>
+                  <td className="py-4 px-4">
+                    {usage.uniqueId && usage.callDirection === 'outbound' ? (
+                      <button
+                        onClick={() => openTranscript(usage.uniqueId)}
+                        className="px-3 py-1 bg-blue-600 text-white text-xs rounded-md hover:bg-blue-700 transition-colors"
+                      >
+                        View Transcript
+                      </button>
+                    ) : (
+                      <span className="text-xs text-gray-400">-</span>
+                    )}
+                  </td>
                 </tr>
               ))}
               {getCreditsUsedHistory().length === 0 && (
                 <tr>
-                  <td className="py-8 px-4 text-center text-gray-500" colSpan={4}>
+                  <td className="py-8 px-4 text-center text-gray-500" colSpan={6}>
                     <div className="flex flex-col items-center">
                       <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
                         <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -566,6 +917,56 @@ export default function CreditsOverview() {
             </tbody>
           </table>
         </div>
+
+        {/* Pagination for Credit Usage Table */}
+        {history.filter(item => item.amount < 0).length > itemsPerPage && (
+          <div className="flex items-center justify-between px-4 py-3 bg-white border-t border-gray-200">
+            <div className="flex items-center text-sm text-gray-700">
+              <span>
+                Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, history.filter(item => item.amount < 0).length)} of {history.filter(item => item.amount < 0).length} results
+              </span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                disabled={currentPage === 1}
+                className={`px-3 py-1 text-sm rounded-md ${
+                  currentPage === 1
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                Previous
+              </button>
+              <div className="flex items-center space-x-1">
+                {Array.from({ length: getTotalPages() }, (_, i) => i + 1).map(page => (
+                  <button
+                    key={page}
+                    onClick={() => setCurrentPage(page)}
+                    className={`px-3 py-1 text-sm rounded-md ${
+                      currentPage === page
+                        ? 'bg-black text-white'
+                        : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    {page}
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={() => setCurrentPage(prev => Math.min(prev + 1, getTotalPages()))}
+                disabled={currentPage === getTotalPages()}
+                className={`px-3 py-1 text-sm rounded-md ${
+                  currentPage === getTotalPages()
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Credit Usage Rates */}
@@ -580,6 +981,7 @@ export default function CreditsOverview() {
         </h4>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
           <div className="text-center p-4 bg-white rounded-lg border border-gray-200">
+            <div className="text-gray-800 text-lg font-bold mb-2">Mobile Calls</div>
             <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-2">
               <svg className="w-4 h-4 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
                 <path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z" />
@@ -587,9 +989,9 @@ export default function CreditsOverview() {
             </div>
             <div className="font-bold text-gray-900 text-lg mb-1">2</div>
             <div className="text-gray-600 text-xs font-medium">Credits per minute</div>
-            <div className="text-gray-800 text-xs font-semibold mt-1">Mobile Calls</div>
           </div>
           <div className="text-center p-4 bg-white rounded-lg border border-gray-200">
+            <div className="text-gray-800 text-lg font-bold mb-2">WhatsApp</div>
             <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-2">
               <svg className="w-4 h-4 text-green-600" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893A11.821 11.821 0 0020.885 3.488"/>
@@ -597,9 +999,9 @@ export default function CreditsOverview() {
             </div>
             <div className="font-bold text-gray-900 text-lg mb-1">1</div>
             <div className="text-gray-600 text-xs font-medium">Credit per message</div>
-            <div className="text-gray-800 text-xs font-semibold mt-1">WhatsApp</div>
           </div>
           <div className="text-center p-4 bg-white rounded-lg border border-gray-200">
+            <div className="text-gray-800 text-lg font-bold mb-2">Telegram</div>
             <div className="w-8 h-8 bg-sky-100 rounded-full flex items-center justify-center mx-auto mb-2">
               <svg className="w-4 h-4 text-sky-600" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/>
@@ -607,9 +1009,9 @@ export default function CreditsOverview() {
             </div>
             <div className="font-bold text-gray-900 text-lg mb-1">0.25</div>
             <div className="text-gray-600 text-xs font-medium">Credits per message</div>
-            <div className="text-gray-800 text-xs font-semibold mt-1">Telegram</div>
           </div>
           <div className="text-center p-4 bg-white rounded-lg border border-gray-200">
+            <div className="text-gray-800 text-lg font-bold mb-2">Email</div>
             <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-2">
               <svg className="w-4 h-4 text-purple-600" fill="currentColor" viewBox="0 0 20 20">
                 <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
@@ -618,7 +1020,6 @@ export default function CreditsOverview() {
             </div>
             <div className="font-bold text-gray-900 text-lg mb-1">0.10</div>
             <div className="text-gray-600 text-xs font-medium">Credits per email</div>
-            <div className="text-gray-800 text-xs font-semibold mt-1">Email</div>
           </div>
         </div>
       </div>
@@ -629,15 +1030,7 @@ export default function CreditsOverview() {
     <div className="space-y-6">
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3">
-        <select
-          value={selectedFilter}
-          onChange={(e) => setSelectedFilter(e.target.value)}
-          className="px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm font-medium focus:ring-2 focus:ring-black focus:border-black"
-        >
-          <option value="all">All Transactions</option>
-          <option value="credit">Credits Added</option>
-          <option value="debit">Credits Used</option>
-        </select>
+       
 
         <select
           value={dateFilter}
@@ -657,9 +1050,12 @@ export default function CreditsOverview() {
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date & Time</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Order ID</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Transaction ID</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Credits</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Invoice</th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-100">
@@ -680,30 +1076,15 @@ export default function CreditsOverview() {
                     })}
                   </div>
                 </td>
+
                 <td className="px-6 py-4 text-sm">
-                  <div className="flex items-center space-x-3">
-                    {h.amount > 0 ? (
-                      <div className="w-6 h-6 rounded-lg bg-green-100 flex items-center justify-center">
-                        <svg className="w-3 h-3 text-green-600" fill="currentColor" viewBox="0 0 20 20">
-                          <path d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4zm2 6a2 2 0 012-2h8a2 2 0 012 2v4a2 2 0 01-2 2H8a2 2 0 01-2-2v-4zm6 4a2 2 0 100-4 2 2 0 000 4z" />
-                        </svg>
-                      </div>
-                    ) : (
-                      <div className="w-6 h-6 rounded-lg bg-red-100 flex items-center justify-center">
-                        <svg className="w-3 h-3 text-red-600" fill="currentColor" viewBox="0 0 20 20">
-                          <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3z" />
-                        </svg>
-                      </div>
-                    )}
-                    <div>
-                      <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-md ${
-                        h.amount > 0 
-                          ? 'bg-green-100 text-green-800 border border-green-200' 
-                          : 'bg-red-100 text-red-800 border border-red-200'
-                      }`}>
-                        {h.amount > 0 ? 'Credit Added' : 'Credit Used'}
-                      </span>
-                    </div>
+                  <div className="text-sm text-gray-900 font-mono">
+                    {h.orderId || '-'}
+                  </div>
+                </td>
+                <td className="px-6 py-4 text-sm">
+                  <div className="text-sm text-gray-900 font-mono">
+                    {h.transactionId || '-'}
                   </div>
                 </td>
                 <td className="px-6 py-4 text-sm">
@@ -716,17 +1097,32 @@ export default function CreditsOverview() {
                 </td>
                 <td className="px-6 py-4 text-sm">
                   <div className="text-right">
+                    <div className={`text-lg font-bold ${h.amount < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                      ₹{Math.abs(h.amount)}
+                    </div>
+                  </div>
+                </td>
+                <td className="px-6 py-4 text-sm">
+                  <div className="text-right">
                     <div className={`text-lg font-bold ${h.amount < 0 ? 'text-red-600' : 'text-green-600'} mb-1`}>
                       {h.amount > 0 ? '+' : ''}{h.amount}
                     </div>
                     <div className="text-gray-500 text-xs font-medium">credits</div>
                   </div>
                 </td>
+                <td className="px-6 py-4 text-sm">
+                  <button
+                    onClick={() => openInvoiceModal(h)}
+                    className="px-3 py-1 bg-gray-600 text-white text-xs rounded-md hover:bg-gray-700 transition-colors"
+                  >
+                    View
+                  </button>
+                </td>
               </tr>
             ))}
             {filteredHistory.length === 0 && (
               <tr>
-                <td className="px-6 py-12 text-center text-gray-500" colSpan={4}>
+                <td className="px-6 py-12 text-center text-gray-500" colSpan={7}>
                   <div className="flex flex-col items-center">
                     <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
                       <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -863,7 +1259,11 @@ export default function CreditsOverview() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Available Balance Card */}
           <div
-            className="bg-gradient-to-r from-gray-900 to-black rounded-xl shadow-sm p-6 text-white border border-gray-200 cursor-pointer hover:shadow-md transition-all duration-300"
+            className={`rounded-xl shadow-sm p-6 border border-gray-200 cursor-pointer hover:shadow-md transition-all duration-300 ${
+              activeTab === 'overview' 
+                ? 'bg-gradient-to-r from-gray-900 to-black text-white ring-2 ring-black ring-opacity-50' 
+                : 'bg-gradient-to-r from-gray-900 to-black text-white'
+            }`}
             onClick={() => setActiveTab('overview')}
           >
             <div className="flex items-center justify-between">
@@ -882,7 +1282,11 @@ export default function CreditsOverview() {
 
           {/* Payment History Card */}
           <div 
-            className="bg-white rounded-xl shadow-sm p-6 border border-gray-200 cursor-pointer hover:shadow-md transition-all duration-300"
+            className={`rounded-xl shadow-sm p-6 border border-gray-200 cursor-pointer hover:shadow-md transition-all duration-300 ${
+              activeTab === 'history' 
+                ? 'bg-white ring-2 ring-blue-500 ring-opacity-50' 
+                : 'bg-white'
+            }`}
             onClick={() => setActiveTab('history')}
           >
             <div className="flex items-center justify-between">
@@ -916,6 +1320,166 @@ export default function CreditsOverview() {
             <div className="animate-spin rounded-full h-12 w-12 border-4 border-gray-200 border-t-black mx-auto mb-4"></div>
             <h3 className="text-lg font-semibold text-gray-900 mb-2">Processing Payment</h3>
             <p className="text-gray-600 text-sm">Please wait while we redirect you to the secure payment gateway...</p>
+          </div>
+        </div>
+      )}
+
+      {/* Transcript Modal */}
+      {transcriptModal.isOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60]">
+          <div className="bg-white rounded-xl shadow-xl max-w-4xl w-full mx-4 max-h-[80vh] overflow-hidden">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">Call Transcript</h3>
+              <button
+                onClick={closeTranscriptModal}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="p-6 overflow-y-auto max-h-[60vh]">
+              {transcriptModal.loading ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-4 border-gray-200 border-t-black"></div>
+                  <span className="ml-3 text-gray-600">Loading transcript...</span>
+                </div>
+              ) : (
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <pre className="whitespace-pre-wrap text-sm text-gray-800 font-mono leading-relaxed">
+                    {transcriptModal.transcript}
+                  </pre>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Invoice Modal */}
+      {invoiceModal.isOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60]">
+          <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full mx-4 max-h-[80vh] overflow-hidden">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">Transaction Invoice</h3>
+              <button
+                onClick={closeInvoiceModal}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="p-6 overflow-y-auto max-h-[60vh]">
+              {invoiceModal.transaction && (
+                <div className="space-y-6">
+                  {/* Invoice Header */}
+                  <div className="text-center border-b border-gray-200 pb-4">
+                    <h2 className="text-2xl font-bold text-gray-900 mb-2">INVOICE</h2>
+                    <p className="text-gray-600">Aitota - AI Communication Platform</p>
+                  </div>
+
+                  {/* Invoice Details */}
+                  <div className="grid grid-cols-2 gap-6">
+                    <div>
+                      <h4 className="font-semibold text-gray-900 mb-3">Invoice Details</h4>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Invoice Number:</span>
+                          <span className="font-mono font-medium">{invoiceModal.transaction.orderId || 'N/A'}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Date:</span>
+                          <span className="font-medium">{new Date(invoiceModal.transaction.timestamp).toLocaleDateString()}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Time:</span>
+                          <span className="font-medium">{new Date(invoiceModal.transaction.timestamp).toLocaleTimeString()}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Status:</span>
+                          <span className={`font-medium ${invoiceModal.transaction.amount > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                            {invoiceModal.transaction.amount > 0 ? 'Credit Added' : 'Credit Used'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <h4 className="font-semibold text-gray-900 mb-3">Client Details</h4>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Name:</span>
+                          <span className="font-medium">{balance?.clientName || 'N/A'}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Email:</span>
+                          <span className="font-medium">{balance?.clientEmail || 'N/A'}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Transaction Details */}
+                  <div className="border-t border-gray-200 pt-4">
+                    <h4 className="font-semibold text-gray-900 mb-3">Transaction Details</h4>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Order ID:</span>
+                        <span className="font-mono font-medium">{invoiceModal.transaction.orderId || 'N/A'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Transaction ID:</span>
+                        <span className="font-mono font-medium">{invoiceModal.transaction.transactionId || 'N/A'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Plan:</span>
+                        <span className="font-medium">{invoiceModal.transaction.planType || 'N/A'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Description:</span>
+                        <span className="font-medium">{invoiceModal.transaction.description}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Amount Details */}
+                  <div className="border-t border-gray-200 pt-4">
+                    <h4 className="font-semibold text-gray-900 mb-3">Amount Details</h4>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Credits:</span>
+                        <span className={`font-bold text-lg ${invoiceModal.transaction.amount > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {invoiceModal.transaction.amount > 0 ? '+' : ''}{invoiceModal.transaction.amount}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Amount:</span>
+                        <span className="font-bold">₹{Math.abs(invoiceModal.transaction.amount)}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="border-t border-gray-200 pt-4 flex justify-end space-x-3">
+                    <button
+                      onClick={() => downloadInvoice(invoiceModal.transaction)}
+                      className="px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors text-sm font-medium"
+                    >
+                      Download Invoice
+                    </button>
+                    <button
+                      onClick={closeInvoiceModal}
+                      className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors text-sm font-medium"
+                    >
+                      Close
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
