@@ -2553,7 +2553,7 @@ function CampaignDetails({ campaignId, onBack }) {
               <div className="flex items-center space-x-3">
                 <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
                 <h3 className="text-base font-medium text-gray-900">
-                  Campaign Instance
+                  Campaign Summary
                 </h3>
                 <span
                   className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
