@@ -11,7 +11,7 @@ export default function CreditsOverview() {
   const [activeTab, setActiveTab] = useState('overview');
   const [selectedFilter, setSelectedFilter] = useState('credit');
   const [dateFilter, setDateFilter] = useState('all');
-  const [graphDateFilter, setGraphDateFilter] = useState('7days');
+  const [graphDateFilter, setGraphDateFilter] = useState('today');
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState(null);
 
@@ -68,42 +68,69 @@ export default function CreditsOverview() {
     return history.filter(item => new Date(item.timestamp) >= filterDate);
   };
 
-  // Get daily credit additions for line chart
-  const getDailyCreditAdditions = () => {
-    const days = graphDateFilter === 'today' ? 1 : graphDateFilter === 'yesterday' ? 1 : 7;
-    const dailyData = [];
+  // Get hourly credit additions for line chart (for today and yesterday)
+  const getHourlyCreditAdditions = () => {
     const now = new Date();
+    const hourlyData = [];
     
     if (graphDateFilter === 'today') {
       const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      const todayCredits = history
-        .filter(item => {
-          const itemDate = new Date(item.timestamp);
-          return itemDate >= today && item.amount > 0;
-        })
-        .reduce((sum, item) => sum + item.amount, 0);
       
-      dailyData.push({
-        date: 'Today',
-        credits: todayCredits
-      });
+      // Generate 24 hours for today
+      for (let hour = 0; hour < 24; hour++) {
+        const hourStart = new Date(today);
+        hourStart.setHours(hour, 0, 0, 0);
+        const hourEnd = new Date(today);
+        hourEnd.setHours(hour + 1, 0, 0, 0);
+        
+        const hourCredits = history
+          .filter(item => {
+            const itemDate = new Date(item.timestamp);
+            return itemDate >= hourStart && itemDate < hourEnd && item.amount > 0;
+          })
+          .reduce((sum, item) => sum + item.amount, 0);
+        
+        const hourLabel = hour === 0 ? '12 AM' : 
+                         hour === 12 ? '12 PM' : 
+                         hour > 12 ? `${hour - 12} PM` : `${hour} AM`;
+        
+        hourlyData.push({
+          hour: hourLabel,
+          credits: hourCredits,
+          time: hour
+        });
+      }
     } else if (graphDateFilter === 'yesterday') {
       const yesterday = new Date(now.getTime() - (24 * 60 * 60 * 1000));
       const yesterdayStart = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate());
-      const yesterdayEnd = new Date(yesterdayStart.getTime() + (24 * 60 * 60 * 1000));
       
-      const yesterdayCredits = history
-        .filter(item => {
-          const itemDate = new Date(item.timestamp);
-          return itemDate >= yesterdayStart && itemDate < yesterdayEnd && item.amount > 0;
-        })
-        .reduce((sum, item) => sum + item.amount, 0);
-      
-      dailyData.push({
-        date: 'Yesterday',
-        credits: yesterdayCredits
-      });
+      // Generate 24 hours for yesterday
+      for (let hour = 0; hour < 24; hour++) {
+        const hourStart = new Date(yesterdayStart);
+        hourStart.setHours(hour, 0, 0, 0);
+        const hourEnd = new Date(yesterdayStart);
+        hourEnd.setHours(hour + 1, 0, 0, 0);
+        
+        const hourCredits = history
+          .filter(item => {
+            const itemDate = new Date(item.timestamp);
+            return itemDate >= hourStart && itemDate < hourEnd && item.amount > 0;
+          })
+          .reduce((sum, item) => sum + item.amount, 0);
+        
+        const hourLabel = hour === 0 ? '12 AM' : 
+                         hour === 12 ? '12 PM' : 
+                         hour > 12 ? `${hour - 12} PM` : `${hour} AM`;
+        
+        hourlyData.push({
+          hour: hourLabel,
+          credits: hourCredits,
+          time: hour
+        });
+      }
     } else {
+      // For 7 days, use daily data
+      const days = 7;
       for (let i = days - 1; i >= 0; i--) {
         const date = new Date(now);
         date.setDate(date.getDate() - i);
@@ -116,14 +143,15 @@ export default function CreditsOverview() {
           })
           .reduce((sum, item) => sum + item.amount, 0);
         
-        dailyData.push({
-          date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-          credits: dayCredits
+        hourlyData.push({
+          hour: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+          credits: dayCredits,
+          time: i
         });
       }
     }
     
-    return dailyData;
+    return hourlyData;
   };
 
   // Usage breakdown pie chart: how much used for call, whatsapp, email, telegram
@@ -162,7 +190,7 @@ export default function CreditsOverview() {
         fetch(`${API_BASE_URL}/client/credits/balance`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
-        fetch(`${API_BASE_URL}/client/credits/history?limit=50`, {
+        fetch(`${API_BASE_URL}/client/credits/history`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
       ]);
@@ -282,7 +310,7 @@ export default function CreditsOverview() {
     }
   };
 
-  const dailyCreditData = getDailyCreditAdditions();
+  const dailyCreditData = getHourlyCreditAdditions();
   const usageBreakdown = getUsageBreakdown();
   
   // Get credits used history (last 10 usage transactions)
@@ -359,13 +387,15 @@ export default function CreditsOverview() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Daily Credit Additions Line Chart */}
           <div>
-            <h4 className="text-base font-medium text-gray-900 mb-4">Daily Credit Usage</h4>
+            <h4 className="text-base font-medium text-gray-900 mb-4">
+              {graphDateFilter === 'today' || graphDateFilter === 'yesterday' ? 'Hourly Credit Usage' : 'Daily Credit Usage'}
+            </h4>
             <div className="h-60">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={dailyCreditData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                   <XAxis 
-                    dataKey="date" 
+                    dataKey="hour" 
                     axisLine={false}
                     tickLine={false}
                     tick={{ fontSize: 11, fill: '#6B7280' }}
@@ -377,11 +407,12 @@ export default function CreditsOverview() {
                   />
                   <Tooltip 
                     contentStyle={{
-                      backgroundColor: '#000',
-                      color: '#fff',
-                      border: 'none',
+                      backgroundColor: '#ffffff',
+                      color: '#000000',
+                      border: '1px solid #e5e7eb',
                       borderRadius: '8px',
-                      fontSize: '12px'
+                      fontSize: '12px',
+                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
                     }}
                     formatter={(value) => [`${value} credits`, 'Added']}
                   />
@@ -403,26 +434,8 @@ export default function CreditsOverview() {
             <h4 className="text-base font-medium text-gray-900 mb-4">Credits Usage Breakdown</h4>
             {usageBreakdown.length > 0 ? (
               <div className="flex">
-                {/* Breakdown Values */}
-                <div className="w-1/3 pr-4">
-                  <div className="space-y-3">
-                    {usageBreakdown.map((item, index) => (
-                      <div key={index} className="flex items-center justify-between">
-                        <div className="flex items-center">
-                          <div 
-                            className="w-3 h-3 rounded-full mr-2"
-                            style={{ backgroundColor: item.color }}
-                          ></div>
-                          <span className="text-xs font-medium text-gray-700">{item.name}</span>
-                        </div>
-                        <span className="text-xs font-bold text-gray-900">{item.percentage}%</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                
                 {/* Pie Chart */}
-                <div className="w-2/3">
+                <div className="w-1/2">
                   <div className="h-60">
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
@@ -440,16 +453,35 @@ export default function CreditsOverview() {
                         </Pie>
                         <Tooltip 
                           contentStyle={{
-                            backgroundColor: '#000',
-                            color: '#fff',
-                            border: 'none',
+                            backgroundColor: '#ffffff',
+                            color: '#000000',
+                            border: '1px solid #e5e7eb',
                             borderRadius: '8px',
-                            fontSize: '12px'
+                            fontSize: '12px',
+                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
                           }}
                           formatter={(value) => [`${value} credits`, 'Used']}
                         />
                       </PieChart>
                     </ResponsiveContainer>
+                  </div>
+                </div>
+                
+                {/* Breakdown Values - Right Side */}
+                <div className="w-1/2 pl-4">
+                  <div className="space-y-3">
+                    {usageBreakdown.map((item, index) => (
+                      <div key={index} className="flex items-center justify-between">
+                        <div className="flex items-center">
+                          <div 
+                            className="w-3 h-3 rounded-full mr-2"
+                            style={{ backgroundColor: item.color }}
+                          ></div>
+                          <span className="text-xs font-medium text-gray-700">{item.name}</span>
+                        </div>
+                        <span className="text-xs font-bold text-gray-900">{item.percentage}%</span>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>
