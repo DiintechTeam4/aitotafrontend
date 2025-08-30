@@ -48,6 +48,11 @@ function GroupDetails({ groupId, onBack }) {
   const [currentContactIndex, setCurrentContactIndex] = useState(0);
   const [callResults, setCallResults] = useState([]);
   const [clientData, setClientData] = useState(null);
+
+  // Selection states for bulk operations
+  const [selectedContacts, setSelectedContacts] = useState([]);
+  const [selectAll, setSelectAll] = useState(false);
+
   // API base URL
   const API_BASE = `${API_BASE_URL}/client`;
 
@@ -56,6 +61,34 @@ function GroupDetails({ groupId, onBack }) {
     fetchAgents();
     fetchClientData();
   }, [groupId]);
+
+  // Sync selectAll state with selectedContacts
+  useEffect(() => {
+    if (contacts.length > 0 && selectedContacts.length === contacts.length) {
+      setSelectAll(true);
+    } else {
+      setSelectAll(false);
+    }
+  }, [selectedContacts, contacts]);
+
+  // Clear selection when contacts change
+  useEffect(() => {
+    setSelectedContacts([]);
+    setSelectAll(false);
+  }, [contacts]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.ctrlKey && event.key === "a" && contacts.length > 0) {
+        event.preventDefault();
+        handleSelectAll();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [contacts, selectAll]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -70,6 +103,86 @@ function GroupDetails({ groupId, onBack }) {
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, [showAgentDropdown]);
+
+  // Selection helper functions
+  const handleSelectContact = (contactId) => {
+    setSelectedContacts((prev) => {
+      if (prev.includes(contactId)) {
+        return prev.filter((id) => id !== contactId);
+      } else {
+        return [...prev, contactId];
+      }
+    });
+  };
+
+  const handleSelectAll = () => {
+    if (selectAll) {
+      setSelectedContacts([]);
+      setSelectAll(false);
+    } else {
+      setSelectedContacts(contacts.map((contact) => contact._id));
+      setSelectAll(true);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedContacts.length === 0) {
+      toast.warning("Please select contacts to delete");
+      return;
+    }
+
+    const contactNames = contacts
+      .filter((contact) => selectedContacts.includes(contact._id))
+      .map((contact) => contact.name)
+      .slice(0, 3); // Show first 3 names
+
+    const confirmMessage =
+      selectedContacts.length === 1
+        ? `Are you sure you want to delete "${contactNames[0]}"?`
+        : `Are you sure you want to delete ${
+            selectedContacts.length
+          } contacts?\n\nFirst few: ${contactNames.join(", ")}${
+            selectedContacts.length > 3 ? "..." : ""
+          }`;
+
+    if (!window.confirm(confirmMessage)) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const token = sessionStorage.getItem("clienttoken");
+
+      // Delete contacts one by one
+      const deletePromises = selectedContacts.map((contactId) =>
+        fetch(`${API_BASE}/groups/${groupId}/contacts/${contactId}`, {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        })
+      );
+
+      await Promise.all(deletePromises);
+
+      // Refresh the contacts list
+      await fetchGroupDetails();
+
+      // Clear selection
+      setSelectedContacts([]);
+      setSelectAll(false);
+
+      toast.success(
+        `Successfully deleted ${selectedContacts.length} contact(s)`
+      );
+    } catch (error) {
+      console.error("Error deleting contacts:", error);
+      toast.error("Failed to delete some contacts");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const fetchClientData = async () => {
     try {
@@ -792,9 +905,56 @@ function GroupDetails({ groupId, onBack }) {
 
         {/* Current Contacts */}
         <div>
-          <h4 className="text-lg font-medium text-gray-700 mb-4">
-            Current Contacts
-          </h4>
+          <div className="flex items-center justify-between mb-4">
+            <h4 className="text-lg font-medium text-gray-700">
+              Current Contacts
+            </h4>
+
+            {/* Selection Controls */}
+            {contacts.length > 0 && (
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={selectAll}
+                    onChange={handleSelectAll}
+                    className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+                  />
+                  <span className="text-sm text-gray-600">
+                    Select All
+                    <span className="text-xs text-gray-400 ml-1">(Ctrl+A)</span>
+                  </span>
+                </div>
+
+                {selectedContacts.length > 0 ? (
+                  <>
+                    <span className="text-sm text-gray-600">
+                      {selectedContacts.length} selected
+                    </span>
+                    <button
+                      onClick={handleBulkDelete}
+                      disabled={loading}
+                      className="px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {loading ? (
+                        <>
+                          <div className="animate-spin rounded-full h-3 w-3 border-2 border-white border-t-transparent"></div>
+                          Deleting...
+                        </>
+                      ) : (
+                        <>
+                          <FiTrash2 className="text-xs" />
+                          Delete Selected
+                        </>
+                      )}
+                    </button>
+                  </>
+                ) : (
+                  <span className="text-sm text-gray-400"></span>
+                )}
+              </div>
+            )}
+          </div>
           {contacts.length === 0 ? (
             <div className="text-center py-12 bg-gray-50 rounded-lg">
               <FiUser className="mx-auto text-4xl text-gray-400 mb-4" />
@@ -808,12 +968,24 @@ function GroupDetails({ groupId, onBack }) {
               {contacts.map((contact) => (
                 <div
                   key={contact._id}
-                  className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
+                  className={`bg-white border rounded-lg p-4 hover:shadow-md transition-all ${
+                    selectedContacts.includes(contact._id)
+                      ? "border-blue-500 bg-blue-50"
+                      : "border-gray-200"
+                  }`}
                 >
                   <div className="flex items-center justify-between mb-3">
-                    <h5 className="font-semibold text-gray-800">
-                      {contact.name}
-                    </h5>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="checkbox"
+                        checked={selectedContacts.includes(contact._id)}
+                        onChange={() => handleSelectContact(contact._id)}
+                        className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+                      />
+                      <h5 className="font-semibold text-gray-800">
+                        {contact.name}
+                      </h5>
+                    </div>
                     <button
                       onClick={() => handleDeleteContact(contact._id)}
                       className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
