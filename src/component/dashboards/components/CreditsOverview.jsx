@@ -331,7 +331,7 @@ export default function CreditsOverview() {
   let cashfreeInstanceRef = null;
   const ensureCashfreeInstance = async () => {
     if (cashfreeInstanceRef) return cashfreeInstanceRef;
-    cashfreeInstanceRef = await loadCashfree({ mode: "test" });
+    cashfreeInstanceRef = await loadCashfree({ mode: "production" });
     return cashfreeInstanceRef;
   };
 
