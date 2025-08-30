@@ -91,21 +91,22 @@ function CampaignDetails({ campaignId, onBack }) {
   const [isTogglingCampaign, setIsTogglingCampaign] = useState(false);
   // Insufficient credits modal
   const [showCreditsModal, setShowCreditsModal] = useState(false);
-  // Minimal leads list and transcript
-  const [leads, setLeads] = useState([]);
-  const [leadsLoading, setLeadsLoading] = useState(false);
-  const [leadsPage, setLeadsPage] = useState(1);
-  const [leadsTotalPages, setLeadsTotalPages] = useState(0);
-  const [leadsTotalItems, setLeadsTotalItems] = useState(0);
+  // Transcript modal states
   const [showTranscriptModal, setShowTranscriptModal] = useState(false);
   const [transcriptDocId, setTranscriptDocId] = useState(null);
   const [transcriptContent, setTranscriptContent] = useState("");
   const [transcriptLoading, setTranscriptLoading] = useState(false);
   const [viewedTranscripts, setViewedTranscripts] = useState(new Set());
-  // Missed calls
-  const [missedCalls, setMissedCalls] = useState([]);
-  const [missedLoading, setMissedLoading] = useState(false);
   const [callFilter, setCallFilter] = useState("all"); // all | connected | missed
+
+  // Merged calls API states
+  const [apiMergedCalls, setApiMergedCalls] = useState([]);
+  const [apiMergedCallsLoading, setApiMergedCallsLoading] = useState(false);
+  const [apiMergedCallsPage, setApiMergedCallsPage] = useState(1);
+  const [apiMergedCallsTotalPages, setApiMergedCallsTotalPages] = useState(0);
+  const [apiMergedCallsTotalItems, setApiMergedCallsTotalItems] = useState(0);
+  const [redialingCalls, setRedialingCalls] = useState(new Set());
+
   // Call details states
   const [showCallDetailsModal, setShowCallDetailsModal] = useState(false);
   const [callDetails, setCallDetails] = useState([]);
@@ -166,40 +167,7 @@ function CampaignDetails({ campaignId, onBack }) {
     return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
 
-  // Build a merged list of calls: recent leads + missed calls, sorted by time desc
-  const mergedCalls = useMemo(() => {
-    const toTimestamp = (value) => {
-      if (!value) return 0;
-      const t = new Date(value).getTime();
-      return Number.isFinite(t) ? t : 0;
-    };
-
-    const normalizedLeads = (leads || []).map((lead) => ({
-      key: lead.documentId || `${lead.number || "-"}-${lead.time || ""}`,
-      time: lead.time || null,
-      name: lead.name || "-",
-      number: lead.number || "-",
-      status: (lead.status || "").toLowerCase(),
-      isMissed: false,
-      documentId: lead.documentId || null,
-      duration: lead.duration || 0,
-    }));
-
-    const normalizedMissed = (missedCalls || []).map((item, idx) => ({
-      key: `missed-${item.uniqueId || idx}`,
-      time: item.time || item.createdAt || null,
-      name: item.contact?.name || "-",
-      number: item.contact?.phone || "-",
-      status: "missed",
-      isMissed: true,
-      documentId: null,
-      duration: 0,
-    }));
-
-    return [...normalizedLeads, ...normalizedMissed].sort(
-      (a, b) => toTimestamp(b.time) - toTimestamp(a.time)
-    );
-  }, [leads, missedCalls]);
+  // Backend API now handles all merging, deduplication, and pagination
   // Tracks whether calling state was restored from storage to gate auto-resume
   const restoredFromStorageRef = useRef(false);
 
@@ -394,9 +362,8 @@ function CampaignDetails({ campaignId, onBack }) {
     fetchAgents();
     fetchClientData();
     fetchCampaignGroups();
-    // Also load leads list initially
-    fetchLeads(1);
-    fetchMissedCalls();
+    // Load merged calls from new API
+    fetchApiMergedCalls(1);
     // Load viewed transcripts
     loadViewedTranscripts();
   }, [campaignId]);
@@ -724,9 +691,26 @@ function CampaignDetails({ campaignId, onBack }) {
       return;
     }
 
-    if (!selectedAgent || campaignContacts.length === 0) {
-      toast.warn(
-        "Please select an agent and ensure there are contacts in the campaign. Add contacts through 'Manage Contacts' first."
+    // Check if campaign has groups
+    if (!campaignGroups || campaignGroups.length === 0) {
+      toast.error(
+        "Cannot start calling: No groups assigned. Please add groups first."
+      );
+      return;
+    }
+
+    // Check if campaign has an agent
+    if (!selectedAgent) {
+      toast.error(
+        "Cannot start calling: No agent selected. Please select an agent first."
+      );
+      return;
+    }
+
+    // Check if campaign has contacts
+    if (!campaignContacts || campaignContacts.length === 0) {
+      toast.error(
+        "Cannot start calling: No contacts available. Please sync contacts from groups first."
       );
       return;
     }
@@ -847,6 +831,30 @@ function CampaignDetails({ campaignId, onBack }) {
   };
 
   const resumeCalling = async () => {
+    // Check if campaign has groups
+    if (!campaignGroups || campaignGroups.length === 0) {
+      toast.error(
+        "Cannot resume calling: No groups assigned. Please add groups first."
+      );
+      return;
+    }
+
+    // Check if campaign has an agent
+    if (!selectedAgent) {
+      toast.error(
+        "Cannot resume calling: No agent selected. Please select an agent first."
+      );
+      return;
+    }
+
+    // Check if campaign has contacts
+    if (!campaignContacts || campaignContacts.length === 0) {
+      toast.error(
+        "Cannot resume calling: No contacts available. Please sync contacts from groups first."
+      );
+      return;
+    }
+
     setCallingStatus("calling");
 
     // Track contacts that have been called in this session
@@ -1143,18 +1151,18 @@ function CampaignDetails({ campaignId, onBack }) {
     }
   };
 
-  // Fetch minimal leads list for this campaign
-  const fetchLeads = async (page = 1) => {
+  // Fetch merged calls from new API
+  const fetchApiMergedCalls = async (page = 1) => {
     try {
       if (!campaignId) return;
-      setLeadsLoading(true);
+      setApiMergedCallsLoading(true);
       const token = sessionStorage.getItem("clienttoken");
       const params = new URLSearchParams({
         page: String(page),
-        limit: String(25),
+        limit: String(50),
       });
       const resp = await fetch(
-        `${API_BASE}/campaigns/${campaignId}/leads?${params.toString()}`,
+        `${API_BASE}/campaigns/${campaignId}/merged-calls?${params.toString()}`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -1164,25 +1172,31 @@ function CampaignDetails({ campaignId, onBack }) {
       );
       const result = await resp.json();
       if (!resp.ok || result.success === false) {
-        throw new Error(result.error || "Failed to fetch leads");
+        throw new Error(result.error || "Failed to fetch merged calls");
       }
-      setLeads(result.data || []);
-      setLeadsPage(result.pagination?.currentPage || page);
-      setLeadsTotalPages(result.pagination?.totalPages || 0);
-      setLeadsTotalItems(result.pagination?.totalItems || 0);
+      setApiMergedCalls(result.data || []);
+      setApiMergedCallsPage(result.pagination?.currentPage || page);
+      setApiMergedCallsTotalPages(result.pagination?.totalPages || 0);
+      setApiMergedCallsTotalItems(result.pagination?.totalItems || 0);
+
+      console.log("Merged Calls API Response:", {
+        data: result.data,
+        pagination: result.pagination,
+        campaign: result.campaign,
+      });
     } catch (e) {
-      console.error("Error fetching leads:", e);
-      setLeads([]);
-      setLeadsPage(1);
-      setLeadsTotalPages(0);
-      setLeadsTotalItems(0);
+      console.error("Error fetching API merged calls:", e);
+      setApiMergedCalls([]);
+      setApiMergedCallsPage(1);
+      setApiMergedCallsTotalPages(0);
+      setApiMergedCallsTotalItems(0);
     } finally {
-      setLeadsLoading(false);
+      setApiMergedCallsLoading(false);
     }
   };
 
   // Open transcript modal and fetch transcript by documentId
-  const openTranscript = async (documentId) => {
+  const openTranscript = async (documentId, leadData = null) => {
     try {
       if (!campaignId || !documentId) return;
       setTranscriptDocId(documentId);
@@ -1208,12 +1222,98 @@ function CampaignDetails({ campaignId, onBack }) {
         throw new Error(result.error || "Failed to fetch transcript");
       }
       setTranscriptContent(result.transcript || "");
+
+      // Store lead data for display in modal
+      if (leadData) {
+        setSelectedCall(leadData);
+      }
     } catch (e) {
       console.error("Error fetching transcript:", e);
       setTranscriptContent("");
     } finally {
       setTranscriptLoading(false);
     }
+  };
+
+  // Parse transcript content into chat-like format
+  const parseTranscriptToChat = (transcriptText) => {
+    if (!transcriptText) return [];
+
+    const lines = transcriptText.split("\n").filter((line) => line.trim());
+    const groupedMessages = [];
+    let currentMessage = null;
+
+    for (const line of lines) {
+      // Extract timestamp from format [2025-08-16T07:20:20.885Z]
+      const timestampMatch = line.match(/\[([^\]]+)\]/);
+      let timestamp = null;
+
+      if (timestampMatch) {
+        try {
+          // Parse the timestamp and format it nicely
+          const date = new Date(timestampMatch[1]);
+          if (!isNaN(date.getTime())) {
+            timestamp = date.toLocaleTimeString("en-US", {
+              hour: "numeric",
+              minute: "2-digit",
+              second: "2-digit",
+              hour12: true,
+            });
+          }
+        } catch (error) {
+          console.error("Error parsing timestamp:", error);
+        }
+      }
+
+      // Remove timestamp from line
+      const lineWithoutTimestamp = line.replace(/\[[^\]]+\]\s*/, "");
+
+      // Extract speaker and text
+      const colonIndex = lineWithoutTimestamp.indexOf(":");
+      if (colonIndex !== -1) {
+        const speaker = lineWithoutTimestamp.substring(0, colonIndex).trim();
+        const text = lineWithoutTimestamp.substring(colonIndex + 1).trim();
+
+        const isAI =
+          speaker.toLowerCase().includes("ai") ||
+          speaker.toLowerCase().includes("agent");
+        const isUser =
+          speaker.toLowerCase().includes("user") ||
+          speaker.toLowerCase().includes("customer");
+
+        // If this is a new speaker or first message, start a new message
+        if (!currentMessage || currentMessage.speaker !== speaker) {
+          // Save previous message if exists
+          if (currentMessage) {
+            groupedMessages.push(currentMessage);
+          }
+
+          // Start new message
+          currentMessage = {
+            speaker,
+            text: text,
+            timestamp,
+            isAI,
+            isUser,
+          };
+        } else {
+          // Same speaker, append to current message
+          currentMessage.text += " " + text;
+        }
+      } else {
+        // No speaker found, treat as continuation of previous message
+        if (currentMessage) {
+          currentMessage.text += " " + lineWithoutTimestamp.trim();
+        }
+      }
+    }
+
+    // Add the last message
+    if (currentMessage) {
+      groupedMessages.push(currentMessage);
+    }
+
+    return groupedMessages;
   };
 
   // Open transcript intelligently: if call is ongoing and we have uniqueId, show live logs; else load saved transcript
@@ -1236,38 +1336,10 @@ function CampaignDetails({ campaignId, onBack }) {
       if (lead.documentId) {
         // Mark this transcript as viewed
         setViewedTranscripts((prev) => new Set([...prev, lead.documentId]));
-        await openTranscript(lead.documentId);
+        await openTranscript(lead.documentId, lead);
       }
     } catch (e) {
       console.error("Failed to open transcript smartly:", e);
-    }
-  };
-
-  // Fetch missed calls: uniqueIds in campaign.details that have no CallLog
-  const fetchMissedCalls = async () => {
-    try {
-      if (!campaignId) return;
-      setMissedLoading(true);
-      const token = sessionStorage.getItem("clienttoken");
-      const resp = await fetch(
-        `${API_BASE}/campaigns/${campaignId}/missed-calls`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
-      const result = await resp.json();
-      if (!resp.ok || result.success === false) {
-        throw new Error(result.error || "Failed to fetch missed calls");
-      }
-      setMissedCalls(result.data || []);
-    } catch (e) {
-      console.error("Error fetching missed calls:", e);
-      setMissedCalls([]);
-    } finally {
-      setMissedLoading(false);
     }
   };
 
@@ -1331,15 +1403,35 @@ function CampaignDetails({ campaignId, onBack }) {
   // Call again via backend: dial missed contacts server-side
   const callMissedCalls = async () => {
     try {
+      // Check if campaign has groups
+      if (!campaignGroups || campaignGroups.length === 0) {
+        toast.error(
+          "Cannot call missed contacts: No groups assigned. Please add groups first."
+        );
+        return;
+      }
+
+      // Check if campaign has an agent
       const { id: primaryAgentId } = getPrimaryAgentIdentity();
       const resolvedAgentId =
         (selectedAgent && (selectedAgent._id || selectedAgent)) ||
         primaryAgentId ||
         (Array.isArray(agents) && agents[0] && (agents[0]._id || agents[0].id));
       if (!resolvedAgentId) {
-        toast.warn("No agent available. Please add/select an agent first.");
+        toast.error(
+          "Cannot call missed contacts: No agent available. Please add/select an agent first."
+        );
         return;
       }
+
+      // Check if campaign has contacts
+      if (!campaignContacts || campaignContacts.length === 0) {
+        toast.error(
+          "Cannot call missed contacts: No contacts available. Please sync contacts from groups first."
+        );
+        return;
+      }
+
       if (!campaignId) return;
 
       const token = sessionStorage.getItem("clienttoken");
@@ -1370,8 +1462,7 @@ function CampaignDetails({ campaignId, onBack }) {
       // Kick a status refresh shortly after
       setTimeout(() => {
         fetchCampaignCallingStatus();
-        fetchLeads(1);
-        fetchMissedCalls();
+        fetchApiMergedCalls(1);
       }, 3000);
     } catch (e) {
       console.error("Error calling missed contacts via backend:", e);
@@ -1385,16 +1476,27 @@ function CampaignDetails({ campaignId, onBack }) {
       const phone = (lead.number || "").toString().trim();
       if (!phone) return;
 
+      // Check if campaign has groups
+      if (!campaignGroups || campaignGroups.length === 0) {
+        toast.error(
+          "Cannot retry call: No groups assigned. Please add groups first."
+        );
+        return;
+      }
+
+      // Check if campaign has an agent
       const { id: primaryAgentId } = getPrimaryAgentIdentity();
       if (!primaryAgentId) {
-        toast.warn("Please add/select an agent for this campaign first.");
+        toast.error(
+          "Cannot retry call: No agent available. Please add/select an agent first."
+        );
         return;
       }
 
       const token = sessionStorage.getItem("clienttoken");
       // Optimistic UI: mark this row as redialing
-      setLeads((prev) =>
-        prev.map((l) => (l.key === lead.key ? { ...l, _isRedialing: true } : l))
+      setRedialingCalls(
+        (prev) => new Set([...prev, lead.documentId || lead.contactId])
       );
       const resp = await fetch(`${API_BASE}/calls/single`, {
         method: "POST",
@@ -1425,22 +1527,22 @@ function CampaignDetails({ campaignId, onBack }) {
       toast.success(`Calling to ${phone} started successfully`);
       console.log("Single call initiated:", result.data?.uniqueId);
       setTimeout(() => {
-        setLeads((prev) =>
-          prev.map((l) =>
-            l.key === lead.key ? { ...l, _isRedialing: false } : l
-          )
-        );
+        setRedialingCalls((prev) => {
+          const newSet = new Set(prev);
+          newSet.delete(lead.documentId || lead.contactId);
+          return newSet;
+        });
         fetchCampaignCallLogs(1);
-        fetchLeads(1);
+        fetchApiMergedCalls(1);
       }, 1500);
     } catch (e) {
       console.error("Retry call failed:", e);
       toast.warn("Failed to initiate call.");
-      setLeads((prev) =>
-        prev.map((l) =>
-          l.key === lead.key ? { ...l, _isRedialing: false } : l
-        )
-      );
+      setRedialingCalls((prev) => {
+        const newSet = new Set(prev);
+        newSet.delete(lead.documentId || lead.contactId);
+        return newSet;
+      });
     }
   };
 
@@ -1831,14 +1933,35 @@ function CampaignDetails({ campaignId, onBack }) {
   const startCampaignCallingBackend = async () => {
     try {
       if (!campaign?._id) return;
+
+      // Check if campaign has groups
+      if (!campaignGroups || campaignGroups.length === 0) {
+        toast.error(
+          "Cannot start campaign: No groups assigned. Please add groups first."
+        );
+        return;
+      }
+
+      // Check if campaign has an agent
       const primaryAgentId =
         Array.isArray(campaign.agent) && campaign.agent.length > 0
           ? campaign.agent[0]
           : null;
       if (!primaryAgentId) {
-        toast.warn("Please add/select an agent for this campaign first.");
+        toast.error(
+          "Cannot start campaign: No agent assigned. Please add an agent first."
+        );
         return;
       }
+
+      // Check if campaign has contacts
+      if (!campaignContacts || campaignContacts.length === 0) {
+        toast.error(
+          "Cannot start campaign: No contacts available. Please sync contacts from groups first."
+        );
+        return;
+      }
+
       setIsTogglingCampaign(true);
       const token = sessionStorage.getItem("clienttoken");
       const resp = await fetch(
@@ -2263,12 +2386,29 @@ function CampaignDetails({ campaignId, onBack }) {
               <div className="flex items-center gap-2">
                 <button
                   onClick={handleToggleCampaignCalling}
-                  disabled={isTogglingCampaign}
+                  disabled={
+                    isTogglingCampaign ||
+                    !campaignGroups ||
+                    campaignGroups.length === 0 ||
+                    !Array.isArray(campaign?.agent) ||
+                    campaign.agent.length === 0
+                  }
                   title={
-                    campaign?.isRunning ? "Stop campaign" : "Start campaign"
+                    !campaignGroups || campaignGroups.length === 0
+                      ? "Cannot start: No groups assigned"
+                      : !Array.isArray(campaign?.agent) ||
+                        campaign.agent.length === 0
+                      ? "Cannot start: No agent assigned"
+                      : campaign?.isRunning
+                      ? "Stop campaign"
+                      : "Start campaign"
                   }
                   className={`inline-flex items-center justify-center h-9 p-2 border rounded-md border-gray-200 transition-colors ${
-                    isTogglingCampaign
+                    isTogglingCampaign ||
+                    !campaignGroups ||
+                    campaignGroups.length === 0 ||
+                    !Array.isArray(campaign?.agent) ||
+                    campaign.agent.length === 0
                       ? "bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed"
                       : campaign?.isRunning
                       ? "bg-red-100 border-red-600 text-red-800 hover:bg-red-100"
@@ -2293,7 +2433,6 @@ function CampaignDetails({ campaignId, onBack }) {
                   {Array.isArray(campaign?.agent) &&
                     campaign.agent.length > 0 && (
                       <span className="items-center gap-1">
-                        <span className="text-gray-500">Agent:</span>
                         <span className="font-medium">
                           {(() => {
                             const { id, immediateName } =
@@ -2314,7 +2453,7 @@ function CampaignDetails({ campaignId, onBack }) {
                   }}
                   className="inline-flex items-center px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50"
                 >
-                  <FiUserPlus className="w-4 h-4 mr-1.5" /> Add Agent
+                  <FiUserPlus className="w-4 h-4 mr-1.5" /> Add AI Agent
                 </button>
               </div>
             </div>
@@ -2482,18 +2621,17 @@ function CampaignDetails({ campaignId, onBack }) {
                     const total = Array.isArray(campaignContacts)
                       ? campaignContacts.length
                       : 0;
-                    const completedCount = Array.isArray(leads)
-                      ? leads.filter((lead) => {
-                          const s = (
-                            lead.status ||
-                            lead.leadStatus ||
-                            ""
-                          ).toLowerCase();
-                          return s === "completed";
+                    const completedCount = Array.isArray(apiMergedCalls)
+                      ? apiMergedCalls.filter((call) => {
+                          const s = (call.status || "").toLowerCase();
+                          return s === "ongoing";
                         }).length
                       : 0;
-                    const missedCount = Array.isArray(missedCalls)
-                      ? missedCalls.length
+                    const missedCount = Array.isArray(apiMergedCalls)
+                      ? apiMergedCalls.filter((call) => {
+                          const s = (call.status || "").toLowerCase();
+                          return s === "missed";
+                        }).length
                       : 0;
                     const callsMade = Math.min(
                       total,
@@ -2506,20 +2644,19 @@ function CampaignDetails({ campaignId, onBack }) {
               </div>
               <div className="text-center">
                 <div className="text-lg font-semibold text-blue-600">
-                  {leads.filter((lead) => {
-                    const s = (
-                      lead.status ||
-                      lead.leadStatus ||
-                      ""
-                    ).toLowerCase();
-                    return s === "completed";
+                  {apiMergedCalls.filter((call) => {
+                    const s = (call.status || "").toLowerCase();
+                    return s === "ongoing";
                   }).length || 0}
                 </div>
-                <div className="text-xs text-gray-500">Completed</div>
+                <div className="text-xs text-gray-500">Ongoing</div>
               </div>
               <div className="text-center">
                 <div className="text-lg font-semibold text-orange-600">
-                  {missedCalls.length || 0}
+                  {apiMergedCalls.filter((call) => {
+                    const s = (call.status || "").toLowerCase();
+                    return s === "missed";
+                  }).length || 0}
                 </div>
                 <div className="text-xs text-gray-500">Missed</div>
               </div>
@@ -2540,18 +2677,17 @@ function CampaignDetails({ campaignId, onBack }) {
                       const total = Array.isArray(campaignContacts)
                         ? campaignContacts.length
                         : 0;
-                      const completedCount = Array.isArray(leads)
-                        ? leads.filter((lead) => {
-                            const s = (
-                              lead.status ||
-                              lead.leadStatus ||
-                              ""
-                            ).toLowerCase();
-                            return s === "completed" || s === "ongoing";
+                      const completedCount = Array.isArray(apiMergedCalls)
+                        ? apiMergedCalls.filter((call) => {
+                            const s = (call.status || "").toLowerCase();
+                            return s === "ongoing" || s === "completed";
                           }).length
                         : 0;
-                      const missedCount = Array.isArray(missedCalls)
-                        ? missedCalls.length
+                      const missedCount = Array.isArray(apiMergedCalls)
+                        ? apiMergedCalls.filter((call) => {
+                            const s = (call.status || "").toLowerCase();
+                            return s === "missed";
+                          }).length
                         : 0;
                       const callsMade = Math.min(
                         total,
@@ -2568,18 +2704,17 @@ function CampaignDetails({ campaignId, onBack }) {
                         ? campaignContacts.length
                         : 0;
                       if (total === 0) return "0%";
-                      const completedCount = Array.isArray(leads)
-                        ? leads.filter((lead) => {
-                            const s = (
-                              lead.status ||
-                              lead.leadStatus ||
-                              ""
-                            ).toLowerCase();
-                            return s === "completed" || s === "ongoing";
+                      const completedCount = Array.isArray(apiMergedCalls)
+                        ? apiMergedCalls.filter((call) => {
+                            const s = (call.status || "").toLowerCase();
+                            return s === "ongoing" || s === "completed";
                           }).length
                         : 0;
-                      const missedCount = Array.isArray(missedCalls)
-                        ? missedCalls.length
+                      const missedCount = Array.isArray(apiMergedCalls)
+                        ? apiMergedCalls.filter((call) => {
+                            const s = (call.status || "").toLowerCase();
+                            return s === "missed";
+                          }).length
                         : 0;
                       const callsMade = Math.min(
                         total,
@@ -2604,6 +2739,35 @@ function CampaignDetails({ campaignId, onBack }) {
                 All calls completed successfully
               </div>
             )}
+
+            {/* Campaign Requirements Check */}
+            {(!campaignGroups || campaignGroups.length === 0) && (
+              <div className="text-xs text-red-700 text-center py-2 bg-red-50 rounded-md border border-red-200">
+                ⚠️ Campaign cannot run: No groups assigned. Please add groups
+                first.
+              </div>
+            )}
+
+            {campaignGroups &&
+              campaignGroups.length > 0 &&
+              (!Array.isArray(campaign?.agent) ||
+                campaign.agent.length === 0) && (
+                <div className="text-xs text-red-700 text-center py-2 bg-red-50 rounded-md border border-red-200">
+                  ⚠️ Campaign cannot run: No agent assigned. Please add an agent
+                  first.
+                </div>
+              )}
+
+            {campaignGroups &&
+              campaignGroups.length > 0 &&
+              Array.isArray(campaign?.agent) &&
+              campaign.agent.length > 0 &&
+              (!campaignContacts || campaignContacts.length === 0) && (
+                <div className="text-xs text-orange-700 text-center py-2 bg-orange-50 rounded-md border border-orange-200">
+                  ⚠️ Campaign cannot run: No contacts available. Please sync
+                  contacts from groups first.
+                </div>
+              )}
           </div>
 
           {/* Minimal Leads + Transcript Section */}
@@ -2620,9 +2784,7 @@ function CampaignDetails({ campaignId, onBack }) {
                 <button
                   className="inline-flex items-center px-2 py-1 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50"
                   onClick={() => {
-                    fetchCampaignCallLogs(1);
-                    fetchLeads(1);
-                    fetchMissedCalls();
+                    fetchApiMergedCalls(1);
                   }}
                   title="Refresh call logs"
                 >
@@ -2656,9 +2818,16 @@ function CampaignDetails({ campaignId, onBack }) {
                     onClick={() => {
                       callMissedCalls();
                     }}
-                    disabled={missedLoading}
-                    title={
+                    disabled={
+                      apiMergedCallsLoading ||
+                      !campaignGroups ||
+                      campaignGroups.length === 0 ||
                       !selectedAgent
+                    }
+                    title={
+                      !campaignGroups || campaignGroups.length === 0
+                        ? "No groups assigned to campaign"
+                        : !selectedAgent
                         ? "Choose an agent, then calls will start"
                         : "Call all missed contacts"
                     }
@@ -2668,11 +2837,11 @@ function CampaignDetails({ campaignId, onBack }) {
                 )}
               </div>
             </div>
-            {leadsLoading ? (
-              <div className="text-center py-10">Loading leads...</div>
-            ) : leads.length === 0 ? (
+            {apiMergedCallsLoading ? (
+              <div className="text-center py-10">Loading call logs...</div>
+            ) : apiMergedCalls.length === 0 ? (
               <div className="text-center py-10 text-gray-500">
-                No leads yet
+                No call logs found
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -2693,7 +2862,7 @@ function CampaignDetails({ campaignId, onBack }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {mergedCalls
+                    {apiMergedCalls
                       .filter((lead) => {
                         const name = (lead.name || "").toString().trim();
                         const number = (lead.number || "").toString().trim();
@@ -2705,15 +2874,18 @@ function CampaignDetails({ campaignId, onBack }) {
                           callFilter === "all"
                             ? true
                             : callFilter === "connected"
-                            ? lead.status === "completed" ||
-                              lead.status === "ongoing"
+                            ? lead.status === "ongoing" ||
+                              lead.status === "completed"
                             : lead.status === "missed" ||
                               lead.status === "not_connected" ||
                               lead.status === "failed";
                         return byData && byStatus;
                       })
                       .map((lead, idx) => (
-                        <tr key={lead.key} className="border-t border-gray-100">
+                        <tr
+                          key={lead.documentId || lead.contactId || idx}
+                          className="border-t border-gray-100"
+                        >
                           <td className="py-2 pr-4 text-gray-700">{idx + 1}</td>
                           <td className="py-2 pr-4 text-gray-700">
                             {lead.time
@@ -2730,7 +2902,9 @@ function CampaignDetails({ campaignId, onBack }) {
                           </td>
                           <td className="py-2 pr-4 text-gray-900">
                             <span className="inline-flex items-center">
-                              {lead._isRedialing ? (
+                              {redialingCalls.has(
+                                lead.documentId || lead.contactId
+                              ) ? (
                                 <span className="inline-flex items-center text-green-600">
                                   <svg
                                     className="animate-spin h-4 w-4 mr-1"
@@ -2771,53 +2945,72 @@ function CampaignDetails({ campaignId, onBack }) {
                                   : "bg-green-100 text-green-700"
                               }`}
                             >
-                              {lead.status}
+                              {lead.status === "completed"
+                                ? "ongoing"
+                                : lead.status === "ongoing"
+                                ? "completed"
+                                : lead.status}
                             </span>
                           </td>
                           <td className="py-2 pr-4">
                             {formatDuration(lead.duration)}
                           </td>
                           <td className="py-2 pr-4">
-                            <button
-                              className={`inline-flex items-center px-3 py-1 text-xs border rounded hover:opacity-80 transition-all duration-200 ${
-                                lead.documentId &&
-                                viewedTranscripts.has(lead.documentId)
-                                  ? "bg-green-50 text-voilet-900 border-green-200"
-                                  : "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
-                              }`}
-                              title={
-                                lead.documentId &&
-                                viewedTranscripts.has(lead.documentId)
-                                  ? "Transcript viewed"
-                                  : "View transcript"
-                              }
-                              onClick={() => openTranscriptSmart(lead)}
-                            >
-                              <svg
-                                className="w-4 h-4 mr-1"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
+                            {lead.status === "missed" ? (
+                              <span className="text-gray-400 text-xs text-center"></span>
+                            ) : (
+                              <button
+                                className={`inline-flex items-center px-3 py-1 text-xs border rounded hover:opacity-80 transition-all duration-200 ${
+                                  lead.documentId &&
+                                  viewedTranscripts.has(lead.documentId)
+                                    ? "bg-green-50 text-fuchsia-700 border-green-200"
+                                    : "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
+                                }`}
+                                title={
+                                  lead.documentId &&
+                                  viewedTranscripts.has(lead.documentId)
+                                    ? "Transcript viewed"
+                                    : "View transcript"
+                                }
+                                onClick={() => openTranscriptSmart(lead)}
                               >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth="2"
-                                  d="M8 16h8M8 12h8M8 8h8M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H7l-2 2H3v12a2 2 0 002 2z"
-                                />
-                              </svg>
-                              {lead.documentId &&
-                              viewedTranscripts.has(lead.documentId)
-                                ? "Viewed"
-                                : "Transcript"}
-                            </button>
+                                <svg
+                                  className="w-4 h-4 mr-1"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  viewBox="0 0 24 24"
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth="2"
+                                    d="M8 16h8M8 12h8M8 8h8M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H7l-2 2H3v12a2 2 0 002 2z"
+                                  />
+                                </svg>
+                                {lead.documentId &&
+                                viewedTranscripts.has(lead.documentId)
+                                  ? "Viewed"
+                                  : "Transcript"}
+                              </button>
+                            )}
                           </td>
                           <td className="py-2 pr-4">
                             <button
                               className="inline-flex items-center px-3 py-1 text-xs bg-green-50 text-green-700 border border-green-200 rounded hover:bg-green-100 disabled:opacity-50"
-                              title="Retry this contact"
+                              title={
+                                !lead.number
+                                  ? "No phone number available"
+                                  : lead.status === "completed" ||
+                                    lead.status === "ringing"
+                                  ? "Call already in progress"
+                                  : "Retry this contact"
+                              }
                               onClick={() => handleRetryLead(lead)}
-                              disabled={!lead.number}
+                              disabled={
+                                !lead.number ||
+                                lead.status === "completed" ||
+                                lead.status === "ringing"
+                              }
                             >
                               <FiPhone
                                 className="w-3 h-3 text-green-700 mx-2"
@@ -2832,22 +3025,30 @@ function CampaignDetails({ campaignId, onBack }) {
                 </table>
                 <div className="flex items-center justify-between mt-4">
                   <div className="text-sm text-gray-600">
-                    Page {leadsPage} of {leadsTotalPages || 1}
+                    Page {apiMergedCallsPage} of {apiMergedCallsTotalPages || 1}{" "}
+                    ({apiMergedCallsTotalItems} total items)
                   </div>
                   <div className="flex gap-2">
                     <button
                       className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 disabled:opacity-50"
-                      onClick={() => fetchLeads(Math.max(1, leadsPage - 1))}
-                      disabled={leadsLoading || leadsPage <= 1}
+                      onClick={() =>
+                        fetchApiMergedCalls(apiMergedCallsPage - 1)
+                      }
+                      disabled={
+                        apiMergedCallsLoading || apiMergedCallsPage <= 1
+                      }
                     >
                       Prev
                     </button>
                     <button
                       className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 disabled:opacity-50"
-                      onClick={() => fetchLeads(leadsPage + 1)}
+                      onClick={() =>
+                        fetchApiMergedCalls(apiMergedCallsPage + 1)
+                      }
                       disabled={
-                        leadsLoading ||
-                        (leadsTotalPages && leadsPage >= leadsTotalPages)
+                        apiMergedCallsLoading ||
+                        (apiMergedCallsTotalPages &&
+                          apiMergedCallsPage >= apiMergedCallsTotalPages)
                       }
                     >
                       Next
@@ -2866,10 +3067,57 @@ function CampaignDetails({ campaignId, onBack }) {
       {showTranscriptModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl w-11/12 max-w-4xl max-h-[90vh] overflow-y-auto shadow-2xl">
-            <div className="flex justify-between items-center p-6 border-b border-gray-200">
-              <h3 className="text-2xl font-bold text-gray-800">Transcript</h3>
+            <div className="flex justify-between items-center p-6 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-blue-100">
+              <div className="flex-1">
+                <h3 className="text-2xl font-bold text-gray-800 flex items-center">
+                  <svg
+                    className="w-6 h-6 mr-2 text-blue-600"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M8 16h8M8 12h8M8 8h8M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H7l-2 2H3v12a2 2 0 002 2z"
+                    />
+                  </svg>
+                  Call Transcript
+                </h3>
+
+                {/* Call Details */}
+                {selectedCall && (
+                  <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="p-3">
+                      <div className="text-sm text-gray-500 mb-1">
+                        Contact Name
+                      </div>
+                      <div className="font-semibold text-gray-800">
+                        {selectedCall.name || ""}
+                      </div>
+                    </div>
+                    <div className="p-3">
+                      <div className="text-sm text-gray-500 mb-1">
+                        Phone Number
+                      </div>
+                      <div className="font-semibold text-gray-800">
+                        {selectedCall.number || selectedCall.phone || "Unknown"}
+                      </div>
+                    </div>
+                    <div className="p-3">
+                      <div className="text-sm text-gray-500 mb-1">
+                        Call Duration
+                      </div>
+                      <div className="font-semibold text-gray-800">
+                        {formatDuration(selectedCall.duration || 0)}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
               <button
-                className="bg-none border-none text-2xl cursor-pointer text-gray-500 hover:text-gray-700 p-2 w-10 h-10 flex items-center justify-center rounded-lg hover:bg-gray-200 transition-colors duration-200"
+                className="bg-none border-none text-2xl cursor-pointer text-gray-500 hover:text-gray-700 p-2 w-10 h-10 flex items-center justify-center rounded-lg hover:bg-gray-200 transition-colors duration-200 ml-4"
                 onClick={() => setShowTranscriptModal(false)}
               >
                 <FiX />
@@ -2877,13 +3125,100 @@ function CampaignDetails({ campaignId, onBack }) {
             </div>
             <div className="p-6">
               {transcriptLoading ? (
-                <div className="text-center py-10">Loading transcript...</div>
+                <div className="text-center py-10">
+                  <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                  </div>
+                  <p className="text-gray-500 mt-4 text-lg">
+                    Loading transcript...
+                  </p>
+                </div>
               ) : transcriptContent ? (
-                <pre className="whitespace-pre-wrap text-sm text-gray-800 bg-gray-50 p-4 rounded-lg">
-                  {transcriptContent}
-                </pre>
+                <div className="bg-gray-50 rounded-lg p-4 max-h-96 overflow-y-auto">
+                  {parseTranscriptToChat(transcriptContent).map(
+                    (message, index) => (
+                      <div key={index} className="mb-4 last:mb-0">
+                        {message.isAI ? (
+                          // AI Message (Left side)
+                          <div className="flex justify-start">
+                            <div className="flex items-end space-x-2 max-w-xs lg:max-w-md">
+                              <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
+                                <svg
+                                  className="w-4 h-4 text-white"
+                                  fill="currentColor"
+                                  viewBox="0 0 20 20"
+                                >
+                                  <path
+                                    fillRule="evenodd"
+                                    d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-6-3a2 2 0 11-4 0 2 2 0 014 0zm-2 4a5 5 0 00-4.546 2.916A5.986 5.986 0 0010 16a5.986 5.986 0 004.546-2.084A5 5 0 0010 11z"
+                                    clipRule="evenodd"
+                                  />
+                                </svg>
+                              </div>
+                              <div className="bg-blue-500 text-white rounded-lg px-4 py-2 shadow-sm">
+                                <div className="text-sm">{message.text}</div>
+                                {message.timestamp && (
+                                  <div className="text-xs text-blue-100 mt-1">
+                                    {message.timestamp}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ) : message.isUser ? (
+                          // User Message (Right side)
+                          <div className="flex justify-end">
+                            <div className="flex items-end space-x-2 max-w-xs lg:max-w-md">
+                              <div className="bg-gray-200 text-gray-800 rounded-lg px-4 py-2 shadow-sm">
+                                <div className="text-sm">{message.text}</div>
+                                {message.timestamp && (
+                                  <div className="text-xs text-gray-500 mt-1">
+                                    {message.timestamp}
+                                  </div>
+                                )}
+                              </div>
+                              <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center flex-shrink-0">
+                                <svg
+                                  className="w-4 h-4 text-white"
+                                  fill="currentColor"
+                                  viewBox="0 0 20 20"
+                                >
+                                  <path
+                                    fillRule="evenodd"
+                                    d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z"
+                                    clipRule="evenodd"
+                                  />
+                                </svg>
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          // System Message (Center)
+                          <div className="flex justify-center">
+                            <div className="bg-gray-100 text-gray-600 rounded-lg px-3 py-1 text-xs">
+                              {message.text}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  )}
+                </div>
               ) : (
                 <div className="text-center py-10 text-gray-500">
+                  <svg
+                    className="w-8 h-8 mx-auto mb-2 text-gray-400"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+                    />
+                  </svg>
                   No transcript available
                 </div>
               )}
