@@ -167,6 +167,26 @@ function CampaignDetails({ campaignId, onBack }) {
     return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
 
+  // Helper function to safely get contact name
+  const getContactName = (contact) => {
+    if (!contact) return "";
+    if (contact.name && contact.name.trim()) {
+      return contact.name.trim();
+    }
+    return "";
+  };
+
+  // Helper function to safely get contact display name
+  const getContactDisplayName = (contact) => {
+    const name = getContactName(contact);
+    return name || "";
+  };
+
+  // Helper function to safely get contact display name (blank if no name)
+  const getContactDisplayNameBlank = (contact) => {
+    return getContactName(contact);
+  };
+
   // Backend API now handles all merging, deduplication, and pagination
   // Tracks whether calling state was restored from storage to gate auto-resume
   const restoredFromStorageRef = useRef(false);
@@ -255,7 +275,7 @@ function CampaignDetails({ campaignId, onBack }) {
 
   // Utility function to safely format timestamps
   const safeFormatTimestamp = (timestamp) => {
-    if (!timestamp) return "Unknown";
+    if (!timestamp) return "";
     try {
       const date = timestamp instanceof Date ? timestamp : new Date(timestamp);
       if (isNaN(date.getTime())) return "Invalid Date";
@@ -624,13 +644,19 @@ function CampaignDetails({ campaignId, onBack }) {
         apiKey = apiKeysResult.data[0].key;
       }
 
+      // Ensure name is properly handled - if no name, send empty string
+      const contactName = getContactName(contact);
+
       const callPayload = {
         transaction_id: "CTI_BOT_DIAL",
         phone_num: contact.phone.replace(/[^\d]/g, ""), // Remove non-digits
         uniqueid: uniqueId,
         callerid: "168353225",
         uuid: clientData?.clientId || "client-uuid-001",
-        custom_param: { uniqueid: uniqueId },
+        custom_param: {
+          uniqueid: uniqueId,
+          contact_name: contactName, // Add contact name to custom params if needed
+        },
         resFormat: 3,
       };
 
@@ -752,43 +778,51 @@ function CampaignDetails({ campaignId, onBack }) {
       const contact = uniqueContacts[contactIdx];
 
       // Create a unique key for this contact
-      const contactKey = `${contact.phone}-${contact.name}`;
+      const contactName = getContactName(contact);
+      const contactKey = `${contact.phone}-${contactName}`;
 
       // Check if this contact was already called in this session or in previous results
       const alreadyCalledInSession = calledContacts.has(contactKey);
       const alreadyCalledInResults = callResults.some(
         (r) =>
-          r.contact.phone === contact.phone && r.contact.name === contact.name
+          r.contact.phone === contact.phone &&
+          getContactName(r.contact) === contactName
       );
 
       // Additional check: if the same contact was called very recently (within 30 seconds), skip it
       const recentCall = callResults.find(
         (r) =>
           r.contact.phone === contact.phone &&
-          r.contact.name === contact.name &&
+          getContactName(r.contact) === contactName &&
           r.timestamp &&
           Date.now() - new Date(r.timestamp).getTime() < 30000 // 30 seconds
       );
 
       if (alreadyCalledInSession || alreadyCalledInResults || recentCall) {
         console.log(
-          `Contact ${contact.name} (${contact.phone}) already called or called recently, skipping...`
+          `Contact ${getContactDisplayName(contact)} (${
+            contact.phone
+          }) already called or called recently, skipping...`
         );
         continue;
       }
 
       console.log(
-        `Calling ${contact.name} at ${contact.phone} from campaign contacts...`
+        `Calling ${getContactDisplayName(contact)} at ${
+          contact.phone
+        } from campaign contacts...`
       );
 
       // Mark this contact as called
       calledContacts.add(contactKey);
 
       console.log(
-        `Making voice bot call to ${contact.name} (${contact.phone})...`
+        `Making voice bot call to ${getContactDisplayName(contact)} (${
+          contact.phone
+        })...`
       );
       const result = await makeVoiceBotCall(contact, selectedAgent);
-      console.log(`Call result for ${contact.name}:`, result);
+      console.log(`Call result for ${getContactDisplayName(contact)}:`, result);
 
       // Add the call result
       setCallResults((prev) => {
@@ -874,33 +908,39 @@ function CampaignDetails({ campaignId, onBack }) {
       const contact = campaignContacts[contactIdx];
 
       // Create a unique key for this contact
-      const contactKey = `${contact.phone}-${contact.name}`;
+      const contactName = getContactName(contact);
+      const contactKey = `${contact.phone}-${contactName}`;
 
       // Check if this contact was already called in this session or in previous results
       const alreadyCalledInSession = calledContacts.has(contactKey);
       const alreadyCalledInResults = callResults.some(
         (r) =>
-          r.contact.phone === contact.phone && r.contact.name === contact.name
+          r.contact.phone === contact.phone &&
+          getContactName(r.contact) === contactName
       );
 
       // Additional check: if the same contact was called very recently (within 30 seconds), skip it
       const recentCall = callResults.find(
         (r) =>
           r.contact.phone === contact.phone &&
-          r.contact.name === contact.name &&
+          getContactName(r.contact) === contactName &&
           r.timestamp &&
           Date.now() - new Date(r.timestamp).getTime() < 30000 // 30 seconds
       );
 
       if (alreadyCalledInSession || alreadyCalledInResults || recentCall) {
         console.log(
-          `Contact ${contact.name} (${contact.phone}) already called or called recently, skipping...`
+          `Contact ${getContactDisplayName(contact)} (${
+            contact.phone
+          }) already called or called recently, skipping...`
         );
         continue;
       }
 
       console.log(
-        `Calling ${contact.name} at ${contact.phone} from campaign contacts...`
+        `Calling ${getContactDisplayName(contact)} at ${
+          contact.phone
+        } from campaign contacts...`
       );
 
       // Mark this contact as called
@@ -943,13 +983,16 @@ function CampaignDetails({ campaignId, onBack }) {
       const seenContacts = new Set();
 
       prev.forEach((result) => {
-        const contactKey = `${result.contact.phone}-${result.contact.name}`;
+        const contactName = getContactName(result.contact);
+        const contactKey = `${result.contact.phone}-${contactName}`;
         if (!seenContacts.has(contactKey)) {
           seenContacts.add(contactKey);
           uniqueResults.push(result);
         } else {
           console.log(
-            `Removing duplicate call result for ${result.contact.name}`
+            `Removing duplicate call result for ${getContactDisplayName(
+              result.contact
+            )}`
           );
         }
       });
@@ -1506,7 +1549,7 @@ function CampaignDetails({ campaignId, onBack }) {
         },
         body: JSON.stringify({
           contact: {
-            name: lead.name || "",
+            name: getContactName(lead),
             phone,
             contactId: lead._id || lead.contactId || null,
           },
@@ -1624,10 +1667,21 @@ function CampaignDetails({ campaignId, onBack }) {
 
   const addContactToCampaign = async () => {
     try {
-      if (!campaign?._id || !contactForm.name || !contactForm.phone) {
-        toast.warn("Name and phone are required");
+      if (!campaign?._id || !contactForm.phone) {
+        toast.warn("Phone number is required");
         return;
       }
+
+      // Name is optional, but if provided, it should be trimmed
+      const contactData = {
+        name: getContactName(contactForm),
+        phone: contactForm.phone.trim(),
+        email:
+          contactForm.email && contactForm.email.trim()
+            ? contactForm.email.trim()
+            : "",
+      };
+
       setLoadingContacts(true);
       const token = sessionStorage.getItem("clienttoken");
       const response = await fetch(
@@ -1638,7 +1692,7 @@ function CampaignDetails({ campaignId, onBack }) {
             Authorization: `Bearer ${token}`,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify(contactForm),
+          body: JSON.stringify(contactData),
         }
       );
       const result = await response.json();
@@ -2990,7 +3044,7 @@ function CampaignDetails({ campaignId, onBack }) {
                               : "-"}
                           </td>
                           <td className="py-2 pr-4 text-gray-900">
-                            {lead.name || "-"}
+                            {getContactDisplayNameBlank(lead)}
                           </td>
                           <td className="py-2 pr-4 text-gray-900">
                             <span className="inline-flex items-center">
@@ -3186,7 +3240,7 @@ function CampaignDetails({ campaignId, onBack }) {
                         Contact Name
                       </div>
                       <div className="font-semibold text-gray-800">
-                        {selectedCall.name || ""}
+                        {getContactDisplayNameBlank(selectedCall)}
                       </div>
                     </div>
                     <div className="p-3">
@@ -3194,7 +3248,7 @@ function CampaignDetails({ campaignId, onBack }) {
                         Phone Number
                       </div>
                       <div className="font-semibold text-gray-800">
-                        {selectedCall.number || selectedCall.phone || "Unknown"}
+                        {selectedCall.number || selectedCall.phone || ""}
                       </div>
                     </div>
                     <div className="p-3">
@@ -3581,8 +3635,9 @@ function CampaignDetails({ campaignId, onBack }) {
                           {loadingContacts ? (
                             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto"></div>
                           ) : (
-                            campaignContacts[currentContactIndex]?.name ||
-                            "None"
+                            getContactDisplayNameBlank(
+                              campaignContacts[currentContactIndex]
+                            ) || "None"
                           )}
                         </div>
                         <div className="text-sm text-gray-600">
@@ -3623,8 +3678,9 @@ function CampaignDetails({ campaignId, onBack }) {
                           {campaignContacts.length}
                         </div>
                         <div className="text-sm text-gray-600">
-                          {campaignContacts[currentContactIndex]?.name ||
-                            "Unknown"}
+                          {getContactDisplayNameBlank(
+                            campaignContacts[currentContactIndex]
+                          ) || ""}
                         </div>
                       </div>
                     </div>
@@ -3666,15 +3722,16 @@ function CampaignDetails({ campaignId, onBack }) {
                             <div>
                               <div className="text-sm text-gray-600">Name</div>
                               <div className="font-semibold text-gray-900">
-                                {campaignContacts[currentContactIndex]?.name ||
-                                  "Unknown"}
+                                {getContactDisplayNameBlank(
+                                  campaignContacts[currentContactIndex]
+                                ) || ""}
                               </div>
                             </div>
                             <div>
                               <div className="text-sm text-gray-600">Phone</div>
                               <div className="font-semibold text-gray-900">
                                 {campaignContacts[currentContactIndex]?.phone ||
-                                  "Unknown"}
+                                  ""}
                               </div>
                             </div>
                           </div>
@@ -3844,6 +3901,7 @@ function CampaignDetails({ campaignId, onBack }) {
                                 // Create a call object with the necessary data for live logs
                                 const callData = {
                                   _id: `result-${index}`,
+                                  name: getContactName(result.contact),
                                   mobile: result.contact.phone,
                                   agentId: {
                                     agentName:
@@ -3874,7 +3932,7 @@ function CampaignDetails({ campaignId, onBack }) {
                             <div className="flex justify-between items-start">
                               <div className="flex-1">
                                 <h6 className="font-semibold text-gray-800 mb-1">
-                                  {result.contact.name}
+                                  {getContactDisplayNameBlank(result.contact)}
                                 </h6>
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                                   <div>
@@ -4215,7 +4273,7 @@ function CampaignDetails({ campaignId, onBack }) {
                             <div>
                               <div className="text-sm text-gray-500">Name</div>
                               <div className="font-semibold">
-                                {contact.name}
+                                {getContactDisplayNameBlank(contact)}
                               </div>
                             </div>
                             <div>
@@ -4279,7 +4337,7 @@ function CampaignDetails({ campaignId, onBack }) {
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Name *
+                    Name (Optional)
                   </label>
                   <input
                     type="text"
@@ -4287,7 +4345,7 @@ function CampaignDetails({ campaignId, onBack }) {
                     onChange={(e) =>
                       setContactForm({ ...contactForm, name: e.target.value })
                     }
-                    required
+                    placeholder="Enter name (optional)"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
@@ -4636,25 +4694,25 @@ function CampaignDetails({ campaignId, onBack }) {
                     <div>
                       <div className="text-sm text-gray-500">Contact</div>
                       <div className="font-semibold">
-                        {selectedCall.mobile || "Unknown"}
+                        {getContactDisplayNameBlank(selectedCall)}
                       </div>
                     </div>
                     <div>
                       <div className="text-sm text-gray-500">Agent</div>
                       <div className="font-semibold">
-                        {selectedCall.agentId?.agentName || "Unknown"}
+                        {selectedCall.agentId?.agentName || ""}
                       </div>
                     </div>
                     <div>
                       <div className="text-sm text-gray-500">Status</div>
                       <div className="font-semibold capitalize">
-                        {selectedCall.leadStatus || "Unknown"}
+                        {selectedCall.leadStatus || ""}
                       </div>
                     </div>
                   </div>
                   <div className="mt-2 text-xs text-gray-500">
                     <span className="font-semibold">uniqueId:</span>{" "}
-                    {selectedCall.metadata?.customParams?.uniqueid || "Unknown"}
+                    {selectedCall.metadata?.customParams?.uniqueid || ""}
                   </div>
                 </div>
               )}
@@ -4873,7 +4931,7 @@ function CampaignDetails({ campaignId, onBack }) {
                         Lead Status
                       </div>
                       <div className="font-semibold capitalize">
-                        {liveCallDetails.leadStatus || "Unknown"}
+                        {liveCallDetails.leadStatus || ""}
                       </div>
                     </div>
                     <div className="bg-gray-50 rounded-lg p-4">
@@ -4881,7 +4939,7 @@ function CampaignDetails({ campaignId, onBack }) {
                         Call Type
                       </div>
                       <div className="font-semibold capitalize">
-                        {liveCallDetails.callType || "Unknown"}
+                        {liveCallDetails.callType || ""}
                       </div>
                     </div>
                   </div>
