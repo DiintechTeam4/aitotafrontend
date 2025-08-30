@@ -256,6 +256,99 @@ function OutboundSection({ tenantId }) {
     }
   };
 
+  // Copy group
+  const handleCopyGroup = async (group) => {
+    try {
+      setLoading(true);
+
+      // First create the new group
+      const response = await fetch(`${API_BASE}/groups`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${sessionStorage.getItem("clienttoken")}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: `${group.name}_copy`,
+          description: group.description || "",
+        }),
+      });
+
+      const result = await response.json();
+      if (!result.success) {
+        throw new Error(result.error || "Failed to create copied group");
+      }
+
+      const newGroupId = result.data._id;
+
+      // If the original group has contacts, copy them to the new group
+      if (group.contacts && group.contacts.length > 0) {
+        let successCount = 0;
+        let errorCount = 0;
+
+        // Add contacts one by one since the API only accepts single contacts
+        for (const contact of group.contacts) {
+          try {
+            const contactData = {
+              name: contact.name || "",
+              phone: contact.phone || "",
+              email: contact.email || "",
+            };
+
+            const addContactResponse = await fetch(
+              `${API_BASE}/groups/${newGroupId}/contacts`,
+              {
+                method: "POST",
+                headers: {
+                  Authorization: `Bearer ${sessionStorage.getItem(
+                    "clienttoken"
+                  )}`,
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify(contactData),
+              }
+            );
+
+            const addContactResult = await addContactResponse.json();
+            if (addContactResult.success) {
+              successCount++;
+            } else {
+              errorCount++;
+              console.warn(
+                `Failed to copy contact ${contact.name}:`,
+                addContactResult.error
+              );
+            }
+          } catch (error) {
+            errorCount++;
+            console.error(`Error copying contact ${contact.name}:`, error);
+          }
+        }
+
+        if (errorCount === 0) {
+          toast.success(
+            `Group copied successfully with ${successCount} contacts!`
+          );
+        } else if (successCount > 0) {
+          toast.success(
+            `Group copied with ${successCount} contacts (${errorCount} failed)`
+          );
+        } else {
+          toast.warn("Group copied but all contacts failed to copy");
+        }
+      } else {
+        toast.success("Group copied successfully!");
+      }
+
+      fetchGroups(); // Refresh the list
+    } catch (error) {
+      console.error("Error copying group:", error);
+      toast.error("Error copying group: " + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Delete group
   const handleDeleteGroup = async (groupId) => {
     if (
@@ -593,6 +686,15 @@ function OutboundSection({ tenantId }) {
                               Edit
                             </button>
                             <button
+                              className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50"
+                              onClick={() => {
+                                setOpenMenuGroupId(null);
+                                handleCopyGroup(group);
+                              }}
+                            >
+                              Copy
+                            </button>
+                            <button
                               className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50"
                               onClick={() => {
                                 setOpenMenuGroupId(null);
@@ -682,6 +784,15 @@ function OutboundSection({ tenantId }) {
                             onClick={() => openEditGroup(group)}
                           >
                             Edit
+                          </button>
+                          <button
+                            className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50"
+                            onClick={() => {
+                              setOpenMenuGroupId(null);
+                              handleCopyGroup(group);
+                            }}
+                          >
+                            Copy
                           </button>
                           <button
                             className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50"
