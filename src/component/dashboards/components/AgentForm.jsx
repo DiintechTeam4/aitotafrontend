@@ -15,6 +15,7 @@ const AgentForm = ({
   clientToken,
 }) => {
   const [selectedTab, setSelectedTab] = useState("starting");
+  const [selectedSocialTab, setSelectedSocialTab] = useState("whatsapp");
   const [formData, setFormData] = useState({
     agentName: "",
     description: "",
@@ -48,6 +49,7 @@ const AgentForm = ({
   const [requesting, setRequesting] = useState(false);
   const [myRequests, setMyRequests] = useState([]);
   const [loadingRequests, setLoadingRequests] = useState(false);
+  const [defaultTemplate, setDefaultTemplate] = useState(null);
 
   const tabs = [
     { key: "starting", label: "Starting Messages" },
@@ -92,10 +94,26 @@ const AgentForm = ({
   useEffect(() => {
     if (!agent) return;
     const hydrated = [];
+    
+    // Handle WhatsApp with automatic default selection
     if (agent.whatsappEnabled) {
       const wa = agent.whatsapplink || (Array.isArray(agent.whatsapp) && agent.whatsapp[0]?.link) || "";
-      if (wa) hydrated.push({ platform: "whatsapp", url: wa });
+      if (wa) {
+        hydrated.push({ platform: "whatsapp", url: wa });
+      } else {
+        // Check if there's only one WhatsApp template, make it default
+        const whatsappTemplates = agent.whatsappTemplates || [];
+        if (whatsappTemplates.length === 1) {
+          hydrated.push({ platform: "whatsapp", url: whatsappTemplates[0].templateUrl });
+        }
+      }
+      
+      // Set default template if available
+      if (agent.defaultTemplate) {
+        setDefaultTemplate(agent.defaultTemplate);
+      }
     }
+    
     if (agent.telegramEnabled && Array.isArray(agent.telegram) && agent.telegram[0]?.link) {
       hydrated.push({ platform: "telegram", url: agent.telegram[0].link });
     }
@@ -169,6 +187,60 @@ const AgentForm = ({
       }
     };
     loadTemplates();
+  }, [agent]);
+
+  // Get WhatsApp templates from agent data
+  const getWhatsAppTemplates = () => {
+    if (!agent || !agent.whatsappTemplates) return [];
+    return agent.whatsappTemplates.map(t => ({
+      _id: t.templateId,
+      name: t.templateName,
+      url: t.templateUrl,
+      description: t.description,
+      language: t.language,
+      status: t.status,
+      category: t.category,
+      platform: 'whatsapp'
+    }));
+  };
+
+  // Fetch WhatsApp templates from agent's database
+  const [whatsappTemplates, setWhatsappTemplates] = useState([]);
+  const [loadingWhatsappTemplates, setLoadingWhatsappTemplates] = useState(false);
+
+  const fetchWhatsappTemplates = async () => {
+    try {
+      setLoadingWhatsappTemplates(true);
+      // Get templates from agent's whatsappTemplates array   (already saved in database)
+      if (agent && agent.whatsappTemplates && Array.isArray(agent.whatsappTemplates)) {
+        const normalized = agent.whatsappTemplates.map(t => ({
+          _id: t.templateId,
+          name: t.templateName,
+          url: t.templateUrl,
+          imageUrl: '', // Not stored in current schema
+          description: t.description,
+          language: t.language,
+          status: t.status,
+          category: t.category,
+          platform: 'whatsapp'
+        }));
+        setWhatsappTemplates(normalized);
+      } else {
+        setWhatsappTemplates([]);
+      }
+    } catch (e) {
+      console.error('Error fetching WhatsApp templates:', e);
+      setWhatsappTemplates([]);
+    } finally {
+      setLoadingWhatsappTemplates(false);
+    }
+  };
+
+  // Fetch WhatsApp templates when agent changes
+  useEffect(() => {
+    if (agent && agent._id) {
+      fetchWhatsappTemplates();
+    }
   }, [agent]);
 
   // Fetch this agent's access requests for status display
@@ -368,6 +440,7 @@ const AgentForm = ({
         firstMessage:
           startingMessages[defaultStartingMessageIndex]?.text ||
           formData.firstMessage,
+        defaultTemplate,
         ...deriveSocials(),
       };
 
@@ -922,234 +995,376 @@ const AgentForm = ({
         placeholder: "sms:+1234567890",
       },
     ];
+
+    const renderPlatformContent = (platform) => {
+      const isEnabled = socialMediaLinks.some(
+        (link) => link.platform === platform.id
+      );
+      const currentLink = socialMediaLinks.find(
+        (link) => link.platform === platform.id
+      );
+
+      // Determine latest request status for this platform
+      const requestsForPlatform = myRequests.filter(r => r.platform === platform.id);
+      const latestReq = requestsForPlatform.length > 0
+        ? requestsForPlatform.sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt))[0]
+        : null;
+      const status = latestReq?.status; // 'pending' | 'approved' | 'rejected'
+      const approvedTemplateName = latestReq?.templateName;
+
+      // Get assigned templates for this platform - only show approved templates
+      const assignedTemplatesForPlatform = platform.id === 'whatsapp' 
+        ? whatsappTemplates.filter(t => t.status === 'APPROVED')
+        : assignedTemplates.filter(t => t.platform === platform.id && t.status === 'APPROVED');
+
+      return (
+        <div className="space-y-4">
+          {/* Enable/Disable Toggle */}
+          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+            <div className="flex items-center gap-3">
+              <div
+                className={`w-8 h-8 ${platform.color} rounded-full flex items-center justify-center text-white text-sm shadow-sm`}
+              >
+                {platform.icon}
+              </div>
+              <div>
+                <h4 className="font-medium text-gray-800">
+                  {platform.name}
+                </h4>
+                {/* Status indicators */}
+                {platform.id === 'whatsapp' && status && (
+                  <div className="flex items-center gap-1 mt-1">
+                    {status === 'pending' && (
+                      <span className="inline-flex items-center text-xs px-2 py-1 rounded-full bg-yellow-100 text-yellow-800">
+                        <span className="w-2 h-2 bg-yellow-500 rounded-full mr-1 animate-pulse"></span>
+                        Pending
+                      </span>
+                    )}
+                    {status === 'approved' && (
+                      <span className="inline-flex items-center text-xs px-2 py-1 rounded-full bg-green-100 text-green-700">
+                        <span className="w-2 h-2 bg-green-500 rounded-full mr-1"></span>
+                        Approved
+                      </span>
+                    )}
+                    {status === 'rejected' && (
+                      <span className="inline-flex items-center text-xs px-2 py-1 rounded-full bg-red-100 text-red-700">
+                        <span className="w-2 h-2 bg-red-500 rounded-full mr-1"></span>
+                        Rejected
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-500">
+                {isEnabled ? 'Enabled' : 'Disabled'}
+              </span>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={isEnabled}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      setSocialMediaLinks([
+                        ...socialMediaLinks,
+                        {
+                          platform: platform.id,
+                          url: "",
+                        },
+                      ]);
+                    } else {
+                      setSocialMediaLinks(
+                        socialMediaLinks.filter(
+                          (link) => link.platform !== platform.id
+                        )
+                      );
+                    }
+                  }}
+                  className="sr-only"
+                />
+                <div
+                  className={`w-11 h-6 rounded-full transition-colors ${
+                    isEnabled ? platform.color : "bg-gray-300"
+                  }`}
+                >
+                  <div
+                    className={`dot absolute left-0.5 top-0.5 bg-white w-5 h-5 rounded-full transition-transform ${
+                      isEnabled ? "translate-x-5" : "translate-x-0"
+                    }`}
+                  ></div>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          {/* Content when enabled */}
+          {isEnabled && (
+            <div className="space-y-4">
+              {/* Show approved WhatsApp link if available */}
+              {platform.id === 'whatsapp' && agent?.whatsapplink && status === 'approved' && (
+                <div className="p-4 rounded border border-green-200 bg-white">
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium text-gray-800 mb-1">
+                        Approved Template{approvedTemplateName ? `: ${approvedTemplateName}` : ''}
+                      </div>
+                    
+                    </div>
+                    <button
+                      type="button"
+                      className="ml-2 px-3 py-1 text-white text-sm rounded bg-green-600 hover:bg-green-700 transition-colors"
+                      onClick={() => {
+                        const next = socialMediaLinks.map((l) => 
+                          l.platform === 'whatsapp' ? { ...l, url: agent.whatsapplink } : l
+                        );
+                        if (!next.find(l => l.platform === 'whatsapp')) {
+                          next.push({ platform: 'whatsapp', url: agent.whatsapplink });
+                        }
+                        setSocialMediaLinks(next);
+                      }}
+                    >
+                      Use
+                    </button>
+                  </div>
+                </div>
+              )}
+
+                             {/* Show assigned templates if available */}
+               {assignedTemplatesForPlatform.length > 0 && (
+                 <div className="space-y-2">
+                   <div className="text-sm font-medium text-gray-700 uppercase tracking-wide">
+                     Templates ({assignedTemplatesForPlatform.length})
+                   </div>
+                   <div className="grid grid-cols-1 gap-2">
+                     {assignedTemplatesForPlatform.map(t => (
+                       <div
+                         key={t._id}
+                         className={`border rounded-lg p-4 bg-white hover:shadow-sm transition-all ${
+                           defaultTemplate && defaultTemplate.templateId === t._id ? 'ring-2 ring-blue-500 bg-blue-50' : ''
+                         }`}
+                       >
+                         <div className="flex items-start justify-between gap-3 mb-3">
+                           <div className="flex items-center gap-3 flex-1">
+                             {t.imageUrl && (
+                               <img src={t.imageUrl} alt={t.name} className="w-12 h-12 object-cover rounded flex-shrink-0" />
+                             )}
+                             <div className="flex-1 min-w-0">
+                               <div className="flex items-center gap-2">
+                                 <div className="font-semibold text-gray-900 text-lg truncate">{t.name}</div>
+                                 {defaultTemplate && defaultTemplate.templateId === t._id && (
+                                   <span className="inline-flex items-center text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-700">
+                                     Default
+                                   </span>
+                                 )}
+                               </div>
+                               <div className="flex items-center gap-2 mt-1">
+                                 {t.status && (
+                                   <span className={`text-xs px-2 py-1 rounded-full ${
+                                     t.status === 'APPROVED' ? 'bg-green-100 text-green-700' : 
+                                     t.status === 'PENDING' ? 'bg-yellow-100 text-yellow-700' : 
+                                     'bg-gray-100 text-gray-700'
+                                   }`}>
+                                     {t.status}
+                                   </span>
+                                 )}
+                                 {t.language && (
+                                   <span className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-700">
+                                     {t.language}
+                                   </span>
+                                 )}
+                                 {t.category && (
+                                   <span className="text-xs px-2 py-1 rounded-full bg-purple-100 text-purple-700">
+                                     {t.category}
+                                   </span>
+                                 )}
+                               </div>
+                             </div>
+                           </div>
+                           <div className="flex flex-col gap-2">
+                             <button
+                               type="button"
+                               onClick={() => {
+                                 const newLinks = socialMediaLinks.map((link) =>
+                                   link.platform === platform.id
+                                     ? { ...link, url: t.url }
+                                     : link
+                                 );
+                                 if (!newLinks.find(l => l.platform === platform.id)) {
+                                   newLinks.push({ platform: platform.id, url: t.url });
+                                 }
+                                 setSocialMediaLinks(newLinks);
+                               }}
+                               className="flex-shrink-0 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors text-sm font-medium"
+                             >
+                               Select
+                             </button>
+                             <button
+                               type="button"
+                               onClick={() => {
+                                 setDefaultTemplate({
+                                   templateId: t._id,
+                                   templateName: t.name,
+                                   templateUrl: t.url,
+                                   platform: platform.id
+                                 });
+                               }}
+                               className={`flex-shrink-0 px-3 py-1 text-xs rounded transition-colors ${
+                                 defaultTemplate && defaultTemplate.templateId === t._id
+                                   ? 'bg-blue-600 text-white'
+                                   : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                               }`}
+                             >
+                               {defaultTemplate && defaultTemplate.templateId === t._id ? 'Default' : 'Set Default'}
+                             </button>
+                           </div>
+                         </div>
+                         
+                         {t.description && (
+                           <div className="text-sm text-gray-700 mb-3 whitespace-pre-wrap line-clamp-3">
+                             {t.description}
+                           </div>
+                         )}
+                         
+                         {t.url && !t.url.includes('whatsapp-template-module.onrender.com') && (
+                           <div className="flex items-center justify-between">
+                             <a 
+                               href={t.url} 
+                               target="_blank" 
+                               rel="noopener noreferrer" 
+                               className="inline-flex items-center text-sm text-blue-600 hover:underline"
+                             >
+                               View Template Link
+                               <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                               </svg>
+                             </a>
+                             {t.parameter_format && (
+                               <span className="text-xs text-gray-500">
+                                 Format: {t.parameter_format}
+                               </span>
+                             )}
+                           </div>
+                         )}
+                       </div>
+                     ))}
+                   </div>
+                 </div>
+               )}
+
+              {/* Loading state for WhatsApp templates */}
+              {platform.id === 'whatsapp' && loadingWhatsappTemplates && (
+                <div className="text-center py-4">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-500 mx-auto"></div>
+                  <p className="text-sm text-gray-500 mt-2">Loading templates...</p>
+                </div>
+              )}
+
+              {/* Show contact admin and request buttons (always show for WhatsApp) */}
+              {platform.id === 'whatsapp' && (
+                <div className="p-4 rounded border border-dashed border-gray-300 bg-white">
+                  <div className="text-sm text-gray-700 mb-2">
+                    Need more templates? Contact admin to get access.
+                  </div>
+                  <div className="flex gap-2">
+                    <a
+                      href="https://web.whatsapp.com/send/?phone=8147540362&text=I%20want%20to%20enable%20my%20business%20with%20Aitota.%20My%20name%20is"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={`inline-flex items-center px-3 py-2 text-white text-sm rounded ${platform.color} ${platform.hoverColor} transition-colors`}
+                    >
+                      Contact Admin
+                    </a>
+                    <button
+                      type="button"
+                      disabled={requesting || !agent?._id || status === 'pending'}
+                      onClick={async () => {
+                        try {
+                          setRequesting(true);
+                          const authToken =
+                            clientToken ||
+                            sessionStorage.getItem("clienttoken") ||
+                            localStorage.getItem("admintoken");
+                          const resp = await fetch(`${API_BASE_URL}/agent-access/request`, {
+                            method: 'POST',
+                            headers: {
+                              'Content-Type': 'application/json',
+                              Authorization: `Bearer ${authToken}`,
+                            },
+                            body: JSON.stringify({
+                              clientId: clientId || agent?.clientId || '',
+                              agentId: agent?._id,
+                              platform: 'whatsapp'
+                            })
+                          });
+                          const json = await resp.json();
+                          if (json.success) {
+                            alert('Request submitted! Admin will review and approve.');
+                            // refresh requests
+                            try {
+                              const r = await fetch(`${API_BASE_URL}/agent-access/requests?agentId=${agent._id}`);
+                              const rj = await r.json();
+                              setMyRequests(rj?.success ? (rj.data || []) : []);
+                            } catch {}
+                          } else {
+                            alert(json.message || 'Failed to submit request');
+                          }
+                        } catch (e) {
+                          alert('Failed to submit request');
+                        } finally {
+                          setRequesting(false);
+                        }
+                      }}
+                      className={`px-3 py-2 text-white text-sm rounded bg-black hover:bg-gray-800 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors`}
+                    >
+                      {status === 'pending' ? 'Requested' : requesting ? 'Requesting...' : 'Request'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      );
+    };
+
     return (
       <div className="space-y-6">
-        <div className="flex items-center mb-6">
+        <div className="flex items-center justify-between mb-6">
           <h3 className="text-xl font-semibold text-gray-800">
-            Integration
+            Action Integration
           </h3>
+          <div className="text-sm text-gray-500">
+            Enable platforms and manage templates for your agent
+          </div>
         </div>
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {socialPlatforms.map((platform) => {
-              const isEnabled = socialMediaLinks.some(
-                (link) => link.platform === platform.id
-              );
-              const currentLink = socialMediaLinks.find(
-                (link) => link.platform === platform.id
-              );
 
-              // Determine latest request status for this platform
-              const requestsForPlatform = myRequests.filter(r => r.platform === platform.id);
-              const latestReq = requestsForPlatform.length > 0
-                ? requestsForPlatform.sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt))[0]
-                : null;
-              const status = latestReq?.status; // 'pending' | 'approved' | 'rejected'
-              const approvedTemplateName = latestReq?.templateName;
+        {/* Platform Tabs */}
+        <div className="flex gap-1 mb-6">
+          {socialPlatforms.map((platform) => (
+            <button
+              key={platform.id}
+              type="button"
+              onClick={() => setSelectedSocialTab(platform.id)}
+              className={`flex-1 py-3 px-4 rounded-t-lg font-medium transition-all duration-200 ${
+                selectedSocialTab === platform.id
+                  ? `${platform.color} text-white shadow-sm`
+                  : "bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-800"
+              }`}
+            >
+              <div className="flex items-center justify-center gap-2">
+                <span className="text-lg">{platform.icon}</span>
+                <span className="text-sm">{platform.name}</span>
+              </div>
+            </button>
+          ))}
+        </div>
 
-              return (
-                <div
-                  key={platform.id}
-                  className="border border-gray-200 rounded-lg p-4 bg-gray-50"
-                >
-                  {/* Platform Header with Toggle */}
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-3">
-                      <div
-                        className={`w-10 h-10 ${platform.color} rounded-full flex items-center justify-center text-white text-lg shadow-sm`}
-                      >
-                        {platform.icon}
-                      </div>
-                      <div>
-                        <h4 className="font-medium text-gray-800">
-                          {platform.name}
-                        </h4>
-                        <p className="text-xs text-gray-500">Social platform</p>
-                        {platform.id === 'whatsapp' && status && (
-                          <div className="mt-1">
-                            {status === 'pending' && (
-                              <span className="inline-block text-[11px] px-2 py-0.5 rounded bg-yellow-100 text-yellow-800">Request Pending</span>
-                            )}
-                            {status === 'approved' && (
-                              <span className="inline-block text-[11px] px-2 py-0.5 rounded bg-green-100 text-green-700">
-                                Approved{approvedTemplateName ? ` • ${approvedTemplateName}` : ''}
-                              </span>
-                            )}
-                            {status === 'rejected' && (
-                              <span className="inline-block text-[11px] px-2 py-0.5 rounded bg-red-100 text-red-700">Rejected</span>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Toggle Switch */}
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={isEnabled}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSocialMediaLinks([
-                              ...socialMediaLinks,
-                              {
-                                platform: platform.id,
-                                url: "",
-                              },
-                            ]);
-                          } else {
-                            setSocialMediaLinks(
-                              socialMediaLinks.filter(
-                                (link) => link.platform !== platform.id
-                              )
-                            );
-                          }
-                        }}
-                        className="sr-only"
-                      />
-                      <div
-                        className={`w-11 h-6 rounded-full transition-colors ${
-                          isEnabled ? platform.color : "bg-gray-300"
-                        }`}
-                      >
-                        <div
-                          className={`dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform ${
-                            isEnabled ? "translate-x-5" : "translate-x-0"
-                          }`}
-                        ></div>
-                      </div>
-                    </label>
-                  </div>
-
-                  {/* Templates or Contact Admin fallback */}
-                  {isEnabled && (
-                    <div className="space-y-3">
-                      {(() => {
-                        const items = assignedTemplates.filter(t => t.platform === platform.id);
-                        if (!items || items.length === 0) {
-                          return (
-                            <div className="p-3 rounded border border-dashed border-gray-300 bg-white">
-                              {platform.id === 'whatsapp' && agent?.whatsapplink && status === 'approved' ? (
-                                <div>
-                                  <div className="text-sm text-gray-800 mb-1">Approved Template{approvedTemplateName ? `: ${approvedTemplateName}` : ''}</div>
-                                  <div className="text-xs break-all text-gray-600 mb-2">{agent.whatsapplink}</div>
-                                  <button
-                                    type="button"
-                                    className="px-3 py-1 text-white text-xs rounded bg-green-600 hover:bg-green-700"
-                                    onClick={() => {
-                                      const next = socialMediaLinks.map((l) => l.platform === 'whatsapp' ? { ...l, url: agent.whatsapplink } : l);
-                                      if (!next.find(l => l.platform === 'whatsapp')) next.push({ platform: 'whatsapp', url: agent.whatsapplink });
-                                      setSocialMediaLinks(next);
-                                    }}
-                                  >
-                                    Use this link
-                                  </button>
-                                </div>
-                              ) : (
-                                <>
-                                  <div className="text-sm text-gray-700 mb-2">No templates available for this platform. Please contact admin.</div>
-                                  <a
-                                    href="https://web.whatsapp.com/send/?phone=8147540362&text=I%20want%20to%20enable%20my%20business%20with%20Aitota.%20My%20name%20is"
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className={`inline-block px-4 py-2 text-white text-sm rounded ${platform.color} ${platform.hoverColor}`}
-                                  >
-                                    Contact Admin on WhatsApp
-                                  </a>
-                                  {platform.id === 'whatsapp' && (
-                                    <div className="mt-3">
-                                      <button
-                                        type="button"
-                                        disabled={requesting || !agent?._id || status === 'pending'}
-                                        onClick={async () => {
-                                          try {
-                                            setRequesting(true);
-                                            const authToken =
-                                              clientToken ||
-                                              sessionStorage.getItem("clienttoken") ||
-                                              localStorage.getItem("admintoken");
-                                            const resp = await fetch(`${API_BASE_URL}/agent-access/request`, {
-                                              method: 'POST',
-                                              headers: {
-                                                'Content-Type': 'application/json',
-                                                Authorization: `Bearer ${authToken}`,
-                                              },
-                                              body: JSON.stringify({
-                                                clientId: clientId || agent?.clientId || '',
-                                                agentId: agent?._id,
-                                                platform: 'whatsapp'
-                                              })
-                                            });
-                                            const json = await resp.json();
-                                            if (json.success) {
-                                              alert('Request submitted! Admin will review and approve.');
-                                              // refresh requests
-                                              try {
-                                                const r = await fetch(`${API_BASE_URL}/agent-access/requests?agentId=${agent._id}`);
-                                                const rj = await r.json();
-                                                setMyRequests(rj?.success ? (rj.data || []) : []);
-                                              } catch {}
-                                            } else {
-                                              alert(json.message || 'Failed to submit request');
-                                            }
-                                          } catch (e) {
-                                            alert('Failed to submit request');
-                                          } finally {
-                                            setRequesting(false);
-                                          }
-                                        }}
-                                        className={`px-4 py-2 bg-black text-white rounded disabled:bg-gray-400`}
-                                      >
-                                        {status === 'pending' ? 'Requested' : requesting ? 'Requesting...' : 'Request'}
-                                      </button>
-                                    </div>
-                                  )}
-                                </>
-                              )}
-                            </div>
-                          );
-                        }
-                        return (
-                          <div>
-                            <label className="text-sm font-medium text-gray-700">Choose Template</label>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2">
-                              {items.map(t => (
-                                <button
-                                  key={t._id}
-                                  type="button"
-                                  onClick={() => {
-                            const newLinks = socialMediaLinks.map((link) =>
-                              link.platform === platform.id
-                                        ? { ...link, url: t.url }
-                                : link
-                            );
-                                    // if not present yet, add entry
-                                    if (!newLinks.find(l => l.platform === platform.id)) {
-                                      newLinks.push({ platform: platform.id, url: t.url });
-                                    }
-                            setSocialMediaLinks(newLinks);
-                          }}
-                                  className="border rounded-lg bg-white p-3 text-left hover:shadow"
-                                >
-                                  <div className="flex items-center gap-3">
-                                    {t.imageUrl && (<img src={t.imageUrl} alt={t.name} className="w-12 h-12 object-cover rounded" />)}
-                                    <div>
-                                      <div className="font-semibold text-sm">{t.name}</div>
-                                      <div className="text-xs text-gray-500 break-all">{t.url}</div>
-                                    </div>
-                                  </div>
-                                  {t.description && (<div className="text-xs text-gray-600 mt-1 line-clamp-2">{t.description}</div>)}
-                        </button>
-                              ))}
-                      </div>
-                          </div>
-                        );
-                      })()}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+        {/* Tab Content */}
+        <div className="border border-gray-200 rounded-b-lg bg-white" style={{ maxHeight: '600px', overflowY: 'auto' }}>
+          <div className="p-6">
+            {renderPlatformContent(socialPlatforms.find(p => p.id === selectedSocialTab))}
           </div>
         </div>
       </div>
@@ -1218,7 +1433,7 @@ const AgentForm = ({
           </div>
 
           {/* Tab Content */}
-          <div className="flex-1 p-8">
+          <div className="flex-1 p-8" style={{ overflowY: 'auto', maxHeight: '80vh' }}>
             <div className="max-w-4xl">{renderTabContent()}</div>
           </div>
         </div>

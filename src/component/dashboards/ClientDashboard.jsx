@@ -41,6 +41,7 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
   const [currentClient, setCurrentClient] = useState(
     propClientId || sessionClientId || ""
   );
+  const [clientInfo, setClientInfo] = useState(null);
   const [agents, setAgents] = useState([]);
   const [agentsLoading, setAgentsLoading] = useState(false);
   const [editingAgent, setEditingAgent] = useState(null);
@@ -81,6 +82,7 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
   useEffect(() => {
     const token = sessionStorage.getItem("clienttoken");
     if (token && currentClient) {
+      // First get client profile for approval status
       fetch(`${API_BASE_URL}/client/profile`, {
         headers: { Authorization: `Bearer ${token}` },
       })
@@ -95,6 +97,30 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
         .catch((error) => {
           console.error("Error fetching profile:", error);
           setIsApproved(false);
+        });
+
+      // Then get full client data for name and email
+      fetch(`${API_BASE_URL}/client/`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.success && data.data) {
+            setClientInfo({
+              name: data.data.name || 'Unknown',
+              email: data.data.email || 'No email',
+              clientId: currentClient
+            });
+          }
+        })
+        .catch((error) => {
+          console.error("Error fetching client data:", error);
+          // Set fallback info
+          setClientInfo({
+            name: 'Unknown',
+            email: 'No email',
+            clientId: currentClient
+          });
         });
     }
   }, [currentClient]);
@@ -552,13 +578,24 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
         <aside className="w-64 bg-gradient-to-b from-gray-900 to-black text-white flex flex-col shadow-lg">
           <div className="p-6 border-b border-gray-700">
             <h1 className="text-2xl font-bold text-white mb-3">AI Manager</h1>
-            <div className="flex flex-col gap-1">
+            <div className="flex flex-col gap-2">
               <span className="text-xs text-gray-400 uppercase tracking-wider">
-                Client:
+                Client Information
               </span>
-              <span className="text-sm text-gray-300 font-semibold">
-                {currentClient}
-              </span>
+              {clientInfo ? (
+                <>
+                  <div className="text-xl text-gray-300 font-semibold">
+                    {clientInfo.name}
+                  </div>
+                  <div className="text-lg text-gray-400">
+                    {clientInfo.email}
+                  </div>
+                </>
+              ) : (
+                <div className="text-sm text-gray-400">
+                  Loading client info...
+                </div>
+              )}
             </div>
           </div>
 

@@ -93,15 +93,19 @@ const AdminDashboard = ({ user, onLogout }) => {
           const bodyComponent = (t.components || []).find(c => c.type === 'BODY');
           const buttonsComp = (t.components || []).find(c => c.type === 'BUTTONS');
           const firstUrl = buttonsComp && Array.isArray(buttonsComp.buttons) && buttonsComp.buttons[0]?.url;
+          const headerComp = (t.components || []).find(c => c.type === 'HEADER');
           return {
             _id: t.id || t.name,
             name: t.name,
             url: firstUrl || '',
-            imageUrl: '',
+            imageUrl: headerComp?.format === 'IMAGE' ? headerComp.example?.header_handle?.[0] : '',
             description: bodyComponent?.text || '',
             language: t.language,
             status: t.status,
-            category: t.category
+            category: t.category,
+            sub_category: t.sub_category,
+            parameter_format: t.parameter_format,
+            components: t.components
           };
         });
         setTemplates(normalized);
@@ -141,7 +145,7 @@ const AdminDashboard = ({ user, onLogout }) => {
     }
   };
 
-  const approveAccessRequest = async (requestId, templateName) => {
+  const approveAccessRequest = async (requestId, templateName, templateData) => {
     try {
       const token = localStorage.getItem('admintoken') || sessionStorage.getItem('admintoken');
       const resp = await fetch(`${API_BASE_URL}/agent-access/approve`, {
@@ -150,7 +154,7 @@ const AdminDashboard = ({ user, onLogout }) => {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {})
         },
-        body: JSON.stringify({ requestId, templateName })
+        body: JSON.stringify({ requestId, templateName, templateData })
       });
       const json = await resp.json();
       if (json?.success) {
@@ -176,10 +180,21 @@ const AdminDashboard = ({ user, onLogout }) => {
         alert("Enter Agent ID and select at least one template");
         return;
       }
+
+      // Get the selected templates data
+      const selectedTemplates = templates.filter(t => selectedTemplateIds.includes(t._id));
+      
       const resp = await fetch(`${API_BASE_URL}/templates/assign`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ agentId: assignAgentId, templateIds: selectedTemplateIds }),
+        headers: { 
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem('admintoken') || sessionStorage.getItem('admintoken')}`
+        },
+        body: JSON.stringify({ 
+          agentId: assignAgentId, 
+          templateIds: selectedTemplateIds,
+          templates: selectedTemplates // Send full template data for WhatsApp
+        }),
       });
       const json = await resp.json();
       if (!resp.ok || !json.success) throw new Error(json.message || "Failed to assign");
@@ -1123,8 +1138,8 @@ const AdminDashboard = ({ user, onLogout }) => {
                                               className="flex-shrink-0 px-2 py-1 bg-green-600 text-white rounded text-xs hover:bg-green-700"
                                               onClick={(e) => {
                                                 e.stopPropagation();
-                                                // Pass template name for WhatsApp link formation
-                                                approveAccessRequest(r._id, t.name);
+                                                // Pass template data for saving to database
+                                                approveAccessRequest(r._id, t.name, t);
                                               }}
                                             >
                                               Approve
