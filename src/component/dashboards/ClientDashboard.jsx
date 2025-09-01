@@ -400,40 +400,42 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
           </div>
         );
 
-      case "agents":
-        return (
-          <div className="h-full flex flex-col">
-            <div className="bg-white border-b border-gray-200 px-8 py-6">
-              <h2 className="text-3xl font-bold text-gray-900 mb-4">
-                AI Agents
-              </h2>
-              <nav className="flex gap-2 justify-between items-center">
-                <div className="flex gap-2">
-                  <button
-                    className={`px-5 py-3 text-sm font-medium rounded-md transition-all ${
-                      activeTab === "list"
-                        ? "bg-black text-white"
-                        : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
-                    }`}
-                    onClick={() => persistTabChange("list")}
-                  >
-                    Agents ({agents.length})
-                  </button>
-                </div>
+             case "agents":
+         return (
+           <div className="h-full flex flex-col">
+             {activeTab !== "form" && (
+               <div className="px-8 py-6 bg-white border-b border-gray-200">
+                 <h2 className="text-3xl font-bold mb-4 text-gray-900">
+                   AI Agents
+                 </h2>
+                 <nav className="flex gap-2 justify-between items-center">
+                   <div className="flex gap-2">
+                     <button
+                       className={`px-5 py-3 text-sm font-medium rounded-md transition-all ${
+                         activeTab === "list"
+                           ? "bg-black text-white"
+                           : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                       }`}
+                       onClick={() => persistTabChange("list")}
+                     >
+                       Agents ({agents.length})
+                     </button>
+                   </div>
 
-                <button
-                  className="px-5 py-3 text-sm font-medium rounded-md transition-all bg-black text-white hover:bg-gray-800"
-                  onClick={() => {
-                    persistTabChange("form");
-                    setEditingAgent(null);
-                  }}
-                >
-                  Create Agent
-                </button>
-              </nav>
-            </div>
+                   <button
+                     className="px-5 py-3 text-sm font-medium rounded-md transition-all bg-black text-white hover:bg-gray-800"
+                     onClick={() => {
+                       persistTabChange("form");
+                       setEditingAgent(null);
+                     }}
+                   >
+                     {editingAgent ? "Update Agent" : "Create Agent"}
+                   </button>
+                 </nav>
+               </div>
+             )}
 
-            <div className="flex-1 p-8 overflow-y-auto">
+             <div className="flex-1 p-8 overflow-y-auto">
               {activeTab === "list" && (
                 <AgentList
                   agents={agents}
