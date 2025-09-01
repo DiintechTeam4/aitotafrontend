@@ -1,69 +1,10 @@
 "use client";
-import { FiMail, FiMessageSquare, FiEye, FiTrash2, FiRotateCcw, FiHelpCircle, FiCalendar, FiMoreVertical, FiCheck, FiX, FiSettings, FiUser, FiMic, FiCode, FiLink, FiSave, FiArrowRight, FiArrowLeft, FiPlus, FiSun, FiMoon } from "react-icons/fi";
+import { FiMail, FiMessageSquare, FiEye, FiTrash2, FiRotateCcw, FiHelpCircle, FiCalendar, FiMoreVertical, FiCheck, FiX, FiSettings, FiUser, FiMic, FiCode, FiLink, FiSave, FiArrowRight, FiArrowLeft, FiPlus } from "react-icons/fi";
 import { FaWhatsapp, FaTelegram } from "react-icons/fa";
-import { useState, useEffect, createContext, useContext } from "react";
+import { useState, useEffect } from "react";
 import VoiceSynthesizer from "./VoiceSynthesizer";
 import AudioRecorder from "./AudioRecorder";
 import { API_BASE_URL } from "../../../config";
-
-// Theme Context
-const ThemeContext = createContext();
-
-const useTheme = () => {
-  const context = useContext(ThemeContext);
-  if (!context) {
-    throw new Error('useTheme must be used within a ThemeProvider');
-  }
-  return context;
-};
-
-// Theme Provider Component
-const ThemeProvider = ({ children }) => {
-  const [isDark, setIsDark] = useState(() => {
-    // Check if there's a saved theme preference
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('agentform-theme');
-      if (saved) return saved === 'dark';
-      // Check system preference
-      return window.matchMedia('(prefers-color-scheme: dark)').matches;
-    }
-    return false;
-  });
-
-  const toggleTheme = () => {
-    const newTheme = !isDark;
-    setIsDark(newTheme);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('agentform-theme', newTheme ? 'dark' : 'light');
-    }
-  };
-
-  return (
-    <ThemeContext.Provider value={{ isDark, toggleTheme }}>
-      <div className={isDark ? 'dark' : ''}>
-        {children}
-      </div>
-    </ThemeContext.Provider>
-  );
-};
-
-// Theme Toggle Component
-const ThemeToggle = () => {
-  const { isDark, toggleTheme } = useTheme();
-  
-  return (
-    <button
-      onClick={toggleTheme}
-      className="relative w-12 h-12 flex items-center justify-center rounded-xl transition-all duration-300 bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500 shadow-lg hover:shadow-xl transform hover:-translate-y-1 group"
-      title={`Switch to ${isDark ? 'light' : 'dark'} mode`}
-    >
-      <div className="relative">
-        <FiSun className={`w-6 h-6 text-yellow-500 transition-all duration-300 absolute ${isDark ? 'opacity-0 rotate-90 scale-75' : 'opacity-100 rotate-0 scale-100'}`} />
-        <FiMoon className={`w-6 h-6 text-blue-400 transition-all duration-300 absolute ${isDark ? 'opacity-100 rotate-0 scale-100' : 'opacity-0 -rotate-90 scale-75'}`} />
-      </div>
-    </button>
-  );
-};
 
 const AgentForm = ({
   agent,
@@ -639,7 +580,7 @@ const AgentForm = ({
         <h3 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent mb-2">
           Starting Messages
         </h3>
-        <p className="text-gray-600 dark:text-gray-400 max-w-md mx-auto">
+        <p className="text-gray-600 max-w-md mx-auto">
           Create engaging opening messages that will greet your users. Choose which one should be the default.
         </p>
       </div>
@@ -648,10 +589,10 @@ const AgentForm = ({
         {startingMessages.map((msg, idx) => (
           <div
             key={idx}
-            className={`group relative bg-gradient-to-br from-white to-gray-50 dark:from-gray-800 dark:to-gray-900 border-2 rounded-2xl p-6 transition-all duration-300 hover:shadow-lg ${
+            className={`group relative bg-gradient-to-br from-white to-gray-50 border-2 rounded-2xl p-6 transition-all duration-300 hover:shadow-lg ${
               defaultStartingMessageIndex === idx 
-                ? 'border-blue-400 dark:border-blue-500 shadow-lg ring-4 ring-blue-100 dark:ring-blue-900/30' 
-                : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500'
+                ? 'border-blue-400 shadow-lg ring-4 ring-blue-100' 
+                : 'border-gray-200 hover:border-gray-300'
             }`}
           >
             {/* Header */}
@@ -660,7 +601,7 @@ const AgentForm = ({
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-300 ${
                   defaultStartingMessageIndex === idx 
                     ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-md' 
-                    : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 group-hover:bg-gray-300 dark:group-hover:bg-gray-600'
+                    : 'bg-gray-200 text-gray-600 group-hover:bg-gray-300'
                 }`}>
                   {idx + 1}
                 </div>
@@ -675,14 +616,14 @@ const AgentForm = ({
                   <div className={`w-5 h-5 rounded-full border-2 transition-all duration-200 ${
                     defaultStartingMessageIndex === idx 
                       ? 'border-blue-500 bg-blue-500' 
-                      : 'border-gray-300 dark:border-gray-600 hover:border-blue-400'
+                      : 'border-gray-300 hover:border-blue-400'
                   }`}>
                     {defaultStartingMessageIndex === idx && (
                       <div className="w-full h-full rounded-full bg-white scale-50"></div>
                     )}
                   </div>
                   <span className={`text-sm font-medium transition-colors ${
-                    defaultStartingMessageIndex === idx ? 'text-blue-600 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400'
+                    defaultStartingMessageIndex === idx ? 'text-blue-600' : 'text-gray-600'
                   }`}>
                     {defaultStartingMessageIndex === idx ? 'Default Message' : 'Set as default'}
                   </span>
@@ -693,7 +634,7 @@ const AgentForm = ({
                 <button
                   type="button"
                   onClick={() => removeStartingMessage(idx)}
-                  className="opacity-0 group-hover:opacity-100 p-2 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all duration-200"
+                  className="opacity-0 group-hover:opacity-100 p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-all duration-200"
                   title="Remove message"
                 >
                   <FiTrash2 className="w-4 h-4" />
@@ -709,16 +650,16 @@ const AgentForm = ({
                   onChange={(e) => handleStartingMessageChange(idx, e.target.value)}
                   rows="4"
                   required
-                  className="w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-xl focus:ring-4 focus:ring-blue-100 dark:focus:ring-blue-900/30 focus:border-blue-400 dark:focus:border-blue-500 transition-all duration-200 resize-none placeholder-gray-400 dark:placeholder-gray-500"
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-400 transition-all duration-200 resize-none text-gray-800 placeholder-gray-400"
                   placeholder={`Enter your starting message ${idx + 1}...`}
                 />
-                <div className="absolute bottom-3 right-3 text-xs text-gray-400 dark:text-gray-500">
+                <div className="absolute bottom-3 right-3 text-xs text-gray-400">
                   {msg.text.length} chars
                 </div>
               </div>
               
               {/* Audio Controls */}
-              <div className="flex items-center gap-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-600">
+              <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-xl border border-gray-200">
                 <VoiceSynthesizer
                   text={msg.text}
                   language={formData.language || "en"}
@@ -734,7 +675,7 @@ const AgentForm = ({
                   clientId={clientId}
                 />
                 {msg.audioBase64 && (
-                  <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
+                  <div className="flex items-center gap-2 text-green-600">
                     <FiCheck className="w-4 h-4" />
                     <span className="text-sm font-medium">Audio ready</span>
                   </div>
@@ -747,9 +688,9 @@ const AgentForm = ({
         <button
           type="button"
           onClick={addStartingMessage}
-          className="w-full py-4 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-2xl hover:border-blue-400 dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all duration-200 group"
+          className="w-full py-4 border-2 border-dashed border-gray-300 rounded-2xl hover:border-blue-400 hover:bg-blue-50 transition-all duration-200 group"
         >
-          <div className="flex items-center justify-center gap-3 text-gray-600 dark:text-gray-400 group-hover:text-blue-600 dark:group-hover:text-blue-400">
+          <div className="flex items-center justify-center gap-3 text-gray-600 group-hover:text-blue-600">
             <FiPlus className="w-5 h-5" />
             <span className="font-medium">Add Another Message</span>
           </div>
@@ -767,7 +708,7 @@ const AgentForm = ({
         <h3 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent mb-2">
           Personal Information
         </h3>
-        <p className="text-gray-600 dark:text-gray-400 max-w-md mx-auto">
+        <p className="text-gray-600 max-w-md mx-auto">
           Define your agent's identity, role, and personality to create the perfect AI assistant.
         </p>
       </div>
@@ -775,7 +716,7 @@ const AgentForm = ({
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <div className="space-y-6">
           <div className="group">
-            <label htmlFor="agentName" className="block mb-3 font-semibold text-gray-800 dark:text-gray-200 text-lg">
+            <label htmlFor="agentName" className="block mb-3 font-semibold text-gray-800 text-lg">
               Agent Name *
             </label>
             <input
@@ -785,13 +726,13 @@ const AgentForm = ({
               value={formData.agentName}
               onChange={handleInputChange}
               required
-              className="w-full px-4 py-4 border-2 border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-xl focus:ring-4 focus:ring-purple-100 dark:focus:ring-purple-900/30 focus:border-purple-400 dark:focus:border-purple-500 transition-all duration-200 text-lg placeholder-gray-400 dark:placeholder-gray-500"
+              className="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-purple-100 focus:border-purple-400 transition-all duration-200 text-lg placeholder-gray-400"
               placeholder="Enter agent name..."
             />
           </div>
 
           <div className="group">
-            <label htmlFor="category" className="block mb-3 font-semibold text-gray-800 dark:text-gray-200 text-lg">
+            <label htmlFor="category" className="block mb-3 font-semibold text-gray-800 text-lg">
               Expert Category
             </label>
             <select
@@ -799,7 +740,7 @@ const AgentForm = ({
               name="category"
               value={formData.category}
               onChange={handleInputChange}
-              className="w-full px-4 py-4 border-2 border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-xl focus:ring-4 focus:ring-purple-100 dark:focus:ring-purple-900/30 focus:border-purple-400 dark:focus:border-purple-500 transition-all duration-200 text-lg"
+              className="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-purple-100 focus:border-purple-400 transition-all duration-200 text-lg"
             >
               <option value="">Select Expert Category</option>
               <option value="customer-service">Customer Service</option>
@@ -811,7 +752,7 @@ const AgentForm = ({
           </div>
 
           <div className="group">
-            <label htmlFor="personality" className="block mb-3 font-semibold text-gray-800 dark:text-gray-200 text-lg">
+            <label htmlFor="personality" className="block mb-3 font-semibold text-gray-800 text-lg">
               Personality (Behaviour)
             </label>
             <select
@@ -819,7 +760,7 @@ const AgentForm = ({
               name="personality"
               value={formData.personality}
               onChange={handleInputChange}
-              className="w-full px-4 py-4 border-2 border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-xl focus:ring-4 focus:ring-purple-100 dark:focus:ring-purple-900/30 focus:border-purple-400 dark:focus:border-purple-500 transition-all duration-200 text-lg"
+              className="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-purple-100 focus:border-purple-400 transition-all duration-200 text-lg"
             >
               <option value="formal">Formal</option>
               <option value="informal">Informal</option>
@@ -832,7 +773,7 @@ const AgentForm = ({
 
         <div className="lg:col-span-2">
           <div className="group">
-            <label htmlFor="description" className="block mb-3 font-semibold text-gray-800 dark:text-gray-200 text-lg">
+            <label htmlFor="description" className="block mb-3 font-semibold text-gray-800 text-lg">
               Description *
             </label>
             <textarea
@@ -842,10 +783,10 @@ const AgentForm = ({
               onChange={handleInputChange}
               rows="4"
               required
-              className="w-full px-4 py-4 border-2 border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-xl focus:ring-4 focus:ring-purple-100 dark:focus:ring-purple-900/30 focus:border-purple-400 dark:focus:border-purple-500 transition-all duration-200 text-lg placeholder-gray-400 dark:placeholder-gray-500 resize-none"
+              className="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-purple-100 focus:border-purple-400 transition-all duration-200 text-lg placeholder-gray-400 resize-none"
               placeholder="Describe your agent's purpose and capabilities..."
             />
-            <div className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+            <div className="mt-2 text-sm text-gray-500">
               {formData.description.length}/500 characters
             </div>
           </div>
@@ -863,7 +804,7 @@ const AgentForm = ({
         <h3 className="text-3xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent mb-2">
           Voice Configuration
         </h3>
-        <p className="text-gray-600 dark:text-gray-400 max-w-md mx-auto">
+        <p className="text-gray-600 max-w-md mx-auto">
           Configure your agent's voice settings and generate audio for the first message.
         </p>
       </div>
@@ -871,7 +812,7 @@ const AgentForm = ({
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <div className="space-y-6">
           <div className="group">
-            <label htmlFor="language" className="block mb-3 font-semibold text-gray-800 dark:text-gray-200 text-lg">
+            <label htmlFor="language" className="block mb-3 font-semibold text-gray-800 text-lg">
               Language
             </label>
             <select
@@ -879,7 +820,7 @@ const AgentForm = ({
               name="language"
               value={formData.language}
               onChange={handleInputChange}
-              className="w-full px-4 py-4 border-2 border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-xl focus:ring-4 focus:ring-green-100 dark:focus:ring-green-900/30 focus:border-green-400 dark:focus:border-green-500 transition-all duration-200 text-lg"
+              className="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-green-100 focus:border-green-400 transition-all duration-200 text-lg"
             >
               <option value="en">English</option>
               <option value="hi">Hindi</option>
@@ -889,7 +830,7 @@ const AgentForm = ({
           </div>
 
           <div className="group">
-            <label htmlFor="voiceSelection" className="block mb-3 font-semibold text-gray-800 dark:text-gray-200 text-lg">
+            <label htmlFor="voiceSelection" className="block mb-3 font-semibold text-gray-800 text-lg">
               Voice Selection
             </label>
             <select
@@ -897,7 +838,7 @@ const AgentForm = ({
               name="voiceSelection"
               value={formData.voiceSelection}
               onChange={handleInputChange}
-              className="w-full px-4 py-4 border-2 border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-xl focus:ring-4 focus:ring-green-100 dark:focus:ring-green-900/30 focus:border-green-400 dark:focus:border-green-500 transition-all duration-200 text-lg"
+              className="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-green-100 focus:border-green-400 transition-all duration-200 text-lg"
             >
               <option value="anushka">Anushka</option>
               <option value="meera">Meera</option>
@@ -922,8 +863,8 @@ const AgentForm = ({
         </div>
 
         <div className="space-y-6">
-          <div className="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 p-6 rounded-2xl border-2 border-green-100 dark:border-green-800">
-            <label className="block mb-4 font-semibold text-gray-800 dark:text-gray-200 text-lg">
+          <div className="bg-gradient-to-br from-green-50 to-emerald-50 p-6 rounded-2xl border-2 border-green-100">
+            <label className="block mb-4 font-semibold text-gray-800 text-lg">
               First Message Audio
             </label>
             <div className="space-y-4">
@@ -938,7 +879,7 @@ const AgentForm = ({
                 <AudioRecorder onAudioRecorded={handleAudioRecorded} />
               </div>
               {formData.audioBase64 && (
-                <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-green-200 dark:border-green-700">
+                <div className="bg-white p-4 rounded-xl border border-green-200">
                   <audio
                     controls
                     src={`data:audio/wav;base64,${formData.audioBase64}`}
@@ -964,7 +905,7 @@ const AgentForm = ({
         <h3 className="text-3xl font-bold bg-gradient-to-r from-orange-600 to-red-600 bg-clip-text text-transparent mb-2">
           System Configuration
         </h3>
-        <p className="text-gray-600 dark:text-gray-400 max-w-md mx-auto">
+        <p className="text-gray-600 max-w-md mx-auto">
           Define your agent's behavior and configure telephony settings.
         </p>
       </div>
@@ -972,7 +913,7 @@ const AgentForm = ({
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <div className="space-y-6">
           <div className="group">
-            <label htmlFor="callingType" className="block mb-3 font-semibold text-gray-800 dark:text-gray-200 text-lg">
+            <label htmlFor="callingType" className="block mb-3 font-semibold text-gray-800 text-lg">
               Calling Type
             </label>
             <select
@@ -980,7 +921,7 @@ const AgentForm = ({
               name="callingType"
               value={formData.callingType}
               onChange={handleInputChange}
-              className="w-full px-4 py-4 border-2 border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-xl focus:ring-4 focus:ring-orange-100 dark:focus:ring-orange-900/30 focus:border-orange-400 dark:focus:border-orange-500 transition-all duration-200 text-lg"
+              className="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-orange-100 focus:border-orange-400 transition-all duration-200 text-lg"
             >
               <option value="inbound">Inbound</option>
               <option value="outbound">Outbound</option>
@@ -989,7 +930,7 @@ const AgentForm = ({
           </div>
 
           <div className="group">
-            <label htmlFor="callingNumber" className="block mb-3 font-semibold text-gray-800 dark:text-gray-200 text-lg">
+            <label htmlFor="callingNumber" className="block mb-3 font-semibold text-gray-800 text-lg">
               Calling Number *
             </label>
             <input
@@ -1000,14 +941,14 @@ const AgentForm = ({
               onChange={handleInputChange}
               placeholder="Enter your calling number"
               required
-              className="w-full px-4 py-4 border-2 border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-xl focus:ring-4 focus:ring-orange-100 dark:focus:ring-orange-900/30 focus:border-orange-400 dark:focus:border-orange-500 transition-all duration-200 text-lg placeholder-gray-400 dark:placeholder-gray-500"
+              className="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-orange-100 focus:border-orange-400 transition-all duration-200 text-lg placeholder-gray-400"
             />
           </div>
         </div>
 
         <div className="lg:col-span-2">
           <div className="group">
-            <label htmlFor="systemPrompt" className="block mb-3 font-semibold text-gray-800 dark:text-gray-200 text-lg">
+            <label htmlFor="systemPrompt" className="block mb-3 font-semibold text-gray-800 text-lg">
               System Prompt *
             </label>
             <div className="relative">
@@ -1019,14 +960,14 @@ const AgentForm = ({
                 rows="12"
                 required
                 placeholder="Define the agent's behavior, knowledge, and capabilities..."
-                className="w-full px-4 py-4 border-2 border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-xl focus:ring-4 focus:ring-orange-100 dark:focus:ring-orange-900/30 focus:border-orange-400 dark:focus:border-orange-500 transition-all duration-200 text-lg placeholder-gray-400 dark:placeholder-gray-500 resize-none"
+                className="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-orange-100 focus:border-orange-400 transition-all duration-200 text-lg placeholder-gray-400 resize-none"
               />
-              <div className="absolute bottom-4 right-4 text-sm text-gray-400 dark:text-gray-500 bg-white dark:bg-gray-800 px-2 py-1 rounded border border-gray-200 dark:border-gray-600">
+              <div className="absolute bottom-4 right-4 text-sm text-gray-400 bg-white px-2 py-1 rounded">
                 {formData.systemPrompt.length} chars
               </div>
             </div>
-            <div className="mt-3 p-4 bg-orange-50 dark:bg-orange-900/20 rounded-xl border border-orange-200 dark:border-orange-800">
-              <p className="text-sm text-orange-700 dark:text-orange-300">
+            <div className="mt-3 p-4 bg-orange-50 rounded-xl border border-orange-200">
+              <p className="text-sm text-orange-700">
                 <strong>Tip:</strong> This prompt defines how the AI agent should behave and respond to users. Be specific about tone, knowledge areas, and response style.
               </p>
             </div>
@@ -1045,14 +986,14 @@ const AgentForm = ({
         <h3 className="text-3xl font-bold bg-gradient-to-r from-gray-700 to-gray-900 bg-clip-text text-transparent mb-2">
           Integration Settings
         </h3>
-        <p className="text-gray-600 dark:text-gray-400 max-w-md mx-auto">
+        <p className="text-gray-600 max-w-md mx-auto">
           Configure API keys and external service integrations for your agent.
         </p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <div className="group">
-          <label htmlFor="X_API_KEY" className="block mb-3 font-semibold text-gray-800 dark:text-gray-200 text-lg">
+          <label htmlFor="X_API_KEY" className="block mb-3 font-semibold text-gray-800 text-lg">
             X API Key
           </label>
           <input
@@ -1062,14 +1003,14 @@ const AgentForm = ({
             value={formData.X_API_KEY}
             onChange={handleInputChange}
             placeholder="Enter X API Key"
-            className="w-full px-4 py-4 border-2 border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-xl focus:ring-4 focus:ring-gray-100 dark:focus:ring-gray-700 focus:border-gray-400 dark:focus:border-gray-500 transition-all duration-200 text-lg placeholder-gray-400 dark:placeholder-gray-500"
+            className="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-gray-100 focus:border-gray-400 transition-all duration-200 text-lg placeholder-gray-400"
           />
         </div>
 
         {(!formData.serviceProvider || formData.serviceProvider !== "tata") && (
           <>
             <div className="group">
-              <label htmlFor="accountSid" className="block mb-3 font-semibold text-gray-800 dark:text-gray-200 text-lg">
+              <label htmlFor="accountSid" className="block mb-3 font-semibold text-gray-800 text-lg">
                 Account SID
               </label>
               <input
@@ -1079,12 +1020,12 @@ const AgentForm = ({
                 value={formData.accountSid}
                 onChange={handleInputChange}
                 placeholder="Enter your account SID"
-                className="w-full px-4 py-4 border-2 border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-xl focus:ring-4 focus:ring-gray-100 dark:focus:ring-gray-700 focus:border-gray-400 dark:focus:border-gray-500 transition-all duration-200 text-lg placeholder-gray-400 dark:placeholder-gray-500"
+                className="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-gray-100 focus:border-gray-400 transition-all duration-200 text-lg placeholder-gray-400"
               />
             </div>
 
             <div className="group">
-              <label htmlFor="callerId" className="block mb-3 font-semibold text-gray-800 dark:text-gray-200 text-lg">
+              <label htmlFor="callerId" className="block mb-3 font-semibold text-gray-800 text-lg">
                 Caller ID
               </label>
               <input
@@ -1094,7 +1035,7 @@ const AgentForm = ({
                 value={formData.callerId}
                 onChange={handleInputChange}
                 placeholder="Enter caller ID (phone number)"
-                className="w-full px-4 py-4 border-2 border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-xl focus:ring-4 focus:ring-gray-100 dark:focus:ring-gray-700 focus:border-gray-400 dark:focus:border-gray-500 transition-all duration-200 text-lg placeholder-gray-400 dark:placeholder-gray-500"
+                className="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-gray-100 focus:border-gray-400 transition-all duration-200 text-lg placeholder-gray-400"
               />
             </div>
           </>
@@ -1113,7 +1054,7 @@ const AgentForm = ({
         color: "bg-green-500",
         hoverColor: "hover:bg-green-600",
         gradient: "from-green-400 to-green-600",
-        lightBg: "bg-green-50 dark:bg-green-900/20",
+        lightBg: "bg-green-50",
         placeholder: "https://wa.me/1234567890",
       },
       {
@@ -1123,7 +1064,7 @@ const AgentForm = ({
         color: "bg-blue-500",
         hoverColor: "hover:bg-blue-600",
         gradient: "from-blue-400 to-blue-600",
-        lightBg: "bg-blue-50 dark:bg-blue-900/20",
+        lightBg: "bg-blue-50",
         placeholder: "https://t.me/username",
       },
       {
@@ -1133,7 +1074,7 @@ const AgentForm = ({
         color: "bg-red-500",
         hoverColor: "hover:bg-red-600",
         gradient: "from-red-400 to-red-600",
-        lightBg: "bg-red-50 dark:bg-red-900/20",
+        lightBg: "bg-red-50",
         placeholder: "mailto:example@email.com",
       },
       {
@@ -1143,7 +1084,7 @@ const AgentForm = ({
         color: "bg-purple-500",
         hoverColor: "hover:bg-purple-600",
         gradient: "from-purple-400 to-purple-600",
-        lightBg: "bg-purple-50 dark:bg-purple-900/20",
+        lightBg: "bg-purple-50",
         placeholder: "sms:+1234567890",
       },
       {
@@ -1153,7 +1094,7 @@ const AgentForm = ({
         color: "bg-orange-500",
         hoverColor: "hover:bg-orange-600",
         gradient: "from-orange-400 to-orange-600",
-        lightBg: "bg-orange-50 dark:bg-orange-900/20",
+        lightBg: "bg-orange-50",
         placeholder: "https://calendar.google.com/calendar/embed",
       },
     ];
@@ -1191,43 +1132,42 @@ const AgentForm = ({
       return (
         <div className="space-y-6">
           {/* Enhanced Enable/Disable Toggle */}
-          <div className={`relative overflow-hidden bg-gradient-to-br ${platform.lightBg} to-white dark:to-gray-800 p-6 rounded-2xl border-2 transition-all duration-300 ${
-            isEnabled ? `border-${platform.id === 'whatsapp' ? 'green' : platform.id === 'telegram' ? 'blue' : platform.id === 'email' ? 'red' : platform.id === 'sms' ? 'purple' : 'orange'}-300 dark:border-${platform.id === 'whatsapp' ? 'green' : platform.id === 'telegram' ? 'blue' : platform.id === 'email' ? 'red' : platform.id === 'sms' ? 'purple' : 'orange'}-600 shadow-lg` : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500'
-          }`}
-          >
+          <div className={`relative overflow-hidden bg-gradient-to-br ${platform.lightBg} to-white p-6 rounded-2xl border-2 transition-all duration-300 ${
+            isEnabled ? `border-${platform.id === 'whatsapp' ? 'green' : platform.id === 'telegram' ? 'blue' : platform.id === 'email' ? 'red' : platform.id === 'sms' ? 'purple' : 'orange'}-300 shadow-lg` : 'border-gray-200 hover:border-gray-300'
+          }`}>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
                 <div className={`w-16 h-16 bg-gradient-to-r ${platform.gradient} rounded-2xl flex items-center justify-center text-white text-xl shadow-lg transform transition-transform duration-200 ${isEnabled ? 'scale-110' : 'scale-100'}`}>
                   {platform.icon}
                 </div>
                 <div>
-                  <h4 className="font-bold text-xl text-gray-800 dark:text-gray-200">
+                  <h4 className="font-bold text-xl text-gray-800">
                     {platform.name}
                   </h4>
                   {/* Enhanced Status indicators */}
                   {platform.id === 'whatsapp' && status && (
                     <div className="flex items-center gap-2 mt-2">
                       {status === 'pending' && (
-                        <span className="inline-flex items-center text-sm px-3 py-1 rounded-full bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-200 border border-yellow-200 dark:border-yellow-700">
+                        <span className="inline-flex items-center text-sm px-3 py-1 rounded-full bg-yellow-100 text-yellow-800 border border-yellow-200">
                           <div className="w-2 h-2 bg-yellow-500 rounded-full mr-2 animate-pulse"></div>
                           Pending Approval
                         </span>
                       )}
                       {status === 'approved' && (
-                        <span className="inline-flex items-center text-sm px-3 py-1 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-200 border border-green-200 dark:border-green-700">
+                        <span className="inline-flex items-center text-sm px-3 py-1 rounded-full bg-green-100 text-green-700 border border-green-200">
                           <FiCheck className="w-3 h-3 mr-2" />
                           Approved
                         </span>
                       )}
                       {status === 'rejected' && (
-                        <span className="inline-flex items-center text-sm px-3 py-1 rounded-full bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-200 border border-red-200 dark:border-red-700">
+                        <span className="inline-flex items-center text-sm px-3 py-1 rounded-full bg-red-100 text-red-700 border border-red-200">
                           <FiX className="w-3 h-3 mr-2" />
                           Rejected
                         </span>
                       )}
                     </div>
                   )}
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                  <p className="text-sm text-gray-600 mt-1">
                     {isEnabled ? 'Integration active' : 'Integration disabled'}
                   </p>
                 </div>
@@ -1235,7 +1175,7 @@ const AgentForm = ({
 
               {/* Enhanced Toggle Switch */}
               <div className="flex items-center gap-3">
-                <span className={`text-sm font-medium transition-colors ${isEnabled ? 'text-gray-700 dark:text-gray-300' : 'text-gray-500 dark:text-gray-500'}`}>
+                <span className={`text-sm font-medium transition-colors ${isEnabled ? 'text-gray-700' : 'text-gray-500'}`}>
                   {isEnabled ? 'ON' : 'OFF'}
                 </span>
                 <label className="relative inline-flex items-center cursor-pointer group">
@@ -1262,7 +1202,7 @@ const AgentForm = ({
                     className="sr-only"
                   />
                   <div className={`w-14 h-8 rounded-full transition-all duration-300 shadow-inner ${
-                    isEnabled ? `bg-gradient-to-r ${platform.gradient} shadow-lg` : "bg-gray-300 dark:bg-gray-600"
+                    isEnabled ? `bg-gradient-to-r ${platform.gradient} shadow-lg` : "bg-gray-300"
                   }`}>
                     <div className={`absolute top-1 left-1 bg-white w-6 h-6 rounded-full transition-all duration-300 shadow-md ${
                       isEnabled ? "translate-x-6" : "translate-x-0"
@@ -1279,13 +1219,14 @@ const AgentForm = ({
               {/* Add template button for Calendar only */}
               {platform.id === 'calendar' && (
                 <div className="flex items-center justify-between mb-6">
-                  <h4 className="text-2xl font-bold text-gray-800 dark:text-gray-200">
+                  <h4 className="text-2xl font-bold text-gray-800">
                     Calendar Templates
                   </h4>
                   <button
                     type="button"
                     onClick={() => setAddTemplateModal({ open: true, platform: platform.id })}
-                    className={`px-6 py-3 text-white rounded-xl transition-all duration-200 flex items-center gap-3 bg-gradient-to-r ${platform.gradient} hover:shadow-lg transform hover:-translate-y-1`}>
+                    className={`px-6 py-3 text-white rounded-xl transition-all duration-200 flex items-center gap-3 bg-gradient-to-r ${platform.gradient} hover:shadow-lg transform hover:-translate-y-1`}
+                  >
                     <FiPlus className="text-lg" />
                     Add Template
                   </button>
@@ -1296,7 +1237,7 @@ const AgentForm = ({
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <h5 className="text-lg font-bold text-gray-800 dark:text-gray-200 uppercase tracking-wide">
+                    <h5 className="text-lg font-bold text-gray-800 uppercase tracking-wide">
                       Templates
                     </h5>
                     <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-gradient-to-r ${platform.gradient} text-white shadow-sm`}>
@@ -1323,24 +1264,24 @@ const AgentForm = ({
                 {assignedTemplatesForPlatform.length > 0 ? (
                   <>
                     {/* Enhanced Template Filters */}
-                    <div className="bg-white/70 dark:bg-gray-800/70 backdrop-blur-sm rounded-2xl p-6 border-2 border-gray-100 dark:border-gray-700 shadow-sm">
+                    <div className="bg-white/70 backdrop-blur-sm rounded-2xl p-6 border-2 border-gray-100 shadow-sm">
                       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                         <div className="lg:col-span-2">
-                          <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Search Templates</label>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">Search Templates</label>
                           <input
                             type="text"
                             placeholder="Search by template name..."
                             value={templateFilter}
                             onChange={(e) => setTemplateFilter(e.target.value)}
-                            className="w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-xl focus:ring-4 focus:ring-blue-100 dark:focus:ring-blue-900/30 focus:border-blue-400 dark:focus:border-blue-500 transition-all duration-200"
+                            className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-400 transition-all duration-200"
                           />
                         </div>
                         <div>
-                          <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Category</label>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">Category</label>
                           <select
                             value={templateCategoryFilter}
                             onChange={(e) => setTemplateCategoryFilter(e.target.value)}
-                            className="w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-xl focus:ring-4 focus:ring-blue-100 dark:focus:ring-blue-900/30 focus:border-blue-400 dark:focus:border-blue-500 transition-all duration-200"
+                            className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-400 transition-all duration-200"
                           >
                             <option value="">All Categories</option>
                             <option value="MARKETING">Marketing</option>
@@ -1356,14 +1297,14 @@ const AgentForm = ({
                           className={`px-5 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${
                             templateListTab === 'available'
                               ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white shadow-md transform scale-105'
-                              : 'text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700'
+                              : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50'
                           }`}
                         >
                           <span className="flex items-center gap-2">
                             <div className="w-2 h-2 rounded-full bg-green-400"></div>
                             Available
                             <span className={`text-xs px-2 py-0.5 rounded-full ${
-                              templateListTab === 'available' ? 'bg-white/20 text-white' : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
+                              templateListTab === 'available' ? 'bg-white/20 text-white' : 'bg-green-100 text-green-700'
                             }`}>
                               {whatsappTemplates.filter(t => t.status === 'APPROVED').length}
                             </span>
@@ -1375,14 +1316,14 @@ const AgentForm = ({
                           className={`px-5 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${
                             templateListTab === 'removed'
                               ? 'bg-gradient-to-r from-red-500 to-pink-500 text-white shadow-md transform scale-105'
-                              : 'text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700'
+                              : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50'
                           }`}
                         >
                           <span className="flex items-center gap-2">
                             <div className="w-2 h-2 rounded-full bg-red-400"></div>
                             Removed
                             <span className={`text-xs px-2 py-0.5 rounded-full ${
-                              templateListTab === 'removed' ? 'bg-white/20 text-white' : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
+                              templateListTab === 'removed' ? 'bg-white/20 text-white' : 'bg-red-100 text-red-700'
                             }`}>
                               {whatsappTemplates.filter(t => t.status === 'REMOVED').length}
                             </span>
@@ -1410,12 +1351,12 @@ const AgentForm = ({
                         .map(t => (
                         <div
                           key={t._id}
-                          className={`group relative overflow-hidden bg-gradient-to-br from-white to-gray-50 dark:from-gray-800 dark:to-gray-900 rounded-2xl p-6 border-2 transition-all duration-300 hover:shadow-xl hover:-translate-y-1 ${
+                          className={`group relative overflow-hidden bg-gradient-to-br from-white to-gray-50 rounded-2xl p-6 border-2 transition-all duration-300 hover:shadow-xl hover:-translate-y-1 ${
                             defaultTemplate && defaultTemplate.templateId === t._id 
-                              ? 'border-blue-400 dark:border-blue-500 shadow-lg ring-4 ring-blue-100 dark:ring-blue-900/30 bg-gradient-to-br from-blue-50 to-white dark:from-blue-900/20 dark:to-gray-800' 
+                              ? 'border-blue-400 shadow-lg ring-4 ring-blue-100 bg-gradient-to-br from-blue-50 to-white' 
                               : t.status === 'REMOVED' 
-                                ? 'border-red-200 dark:border-red-700 bg-gradient-to-br from-red-50 to-gray-50 dark:from-red-900/20 dark:to-gray-800 opacity-80' 
-                                : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500'
+                                ? 'border-red-200 bg-gradient-to-br from-red-50 to-gray-50 opacity-80' 
+                                : 'border-gray-200 hover:border-gray-300'
                           }`}
                         >
                           {/* Gradient Overlay */}
@@ -1430,7 +1371,7 @@ const AgentForm = ({
                               )}
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-3 mb-2">
-                                  <h6 className="font-bold text-xl text-gray-900 dark:text-gray-100 truncate">{t.name}</h6>
+                                  <h6 className="font-bold text-xl text-gray-900 truncate">{t.name}</h6>
                                   <div className="flex items-center gap-2">
                                     {defaultTemplate && defaultTemplate.templateId === t._id && (
                                       <span className="inline-flex items-center text-xs px-3 py-1 rounded-full bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-medium shadow-sm">
@@ -1454,7 +1395,7 @@ const AgentForm = ({
                                       href={t.link} 
                                       target="_blank" 
                                       rel="noopener noreferrer" 
-                                      className="inline-flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline bg-blue-50 dark:bg-blue-900/30 px-3 py-1 rounded-lg border border-blue-200 dark:border-blue-700 transition-all duration-200"
+                                      className="inline-flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 hover:underline bg-blue-50 px-3 py-1 rounded-lg border border-blue-200 transition-all duration-200"
                                     >
                                       <FiCalendar className="w-4 h-4" />
                                       Open Calendar
@@ -1468,7 +1409,7 @@ const AgentForm = ({
                                     <span className={`text-xs px-3 py-1 rounded-full font-medium shadow-sm ${
                                       t.status === 'APPROVED' ? 'bg-gradient-to-r from-green-400 to-emerald-400 text-white' : 
                                       t.status === 'PENDING' ? 'bg-gradient-to-r from-yellow-400 to-orange-400 text-white' : 
-                                      'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-600'
+                                      'bg-gray-100 text-gray-700 border border-gray-200'
                                     }`}>
                                       {t.status === 'APPROVED' ? '✓ Approved' : t.status}
                                     </span>
@@ -1479,7 +1420,7 @@ const AgentForm = ({
                                     </span>
                                   )}
                                   {t.assignedAt && (
-                                    <span className="text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded-lg">
+                                    <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-lg">
                                       📅 {new Date(t.assignedAt).toLocaleDateString()}
                                     </span>
                                   )}
@@ -1491,7 +1432,7 @@ const AgentForm = ({
                               {/* Enhanced Default Template Toggle */}
                               {templateListTab === 'available' && (
                                 <div className="flex items-center gap-3">
-                                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Default:</span>
+                                  <span className="text-sm font-medium text-gray-700">Default:</span>
                                   <label className="relative inline-flex items-center cursor-pointer group">
                                     <input
                                       type="checkbox"
@@ -1517,7 +1458,7 @@ const AgentForm = ({
                                         }
                                       }}
                                     />
-                                    <div className="w-12 h-7 bg-gray-200 dark:bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gradient-to-r peer-checked:from-blue-500 peer-checked:to-cyan-500 shadow-inner"></div>
+                                    <div className="w-12 h-7 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gradient-to-r peer-checked:from-blue-500 peer-checked:to-cyan-500 shadow-inner"></div>
                                   </label>
                                 </div>
                               )}
@@ -1526,17 +1467,17 @@ const AgentForm = ({
                               <div className="relative">
                                 <button
                                   type="button"
-                                  className="p-3 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl transition-all duration-200 group-hover:bg-white dark:group-hover:bg-gray-800"
+                                  className="p-3 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition-all duration-200 group-hover:bg-white"
                                   title="More options"
                                 >
                                   <FiMoreVertical className="w-5 h-5" />
                                 </button>
-                                <div className="absolute right-0 mt-2 w-52 bg-white dark:bg-gray-800 rounded-xl shadow-xl border-2 border-gray-100 dark:border-gray-700 z-10 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 transform scale-95 group-hover:scale-100">
+                                <div className="absolute right-0 mt-2 w-52 bg-white rounded-xl shadow-xl border-2 border-gray-100 z-10 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 transform scale-95 group-hover:scale-100">
                                   <div className="py-2">
                                     <button
                                       type="button"
                                       onClick={() => setViewTemplateModal({ open: true, template: t })}
-                                      className="w-full text-left px-4 py-3 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-3 transition-colors duration-200"
+                                      className="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-colors duration-200"
                                     >
                                       <FiEye className="w-4 h-4" />
                                       View Details
@@ -1550,7 +1491,7 @@ const AgentForm = ({
                                           handleTemplateStatusChange(t._id, t.status === 'APPROVED' ? 'REMOVED' : 'APPROVED');
                                         }
                                       }}
-                                      className="w-full text-left px-4 py-3 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-3 transition-colors duration-200"
+                                      className="w-full text-left px-4 py-3 text-sm text-red-600 hover:bg-red-50 flex items-center gap-3 transition-colors duration-200"
                                     >
                                       <FiTrash2 className="w-4 h-4" />
                                       {platform.id === 'calendar' ? 'Delete' : (t.status === 'APPROVED' ? 'Remove' : 'Restore')}
@@ -1564,13 +1505,13 @@ const AgentForm = ({
                           {/* Enhanced Description */}
                           {t.description && (
                             <div 
-                              className="bg-gradient-to-br from-gray-50 to-white dark:from-gray-800 dark:to-gray-900 p-4 rounded-xl border border-gray-200 dark:border-gray-600 cursor-pointer hover:shadow-md transition-all duration-200 group-hover:border-gray-300 dark:group-hover:border-gray-500"
+                              className="bg-gradient-to-br from-gray-50 to-white p-4 rounded-xl border border-gray-200 cursor-pointer hover:shadow-md transition-all duration-200 group-hover:border-gray-300"
                               onClick={() => setViewTemplateModal({ open: true, template: t })}
                               title="Click to view full details"
                             >
                               <div className="flex items-start gap-2">
-                                <span className="font-semibold text-gray-700 dark:text-gray-300 text-sm">Description:</span>
-                                <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2">{t.description}</p>
+                                <span className="font-semibold text-gray-700 text-sm">Description:</span>
+                                <p className="text-sm text-gray-600 line-clamp-2">{t.description}</p>
                               </div>
                             </div>
                           )}
@@ -1579,7 +1520,7 @@ const AgentForm = ({
                     </div>
                   </>
                 ) : (
-                  <div className="text-center py-16 bg-gradient-to-br from-gray-50 to-white dark:from-gray-800 dark:to-gray-900 rounded-2xl border-2 border-gray-100 dark:border-gray-700">
+                  <div className="text-center py-16 bg-gradient-to-br from-gray-50 to-white rounded-2xl border-2 border-gray-100">
                     <div className={`w-20 h-20 mx-auto mb-6 bg-gradient-to-r ${platform.gradient} rounded-full flex items-center justify-center shadow-lg opacity-50`}>
                       {templateListTab === 'removed' ? (
                         <FiTrash2 className="w-10 h-10 text-white" />
@@ -1587,10 +1528,10 @@ const AgentForm = ({
                         <FiEye className="w-10 h-10 text-white" />
                       )}
                     </div>
-                    <h4 className="text-xl font-bold text-gray-700 dark:text-gray-300 mb-2">
+                    <h4 className="text-xl font-bold text-gray-700 mb-2">
                       No {templateListTab} templates
                     </h4>
-                    <p className="text-gray-500 dark:text-gray-400 max-w-sm mx-auto">
+                    <p className="text-gray-500 max-w-sm mx-auto">
                       {templateListTab === 'removed' 
                         ? 'Templates will appear here after being removed from the available list.'
                         : 'No templates are currently available for this agent.'
@@ -1603,8 +1544,8 @@ const AgentForm = ({
               {/* Enhanced Loading state for WhatsApp templates */}
               {platform.id === 'whatsapp' && loadingWhatsappTemplates && (
                 <div className="text-center py-8">
-                  <div className="w-12 h-12 border-4 border-green-200 dark:border-green-700 border-t-green-500 dark:border-t-green-400 rounded-full animate-spin mx-auto mb-4"></div>
-                  <p className="text-gray-600 dark:text-gray-400 font-medium">Loading templates...</p>
+                  <div className="w-12 h-12 border-4 border-green-200 border-t-green-500 rounded-full animate-spin mx-auto mb-4"></div>
+                  <p className="text-gray-600 font-medium">Loading templates...</p>
                 </div>
               )}
             </div>
@@ -1622,14 +1563,14 @@ const AgentForm = ({
           <h3 className="text-3xl font-bold bg-gradient-to-r from-indigo-600 to-blue-600 bg-clip-text text-transparent mb-2">
             Action Integration
           </h3>
-          <p className="text-gray-600 dark:text-gray-400 max-w-md mx-auto">
+          <p className="text-gray-600 max-w-md mx-auto">
             Manage templates and integrations for your agent across different platforms.
           </p>
         </div>
 
         {/* Enhanced Platform Tabs */}
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border-2 border-gray-100 dark:border-gray-700 overflow-hidden">
-          <div className="flex overflow-x-auto scrollbar-hide bg-gray-50 dark:bg-gray-700">
+        <div className="bg-white rounded-2xl shadow-lg border-2 border-gray-100 overflow-hidden">
+          <div className="flex overflow-x-auto scrollbar-hide bg-gray-50">
             {socialPlatforms.map((platform) => (
               <button
                 key={platform.id}
@@ -1638,7 +1579,7 @@ const AgentForm = ({
                 className={`flex-shrink-0 py-4 px-6 font-semibold transition-all duration-300 relative ${
                   selectedSocialTab === platform.id
                     ? `bg-gradient-to-r ${platform.gradient} text-white shadow-lg`
-                    : "text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600"
+                    : "text-gray-600 hover:text-gray-800 hover:bg-gray-100"
                 }`}
               >
                 <div className="flex items-center justify-center gap-3">
@@ -1734,457 +1675,438 @@ const AgentForm = ({
   const currentTab = tabs.find(tab => tab.key === selectedTab);
 
   return (
-    <ThemeProvider>
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
-        <div className="max-w-7xl mx-auto">
-          <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-3xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-            
-            {/* Enhanced Header */}
-            <div className="relative overflow-hidden">
-              <div className={`absolute inset-0 bg-gradient-to-r ${currentTab?.gradient || 'from-gray-600 to-gray-800'} opacity-10`}></div>
-              <div className="relative px-8 py-8 border-b border-gray-200 dark:border-gray-700">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className={`w-16 h-16 bg-gradient-to-r ${currentTab?.gradient || 'from-gray-600 to-gray-800'} rounded-2xl flex items-center justify-center shadow-lg`}>
-                      {currentTab?.icon || <FiSettings className="w-8 h-8 text-white" />}
-                    </div>
-                    <div>
-                      <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">AI Agent</h1>
-                      <h2 className="text-lg font-semibold text-gray-600 dark:text-gray-400">
-                        {agent ? `Editing: ${agent.agentName}` : "Create New Agent"}
-                      </h2>
-                    </div>
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100">
+      <div className="max-w-7xl mx-auto">
+        <div className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-2xl border border-gray-200 overflow-hidden">
+          
+          {/* Enhanced Header */}
+          <div className="relative overflow-hidden">
+            <div className={`absolute inset-0 bg-gradient-to-r ${currentTab?.gradient || 'from-gray-600 to-gray-800'} opacity-10`}></div>
+            <div className="relative px-8 py-8 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className={`w-16 h-16 bg-gradient-to-r ${currentTab?.gradient || 'from-gray-600 to-gray-800'} rounded-2xl flex items-center justify-center shadow-lg`}>
+                    {currentTab?.icon || <FiSettings className="w-8 h-8 text-white" />}
                   </div>
-                  
-                  <div className="flex items-center gap-4">
-                    <ThemeToggle />
-                    {agent && (
-                      <button
-                        type="button"
-                        onClick={handleSave}
-                        disabled={isLoading}
-                        className="px-6 py-3 bg-gradient-to-r from-gray-800 to-black dark:from-gray-700 dark:to-gray-900 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 transform hover:-translate-y-1"
-                      >
-                        {isLoading ? (
-                          <div className="flex items-center gap-3">
-                            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                            Updating...
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-3">
-                            <FiSave className="w-5 h-5" />
-                            Update Agent
-                          </div>
-                        )}
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      title="Need help? Chat with us!"
-                      onClick={() => window.open('https://web.whatsapp.com/send/?phone=8147540362&text=I%20need%20help%20with%20agent%20templates', '_blank')}
-                      className="w-12 h-12 flex items-center justify-center rounded-xl bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-lg hover:shadow-xl transition-all duration-200 transform hover:-translate-y-1 hover:scale-105"
-                    >
-                      <FiHelpCircle className="w-6 h-6" />
-                    </button>
+                  <div>
+                    <h1 className="text-3xl font-bold text-gray-900">AI Agent</h1>
+                    <h2 className="text-lg font-semibold text-gray-600">
+                      {agent ? `Editing: ${agent.agentName}` : "Create New Agent"}
+                    </h2>
                   </div>
                 </div>
                 
-                {/* Progress Indicator */}
-                <div className="mt-6">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Progress</span>
-                    <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                      {tabs.findIndex(tab => tab.key === selectedTab) + 1} / {tabs.length}
-                    </span>
+                <div className="flex items-center gap-4">
+                  {agent && (
+                    <button
+                      type="button"
+                      onClick={handleSave}
+                      disabled={isLoading}
+                      className="px-6 py-3 bg-gradient-to-r from-gray-800 to-black text-white rounded-xl font-semibold shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 transform hover:-translate-y-1"
+                    >
+                      {isLoading ? (
+                        <div className="flex items-center gap-3">
+                          <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                          Updating...
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-3">
+                          <FiSave className="w-5 h-5" />
+                          Update Agent
+                        </div>
+                      )}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    title="Need help? Chat with us!"
+                    onClick={() => window.open('https://web.whatsapp.com/send/?phone=8147540362&text=I%20need%20help%20with%20agent%20templates', '_blank')}
+                    className="w-12 h-12 flex items-center justify-center rounded-xl bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-lg hover:shadow-xl transition-all duration-200 transform hover:-translate-y-1 hover:scale-105"
+                  >
+                    <FiHelpCircle className="w-6 h-6" />
+                  </button>
+                </div>
+              </div>
+              
+            </div>
+          </div>
+
+          <form>
+            <div className="flex min-h-[600px]">
+              {/* Enhanced Tab Navigation */}
+              <div className="w-80 bg-gradient-to-b from-gray-50 to-gray-100 border-r-2 border-gray-200">
+                <div className="p-6">
+                  <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4">Configuration Steps</h4>
+                  <div className="space-y-2">
+                    {tabs.map((tab, index) => (
+                      <button
+                        key={tab.key}
+                        type="button"
+                        className={`w-full group relative overflow-hidden rounded-xl transition-all duration-300 ${
+                          selectedTab === tab.key
+                            ? `bg-gradient-to-r ${tab.gradient} text-white shadow-lg transform scale-105`
+                            : "text-gray-600 hover:text-gray-800 hover:bg-white hover:shadow-md"
+                        }`}
+                        onClick={() => setSelectedTab(tab.key)}
+                      >
+                        <div className="flex items-center gap-4 p-4">
+                          <div className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all duration-200 ${
+                            selectedTab === tab.key 
+                              ? 'bg-white/20 text-white' 
+                              : 'bg-gray-100 text-gray-600 group-hover:bg-gray-200'
+                          }`}>
+                            {tab.icon}
+                          </div>
+                          <div className="text-left flex-1">
+                            <div className={`font-semibold text-sm ${selectedTab === tab.key ? 'text-white' : 'text-gray-800'}`}>
+                              {tab.label}
+                            </div>
+                            <div className={`text-xs ${selectedTab === tab.key ? 'text-white/80' : 'text-gray-500'}`}>
+                              Step {index + 1}
+                            </div>
+                          </div>
+                          {selectedTab === tab.key && (
+                            <div className="w-1 h-8 bg-white/30 rounded-full"></div>
+                          )}
+                        </div>
+                      </button>
+                    ))}
                   </div>
-                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 shadow-inner">
-                    <div 
-                      className={`h-2 bg-gradient-to-r ${currentTab?.gradient || 'from-gray-600 to-gray-800'} rounded-full transition-all duration-500 shadow-sm`}
-                      style={{ width: `${((tabs.findIndex(tab => tab.key === selectedTab) + 1) / tabs.length) * 100}%` }}
-                    ></div>
-                  </div>
+                </div>
+              </div>
+
+              {/* Enhanced Tab Content */}
+              <div className="flex-1 p-8" style={{ overflowY: 'auto', maxHeight: '80vh' }}>
+                <div className="max-w-5xl mx-auto">
+                  {renderTabContent()}
                 </div>
               </div>
             </div>
 
-            <form>
-              <div className="flex min-h-[600px]">
-                {/* Enhanced Tab Navigation */}
-                <div className="w-80 bg-gradient-to-b from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 border-r-2 border-gray-200 dark:border-gray-700">
-                  <div className="p-6">
-                    <h4 className="text-sm font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-4">Configuration Steps</h4>
-                    <div className="space-y-2">
-                      {tabs.map((tab, index) => (
-                        <button
-                          key={tab.key}
-                          type="button"
-                          className={`w-full group relative overflow-hidden rounded-xl transition-all duration-300 ${
-                            selectedTab === tab.key
-                              ? `bg-gradient-to-r ${tab.gradient} text-white shadow-lg transform scale-105`
-                              : "text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-white dark:hover:bg-gray-700 hover:shadow-md"
-                          }`}
-                          onClick={() => setSelectedTab(tab.key)}
-                        >
-                          <div className="flex items-center gap-4 p-4">
-                            <div className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all duration-200 ${
-                              selectedTab === tab.key 
-                                ? 'bg-white/20 text-white' 
-                                : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 group-hover:bg-gray-200 dark:group-hover:bg-gray-600'
-                            }`}>
-                              {tab.icon}
-                            </div>
-                            <div className="text-left flex-1">
-                              <div className={`font-semibold text-sm ${selectedTab === tab.key ? 'text-white' : 'text-gray-800 dark:text-gray-200'}`}>
-                                {tab.label}
-                              </div>
-                              <div className={`text-xs ${selectedTab === tab.key ? 'text-white/80' : 'text-gray-500 dark:text-gray-400'}`}>
-                                Step {index + 1}
-                              </div>
-                            </div>
-                            {selectedTab === tab.key && (
-                              <div className="w-1 h-8 bg-white/30 rounded-full"></div>
-                            )}
-                          </div>
-                        </button>
-                      ))}
+            {/* Enhanced Form Actions */}
+            <div className="border-t-2 border-gray-200 bg-gradient-to-r from-gray-50 to-white p-8">
+              <div className="flex items-center justify-between max-w-5xl mx-auto">
+                <div className="flex gap-4">
+                  <button
+                    type="button"
+                    onClick={onCancel}
+                    className="px-6 py-3 bg-white text-gray-700 border-2 border-gray-300 rounded-xl font-semibold hover:bg-gray-50 hover:border-gray-400 transition-all duration-200 transform hover:-translate-y-0.5"
+                  >
+                    Cancel
+                  </button>
+                  {!isFirstTab && (
+                    <button
+                      type="button"
+                      onClick={handlePrevious}
+                      className="px-6 py-3 bg-gradient-to-r from-gray-500 to-gray-600 text-white rounded-xl font-semibold hover:shadow-lg transition-all duration-200 transform hover:-translate-y-0.5 flex items-center gap-2"
+                    >
+                      <FiArrowLeft className="w-5 h-5" />
+                      Previous
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex gap-4">
+                  {!isLastTab ? (
+                    <button
+                      type="button"
+                      onClick={handleNext}
+                      className={`px-8 py-3 bg-gradient-to-r ${currentTab?.gradient || 'from-indigo-500 to-blue-600'} text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-200 transform hover:-translate-y-1 flex items-center gap-3`}
+                    >
+                      Next Step
+                      <FiArrowRight className="w-5 h-5" />
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleSave}
+                      disabled={isLoading}
+                      className="px-8 py-3 bg-gradient-to-r from-gray-800 to-black text-white rounded-xl font-semibold shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 transform hover:-translate-y-1 flex items-center gap-3"
+                    >
+                      {isLoading ? (
+                        <>
+                          <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                          Saving...
+                        </>
+                      ) : (
+                        <>
+                          <FiSave className="w-5 h-5" />
+                          {agent ? "Update Agent" : "Create Agent"}
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </form>
+
+          {/* Enhanced Add Template Modal */}
+          {addTemplateModal.open && (
+            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in duration-300">
+              <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full mx-4 overflow-hidden transform animate-in slide-in-from-bottom-4 duration-300">
+                <div className={`p-6 bg-gradient-to-r ${
+                  addTemplateModal.platform === 'calendar' ? 'from-orange-500 to-red-500' : 'from-green-500 to-emerald-500'
+                } text-white`}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
+                        {addTemplateModal.platform === 'calendar' ? <FiCalendar className="w-6 h-6" /> : <FaWhatsapp className="w-6 h-6" />}
+                      </div>
+                      <h3 className="text-xl font-bold">
+                        Add {addTemplateModal.platform === 'calendar' ? 'Calendar' : 'WhatsApp'} Template
+                      </h3>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAddTemplateModal({ open: false, platform: '' });
+                        setNewTemplateData({ description: '', link: '' });
+                      }}
+                      className="text-white/80 hover:text-white hover:bg-white/20 p-2 rounded-lg transition-all duration-200"
+                    >
+                      <FiX className="w-6 h-6" />
+                    </button>
+                  </div>
+                </div>
+                
+                <div className="p-6">
+                  <div className="space-y-6">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-3">Description</label>
+                      <textarea
+                        placeholder={addTemplateModal.platform === 'calendar' 
+                          ? "Describe the calendar template..." 
+                          : "Describe the WhatsApp template..."
+                        }
+                        value={newTemplateData.description}
+                        onChange={(e) => setNewTemplateData(prev => ({ ...prev, description: e.target.value }))}
+                        className={`w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:border-transparent resize-none transition-all duration-200 ${
+                          addTemplateModal.platform === 'calendar' 
+                            ? 'focus:ring-orange-100 focus:border-orange-400' 
+                            : 'focus:ring-green-100 focus:border-green-400'
+                        }`}
+                        rows={3}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-3">
+                        {addTemplateModal.platform === 'calendar' ? 'Calendar Link' : 'Template URL'}
+                      </label>
+                      <input
+                        type="url"
+                        placeholder={addTemplateModal.platform === 'calendar' 
+                          ? "https://calendar.google.com/calendar/embed..." 
+                          : "https://example.com/template..."
+                        }
+                        value={newTemplateData.link}
+                        onChange={(e) => setNewTemplateData(prev => ({ ...prev, link: e.target.value }))}
+                        className={`w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:border-transparent transition-all duration-200 ${
+                          addTemplateModal.platform === 'calendar' 
+                            ? 'focus:ring-orange-100 focus:border-orange-400' 
+                            : 'focus:ring-green-100 focus:border-green-400'
+                        }`}
+                      />
                     </div>
                   </div>
                 </div>
-
-                {/* Enhanced Tab Content */}
-                <div className="flex-1 p-8" style={{ overflowY: 'auto', maxHeight: '80vh' }}>
-                  <div className="max-w-5xl mx-auto">
-                    {renderTabContent()}
-                  </div>
-                </div>
-              </div>
-
-              {/* Enhanced Form Actions */}
-              <div className="border-t-2 border-gray-200 dark:border-gray-700 bg-gradient-to-r from-gray-50 to-white dark:from-gray-800 dark:to-gray-900 p-8">
-                <div className="flex items-center justify-between max-w-5xl mx-auto">
-                  <div className="flex gap-4">
+                
+                <div className="p-6 bg-gray-50 border-t border-gray-200">
+                  <div className="flex gap-3 justify-end">
                     <button
                       type="button"
-                      onClick={onCancel}
-                      className="px-6 py-3 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-2 border-gray-300 dark:border-gray-600 rounded-xl font-semibold hover:bg-gray-50 dark:hover:bg-gray-700 hover:border-gray-400 dark:hover:border-gray-500 transition-all duration-200 transform hover:-translate-y-0.5"
+                      onClick={() => {
+                        setAddTemplateModal({ open: false, platform: '' });
+                        setNewTemplateData({ description: '', link: '' });
+                      }}
+                      className="px-5 py-2.5 bg-gray-300 text-gray-700 rounded-xl font-medium hover:bg-gray-400 transition-all duration-200"
                     >
                       Cancel
                     </button>
-                    {!isFirstTab && (
-                      <button
-                        type="button"
-                        onClick={handlePrevious}
-                        className="px-6 py-3 bg-gradient-to-r from-gray-500 to-gray-600 text-white rounded-xl font-semibold hover:shadow-lg transition-all duration-200 transform hover:-translate-y-0.5 flex items-center gap-2"
-                      >
-                        <FiArrowLeft className="w-5 h-5" />
-                        Previous
-                      </button>
-                    )}
-                  </div>
-
-                  <div className="flex gap-4">
-                    {!isLastTab ? (
-                      <button
-                        type="button"
-                        onClick={handleNext}
-                        className={`px-8 py-3 bg-gradient-to-r ${currentTab?.gradient || 'from-indigo-500 to-blue-600'} text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-200 transform hover:-translate-y-1 flex items-center gap-3`}
-                      >
-                        Next Step
-                        <FiArrowRight className="w-5 h-5" />
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={handleSave}
-                        disabled={isLoading}
-                        className="px-8 py-3 bg-gradient-to-r from-gray-800 to-black dark:from-gray-700 dark:to-gray-900 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 transform hover:-translate-y-1 flex items-center gap-3"
-                      >
-                        {isLoading ? (
-                          <>
-                            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                            Saving...
-                          </>
-                        ) : (
-                          <>
-                            <FiSave className="w-5 h-5" />
-                            {agent ? "Update Agent" : "Create Agent"}
-                          </>
-                        )}
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (newTemplateData.description.trim() && newTemplateData.link.trim()) {
+                          const newTemplate = {
+                            _id: Date.now().toString(),
+                            name: newTemplateData.description.substring(0, 50) + (newTemplateData.description.length > 50 ? '...' : ''),
+                            description: newTemplateData.description,
+                            link: newTemplateData.link,
+                            platform: addTemplateModal.platform
+                          };
+                          
+                          if (addTemplateModal.platform === 'calendar') {
+                            setCalendarTemplates(prev => [...prev, newTemplate]);
+                          } else if (addTemplateModal.platform === 'whatsapp') {
+                            const whatsappTemplate = {
+                              ...newTemplate,
+                              url: newTemplate.link,
+                              status: 'APPROVED',
+                              category: 'UTILITY',
+                              language: 'en'
+                            };
+                            setWhatsappTemplates(prev => [...prev, whatsappTemplate]);
+                          }
+                          
+                          setAddTemplateModal({ open: false, platform: '' });
+                          setNewTemplateData({ description: '', link: '' });
+                        } else {
+                          alert('Please fill in both description and link');
+                        }
+                      }}
+                      className={`px-6 py-2.5 text-white rounded-xl font-medium transition-all duration-200 transform hover:-translate-y-0.5 ${
+                        addTemplateModal.platform === 'calendar' 
+                          ? 'bg-gradient-to-r from-orange-500 to-red-500 hover:shadow-orange-lg' 
+                          : 'bg-gradient-to-r from-green-500 to-emerald-500 hover:shadow-green-lg'
+                      }`}
+                    >
+                      Add Template
+                    </button>
                   </div>
                 </div>
               </div>
-            </form>
+            </div>
+          )}
 
-            {/* Enhanced Add Template Modal */}
-            {addTemplateModal.open && (
-              <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in duration-300">
-                <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-lg w-full mx-4 overflow-hidden transform animate-in slide-in-from-bottom-4 duration-300">
-                  <div className={`p-6 bg-gradient-to-r ${
-                    addTemplateModal.platform === 'calendar' ? 'from-orange-500 to-red-500' : 'from-green-500 to-emerald-500'
-                  } text-white`}>
+          {/* Enhanced View Template Modal */}
+          {viewTemplateModal.open && viewTemplateModal.template && (
+            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in duration-300">
+              <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto transform animate-in slide-in-from-bottom-4 duration-300">
+                <div className="sticky top-0 bg-white border-b border-gray-200 z-10">
+                  <div className="p-6">
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
-                          {addTemplateModal.platform === 'calendar' ? <FiCalendar className="w-6 h-6" /> : <FaWhatsapp className="w-6 h-6" />}
-                        </div>
-                        <h3 className="text-xl font-bold">
-                          Add {addTemplateModal.platform === 'calendar' ? 'Calendar' : 'WhatsApp'} Template
-                        </h3>
-                      </div>
+                      <h3 className="text-2xl font-bold text-gray-800">Template Details</h3>
                       <button
                         type="button"
-                        onClick={() => {
-                          setAddTemplateModal({ open: false, platform: '' });
-                          setNewTemplateData({ description: '', link: '' });
-                        }}
-                        className="text-white/80 hover:text-white hover:bg-white/20 p-2 rounded-lg transition-all duration-200"
+                        onClick={() => setViewTemplateModal({ open: false, template: null })}
+                        className="text-gray-400 hover:text-gray-600 p-2 rounded-lg hover:bg-gray-100 transition-colors duration-200"
                       >
                         <FiX className="w-6 h-6" />
                       </button>
                     </div>
                   </div>
-                  
-                  <div className="p-6">
-                    <div className="space-y-6">
-                      <div>
-                        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Description</label>
-                        <textarea
-                          placeholder={addTemplateModal.platform === 'calendar' 
-                            ? "Describe the calendar template..." 
-                            : "Describe the WhatsApp template..."
-                          }
-                          value={newTemplateData.description}
-                          onChange={(e) => setNewTemplateData(prev => ({ ...prev, description: e.target.value }))}
-                          className={`w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-xl focus:ring-4 focus:border-transparent resize-none transition-all duration-200 ${
-                            addTemplateModal.platform === 'calendar' 
-                              ? 'focus:ring-orange-100 dark:focus:ring-orange-900/30 focus:border-orange-400 dark:focus:border-orange-500' 
-                              : 'focus:ring-green-100 dark:focus:ring-green-900/30 focus:border-green-400 dark:focus:border-green-500'
-                          }`}
-                          rows={3}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
-                          {addTemplateModal.platform === 'calendar' ? 'Calendar Link' : 'Template URL'}
-                        </label>
-                        <input
-                          type="url"
-                          placeholder={addTemplateModal.platform === 'calendar' 
-                            ? "https://calendar.google.com/calendar/embed..." 
-                            : "https://example.com/template..."
-                          }
-                          value={newTemplateData.link}
-                          onChange={(e) => setNewTemplateData(prev => ({ ...prev, link: e.target.value }))}
-                          className={`w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-xl focus:ring-4 focus:border-transparent transition-all duration-200 ${
-                            addTemplateplatform === 'calendar' 
-                            ? 'focus:ring-orange-100 dark:focus:ring-orange-900/30 focus:border-orange-400 dark:focus:border-orange-500' 
-                            : 'focus:ring-green-100 dark:focus:ring-green-900/30 focus:border-green-400 dark:focus:border-green-500'
-                          }`}
-                        />
-                        
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="p-6 bg-gray-50 dark:bg-gray-700 border-t border-gray-200 dark:border-gray-600">
-                    <div className="flex gap-3 justify-end">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setAddTemplateModal({ open: false, platform: '' });
-                          setNewTemplateData({ description: '', link: '' });
-                        }}
-                        className="px-5 py-2.5 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-xl font-medium hover:bg-gray-400 dark:hover:bg-gray-500 transition-all duration-200"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (newTemplateData.description.trim() && newTemplateData.link.trim()) {
-                            const newTemplate = {
-                              _id: Date.now().toString(),
-                              name: newTemplateData.description.substring(0, 50) + (newTemplateData.description.length > 50 ? '...' : ''),
-                              description: newTemplateData.description,
-                              link: newTemplateData.link,
-                              platform: addTemplateModal.platform
-                            };
-                            
-                            if (addTemplateModal.platform === 'calendar') {
-                              setCalendarTemplates(prev => [...prev, newTemplate]);
-                            } else if (addTemplateModal.platform === 'whatsapp') {
-                              const whatsappTemplate = {
-                                ...newTemplate,
-                                url: newTemplate.link,
-                                status: 'APPROVED',
-                                category: 'UTILITY',
-                                language: 'en'
-                              };
-                              setWhatsappTemplates(prev => [...prev, whatsappTemplate]);
-                            }
-                            
-                            setAddTemplateModal({ open: false, platform: '' });
-                            setNewTemplateData({ description: '', link: '' });
-                          } else {
-                            alert('Please fill in both description and link');
-                          }
-                        }}
-                        className={`px-6 py-2.5 text-white rounded-xl font-medium transition-all duration-200 transform hover:-translate-y-0.5 ${
-                          addTemplateModal.platform === 'calendar' 
-                            ? 'bg-gradient-to-r from-orange-500 to-red-500 hover:shadow-lg' 
-                            : 'bg-gradient-to-r from-green-500 to-emerald-500 hover:shadow-lg'
-                        }`}
-                      >
-                        Add Template
-                      </button>
-                    </div>
-                  </div>
                 </div>
-              </div>
-            )}
-
-            {/* Enhanced View Template Modal */}
-            {viewTemplateModal.open && viewTemplateModal.template && (
-              <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in duration-300">
-                <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto transform animate-in slide-in-from-bottom-4 duration-300">
-                  <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 z-10">
-                    <div className="p-6">
-                      <div className="flex items-center justify-between">
-                        <h3 className="text-2xl font-bold text-gray-800 dark:text-gray-200">Template Details</h3>
-                        <button
-                          type="button"
-                          onClick={() => setViewTemplateModal({ open: false, template: null })}
-                          className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200"
-                        >
-                          <FiX className="w-6 h-6" />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="p-6">
-                    <div className="space-y-6">
-                      {/* Header Section */}
-                      <div className="flex items-start gap-4">
-                        {viewTemplateModal.template.imageUrl && (
-                          <img 
-                            src={viewTemplateModal.template.imageUrl} 
-                            alt={viewTemplateModal.template.name} 
-                            className="w-20 h-20 object-cover rounded-xl shadow-md flex-shrink-0"
-                          />
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <h4 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">
-                            {viewTemplateModal.template.name}
-                          </h4>
-                          <div className="flex flex-wrap gap-2">
-                            {viewTemplateModal.template.status && (
-                              <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
-                                viewTemplateModal.template.status === 'APPROVED' 
-                                  ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-700' 
-                                  : viewTemplateModal.template.status === 'PENDING'
-                                  ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 border border-yellow-200 dark:border-yellow-700'
-                                  : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-700'
-                              }`}>
-                                {viewTemplateModal.template.status}
-                              </span>
-                            )}
-                            {viewTemplateModal.template.language && (
-                              <span className="inline-flex items-center px-3 py-1 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs font-medium border border-blue-200 dark:border-blue-700">
-                                🌐 {viewTemplateModal.template.language}
-                              </span>
-                            )}
-                            {viewTemplateModal.template.category && (
-                              <span className="inline-flex items-center px-3 py-1 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-xs font-medium border border-purple-200 dark:border-purple-700">
-                                📂 {viewTemplateModal.template.category}
-                              </span>
-                            )}
-                          </div>
+                
+                <div className="p-6">
+                  <div className="space-y-6">
+                    {/* Header Section */}
+                    <div className="flex items-start gap-4">
+                      {viewTemplateModal.template.imageUrl && (
+                        <img 
+                          src={viewTemplateModal.template.imageUrl} 
+                          alt={viewTemplateModal.template.name} 
+                          className="w-20 h-20 object-cover rounded-xl shadow-md flex-shrink-0"
+                        />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <h4 className="text-2xl font-bold text-gray-900 mb-2">
+                          {viewTemplateModal.template.name}
+                        </h4>
+                        <div className="flex flex-wrap gap-2">
+                          {viewTemplateModal.template.status && (
+                            <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
+                              viewTemplateModal.template.status === 'APPROVED' 
+                                ? 'bg-green-100 text-green-700 border border-green-200' 
+                                : viewTemplateModal.template.status === 'PENDING'
+                                ? 'bg-yellow-100 text-yellow-700 border border-yellow-200'
+                                : 'bg-red-100 text-red-700 border border-red-200'
+                            }`}>
+                              {viewTemplateModal.template.status}
+                            </span>
+                          )}
+                          {viewTemplateModal.template.language && (
+                            <span className="inline-flex items-center px-3 py-1 rounded-full bg-blue-100 text-blue-700 text-xs font-medium border border-blue-200">
+                              🌐 {viewTemplateModal.template.language}
+                            </span>
+                          )}
+                          {viewTemplateModal.template.category && (
+                            <span className="inline-flex items-center px-3 py-1 rounded-full bg-purple-100 text-purple-700 text-xs font-medium border border-purple-200">
+                              📂 {viewTemplateModal.template.category}
+                            </span>
+                          )}
                         </div>
                       </div>
+                    </div>
 
-                      {/* Description Section */}
-                      {viewTemplateModal.template.description && (
-                        <div className="bg-gray-50 dark:bg-gray-700 rounded-xl p-5 border border-gray-200 dark:border-gray-600">
-                          <h5 className="font-semibold text-gray-700 dark:text-gray-300 mb-3 text-lg">Description</h5>
-                          <p className="text-gray-600 dark:text-gray-400 whitespace-pre-wrap leading-relaxed">
-                            {viewTemplateModal.template.description}
+                    {/* Description Section */}
+                    {viewTemplateModal.template.description && (
+                      <div className="bg-gray-50 rounded-xl p-5 border border-gray-200">
+                        <h5 className="font-semibold text-gray-700 mb-3 text-lg">Description</h5>
+                        <p className="text-gray-600 whitespace-pre-wrap leading-relaxed">
+                          {viewTemplateModal.template.description}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* URL Section */}
+                    {viewTemplateModal.template.url && (
+                      <div className="bg-blue-50 rounded-xl p-5 border border-blue-200">
+                        <h5 className="font-semibold text-gray-700 mb-3 text-lg">Template URL</h5>
+                        <a 
+                          href={viewTemplateModal.template.url} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:text-blue-800 hover:underline break-all font-mono text-sm bg-white p-3 rounded-lg border border-blue-100 block"
+                        >
+                          {viewTemplateModal.template.url}
+                        </a>
+                      </div>
+                    )}
+
+                    {/* Metadata Section */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {viewTemplateModal.template.assignedAt && (
+                        <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
+                          <h6 className="font-semibold text-gray-700 mb-2 text-sm uppercase tracking-wide">Approval Date</h6>
+                          <p className="text-gray-600">
+                            {new Date(viewTemplateModal.template.assignedAt).toLocaleDateString('en-US', {
+                              year: 'numeric',
+                              month: 'long',
+                              day: 'numeric'
+                            })}
+                          </p>
+                          <p className="text-sm text-gray-500 mt-1">
+                            {new Date(viewTemplateModal.template.assignedAt).toLocaleTimeString('en-US', {
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
                           </p>
                         </div>
                       )}
-
-                      {/* URL Section */}
-                      {viewTemplateModal.template.url && (
-                        <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-5 border border-blue-200 dark:border-blue-700">
-                          <h5 className="font-semibold text-gray-700 dark:text-gray-300 mb-3 text-lg">Template URL</h5>
-                          <a 
-                            href={viewTemplateModal.template.url} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline break-all font-mono text-sm bg-white dark:bg-gray-800 p-3 rounded-lg border border-blue-100 dark:border-blue-700 block"
-                          >
-                            {viewTemplateModal.template.url}
-                          </a>
+                      
+                      {viewTemplateModal.template.platform && (
+                        <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
+                          <h6 className="font-semibold text-gray-700 mb-2 text-sm uppercase tracking-wide">Platform</h6>
+                          <div className="flex items-center gap-2">
+                            <span className="text-lg">
+                              {viewTemplateModal.template.platform === 'whatsapp' && <FaWhatsapp className="text-green-500" />}
+                              {viewTemplateModal.template.platform === 'calendar' && <FiCalendar className="text-orange-500" />}
+                            </span>
+                            <span className="text-gray-600 capitalize">
+                              {viewTemplateModal.template.platform}
+                            </span>
+                          </div>
                         </div>
                       )}
-
-                      {/* Metadata Section */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {viewTemplateModal.template.assignedAt && (
-                          <div className="bg-gray-50 dark:bg-gray-700 rounded-xl p-4 border border-gray-200 dark:border-gray-600">
-                            <h6 className="font-semibold text-gray-700 dark:text-gray-300 mb-2 text-sm uppercase tracking-wide">Approval Date</h6>
-                            <p className="text-gray-600 dark:text-gray-400">
-                              {new Date(viewTemplateModal.template.assignedAt).toLocaleDateString('en-US', {
-                                year: 'numeric',
-                                month: 'long',
-                                day: 'numeric'
-                              })}
-                            </p>
-                            <p className="text-sm text-gray-500 dark:text-gray-500 mt-1">
-                              {new Date(viewTemplateModal.template.assignedAt).toLocaleTimeString('en-US', {
-                                hour: '2-digit',
-                                minute: '2-digit'
-                              })}
-                            </p>
-                          </div>
-                        )}
-                        
-                        {viewTemplateModal.template.platform && (
-                          <div className="bg-gray-50 dark:bg-gray-700 rounded-xl p-4 border border-gray-200 dark:border-gray-600">
-                            <h6 className="font-semibold text-gray-700 dark:text-gray-300 mb-2 text-sm uppercase tracking-wide">Platform</h6>
-                            <div className="flex items-center gap-2">
-                              <span className="text-lg">
-                                {viewTemplateModal.template.platform === 'whatsapp' && <FaWhatsapp className="text-green-500" />}
-                                {viewTemplateModal.template.platform === 'calendar' && <FiCalendar className="text-orange-500" />}
-                              </span>
-                              <span className="text-gray-600 dark:text-gray-400 capitalize">
-                                {viewTemplateModal.template.platform}
-                              </span>
-                            </div>
-                          </div>
-                        )}
-                      </div>
                     </div>
                   </div>
-                  
-                  <div className="sticky bottom-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 p-6">
-                    <button
-                      type="button"
-                      onClick={() => setViewTemplateModal({ open: false, template: null })}
-                      className="w-full py-3 bg-gradient-to-r from-gray-600 to-gray-800 text-white rounded-xl font-semibold hover:shadow-lg transition-all duration-200 transform hover:-translate-y-0.5"
-                    >
-                      Close Details
-                    </button>
-                  </div>
+                </div>
+                
+                <div className="sticky bottom-0 bg-white border-t border-gray-200 p-6">
+                  <button
+                    type="button"
+                    onClick={() => setViewTemplateModal({ open: false, template: null })}
+                    className="w-full py-3 bg-gradient-to-r from-gray-600 to-gray-800 text-white rounded-xl font-semibold hover:shadow-lg transition-all duration-200 transform hover:-translate-y-0.5"
+                  >
+                    Close Details
+                  </button>
                 </div>
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </div>
-    </ThemeProvider>
+    </div>
   );
 };
 
