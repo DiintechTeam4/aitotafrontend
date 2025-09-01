@@ -104,7 +104,14 @@ const AgentForm = ({
         // Check if there's only one WhatsApp template, make it default
         const whatsappTemplates = agent.whatsappTemplates || [];
         if (whatsappTemplates.length === 1) {
-          hydrated.push({ platform: "whatsapp", url: whatsappTemplates[0].templateUrl });
+          // Generate WhatsApp template module URL format
+          const base = 'https://whatsapp-template-module.onrender.com/api/whatsapp/send';
+          const suffix = whatsappTemplates[0].templateName ? `-${whatsappTemplates[0].templateName}` : '';
+          const whatsappUrl = base + suffix;
+          hydrated.push({ platform: "whatsapp", url: whatsappUrl });
+        } else {
+          // If WhatsApp is enabled but no URL, still add it with empty URL
+          hydrated.push({ platform: "whatsapp", url: "" });
         }
       }
       
@@ -114,15 +121,20 @@ const AgentForm = ({
       }
     }
     
-    if (agent.telegramEnabled && Array.isArray(agent.telegram) && agent.telegram[0]?.link) {
-      hydrated.push({ platform: "telegram", url: agent.telegram[0].link });
+    // Handle other platforms consistently
+    if (agent.telegramEnabled) {
+      const telegramUrl = Array.isArray(agent.telegram) && agent.telegram[0]?.link ? agent.telegram[0].link : "";
+      hydrated.push({ platform: "telegram", url: telegramUrl });
     }
-    if (agent.emailEnabled && Array.isArray(agent.email) && agent.email[0]?.link) {
-      hydrated.push({ platform: "email", url: agent.email[0].link });
+    if (agent.emailEnabled) {
+      const emailUrl = Array.isArray(agent.email) && agent.email[0]?.link ? agent.email[0].link : "";
+      hydrated.push({ platform: "email", url: emailUrl });
     }
-    if (agent.smsEnabled && Array.isArray(agent.sms) && agent.sms[0]?.link) {
-      hydrated.push({ platform: "sms", url: agent.sms[0].link });
+    if (agent.smsEnabled) {
+      const smsUrl = Array.isArray(agent.sms) && agent.sms[0]?.link ? agent.sms[0].link : "";
+      hydrated.push({ platform: "sms", url: smsUrl });
     }
+    
     if (hydrated.length > 0) setSocialMediaLinks(hydrated);
   }, [agent]);
 
@@ -417,22 +429,33 @@ const AgentForm = ({
           emailEnabled: false,
           smsEnabled: false,
         };
-        const linkMap = Object.fromEntries(
-          socialMediaLinks
-            .filter((l) => l && l.platform && typeof l.url === "string")
-            .map((l) => [l.platform, l.url.trim()])
-        );
+        
+        // Check if platform is enabled (exists in socialMediaLinks)
         platforms.forEach((p) => {
-          const url = linkMap[p];
-          const enabled = !!url;
-          socials[`${p}Enabled`] = enabled;
-          if (enabled) {
-            socials[p] = [{ link: url }];
+          const platformExists = socialMediaLinks.some((l) => l && l.platform === p);
+          socials[`${p}Enabled`] = platformExists;
+          
+          if (platformExists) {
+            // Get the URL for this platform
+            const platformLink = socialMediaLinks.find((l) => l && l.platform === p);
+            const url = platformLink?.url?.trim() || "";
+            
+            // Only add the social array if there's a valid URL
+            if (url) {
+              socials[p] = [{ link: url }];
+            }
           }
         });
+        
         return socials;
       };
 
+      const socialsData = deriveSocials();
+      console.log('🔧 Social media data being sent:', {
+        socialMediaLinks,
+        derivedSocials: socialsData
+      });
+      
       const payload = {
         ...formDataWithoutServiceProvider,
         startingMessages,
@@ -441,7 +464,7 @@ const AgentForm = ({
           startingMessages[defaultStartingMessageIndex]?.text ||
           formData.firstMessage,
         defaultTemplate,
-        ...deriveSocials(),
+        ...socialsData,
       };
 
       // Only add serviceProvider if it's not empty
@@ -1186,13 +1209,21 @@ const AgentForm = ({
                              <button
                                type="button"
                                onClick={() => {
+                                 // For WhatsApp, generate the template module URL instead of using the template's actual URL
+                                 let urlToUse = t.url;
+                                 if (platform.id === 'whatsapp') {
+                                   const base = 'https://whatsapp-template-module.onrender.com/api/whatsapp/send';
+                                   const suffix = t.name ? `-${t.name}` : '';
+                                   urlToUse = base + suffix;
+                                 }
+                                 
                                  const newLinks = socialMediaLinks.map((link) =>
                                    link.platform === platform.id
-                                     ? { ...link, url: t.url }
+                                     ? { ...link, url: urlToUse }
                                      : link
                                  );
                                  if (!newLinks.find(l => l.platform === platform.id)) {
-                                   newLinks.push({ platform: platform.id, url: t.url });
+                                   newLinks.push({ platform: platform.id, url: urlToUse });
                                  }
                                  setSocialMediaLinks(newLinks);
                                }}
@@ -1203,10 +1234,18 @@ const AgentForm = ({
                              <button
                                type="button"
                                onClick={() => {
+                                 // For WhatsApp, generate the template module URL instead of using the template's actual URL
+                                 let urlToUse = t.url;
+                                 if (platform.id === 'whatsapp') {
+                                   const base = 'https://whatsapp-template-module.onrender.com/api/whatsapp/send';
+                                   const suffix = t.name ? `-${t.name}` : '';
+                                   urlToUse = base + suffix;
+                                 }
+                                 
                                  setDefaultTemplate({
                                    templateId: t._id,
                                    templateName: t.name,
-                                   templateUrl: t.url,
+                                   templateUrl: urlToUse,
                                    platform: platform.id
                                  });
                                }}
