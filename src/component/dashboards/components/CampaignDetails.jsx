@@ -655,7 +655,7 @@ function CampaignDetails({ campaignId, onBack }) {
         uuid: clientData?.clientId || "client-uuid-001",
         custom_param: {
           uniqueid: uniqueId,
-          contact_name: contactName, // Add contact name to custom params if needed
+          contact_name: contactName || "", // Add contact name to custom params if needed
         },
         resFormat: 3,
       };
