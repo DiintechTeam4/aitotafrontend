@@ -26,6 +26,7 @@ import {
 import ApprovalFormDetails from "./components/ApprovalFormDetails";
 import HumanAgentManagement from "./components/HumanAgentManagement";
 import AdminAgents from "./components/AdminAgents";
+import AllAgents from "./components/AllAgents";
 import PlanManagement from "./components/PlanManagement";
 import CreditManagement from "./components/CreditManagement";
 import CouponManagement from "./components/CouponManagement";
@@ -280,7 +281,23 @@ const AdminDashboard = ({ user, onLogout }) => {
   const getclients = async (req, res) => {
     try {
       setIsLoading(true);
-      const response = await fetch(`${API_BASE_URL}/admin/getclients`);
+      const adminToken =
+        localStorage.getItem("admintoken") ||
+        sessionStorage.getItem("admintoken");
+
+      if (!adminToken) {
+        console.error("No admin token found");
+        setIsLoading(false);
+        return;
+      }
+
+      const response = await fetch(`${API_BASE_URL}/admin/getclients`, {
+        headers: {
+          Authorization: `Bearer ${adminToken}`,
+          "Content-Type": "application/json",
+        },
+      });
+
       const data = await response.json();
       console.log(data.data);
       setclients(data.data);
@@ -441,7 +458,7 @@ const AdminDashboard = ({ user, onLogout }) => {
       icon: <FaDatabase />,
       subItems: ["Chats"],
     },
-    // { name: "AI Agent", icon: <FaRobot /> },
+    { name: "AI Agent", icon: <FaRobot /> },
     // { name: "Tickets", icon: <FaClipboardList /> },
     { name: "Users", icon: <FaUsers /> },
   ];
@@ -1207,33 +1224,6 @@ const AdminDashboard = ({ user, onLogout }) => {
         {/* Page Content */}
         <main className="p-6">
           <div className="max-w-7xl mx-auto">
-            {/* Welcome Message */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-4 mb-6">
-              <div className="flex flex-col md:flex-row justify-between items-start md:items-center">
-                <div>
-                  <h1 className="text-xl font-semibold text-gray-800 mb-1">
-                    Welcome back, Admin!
-                  </h1>
-                  <p className="text-gray-600 text-sm">
-                    {new Date().getHours() < 12
-                      ? "Good morning"
-                      : new Date().getHours() < 18
-                      ? "Good afternoon"
-                      : "Good evening"}
-                    , here's your system overview.
-                  </p>
-                </div>
-                <div className="mt-3 md:mt-0 flex items-center space-x-3">
-                  <div className="bg-red-50 rounded-lg p-2">
-                    <FaShieldAlt className="text-red-600 text-lg" />
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs text-gray-500">System Status</p>
-                    <p className="text-sm font-medium text-red-600">Active</p>
-                  </div>
-                </div>
-              </div>
-            </div>
 
             {/* Dashboard Content based on active tab */}
             {activeTab === "Overview" && (
@@ -1269,6 +1259,8 @@ const AdminDashboard = ({ user, onLogout }) => {
             )}
             {/* Dashboard Content based on active tab */}
             {activeTab === "Agents" && <AdminAgents />}
+
+            {activeTab === "AI Agent" && <AllAgents />}
 
             {activeTab === "Plans" && <PlanManagement />}
 
@@ -1331,7 +1323,7 @@ const AdminDashboard = ({ user, onLogout }) => {
               </div>
             )}
 
-            {activeTab === "Tools" && <ToolsManagement/>}
+            {activeTab === "Tools" && <ToolsManagement />}
 
             {/* Client Table */}
             {activeTab === "Client" && (
@@ -1437,7 +1429,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                                 )}
                                 <div className="ml-3">
                                   <div className="text-sm font-medium text-gray-900">
-                                    {client.name}
+                                  {client.businessName}
                                   </div>
                                   <div className="text-xs text-gray-500 mt-1">
                                     Client since {formatDate(client.createdAt)}
@@ -1447,7 +1439,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                             </td>
                             <td className="px-4 py-6">
                               <div className="text-sm font-medium text-gray-900">
-                                {client.businessName}
+                                {client.name}
                               </div>
                               <div className="text-xs text-gray-500 mt-2">
                                 {client.websiteUrl ? (
