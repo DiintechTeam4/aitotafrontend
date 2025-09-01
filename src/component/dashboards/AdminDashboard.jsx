@@ -1429,7 +1429,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                                 )}
                                 <div className="ml-3">
                                   <div className="text-sm font-medium text-gray-900">
-                                    {client.name}
+                                  {client.businessName}
                                   </div>
                                   <div className="text-xs text-gray-500 mt-1">
                                     Client since {formatDate(client.createdAt)}
@@ -1439,7 +1439,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                             </td>
                             <td className="px-4 py-6">
                               <div className="text-sm font-medium text-gray-900">
-                                {client.businessName}
+                                {client.name}
                               </div>
                               <div className="text-xs text-gray-500 mt-2">
                                 {client.websiteUrl ? (

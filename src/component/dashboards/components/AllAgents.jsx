@@ -183,10 +183,13 @@ const AllAgents = () => {
     });
 
   const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString("en-US", {
+    return new Date(dateString).toLocaleString("en-US", {
       year: "numeric",
       month: "short",
       day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
     });
   };
 
@@ -451,7 +454,7 @@ const AllAgents = () => {
       <div className="p-6 border-b border-gray-100">
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
           <div>
-            <h2 className="text-2xl font-bold text-gray-900">All Agents</h2>
+            <h2 className="text-2xl font-bold text-gray-900">AI Agents</h2>
           </div>
         </div>
 
@@ -524,7 +527,7 @@ const AllAgents = () => {
       </div>
 
       {/* Filters */}
-      <div className="p-6 border-b border-gray-100 bg-gray-50">
+      <div className="p-6 border-b border-white-100 bg-white-50">
         <div className="flex justify-end gap-4">
           {/* Search */}
           <div className="relative">
@@ -561,7 +564,7 @@ const AllAgents = () => {
       <div className="overflow-x-auto pb-30">
         {filteredAgents.length === 0 ? (
           <div className="p-8 text-center">
-            <FaUserTie className="mx-auto h-12 w-12 text-gray-400" />
+            <FaUserTie className="mx-auto h-12 w-12 text-white-400" />
             <h3 className="mt-2 text-sm font-medium text-gray-900">
               No agents found
             </h3>
@@ -572,8 +575,8 @@ const AllAgents = () => {
             </p>
           </div>
         ) : (
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+          <table className="min-w-full divide-y divide-white-200">
+            <thead className="bg-white-50">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Sno.
@@ -596,7 +599,7 @@ const AllAgents = () => {
               {filteredAgents.map((agent, index) => (
                 <tr
                   key={agent._id}
-                  className={`${index % 2 === 0 ? "bg-white" : "bg-gray-50"} ${
+                  className={`${agent.isActive ? "bg-white" : "bg-gray-100"} ${
                     !agent.isActive ? "shadow-md" : ""
                   }`}
                 >
