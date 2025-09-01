@@ -1570,7 +1570,12 @@ const AgentForm = ({
         </div>
 
         {/* Tab Content */}
-        <div className="border border-gray-200 rounded-b-lg bg-white" style={{ maxHeight: '600px', overflowY: 'auto' }}>
+        <div className="border border-gray-200 rounded-b-lg bg-white" style={{ maxHeight: '600px', overflowY: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+          <style jsx>{`
+            div::-webkit-scrollbar {
+              display: none;
+            }
+          `}</style>
           <div className="p-6">
             {renderPlatformContent(socialPlatforms.find(p => p.id === selectedSocialTab))}
           </div>
@@ -1692,7 +1697,12 @@ const AgentForm = ({
           </div>
 
           {/* Tab Content */}
-          <div className="flex-1 p-8" style={{ overflowY: 'auto', maxHeight: '80vh' }}>
+          <div className="flex-1 p-8" style={{ overflowY: 'auto', maxHeight: '80vh', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+            <style jsx>{`
+              div::-webkit-scrollbar {
+                display: none;
+              }
+            `}</style>
             <div className="max-w-4xl">{renderTabContent()}</div>
           </div>
         </div>
@@ -1750,7 +1760,12 @@ const AgentForm = ({
       {/* View Template Modal */}
       {viewTemplateModal.open && viewTemplateModal.template && (
         <div className="fixed inset-0 bg-gray-50/80 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+            <style jsx>{`
+              div::-webkit-scrollbar {
+                display: none;
+              }
+            `}</style>
             <div className="p-6 border-b border-gray-200">
               <div className="flex items-center justify-between">
                 <h3 className="text-xl font-semibold text-gray-800">Template Details</h3>
