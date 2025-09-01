@@ -29,7 +29,6 @@ import AdminAgents from "./components/AdminAgents";
 import PlanManagement from "./components/PlanManagement";
 import CreditManagement from "./components/CreditManagement";
 import CouponManagement from "./components/CouponManagement";
-import ToolsManagement from "./components/ToolsManagement";
 
 const AdminDashboard = ({ user, onLogout }) => {
   const navigate = useNavigate();
@@ -72,9 +71,176 @@ const AdminDashboard = ({ user, onLogout }) => {
   const [clientTokenForHumanAgent, setClientTokenForHumanAgent] =
     useState(null);
 
+  // Tools/Templates state
+  const [activeTool, setActiveTool] = useState(null); // 'whatsapp' | 'telegram' | 'email' | 'sms'
+  const [templates, setTemplates] = useState([]);
+  const [externalTemplates, setExternalTemplates] = useState(false);
+  const [selectedTemplateIds, setSelectedTemplateIds] = useState([]);
+  const [assignAgentId, setAssignAgentId] = useState("");
+  const [accessRequests, setAccessRequests] = useState([]);
+  const [loadingRequests, setLoadingRequests] = useState(false);
+  const [openMenuTemplateId, setOpenMenuTemplateId] = useState(null);
+  const [clientStatusFilter, setClientStatusFilter] = useState("all"); // all | approved | pending
 
+  const fetchTemplates = async (platform) => {
+    try {
+      // For WhatsApp, load from external service provided
+      if (platform === "whatsapp") {
+        const resp = await fetch(
+          "https://whatsapp-template-module.onrender.com/api/whatsapp/get-templates"
+        );
+        const json = await resp.json();
+        const arr = Array.isArray(json?.templates) ? json.templates : [];
+        // Normalize into a common shape used by the grid
+        const normalized = arr.map((t) => {
+          const bodyComponent = (t.components || []).find(
+            (c) => c.type === "BODY"
+          );
+          const buttonsComp = (t.components || []).find(
+            (c) => c.type === "BUTTONS"
+          );
+          const firstUrl =
+            buttonsComp &&
+            Array.isArray(buttonsComp.buttons) &&
+            buttonsComp.buttons[0]?.url;
+          const headerComp = (t.components || []).find(
+            (c) => c.type === "HEADER"
+          );
+          return {
+            _id: t.id || t.name,
+            name: t.name,
+            url: firstUrl || "",
+            imageUrl:
+              headerComp?.format === "IMAGE"
+                ? headerComp.example?.header_handle?.[0]
+                : "",
+            description: bodyComponent?.text || "",
+            language: t.language,
+            status: t.status,
+            category: t.category,
+            sub_category: t.sub_category,
+            parameter_format: t.parameter_format,
+            components: t.components,
+          };
+        });
+        setTemplates(normalized);
+        setExternalTemplates(true);
+      } else {
+        const resp = await fetch(
+          `${API_BASE_URL}/templates?platform=${platform}`
+        );
+        const json = await resp.json();
+        setTemplates(json?.success ? json.data || [] : []);
+        setExternalTemplates(false);
+      }
+      setSelectedTemplateIds([]);
+    } catch (e) {
+      setTemplates([]);
+      setSelectedTemplateIds([]);
+      setExternalTemplates(false);
+    }
+  };
 
+  useEffect(() => {
+    if (
+      activeTool === "whatsapp" ||
+      activeTool === "telegram" ||
+      activeTool === "email" ||
+      activeTool === "sms"
+    ) {
+      fetchTemplates(activeTool);
+      fetchAccessRequests({ status: "pending", platform: activeTool });
+    }
+  }, [activeTool]);
 
+  const fetchAccessRequests = async (params = { status: "pending" }) => {
+    try {
+      setLoadingRequests(true);
+      const qs = new URLSearchParams(params).toString();
+      const resp = await fetch(
+        `${API_BASE_URL}/agent-access/requests${qs ? `?${qs}` : ""}`
+      );
+      const json = await resp.json();
+      setAccessRequests(json?.success ? json.data || [] : []);
+    } catch (e) {
+      setAccessRequests([]);
+    } finally {
+      setLoadingRequests(false);
+    }
+  };
+
+  const approveAccessRequest = async (
+    requestId,
+    templateName,
+    templateData
+  ) => {
+    try {
+      const token =
+        localStorage.getItem("admintoken") ||
+        sessionStorage.getItem("admintoken");
+      const resp = await fetch(`${API_BASE_URL}/agent-access/approve`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ requestId, templateName, templateData }),
+      });
+      const json = await resp.json();
+      if (json?.success) {
+        await fetchAccessRequests({ status: "pending", platform: activeTool });
+        alert("Approved and updated agent successfully");
+      } else {
+        alert(json?.message || "Failed to approve");
+      }
+    } catch (e) {
+      alert("Failed to approve");
+    }
+  };
+
+  const toggleSelectTemplate = (id) => {
+    setSelectedTemplateIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  const assignTemplates = async () => {
+    try {
+      if (!assignAgentId || selectedTemplateIds.length === 0) {
+        alert("Enter Agent ID and select at least one template");
+        return;
+      }
+
+      // Get the selected templates data
+      const selectedTemplates = templates.filter((t) =>
+        selectedTemplateIds.includes(t._id)
+      );
+
+      const resp = await fetch(`${API_BASE_URL}/templates/assign`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${
+            localStorage.getItem("admintoken") ||
+            sessionStorage.getItem("admintoken")
+          }`,
+        },
+        body: JSON.stringify({
+          agentId: assignAgentId,
+          templateIds: selectedTemplateIds,
+          templates: selectedTemplates, // Send full template data for WhatsApp
+        }),
+      });
+      const json = await resp.json();
+      if (!resp.ok || !json.success)
+        throw new Error(json.message || "Failed to assign");
+      alert("Templates assigned to agent");
+      setSelectedTemplateIds([]);
+      setAssignAgentId("");
+    } catch (e) {
+      alert(e.message || "Failed to assign templates");
+    }
+  };
 
   // Check if screen is mobile and handle resize events
   useEffect(() => {
@@ -239,32 +405,48 @@ const AdminDashboard = ({ user, onLogout }) => {
 
   // Filter clients based on search term
   const filteredClients = clients
-    ? clients.filter(
-        (client) =>
-          client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          client.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          client.businessName.toLowerCase().includes(searchTerm.toLowerCase())
-      )
+    ? clients
+        .filter((client) => {
+          if (clientStatusFilter === "approved") return !!client.isApproved;
+          if (clientStatusFilter === "pending") return !client.isApproved;
+          return true;
+        })
+        .filter(
+          (client) =>
+            client.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            client.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            client.businessName
+              ?.toLowerCase()
+              .includes(searchTerm.toLowerCase()) ||
+            client.mobileNo?.includes(searchTerm) ||
+            client.city?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            client.gstNo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            client.panNo?.toLowerCase().includes(searchTerm.toLowerCase())
+        )
     : [];
 
   const navItems = [
     { name: "Overview", icon: <FaChartBar /> },
     { name: "Client", icon: <FaUsers /> },
     { name: "Agents", icon: <FaUserTie /> },
-    { name: "Plans", icon: <FaDollarSign /> },
-    { name: "Credits", icon: <FaChartBar /> },
-    { name: "Coupons", icon: <FaFileInvoiceDollar /> },
+    {
+      name: "Accounts",
+      icon: <FaDollarSign />,
+      subItems: ["Plans", "Credits", "Coupons", "Payments"],
+    },
     { name: "Tools", icon: <FaCog /> },
-    { name: "Datastore", icon: <FaDatabase /> },
-    { name: "AI Agent", icon: <FaRobot /> },
-    { name: "Chats", icon: <FaComments /> },
-    { name: "Payments", icon: <FaFileInvoiceDollar /> },
-    { name: "Tickets", icon: <FaClipboardList /> },
+    {
+      name: "Datastore",
+      icon: <FaDatabase />,
+      subItems: ["Chats"],
+    },
+    // { name: "AI Agent", icon: <FaRobot /> },
+    // { name: "Tickets", icon: <FaClipboardList /> },
     { name: "Users", icon: <FaUsers /> },
   ];
 
   const bottomNavItems = [
-    { name: "Support", icon: <FaHeadset /> },
+    { name: "Support", icon: <FaHeadset />, subItems: ["Tickets"] },
     { name: "Help", icon: <FaQuestionCircle /> },
     { name: "Settings", icon: <FaCog />, subItems: ["Log out"] },
   ];
@@ -459,196 +641,261 @@ const AdminDashboard = ({ user, onLogout }) => {
     <div className="min-h-screen bg-gray-50">
       {/* Add Client Modal */}
       {showAddClientModal && (
-        <div className="fixed inset-0 backdrop-blur-sm bg-opacity-50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl relative">
-            <button
-              className="absolute top-4 right-4 text-gray-500 hover:text-gray-700"
-              onClick={() => setShowAddClientModal(false)}
-            >
-              <FaTimes size={20} />
-            </button>
-            <div className="p-6">
-              <h2 className="text-2xl font-bold mb-4 text-center">
-                Add New Client
-              </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Name
-                  </label>
-                  <input
-                    type="text"
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                    value={newClient.name}
-                    onChange={(e) =>
-                      setNewClient({ ...newClient, name: e.target.value })
-                    }
-                  />
+        <div className="fixed inset-0 bg-opacity-40 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden relative">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-red-600 to-red-700 px-6 py-4 flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-red-600 font-bold">
+                  <FaPlus className="text-sm" />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Email
-                  </label>
-                  <input
-                    type="email"
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                    value={newClient.email}
-                    onChange={(e) =>
-                      setNewClient({ ...newClient, email: e.target.value })
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Password
-                  </label>
-                  <input
-                    type="password"
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                    value={newClient.password}
-                    onChange={(e) =>
-                      setNewClient({ ...newClient, password: e.target.value })
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Confirm Password
-                  </label>
-                  <input
-                    type="password"
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                    value={newClient.confirmPassword}
-                    onChange={(e) =>
-                      setNewClient({
-                        ...newClient,
-                        confirmPassword: e.target.value,
-                      })
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Business Name
-                  </label>
-                  <input
-                    type="text"
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                    value={newClient.businessName}
-                    onChange={(e) =>
-                      setNewClient({
-                        ...newClient,
-                        businessName: e.target.value,
-                      })
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Website URL
-                  </label>
-                  <input
-                    type="url"
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                    value={newClient.websiteUrl}
-                    onChange={(e) =>
-                      setNewClient({ ...newClient, websiteUrl: e.target.value })
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    City
-                  </label>
-                  <input
-                    type="text"
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                    value={newClient.city}
-                    onChange={(e) =>
-                      setNewClient({ ...newClient, city: e.target.value })
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Pincode
-                  </label>
-                  <input
-                    type="text"
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                    value={newClient.pincode}
-                    onChange={(e) =>
-                      setNewClient({ ...newClient, pincode: e.target.value })
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    GST Number
-                  </label>
-                  <input
-                    type="text"
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                    value={newClient.gstNo}
-                    onChange={(e) =>
-                      setNewClient({ ...newClient, gstNo: e.target.value })
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    PAN Number
-                  </label>
-                  <input
-                    type="text"
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                    value={newClient.panNo}
-                    onChange={(e) =>
-                      setNewClient({ ...newClient, panNo: e.target.value })
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Mobile Number
-                  </label>
-                  <input
-                    type="text"
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                    value={newClient.mobileNo}
-                    onChange={(e) =>
-                      setNewClient({ ...newClient, mobileNo: e.target.value })
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Address
-                  </label>
-                  <input
-                    type="text"
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                    value={newClient.address}
-                    onChange={(e) =>
-                      setNewClient({ ...newClient, address: e.target.value })
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Business Logo
-                  </label>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="mt-1 block w-full"
-                    onChange={handleBusinessLogoChange}
-                  />
+                <h2 className="text-xl font-semibold text-white">
+                  Add New Client
+                </h2>
+              </div>
+              <button
+                className="text-white hover:text-red-200 transition-colors p-1"
+                onClick={() => setShowAddClientModal(false)}
+              >
+                <FaTimes size={20} />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 overflow-y-auto max-h-[calc(90vh-80px)]">
+              {/* Personal Information Section */}
+              <div className="mb-8">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4 pb-2 border-b border-gray-200">
+                  Personal Information
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Full Name *
+                    </label>
+                    <input
+                      type="text"
+                      className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors"
+                      placeholder="Enter full name"
+                      value={newClient.name}
+                      onChange={(e) =>
+                        setNewClient({ ...newClient, name: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Email Address *
+                    </label>
+                    <input
+                      type="email"
+                      className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors"
+                      placeholder="Enter email address"
+                      value={newClient.email}
+                      onChange={(e) =>
+                        setNewClient({ ...newClient, email: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Mobile Number *
+                    </label>
+                    <input
+                      type="tel"
+                      className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors"
+                      placeholder="Enter mobile number"
+                      value={newClient.mobileNo}
+                      onChange={(e) =>
+                        setNewClient({ ...newClient, mobileNo: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Address
+                    </label>
+                    <input
+                      type="text"
+                      className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors"
+                      placeholder="Enter address"
+                      value={newClient.address}
+                      onChange={(e) =>
+                        setNewClient({ ...newClient, address: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      City
+                    </label>
+                    <input
+                      type="text"
+                      className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors"
+                      placeholder="Enter city"
+                      value={newClient.city}
+                      onChange={(e) =>
+                        setNewClient({ ...newClient, city: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Pincode
+                    </label>
+                    <input
+                      type="text"
+                      className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors"
+                      placeholder="Enter pincode"
+                      value={newClient.pincode}
+                      onChange={(e) =>
+                        setNewClient({ ...newClient, pincode: e.target.value })
+                      }
+                    />
+                  </div>
                 </div>
               </div>
-              <div className="mt-6 flex justify-end">
+
+              {/* Business Information Section */}
+              <div className="mb-8">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4 pb-2 border-b border-gray-200">
+                  Business Information
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Business Name *
+                    </label>
+                    <input
+                      type="text"
+                      className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors"
+                      placeholder="Enter business name"
+                      value={newClient.businessName}
+                      onChange={(e) =>
+                        setNewClient({
+                          ...newClient,
+                          businessName: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Website URL
+                    </label>
+                    <input
+                      type="url"
+                      className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors"
+                      placeholder="https://example.com"
+                      value={newClient.websiteUrl}
+                      onChange={(e) =>
+                        setNewClient({
+                          ...newClient,
+                          websiteUrl: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      GST Number
+                    </label>
+                    <input
+                      type="text"
+                      className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors"
+                      placeholder="Enter GST number"
+                      value={newClient.gstNo}
+                      onChange={(e) =>
+                        setNewClient({ ...newClient, gstNo: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      PAN Number
+                    </label>
+                    <input
+                      type="text"
+                      className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors"
+                      placeholder="Enter PAN number"
+                      value={newClient.panNo}
+                      onChange={(e) =>
+                        setNewClient({ ...newClient, panNo: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Business Logo
+                    </label>
+                    <div className="w-full px-4 py-6 border-2 border-dashed border-gray-300 rounded-lg hover:border-red-500 transition-colors">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-red-50 file:text-red-700 hover:file:bg-red-100"
+                        onChange={handleBusinessLogoChange}
+                      />
+                      <p className="text-xs text-gray-500 mt-2">
+                        Upload your business logo (PNG, JPG, GIF up to 10MB)
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Account Security Section */}
+              <div className="mb-8">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4 pb-2 border-b border-gray-200">
+                  Account Security
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Password *
+                    </label>
+                    <input
+                      type="password"
+                      className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors"
+                      placeholder="Enter password"
+                      value={newClient.password}
+                      onChange={(e) =>
+                        setNewClient({ ...newClient, password: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Confirm Password *
+                    </label>
+                    <input
+                      type="password"
+                      className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors"
+                      placeholder="Confirm password"
+                      value={newClient.confirmPassword}
+                      onChange={(e) =>
+                        setNewClient({
+                          ...newClient,
+                          confirmPassword: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="bg-gray-50 px-6 py-4 flex items-center justify-between border-t border-gray-200">
+              <p className="text-sm text-gray-500">* Required fields</p>
+              <div className="flex space-x-3">
                 <button
-                  className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600"
+                  className="px-6 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+                  onClick={() => setShowAddClientModal(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium shadow-sm"
                   onClick={handleAddClient}
                 >
                   Add Client
@@ -661,7 +908,7 @@ const AdminDashboard = ({ user, onLogout }) => {
 
       {/* Delete Confirmation Modal */}
       {showDeleteModal && (
-        <div className="fixed inset-0 backdrop-blur-sm bg-opacity-50 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-gray-500 bg-opacity-40 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
           <div className="bg-white rounded-lg shadow-xl w-full max-w-md relative">
             <div className="p-6">
               <h2 className="text-2xl font-bold mb-4 text-center">
@@ -761,20 +1008,76 @@ const AdminDashboard = ({ user, onLogout }) => {
         <div className="flex flex-col h-full">
           <div className="flex-1 py-4">
             {navItems.map((item, index) => (
-              <button
-                key={index}
-                className={`flex items-center w-full py-3 px-4 text-left transition-colors duration-200 ${
-                  activeTab === item.name
-                    ? "bg-red-50 text-red-600 border-r-4 border-red-500"
-                    : "text-gray-600 hover:bg-gray-50"
-                }`}
-                onClick={() => handleTabClick(item.name)}
-              >
-                <span className="text-xl flex-shrink-0">{item.icon}</span>
-                {(isSidebarOpen || isMobile) && (
-                  <span className="ml-3 font-medium">{item.name}</span>
-                )}
-              </button>
+              <div key={index}>
+                <button
+                  className={`flex items-center w-full py-3 px-4 text-left transition-colors duration-200 ${
+                    activeTab === item.name ||
+                    (item.subItems && item.subItems.includes(activeTab))
+                      ? "bg-red-50 text-red-600 border-r-4 border-red-500"
+                      : "text-gray-600 hover:bg-gray-50"
+                  }`}
+                  onClick={() => {
+                    if (item.subItems) {
+                      // For Accounts, show submenu and select Plans by default
+                      if (item.name === "Accounts") {
+                        if (
+                          activeTab === item.name ||
+                          item.subItems.includes(activeTab)
+                        ) {
+                          setActiveTab("Overview"); // Close submenu if already open
+                        } else {
+                          setActiveTab("Plans"); // Open submenu with Plans selected by default
+                        }
+                      } else if (item.name === "Datastore") {
+                        if (
+                          activeTab === item.name ||
+                          item.subItems.includes(activeTab)
+                        ) {
+                          setActiveTab("Overview"); // Close submenu if already open
+                        } else {
+                          setActiveTab("Datastore"); // Open submenu with Datastore selected by default
+                        }
+                      } else {
+                        // For other items with submenus, toggle the submenu
+                        if (activeTab === item.name) {
+                          setActiveTab("Overview"); // Close submenu
+                        } else {
+                          setActiveTab(item.name); // Open submenu
+                        }
+                      }
+                    } else {
+                      handleTabClick(item.name);
+                    }
+                  }}
+                >
+                  <span className="text-xl flex-shrink-0">{item.icon}</span>
+                  {(isSidebarOpen || isMobile) && (
+                    <span className="ml-3 font-medium">{item.name}</span>
+                  )}
+                </button>
+
+                {/* Submenu for Accounts and Datastore */}
+                {isSidebarOpen &&
+                  item.subItems &&
+                  (item.subItems.includes(activeTab) ||
+                    activeTab === item.name) && (
+                    <div className="ml-12 mt-1">
+                      {item.subItems.map((subItem, subIndex) => (
+                        <button
+                          key={subIndex}
+                          className={`flex items-center w-full py-2 text-left transition-colors duration-200 ${
+                            activeTab === subItem
+                              ? "text-red-600 font-medium"
+                              : "text-gray-600 hover:text-red-600"
+                          }`}
+                          onClick={() => setActiveTab(subItem)}
+                        >
+                          <span>{subItem}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+              </div>
             ))}
           </div>
 
@@ -784,11 +1087,53 @@ const AdminDashboard = ({ user, onLogout }) => {
               <div key={index}>
                 <button
                   className={`flex items-center w-full py-3 px-4 text-left transition-colors duration-200 ${
-                    activeTab === item.name
+                    activeTab === item.name ||
+                    (item.subItems && item.subItems.includes(activeTab))
                       ? "bg-red-50 text-red-600 border-r-4 border-red-500"
                       : "text-gray-600 hover:bg-gray-50"
                   }`}
-                  onClick={() => handleTabClick(item.name)}
+                  onClick={() => {
+                    if (item.subItems) {
+                      // For Accounts, show submenu and select Plans by default
+                      if (item.name === "Accounts") {
+                        if (
+                          activeTab === item.name ||
+                          item.subItems.includes(activeTab)
+                        ) {
+                          setActiveTab("Overview"); // Close submenu if already open
+                        } else {
+                          setActiveTab("Plans"); // Open submenu with Plans selected by default
+                        }
+                      } else if (item.name === "Datastore") {
+                        if (
+                          activeTab === item.name ||
+                          item.subItems.includes(activeTab)
+                        ) {
+                          setActiveTab("Overview"); // Close submenu if already open
+                        } else {
+                          setActiveTab("Chats"); // Open submenu with Chats selected by default
+                        }
+                      } else if (item.name === "Support") {
+                        if (
+                          activeTab === item.name ||
+                          item.subItems.includes(activeTab)
+                        ) {
+                          setActiveTab("Overview"); // Close submenu if already open
+                        } else {
+                          setActiveTab("Support"); // Open submenu with Support selected by default
+                        }
+                      } else {
+                        // For other items with submenus, toggle the submenu
+                        if (activeTab === item.name) {
+                          setActiveTab("Overview"); // Close submenu
+                        } else {
+                          setActiveTab(item.name); // Open submenu
+                        }
+                      }
+                    } else {
+                      handleTabClick(item.name);
+                    }
+                  }}
                 >
                   <span className="text-xl flex-shrink-0">{item.icon}</span>
                   {(isSidebarOpen || isMobile) && (
@@ -796,25 +1141,40 @@ const AdminDashboard = ({ user, onLogout }) => {
                   )}
                 </button>
 
-                {/* Settings Submenu */}
-                {isSidebarOpen && item.subItems && activeTab === item.name && (
-                  <div className="ml-12 mt-1">
-                    {item.subItems.map((subItem, subIndex) => (
-                      <button
-                        key={subIndex}
-                        className="flex items-center w-full py-2 text-left text-gray-600 hover:text-red-600 transition-colors duration-200"
-                        onClick={() => {
-                          if (subItem === "Log out") onLogout();
-                        }}
-                      >
-                        {subItem === "Log out" && (
-                          <FaSignOutAlt className="mr-2" />
-                        )}
-                        <span>{subItem}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
+                {/* Submenu for Accounts and Settings */}
+                {isSidebarOpen &&
+                  item.subItems &&
+                  (item.subItems.includes(activeTab) ||
+                    activeTab === item.name) && (
+                    <div className="ml-12 mt-1">
+                      {item.subItems.map((subItem, subIndex) => (
+                        <button
+                          key={subIndex}
+                          className={`flex items-center w-full py-2 text-left transition-colors duration-200 ${
+                            activeTab === subItem
+                              ? "text-red-600 font-medium"
+                              : "text-gray-600 hover:text-red-600"
+                          }`}
+                          onClick={() => {
+                            if (subItem === "Log out") {
+                              onLogout();
+                            } else if (
+                              item.name === "Accounts" ||
+                              item.name === "Datastore" ||
+                              item.name === "Support"
+                            ) {
+                              setActiveTab(subItem);
+                            }
+                          }}
+                        >
+                          {subItem === "Log out" && (
+                            <FaSignOutAlt className="mr-2" />
+                          )}
+                          <span>{subItem}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
               </div>
             ))}
           </div>
@@ -907,23 +1267,366 @@ const AdminDashboard = ({ user, onLogout }) => {
               </div>
             )}
             {/* Dashboard Content based on active tab */}
-            {activeTab === "Agents" && (
-              <AdminAgents/>
+            {activeTab === "Agents" && <AdminAgents />}
+
+            {activeTab === "Plans" && <PlanManagement />}
+
+            {activeTab === "Credits" && <CreditManagement />}
+
+            {activeTab === "Coupons" && <CouponManagement />}
+
+            {activeTab === "Payments" && (
+              <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
+                <h3 className="text-xl font-semibold text-gray-800 mb-4">
+                  Payment Management
+                </h3>
+                <p className="text-gray-600">
+                  Payment management functionality coming soon...
+                </p>
+              </div>
             )}
 
-            {activeTab === "Plans" && (
-              <PlanManagement />
+            {activeTab === "Datastore" && (
+              <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
+                <h3 className="text-xl font-semibold text-gray-800 mb-4">
+                  Datastore Management
+                </h3>
+                <p className="text-gray-600">
+                  Datastore management functionality coming soon...
+                </p>
+              </div>
             )}
 
-            {activeTab === "Credits" && (
-              <CreditManagement />
+            {activeTab === "Chats" && (
+              <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
+                <h3 className="text-xl font-semibold text-gray-800 mb-4">
+                  Chat Management
+                </h3>
+                <p className="text-gray-600">
+                  Chat management functionality coming soon...
+                </p>
+              </div>
             )}
 
-            {activeTab === "Coupons" && (
-              <CouponManagement />
+            {activeTab === "Support" && (
+              <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
+                <h3 className="text-xl font-semibold text-gray-800 mb-4">
+                  Support Management
+                </h3>
+                <p className="text-gray-600">
+                  Support management functionality coming soon...
+                </p>
+              </div>
             )}
 
-            {activeTab === "Tools" && <ToolsManagement />}
+            {activeTab === "Tickets" && (
+              <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
+                <h3 className="text-xl font-semibold text-gray-800 mb-4">
+                  Support Tickets
+                </h3>
+                <p className="text-gray-600">
+                  Support ticket management functionality coming soon...
+                </p>
+              </div>
+            )}
+
+            {activeTab === "Tools" && (
+              <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
+                <h3 className="text-xl font-semibold text-gray-800 mb-4">
+                  Tools
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                  {[
+                    {
+                      id: "whatsapp",
+                      label: "WhatsApp",
+                      color: "bg-green-600",
+                    },
+                    { id: "telegram", label: "Telegram", color: "bg-blue-500" },
+                    { id: "email", label: "Email", color: "bg-red-500" },
+                    { id: "sms", label: "SMS", color: "bg-purple-600" },
+                  ].map((t) => (
+                    <button
+                      key={t.id}
+                      onClick={() => setActiveTool(t.id)}
+                      className={`h-28 rounded-xl text-white text-2xl font-semibold shadow transition transform hover:-translate-y-0.5 ${t.color}`}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+
+                {activeTool && (
+                  <div>
+                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
+                      <h4 className="text-lg font-semibold capitalize">
+                        {activeTool} Templates
+                      </h4>
+                      {!externalTemplates && (
+                        <div className="flex gap-2 items-center">
+                          <input
+                            value={assignAgentId}
+                            onChange={(e) => setAssignAgentId(e.target.value)}
+                            placeholder="Agent ID to assign"
+                            className="px-3 py-2 border rounded w-72"
+                          />
+                          <button
+                            onClick={assignTemplates}
+                            className="px-4 py-2 bg-black text-white rounded"
+                          >
+                            Assign Selected
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                      {templates.map((t) => (
+                        <div
+                          key={t._id}
+                          onClick={() =>
+                            !externalTemplates && toggleSelectTemplate(t._id)
+                          }
+                          className={`cursor-pointer border rounded-lg p-5 bg-white shadow-sm hover:shadow-md transition ${
+                            !externalTemplates &&
+                            selectedTemplateIds.includes(t._id)
+                              ? "ring-2 ring-black"
+                              : ""
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-3 mb-2">
+                            <div className="font-semibold text-gray-900 text-lg truncate">
+                              {t.name}
+                            </div>
+                            {t.status && (
+                              <span
+                                className={`text-xs px-2 py-0.5 rounded-full ${
+                                  t.status === "APPROVED"
+                                    ? "bg-green-100 text-green-700"
+                                    : "bg-gray-100 text-gray-700"
+                                }`}
+                              >
+                                {t.status}
+                              </span>
+                            )}
+                            <div className="relative">
+                              <button
+                                type="button"
+                                className="w-8 h-8 flex items-center justify-center rounded hover:bg-gray-100"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setOpenMenuTemplateId(
+                                    openMenuTemplateId === t._id ? null : t._id
+                                  );
+                                }}
+                                title="Requests"
+                              >
+                                <span className="text-xl leading-none">⋯</span>
+                              </button>
+                              {openMenuTemplateId === t._id && (
+                                <div
+                                  className="absolute right-0 mt-2 w-80 bg-white border border-gray-200 rounded shadow-lg z-10"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <div className="px-3 py-2 text-sm font-semibold text-gray-700 border-b">
+                                    Pending Requests
+                                  </div>
+                                  <div className="max-h-72 overflow-y-auto">
+                                    {loadingRequests ? (
+                                      <div className="p-3 text-sm text-gray-500">
+                                        Loading...
+                                      </div>
+                                    ) : (accessRequests || []).filter(
+                                        (r) => r.platform === activeTool
+                                      ).length === 0 ? (
+                                      <div className="p-3 text-sm text-gray-500">
+                                        No pending requests
+                                      </div>
+                                    ) : (
+                                      (accessRequests || [])
+                                        .filter(
+                                          (r) => r.platform === activeTool
+                                        )
+                                        .map((r) => (
+                                          <div
+                                            key={r._id}
+                                            className="px-3 py-2 text-sm flex items-center justify-between hover:bg-gray-50"
+                                          >
+                                            <div className="pr-2 min-w-0">
+                                              <div className="text-gray-800 truncate">
+                                                Agent:{" "}
+                                                <span className="font-medium break-all">
+                                                  {typeof r.agentId === "object"
+                                                    ? r.agentId?._id ||
+                                                      r.agentId
+                                                    : r.agentId}
+                                                </span>
+                                              </div>
+                                              <div className="text-gray-500 truncate">
+                                                Client:{" "}
+                                                <span className="break-all">
+                                                  {typeof r.clientId ===
+                                                  "object"
+                                                    ? r.clientId?._id ||
+                                                      r.clientId
+                                                    : r.clientId}
+                                                </span>
+                                              </div>
+                                            </div>
+                                            <button
+                                              className="flex-shrink-0 px-2 py-1 bg-green-600 text-white rounded text-xs hover:bg-green-700"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                // Pass template data for saving to database
+                                                approveAccessRequest(
+                                                  r._id,
+                                                  t.name,
+                                                  t
+                                                );
+                                              }}
+                                            >
+                                              Approve
+                                            </button>
+                                          </div>
+                                        ))
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          <div className="text-xs text-gray-500 mb-2">
+                            {(t.language || t.category) && (
+                              <span>
+                                {t.language}
+                                {t.language && t.category ? " • " : ""}
+                                {t.category}
+                              </span>
+                            )}
+                          </div>
+                          {t.imageUrl && (
+                            <img
+                              src={t.imageUrl}
+                              alt={t.name}
+                              className="w-full h-40 object-cover rounded mb-3"
+                            />
+                          )}
+                          {t.description && (
+                            <div className="text-sm text-gray-700 mt-2 whitespace-pre-wrap line-clamp-5">
+                              {t.description}
+                            </div>
+                          )}
+                          {t.url && (
+                            <a
+                              href={t.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center text-sm text-blue-600 hover:underline mt-3"
+                            >
+                              Open Link
+                            </a>
+                          )}
+                        </div>
+                      ))}
+                      {templates.length === 0 && (
+                        <div className="text-gray-500">
+                          No templates found for this platform.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {activeTool === "requests" && (
+                  <div>
+                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
+                      <h4 className="text-lg font-semibold">
+                        Pending Access Requests
+                      </h4>
+                      <div className="flex gap-2 items-center">
+                        <button
+                          onClick={() =>
+                            fetchAccessRequests({ status: "pending" })
+                          }
+                          className="px-4 py-2 bg-black text-white rounded"
+                        >
+                          Refresh
+                        </button>
+                      </div>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                              Client ID
+                            </th>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                              Agent ID
+                            </th>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                              Platform
+                            </th>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                              Requested At
+                            </th>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                              Action
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {loadingRequests ? (
+                            <tr>
+                              <td
+                                className="px-4 py-6 text-center text-gray-500"
+                                colSpan={5}
+                              >
+                                Loading...
+                              </td>
+                            </tr>
+                          ) : accessRequests.length === 0 ? (
+                            <tr>
+                              <td
+                                className="px-4 py-6 text-center text-gray-500"
+                                colSpan={5}
+                              >
+                                No pending requests
+                              </td>
+                            </tr>
+                          ) : (
+                            accessRequests.map((r) => (
+                              <tr key={r._id}>
+                                <td className="px-4 py-2 text-sm text-gray-700 break-all">
+                                  {r.clientId}
+                                </td>
+                                <td className="px-4 py-2 text-sm text-gray-700 break-all">
+                                  {r.agentId}
+                                </td>
+                                <td className="px-4 py-2 text-sm text-gray-700 capitalize">
+                                  {r.platform}
+                                </td>
+                                <td className="px-4 py-2 text-sm text-gray-500">
+                                  {new Date(r.createdAt).toLocaleString()}
+                                </td>
+                                <td className="px-4 py-2 text-sm">
+                                  <button
+                                    onClick={() => approveAccessRequest(r._id)}
+                                    className="px-3 py-1.5 bg-green-600 text-white rounded hover:bg-green-700"
+                                  >
+                                    Approve
+                                  </button>
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Client Table */}
             {activeTab === "Client" && (
@@ -942,6 +1645,19 @@ const AdminDashboard = ({ user, onLogout }) => {
                         <FaPlus className="mr-2" />
                         Add Client
                       </button>
+                      <div>
+                        <select
+                          value={clientStatusFilter}
+                          onChange={(e) =>
+                            setClientStatusFilter(e.target.value)
+                          }
+                          className="px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+                        >
+                          <option value="all">All</option>
+                          <option value="pending">Pending</option>
+                          <option value="approved">Approved</option>
+                        </select>
+                      </div>
                       <div className="relative">
                         <input
                           type="text"
@@ -973,22 +1689,22 @@ const AdminDashboard = ({ user, onLogout }) => {
                     <table className="min-w-full divide-y divide-gray-200">
                       <thead className="bg-gray-50">
                         <tr>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/6">
                             Name
                           </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/6">
                             Business Details
                           </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/6">
                             Contact Info
                           </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/8">
                             ID Details
                           </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-1/6">
                             Actions
                           </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-1/8">
                             Client Status
                           </th>
                         </tr>
@@ -1001,32 +1717,40 @@ const AdminDashboard = ({ user, onLogout }) => {
                               index % 2 === 0 ? "bg-white" : "bg-gray-50"
                             }
                           >
-                            <td className="px-6 py-4 whitespace-nowrap">
+                            <td className="px-4 py-6 whitespace-nowrap">
                               <div className="flex items-center">
-                                <div className="flex-shrink-0 h-10 w-10 rounded-full bg-red-100 flex items-center justify-center text-red-600 font-semibold">
-                                  {client.name.charAt(0).toUpperCase()}
-                                </div>
-                                <div className="ml-4">
+                                {client.businessLogoUrl ? (
+                                  <img
+                                    src={client.businessLogoUrl}
+                                    alt={client.businessName || client.name}
+                                    className="flex-shrink-0 h-12 w-12 rounded-full object-cover"
+                                  />
+                                ) : (
+                                  <div className="flex-shrink-0 h-12 w-12 rounded-full bg-red-100 flex items-center justify-center text-red-600 font-semibold">
+                                    {client.name.charAt(0).toUpperCase()}
+                                  </div>
+                                )}
+                                <div className="ml-3">
                                   <div className="text-sm font-medium text-gray-900">
                                     {client.name}
                                   </div>
-                                  <div className="text-sm text-gray-500">
+                                  <div className="text-xs text-gray-500 mt-1">
                                     Client since {formatDate(client.createdAt)}
                                   </div>
                                 </div>
                               </div>
                             </td>
-                            <td className="px-6 py-4">
-                              <div className="text-sm text-gray-900">
+                            <td className="px-4 py-6">
+                              <div className="text-sm font-medium text-gray-900">
                                 {client.businessName}
                               </div>
-                              <div className="text-sm text-gray-500">
+                              <div className="text-xs text-gray-500 mt-2">
                                 {client.websiteUrl ? (
                                   <a
                                     href={client.websiteUrl}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="flex items-center text-red-600 hover:underline"
+                                    className="inline-flex items-center text-red-600 hover:underline"
                                   >
                                     Website{" "}
                                     <FaExternalLinkAlt className="ml-1 text-xs" />
@@ -1036,75 +1760,95 @@ const AdminDashboard = ({ user, onLogout }) => {
                                 )}
                               </div>
                             </td>
-                            <td className="px-6 py-4">
-                              <div className="text-sm text-gray-900">
+                            <td className="px-4 py-6">
+                              <div className="text-sm text-gray-900 font-medium">
                                 {client.email}
                               </div>
-                              <div className="text-sm text-gray-500">
+                              <div className="text-xs text-gray-500 mt-2">
                                 {client.mobileNo}
                               </div>
-                              <div className="text-sm text-gray-500">
+                              <div className="text-xs text-gray-500 mt-1">
                                 {client.address}
                               </div>
-                              <div className="text-sm text-gray-500">
+                              <div className="text-xs text-gray-500 mt-1">
                                 {client.city}, {client.pincode}
                               </div>
                             </td>
-                            <td className="px-6 py-4">
+                            <td className="px-4 py-6">
                               <div className="text-sm text-gray-900">
-                                <p>GST: {client.gstNo}</p>
-                                <p>PAN: {client.panNo}</p>
+                                <div className="text-xs text-gray-600">
+                                  GST: {client.gstNo}
+                                </div>
+                                <div className="text-xs text-gray-600 mt-2">
+                                  PAN: {client.panNo}
+                                </div>
                               </div>
                             </td>
-                            <td className="px-6 py-6 text-sm font-medium flex flex-col space-y-2 align-middle">
-                              <button
-                                onClick={() =>
-                                  openClientLogin(
-                                    client._id,
-                                    client.email,
-                                    client.name
-                                  )
-                                }
-                                className={`${
-                                  loggedInClients.has(client._id)
-                                    ? "bg-green-600 hover:bg-green-700"
-                                    : "bg-red-600 hover:bg-red-700"
-                                } text-white px-4 py-2 rounded-md transition-colors`}
-                                title={
-                                  loggedInClients.has(client._id)
-                                    ? "Client Logged In"
-                                    : "Client Login"
-                                }
-                              >
-                                {loggedInClients.has(client._id)
-                                  ? "Logged In"
-                                  : "Authenticate"}
-                              </button>
-                              <button
-                                onClick={() =>
-                                  openHumanAgentManagement(
-                                    client._id,
-                                    client.name
-                                  )
-                                }
-                                disabled={loadingClientId === client._id}
-                                className="text-white px-4 py-2 rounded-md transition-colors align-middle bg-red-600 capitalize disabled:opacity-50"
-                              >
-                                {loadingClientId === client._id
-                                  ? "Loading..."
-                                  : "setting"}
-                              </button>
+                            <td className="px-4 py-6 text-center">
+                              <div className="flex flex-row items-center gap-1 justify-center">
+                                <button
+                                  onClick={() =>
+                                    openClientLogin(
+                                      client._id,
+                                      client.email,
+                                      client.name
+                                    )
+                                  }
+                                  className={`inline-flex items-center justify-center w-24 ${
+                                    loggedInClients.has(client._id)
+                                      ? "bg-green-600 hover:bg-green-700"
+                                      : "bg-red-600 hover:bg-red-700"
+                                  } text-white px-3 py-2 rounded-md transition-colors text-xs font-semibold`}
+                                  title={
+                                    loggedInClients.has(client._id)
+                                      ? "Client Logged In"
+                                      : "Client Login"
+                                  }
+                                >
+                                  {loggedInClients.has(client._id)
+                                    ? "Logged In"
+                                    : "Authenticate"}
+                                </button>
+                                <button
+                                  onClick={() =>
+                                    openHumanAgentManagement(
+                                      client._id,
+                                      client.name
+                                    )
+                                  }
+                                  disabled={loadingClientId === client._id}
+                                  className="inline-flex items-center justify-center w-10 h-10 transition-colors disabled:opacity-50"
+                                  title="Settings"
+                                >
+                                  {loadingClientId === client._id ? (
+                                    "..."
+                                  ) : (
+                                    <FaCog className="text-sm" />
+                                  )}
+                                </button>
+                              </div>
                             </td>
-                            <td className="px-6 py-6 text-sm font-medium align-middle text-center ">
-                              <button
-                                className="w-28 px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600"
-                                onClick={() => {
-                                  setReviewClientId(client._id);
-                                  setShowApprovalModal(true);
-                                }}
-                              >
-                                Review
-                              </button>
+                            <td className="px-4 py-6 text-center">
+                              <div className="flex flex-col items-center gap-3">
+                                <span
+                                  className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${
+                                    client.isApproved
+                                      ? "bg-green-100 text-green-800"
+                                      : "bg-yellow-100 text-yellow-800"
+                                  }`}
+                                >
+                                  {client.isApproved ? "Approved" : "Pending"}
+                                </span>
+                                <button
+                                  className="w-20 px-2 py-2 bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200 text-xs font-medium transition-colors"
+                                  onClick={() => {
+                                    setReviewClientId(client._id);
+                                    setShowApprovalModal(true);
+                                  }}
+                                >
+                                  Review
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         ))}
