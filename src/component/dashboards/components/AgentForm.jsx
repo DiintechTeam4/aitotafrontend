@@ -1,5 +1,5 @@
 "use client";
-import { FiMail, FiMessageSquare, FiEye, FiTrash2, FiRotateCcw, FiHelpCircle } from "react-icons/fi";
+import { FiMail, FiMessageSquare, FiEye, FiTrash2, FiRotateCcw, FiHelpCircle, FiCalendar, FiMoreVertical } from "react-icons/fi";
 import { FaWhatsapp, FaTelegram } from "react-icons/fa";
 import { useState, useEffect } from "react";
 import VoiceSynthesizer from "./VoiceSynthesizer";
@@ -56,6 +56,24 @@ const AgentForm = ({
   const [templateListTab, setTemplateListTab] = useState('available');
   const [templateFilter, setTemplateFilter] = useState('');
   const [templateCategoryFilter, setTemplateCategoryFilter] = useState('');
+  const [calendarTemplates, setCalendarTemplates] = useState([
+    {
+      _id: '1',
+      name: 'Business Meeting Schedule',
+      description: 'Calendar for scheduling business meetings and appointments',
+      link: 'https://calendar.google.com/calendar/embed?src=business@company.com',
+      platform: 'calendar'
+    },
+    {
+      _id: '2', 
+      name: 'Team Availability',
+      description: 'Track team member availability and working hours',
+      link: 'https://calendar.google.com/calendar/embed?src=team@company.com',
+      platform: 'calendar'
+    }
+  ]);
+  const [addTemplateModal, setAddTemplateModal] = useState({ open: false, platform: '' });
+  const [newTemplateData, setNewTemplateData] = useState({ description: '', link: '' });
 
   const tabs = [
     { key: "starting", label: "Starting Messages" },
@@ -903,7 +921,7 @@ const AgentForm = ({
           name="systemPrompt"
           value={formData.systemPrompt}
           onChange={handleInputChange}
-          rows="4"
+          rows="12"
           required
           placeholder="Define the agent's behavior, knowledge, and capabilities..."
           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors resize-vertical"
@@ -1051,6 +1069,14 @@ const AgentForm = ({
         hoverColor: "hover:bg-purple-600",
         placeholder: "sms:+1234567890",
       },
+      {
+        id: "calendar",
+        name: "Calendar",
+        icon: <FiCalendar />,
+        color: "bg-orange-500",
+        hoverColor: "hover:bg-orange-600",
+        placeholder: "https://calendar.google.com/calendar/embed",
+      },
     ];
 
     const renderPlatformContent = (platform) => {
@@ -1077,8 +1103,8 @@ const AgentForm = ({
         } else {
           assignedTemplatesForPlatform = whatsappTemplates.filter(t => t.status === 'REMOVED');
         }
-        
-
+      } else if (platform.id === 'calendar') {
+        assignedTemplatesForPlatform = calendarTemplates;
       } else {
         assignedTemplatesForPlatform = assignedTemplates.filter(t => t.platform === platform.id && t.status === 'APPROVED');
       }
@@ -1168,51 +1194,79 @@ const AgentForm = ({
           {/* Content when enabled */}
           {isEnabled && (
             <div className="space-y-4">
-              
+              {/* Add template button for Calendar only */}
+              {platform.id === 'calendar' && (
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="text-lg font-semibold text-gray-800">
+                    Calendar Templates
+                  </h4>
+                  <button
+                    type="button"
+                    onClick={() => setAddTemplateModal({ open: true, platform: platform.id })}
+                    className="px-4 py-2 text-white rounded-lg transition-colors flex items-center gap-2 bg-orange-500 hover:bg-orange-600"
+                  >
+                    <span className="text-lg">+</span>
+                    Add Template
+                  </button>
+                </div>
+              )}
 
-                             {/* Show assigned templates if available */}
-               <div className="space-y-2">
+              {/* Show assigned templates if available */}
+              <div className="space-y-2">
                  <div className="flex items-center justify-between">
                    <div className="text-sm font-medium text-gray-700 uppercase tracking-wide">
                      Templates ({assignedTemplatesForPlatform.length})
                    </div>
+                   
                    {/* WhatsApp tabs for Available/Removed - Always show for WhatsApp */}
                    {platform.id === 'whatsapp' && (
-                     <div className="flex gap-1 bg-gray-100 p-1 rounded-lg">
-                       <button
+                    
+                     <div className="flex gap-2 items-center">
+                        <button
                          type="button"
-                         onClick={() => setTemplateListTab('available')}
-                         className={`px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
-                           templateListTab === 'available'
-                             ? 'bg-white text-green-700 shadow-sm border border-green-200'
-                             : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50'
-                         }`}
+                         onClick={() => setAddTemplateModal({ open: true, platform: 'whatsapp' })}
+                         className="px-3 py-2 text-sm font-medium bg-green-500 text-white rounded-md hover:bg-green-600 transition-all duration-200 flex items-center gap-2"
                        >
-                         <span className="flex items-center gap-2">
-                           <span className="w-2 h-2 rounded-full bg-green-500"></span>
-                           Available
-                           <span className="bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded-full">
-                             {whatsappTemplates.filter(t => t.status === 'APPROVED').length}
-                           </span>
-                         </span>
+                         <span className="text-lg">+</span>
+                         Raise Request
                        </button>
-                       <button
-                         type="button"
-                         onClick={() => setTemplateListTab('removed')}
-                         className={`px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
-                           templateListTab === 'removed'
-                             ? 'bg-white text-red-700 shadow-sm border border-red-200'
-                             : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50'
-                         }`}
-                       >
-                         <span className="flex items-center gap-2">
-                           <span className="w-2 h-2 rounded-full bg-red-500"></span>
-                           Removed
-                           <span className="bg-red-100 text-red-700 text-xs px-2 py-0.5 rounded-full">
-                             {whatsappTemplates.filter(t => t.status === 'REMOVED').length}
+                       <div className="flex gap-1 bg-gray-100 p-1 rounded-lg">
+                         <button
+                           type="button"
+                           onClick={() => setTemplateListTab('available')}
+                           className={`px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
+                             templateListTab === 'available'
+                               ? 'bg-white text-green-700 shadow-sm border border-green-200'
+                               : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50'
+                           }`}
+                         >
+                           <span className="flex items-center gap-2">
+                             <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                             Available
+                             <span className="bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded-full">
+                               {whatsappTemplates.filter(t => t.status === 'APPROVED').length}
+                             </span>
                            </span>
-                         </span>
-                       </button>
+                         </button>
+                         <button
+                           type="button"
+                           onClick={() => setTemplateListTab('removed')}
+                           className={`px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
+                             templateListTab === 'removed'
+                               ? 'bg-white text-red-700 shadow-sm border border-red-200'
+                               : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50'
+                           }`}
+                         >
+                           <span className="flex items-center gap-2">
+                             <span className="w-2 h-2 rounded-full bg-red-500"></span>
+                             Removed
+                             <span className="bg-red-100 text-red-700 text-xs px-2 py-0.5 rounded-full">
+                               {whatsappTemplates.filter(t => t.status === 'REMOVED').length}
+                             </span>
+                           </span>
+                         </button>
+                       </div>
+                     
                      </div>
                    )}
                  </div>
@@ -1303,8 +1357,30 @@ const AgentForm = ({
                                        🗑️ Removed
                                      </span>
                                    )}
+                                   {/* Approval Date & Time */}
+                                   {t.assignedAt && (
+                                     <span className="text-xs text-gray-500">
+                                       📅 {new Date(t.assignedAt).toLocaleDateString()} {new Date(t.assignedAt).toLocaleTimeString()}
+                                     </span>
+                                   )}
                                  </div>
                                </div>
+                               
+                               {/* Show links below heading for calendar and WhatsApp templates */}
+                               {platform.id === 'calendar' && t.link && (
+                                 <div className="mt-2">
+                                   <a 
+                                     href={t.link} 
+                                     target="_blank" 
+                                     rel="noopener noreferrer" 
+                                     className="text-sm text-blue-600 hover:underline break-all"
+                                   >
+                                     📅 {t.link}
+                                   </a>
+                                 </div>
+                               )}
+                  
+                               
                                <div className="flex items-center gap-2 mt-2">
                                  {t.status && t.status !== 'REMOVED' && (
                                    <span className={`text-xs px-3 py-1 rounded-full font-medium ${
@@ -1313,11 +1389,6 @@ const AgentForm = ({
                                      'bg-gray-100 text-gray-700 border border-gray-200'
                                    }`}>
                                      {t.status === 'APPROVED' ? '✓ Approved' : t.status}
-                                   </span>
-                                 )}
-                                 {t.language && (
-                                   <span className="text-xs px-3 py-1 rounded-full bg-blue-100 text-blue-700 font-medium border border-blue-200">
-                                     🌐 {t.language}
                                    </span>
                                  )}
                                  {t.category && (
@@ -1329,16 +1400,6 @@ const AgentForm = ({
                              </div>
                            </div>
                            <div className="flex items-center gap-4">
-                             {/* View Button - Left side */}
-                             <button
-                               type="button"
-                               onClick={() => setViewTemplateModal({ open: true, template: t })}
-                               className="flex-shrink-0 px-3 py-2 text-sm font-medium rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 transition-all duration-200 border border-blue-200"
-                               title="View template details"
-                             >
-                               <FiEye className="w-4 h-4" />
-                             </button>
-                             
                              {/* Default Template Toggle - Center */}
                              {templateListTab === 'available' && (
                                <div className="flex items-center gap-3">
@@ -1376,61 +1437,50 @@ const AgentForm = ({
                                </div>
                              )}
                              
-                             
+                             {/* Three dots menu */}
+                             <div className="relative group">
+                               <button
+                                 type="button"
+                                 className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
+                                 title="More options"
+                               >
+                                 <FiMoreVertical className="w-4 h-4" />
+                               </button>
+                               <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg border border-gray-200 z-10 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200">
+                                 <div className="py-1">
+                                   <button
+                                     type="button"
+                                     onClick={() => {
+                                       if (platform.id === 'calendar') {
+                                         // Remove calendar template
+                                         setCalendarTemplates(prev => prev.filter(temp => temp._id !== t._id));
+                                       } else {
+                                         // Remove/restore other templates
+                                         handleTemplateStatusChange(t._id, t.status === 'APPROVED' ? 'REMOVED' : 'APPROVED');
+                                       }
+                                     }}
+                                     className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100 flex items-center gap-2"
+                                   >
+                                     <FiTrash2 className="w-4 h-4" />
+                                     {platform.id === 'calendar' ? 'Delete' : (t.status === 'APPROVED' ? 'Remove' : 'Restore')}
+                                   </button>
+                                 </div>
+                               </div>
+                             </div>
                            </div>
                          </div>
                          
                          {t.description && (
-                           <div className="text-sm text-gray-600 mb-4 whitespace-pre-wrap line-clamp-3 bg-gray-50 p-3 rounded-lg border border-gray-200">
+                           <div 
+                             className="text-sm text-gray-600 mb-4 whitespace-pre-wrap line-clamp-3 bg-gray-50 p-3 rounded-lg border border-gray-200 cursor-pointer hover:bg-gray-100 transition-colors"
+                             onClick={() => setViewTemplateModal({ open: true, template: t })}
+                             title="Click to view full details"
+                           >
                              <span className="font-medium text-gray-700">Description:</span> {t.description}
                            </div>
                          )}
                          
                          
-                         {/* Action buttons section - always show */}
-                         <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-200">
-                           <div className="flex items-center gap-4">
-                             {t.url && !t.url.includes('whatsapp-template-module.onrender.com') && (
-                               <>
-                                 <a 
-                                   href={t.url} 
-                                   target="_blank" 
-                                   rel="noopener noreferrer" 
-                                   className="inline-flex items-center text-sm text-blue-600 hover:underline"
-                                 >
-                                   View Template Link
-                                   <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                                   </svg>
-                                 </a>
-                                 {t.parameter_format && (
-                                   <span className="text-xs text-gray-500">
-                                     Format: {t.parameter_format}
-                                   </span>
-                                 )}
-                               </>
-                             )}
-                           </div>
-                           
-                           {/* Remove/Restore Button - Right side */}
-                           {templateListTab === 'available' ? (
-                             <button
-                               type="button"
-                               onClick={() => handleTemplateStatusChange(t._id, 'REMOVED')}
-                               className="flex-shrink-0 px-2 py-2 text-sm font-medium rounded-lg bg-red-50 text-red-700 hover:bg-red-100 transition-all duration-200 border border-red-200"
-                             >
-                               <FiTrash2 className="w-4 h-4 inline" />
-                             </button>
-                           ) : (
-                             <button
-                               type="button"
-                               onClick={() => handleTemplateStatusChange(t._id, 'APPROVED')}
-                               className="flex-shrink-0 px-4 py-2 text-sm font-medium rounded-lg bg-green-50 text-green-700 hover:bg-green-100 transition-all duration-200 border border-green-200"
-                             >
-                               <FiRotateCcw className="w-4 h-4 inline" />
-                             </button>
-                           )}
-                         </div>
                        </div>
                                               ))}
                        </div>
@@ -1465,72 +1515,7 @@ const AgentForm = ({
                 </div>
               )}
 
-              {/* Show raise request UI for WhatsApp */}
-              {platform.id === 'whatsapp' && (
-                <div className="p-4 rounded border border-dashed border-gray-300 bg-white">
-                  <div className="text-sm text-gray-700 mb-3">
-                    Need more templates? Raise a request for template approval.
-                  </div>
-                  <div className="space-y-3">
-                    <textarea
-                      placeholder="Describe the template you need and why..."
-                      value={requestReason}
-                      onChange={(e) => setRequestReason(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
-                      rows={3}
-                    />
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        disabled={requesting || !agent?._id || status === 'pending' || !requestReason.trim()}
-                        onClick={async () => {
-                          try {
-                            setRequesting(true);
-                            const authToken =
-                              clientToken ||
-                              sessionStorage.getItem("clienttoken") ||
-                              localStorage.getItem("admintoken");
-                            const resp = await fetch(`${API_BASE_URL}/agent-access/request`, {
-                              method: 'POST',
-                              headers: {
-                                'Content-Type': 'application/json',
-                                Authorization: `Bearer ${authToken}`,
-                              },
-                              body: JSON.stringify({
-                                clientId: clientId || agent?.clientId || '',
-                                agentId: agent?._id,
-                                platform: 'whatsapp',
-                                reason: requestReason.trim()
-                              })
-                            });
-                            const json = await resp.json();
-                            if (json.success) {
-                              alert('Request submitted! Admin will review and approve.');
-                              setRequestReason('');
-                              // refresh requests
-                              try {
-                                const r = await fetch(`${API_BASE_URL}/agent-access/requests?agentId=${agent._id}`);
-                                const rj = await r.json();
-                                setMyRequests(rj?.success ? (rj.data || []) : []);
-                              } catch {}
-                            } else {
-                              alert(json.message || 'Failed to submit request');
-                            }
-                          } catch (e) {
-                            alert('Failed to submit request');
-                          } finally {
-                            setRequesting(false);
-                          }
-                        }}
-                        className={`px-4 py-2 text-white text-sm rounded bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors`}
-                      >
-                        {status === 'pending' ? 'Requested' : requesting ? 'Submitting...' : 'Raise Request'}
-                      </button>
-                     
-                    </div>
-                  </div>
-                </div>
-              )}
+
             </div>
           )}
         </div>
@@ -1549,7 +1534,7 @@ const AgentForm = ({
         </div>
 
         {/* Platform Tabs */}
-        <div className="flex gap-1 mb-6">
+        <div className="flex gap-1 mb-6 w-full">
           {socialPlatforms.map((platform) => (
             <button
               key={platform.id}
@@ -1659,20 +1644,44 @@ const AgentForm = ({
   const isFirstTab = selectedTab === tabs[0].key;
 
   return (
-    <div className="bg-white rounded-lg shadow-lg w-[90%] mx-auto">
+    <div className="bg-white rounded-lg shadow-lg mx-auto">
+      
       <div className="border-b border-gray-200 p-6">
+      <h1 className="text-2xl font-bold text-gray-800">AI Agent</h1>
         <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-bold text-gray-800">
-            {agent ? "Edit Agent" : "Create New Agent"}
+          <h2 className="text-lg font-bold text-gray-800">
+            {agent ? `${agent.agentName}` : "Create New Agent"}
           </h2>
-          <button
-            type="button"
-            title="Help"
-            onClick={() => window.open('https://web.whatsapp.com/send/?phone=8147540362&text=I%20need%20help%20with%20agent%20templates', '_blank')}
-            className="w-9 h-9 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 text-gray-700"
-          >
-            ?
-          </button>
+          <div className="flex items-center gap-3">
+            {agent && (
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={isLoading}
+                className="px-6 py-3 bg-black text-white rounded-lg hover:bg-gray-800 disabled:bg-gray-400 disabled:cursor-not-allowed transition-all hover:-translate-y-1"
+              >
+                {isLoading ? (
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    Updating...
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    
+                    Update Agent
+                  </div>
+                )}
+              </button>
+            )}
+            <button
+              type="button"
+              title="Help"
+              onClick={() => window.open('https://web.whatsapp.com/send/?phone=8147540362&text=I%20need%20help%20with%20agent%20templates', '_blank')}
+              className="w-9 h-9 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 text-gray-700 transition-all duration-200 hover:shadow-md"
+            >
+              ?
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1756,6 +1765,127 @@ const AgentForm = ({
           </div>
         </div>
       </form>
+
+      {/* Add Template Modal */}
+      {addTemplateModal.open && (
+        <div className="fixed inset-0 bg-gray-50/80 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xl font-semibold text-gray-800">
+                  Add {addTemplateModal.platform === 'calendar' ? 'Calendar' : 'WhatsApp'} Template
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAddTemplateModal({ open: false, platform: '' });
+                    setNewTemplateData({ description: '', link: '' });
+                  }}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <div className="p-6">
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
+                  <textarea
+                    placeholder={addTemplateModal.platform === 'calendar' 
+                      ? "Describe the calendar template..." 
+                      : "Describe the WhatsApp template..."
+                    }
+                    value={newTemplateData.description}
+                    onChange={(e) => setNewTemplateData(prev => ({ ...prev, description: e.target.value }))}
+                    className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:border-transparent resize-none ${
+                      addTemplateModal.platform === 'calendar' 
+                        ? 'focus:ring-orange-500' 
+                        : 'focus:ring-green-500'
+                    }`}
+                    rows={3}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    {addTemplateModal.platform === 'calendar' ? 'Calendar Link' : 'Template URL'}
+                  </label>
+                  <input
+                    type="url"
+                    placeholder={addTemplateModal.platform === 'calendar' 
+                      ? "https://calendar.google.com/calendar/embed..." 
+                      : "https://example.com/template..."
+                    }
+                    value={newTemplateData.link}
+                    onChange={(e) => setNewTemplateData(prev => ({ ...prev, link: e.target.value }))}
+                    className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:border-transparent ${
+                      addTemplateModal.platform === 'calendar' 
+                        ? 'focus:ring-orange-500' 
+                        : 'focus:ring-green-500'
+                    }`}
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="p-6 border-t border-gray-200 bg-gray-50">
+              <div className="flex gap-3 justify-end">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAddTemplateModal({ open: false, platform: '' });
+                    setNewTemplateData({ description: '', link: '' });
+                  }}
+                  className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (newTemplateData.description.trim() && newTemplateData.link.trim()) {
+                      const newTemplate = {
+                        _id: Date.now().toString(),
+                        name: newTemplateData.description.substring(0, 50) + (newTemplateData.description.length > 50 ? '...' : ''),
+                        description: newTemplateData.description,
+                        link: newTemplateData.link,
+                        platform: addTemplateModal.platform
+                      };
+                      
+                      if (addTemplateModal.platform === 'calendar') {
+                        setCalendarTemplates(prev => [...prev, newTemplate]);
+                      } else if (addTemplateModal.platform === 'whatsapp') {
+                        // Add to WhatsApp templates with APPROVED status
+                        const whatsappTemplate = {
+                          ...newTemplate,
+                          url: newTemplate.link,
+                          status: 'APPROVED',
+                          category: 'UTILITY',
+                          language: 'en'
+                        };
+                        setWhatsappTemplates(prev => [...prev, whatsappTemplate]);
+                      }
+                      
+                      setAddTemplateModal({ open: false, platform: '' });
+                      setNewTemplateData({ description: '', link: '' });
+                    } else {
+                      alert('Please fill in both description and link');
+                    }
+                  }}
+                  className={`px-4 py-2 text-white rounded transition-colors ${
+                    addTemplateModal.platform === 'calendar' 
+                      ? 'bg-orange-500 hover:bg-orange-600' 
+                      : 'bg-green-500 hover:bg-green-600'
+                  }`}
+                >
+                  Add Template
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* View Template Modal */}
       {viewTemplateModal.open && viewTemplateModal.template && (
