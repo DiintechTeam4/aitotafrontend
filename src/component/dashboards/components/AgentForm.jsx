@@ -1206,31 +1206,7 @@ const AgentForm = ({
                              </div>
                            </div>
                            <div className="flex flex-col gap-2">
-                             <button
-                               type="button"
-                               onClick={() => {
-                                 // For WhatsApp, generate the template module URL instead of using the template's actual URL
-                                 let urlToUse = t.url;
-                                 if (platform.id === 'whatsapp') {
-                                   const base = 'https://whatsapp-template-module.onrender.com/api/whatsapp/send';
-                                   const suffix = t.name ? `-${t.name}` : '';
-                                   urlToUse = base + suffix;
-                                 }
-                                 
-                                 const newLinks = socialMediaLinks.map((link) =>
-                                   link.platform === platform.id
-                                     ? { ...link, url: urlToUse }
-                                     : link
-                                 );
-                                 if (!newLinks.find(l => l.platform === platform.id)) {
-                                   newLinks.push({ platform: platform.id, url: urlToUse });
-                                 }
-                                 setSocialMediaLinks(newLinks);
-                               }}
-                               className="flex-shrink-0 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors text-sm font-medium"
-                             >
-                               Select
-                             </button>
+                            
                              <button
                                type="button"
                                onClick={() => {
@@ -1255,7 +1231,7 @@ const AgentForm = ({
                                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                                }`}
                              >
-                               {defaultTemplate && defaultTemplate.templateId === t._id ? 'Default' : 'Set Default'}
+                               {defaultTemplate && defaultTemplate.templateId === t._id ? 'Selected' : 'Select'}
                              </button>
                            </div>
                          </div>
