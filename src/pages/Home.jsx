@@ -300,7 +300,7 @@ const Home = () => {
               <h3 className="text-xl font-bold mb-4">Office</h3>
               <div className="text-gray-400 space-y-2">
                 <p>Head Office</p>
-                <p>804, 5th Cross, 4th Block,<br />Koramangala, Bengaluru-560095</p>
+                <p>S-04, D-53, Sector 2<br /> Noida, UP, India</p>
                 <p>contact@aitota.com</p>
               </div>
             </div>
