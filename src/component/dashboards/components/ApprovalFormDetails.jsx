@@ -10,6 +10,10 @@ import {
   FaMapMarkerAlt,
   FaIdCard,
   FaRupeeSign,
+  FaArrowLeft,
+  FaUserCheck,
+  FaIdBadge,
+  FaCalendarAlt,
 } from "react-icons/fa";
 import { API_BASE_URL } from "../../../config";
 
@@ -220,207 +224,287 @@ const ApprovalFormDetails = ({ clientId, onClose, onApprove }) => {
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-white overflow-y-auto">
-      {/* Header */}
-      <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4">
-        <div className="flex justify-between items-center">
-          <div className="flex items-center space-x-3">
+    <div
+      className="fixed inset-0 z-50 bg-gray-50 overflow-y-auto"
+      style={{ marginLeft: "16rem" }}
+    >
+      {/* Professional Header */}
+      <div className="sticky top-0 bg-white border-b border-gray-200 shadow-sm">
+        <div className="max-w-7xl mx-auto px-6 py-4">
+          <div className="flex justify-between items-center">
+            <div className="flex items-center space-x-4">
+              <button
+                onClick={onClose}
+                className="flex items-center gap-3 text-gray-600 hover:text-red-600 font-medium px-4 py-2 rounded-lg transition-colors hover:bg-gray-100"
+              >
+                <FaArrowLeft className="text-xl" />
+                <span className="text-lg">Back to Dashboard</span>
+              </button>
+            </div>
+            <div className="text-center">
+              <h1 className="text-3xl font-bold text-gray-800">
+                Client Profile Review
+              </h1>
+              <p className="text-gray-500 mt-1">
+                Review and approve client applications
+              </p>
+            </div>
             <button
               onClick={onClose}
-              className="flex items-center gap-2 text-gray-600 hover:text-red-600 font-medium px-4 py-2 rounded transition"
+              className="text-gray-400 hover:text-red-600 p-3 rounded-lg hover:bg-gray-100 transition-colors"
             >
-              <span className="text-xl">&larr;</span> Back
+              <FaTimes size={24} />
             </button>
           </div>
-          <h1 className="text-2xl font-bold text-gray-800">
-            Client Profile Review
-          </h1>
-          <button
-            onClick={onClose}
-            className="text-gray-600 hover:text-red-600 p-2 rounded transition"
-          >
-            <FaTimes size={24} />
-          </button>
         </div>
       </div>
 
-      {/* Content */}
-      <div className="max-w-4xl mx-auto p-6">
+      {/* Main Content */}
+      <div className="max-w-6xl mx-auto p-6">
         {clientData && (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Name */}
-              <div>
-                <label className="block text-sm font-medium text-gray-500 mb-1">
-                  Name
-                </label>
-                <p className="text-lg font-medium text-gray-900">
-                  {clientData.name || clientData.contactName || "Not provided"}
-                </p>
+          <div className="space-y-6">
+            {/* Client Overview Card */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center space-x-4">
+                  <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center">
+                    <FaUser className="text-2xl text-red-600" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold text-gray-800">
+                      {clientData.name ||
+                        clientData.contactName ||
+                        "Not provided"}
+                    </h2>
+                    <p className="text-gray-500 text-lg">
+                      {clientData.businessName || "Business name not provided"}
+                    </p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div
+                    className={`inline-flex items-center px-4 py-2 rounded-full text-sm font-semibold ${
+                      clientData.isApproved
+                        ? "bg-green-100 text-green-800"
+                        : "bg-yellow-100 text-yellow-800"
+                    }`}
+                  >
+                    <FaUserCheck className="mr-2" />
+                    {clientData.isApproved ? "Approved" : "Pending Approval"}
+                  </div>
+                </div>
               </div>
+            </div>
 
-              {/* Business Name */}
-              <div>
-                <label className="block text-sm font-medium text-gray-500 mb-1">
-                  Business Name
-                </label>
-                <p className="text-lg font-medium text-gray-900">
-                  {clientData.businessName || "Not provided"}
-                </p>
-              </div>
+            {/* Client Details Grid */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <h3 className="text-xl font-semibold text-gray-800 mb-6 flex items-center">
+                <FaIdBadge className="mr-3 text-red-600" />
+                Client Information
+              </h3>
 
-              {/* Mobile Number */}
-              <div>
-                <label className="block text-sm font-medium text-gray-500 mb-1">
-                  Mobile Number
-                </label>
-                <p className="text-lg font-medium text-gray-900">
-                  {clientData.mobileNo ||
-                    clientData.contactNumber ||
-                    "Not provided"}
-                </p>
-              </div>
-
-              {/* GST Number */}
-              <div>
-                <label className="block text-sm font-medium text-gray-500 mb-1">
-                  GST Number
-                </label>
-                <p className="text-lg font-medium text-gray-900">
-                  {clientData.gstNo || clientData.gst || "Not provided"}
-                </p>
-              </div>
-
-              {/* PAN Number */}
-              <div>
-                <label className="block text-sm font-medium text-gray-500 mb-1">
-                  PAN Number
-                </label>
-                <p className="text-lg font-medium text-gray-900">
-                  {clientData.panNo || clientData.pancard || "Not provided"}
-                </p>
-              </div>
-
-              {/* Address */}
-              <div>
-                <label className="block text-sm font-medium text-gray-500 mb-1">
-                  Address
-                </label>
-                <p className="text-lg font-medium text-gray-900">
-                  {clientData.address || "Not provided"}
-                </p>
-              </div>
-
-              {/* City */}
-              <div>
-                <label className="block text-sm font-medium text-gray-500 mb-1">
-                  City
-                </label>
-                <p className="text-lg font-medium text-gray-900">
-                  {clientData.city || "Not provided"}
-                </p>
-              </div>
-
-              {/* Pincode */}
-              <div>
-                <label className="block text-sm font-medium text-gray-500 mb-1">
-                  Pincode
-                </label>
-                <p className="text-lg font-medium text-gray-900">
-                  {clientData.pincode || "Not provided"}
-                </p>
-              </div>
-
-              {/* Website */}
-              <div>
-                <label className="block text-sm font-medium text-gray-500 mb-1">
-                  Website
-                </label>
-                <p className="text-lg font-medium text-gray-900">
-                  {clientData.websiteUrl ||
-                    clientData.website ||
-                    "Not provided"}
-                </p>
-              </div>
-
-              {/* User ID */}
-              <div>
-                <label className="block text-sm font-medium text-gray-500 mb-1">
-                  User ID
-                </label>
-                <p className="text-lg font-medium text-gray-900">
-                  {clientData.userId || clientData.clientId || "Not provided"}
-                </p>
-              </div>
-
-              {/* Created At */}
-              <div>
-                <label className="block text-sm font-medium text-gray-500 mb-1">
-                  Created At
-                </label>
-                <p className="text-lg font-medium text-gray-900">
-                  {clientData.createdAt
-                    ? new Date(clientData.createdAt).toLocaleString()
-                    : "Not provided"}
-                </p>
-              </div>
-
-              {/* Business Logo URL */}
-              {clientData.businessLogoUrl && (
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-500 mb-1">
-                    Business Logo
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {/* Name */}
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <label className="block text-sm font-medium text-gray-500 mb-2 flex items-center">
+                    <FaUser className="mr-2 text-red-500" />
+                    Full Name
                   </label>
-                  <div className="flex items-center space-x-3">
-                    {clientData.businessLogoUrl && (
+                  <p className="text-lg font-semibold text-gray-900">
+                    {clientData.name ||
+                      clientData.contactName ||
+                      "Not provided"}
+                  </p>
+                </div>
+
+                {/* Business Name */}
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <label className="block text-sm font-medium text-gray-500 mb-2 flex items-center">
+                    <FaBuilding className="mr-2 text-red-500" />
+                    Business Name
+                  </label>
+                  <p className="text-lg font-semibold text-gray-900">
+                    {clientData.businessName || "Not provided"}
+                  </p>
+                </div>
+
+                {/* Mobile Number */}
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <label className="block text-sm font-medium text-gray-500 mb-2 flex items-center">
+                    <FaPhone className="mr-2 text-red-500" />
+                    Mobile Number
+                  </label>
+                  <p className="text-lg font-semibold text-gray-900">
+                    {clientData.mobileNo ||
+                      clientData.contactNumber ||
+                      "Not provided"}
+                  </p>
+                </div>
+
+                {/* GST Number */}
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <label className="block text-sm font-medium text-gray-500 mb-2 flex items-center">
+                    <FaIdCard className="mr-2 text-red-500" />
+                    GST Number
+                  </label>
+                  <p className="text-lg font-semibold text-gray-900">
+                    {clientData.gstNo || clientData.gst || "Not provided"}
+                  </p>
+                </div>
+
+                {/* PAN Number */}
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <label className="block text-sm font-medium text-gray-500 mb-2 flex items-center">
+                    <FaIdCard className="mr-2 text-red-500" />
+                    PAN Number
+                  </label>
+                  <p className="text-lg font-semibold text-gray-900">
+                    {clientData.panNo || clientData.pancard || "Not provided"}
+                  </p>
+                </div>
+
+                {/* Email */}
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <label className="block text-sm font-medium text-gray-500 mb-2 flex items-center">
+                    <FaGlobe className="mr-2 text-red-500" />
+                    Email Address
+                  </label>
+                  <p className="text-lg font-semibold text-gray-900">
+                    {clientData.email || "Not provided"}
+                  </p>
+                </div>
+
+                {/* Address */}
+                <div className="bg-gray-50 rounded-lg p-4 md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-500 mb-2 flex items-center">
+                    <FaMapMarkerAlt className="mr-2 text-red-500" />
+                    Address
+                  </label>
+                  <p className="text-lg font-semibold text-gray-900">
+                    {clientData.address || "Not provided"}
+                  </p>
+                </div>
+
+                {/* City */}
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <label className="block text-sm font-medium text-gray-500 mb-2 flex items-center">
+                    <FaMapMarkerAlt className="mr-2 text-red-500" />
+                    City
+                  </label>
+                  <p className="text-lg font-semibold text-gray-900">
+                    {clientData.city || "Not provided"}
+                  </p>
+                </div>
+
+                {/* Pincode */}
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <label className="block text-sm font-medium text-gray-500 mb-2 flex items-center">
+                    <FaMapMarkerAlt className="mr-2 text-red-500" />
+                    Pincode
+                  </label>
+                  <p className="text-lg font-semibold text-gray-900">
+                    {clientData.pincode || "Not provided"}
+                  </p>
+                </div>
+
+                {/* Website */}
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <label className="block text-sm font-medium text-gray-500 mb-2 flex items-center">
+                    <FaGlobe className="mr-2 text-red-500" />
+                    Website
+                  </label>
+                  <p className="text-lg font-semibold text-gray-900">
+                    {clientData.websiteUrl ||
+                      clientData.website ||
+                      "Not provided"}
+                  </p>
+                </div>
+
+                {/* Created At */}
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <label className="block text-sm font-medium text-gray-500 mb-2 flex items-center">
+                    <FaCalendarAlt className="mr-2 text-red-500" />
+                    Registration Date
+                  </label>
+                  <p className="text-lg font-semibold text-gray-900">
+                    {clientData.createdAt
+                      ? new Date(clientData.createdAt).toLocaleDateString(
+                          "en-US",
+                          {
+                            year: "numeric",
+                            month: "long",
+                            day: "numeric",
+                          }
+                        )
+                      : "Not provided"}
+                  </p>
+                </div>
+
+                {/* Business Logo */}
+                {clientData.businessLogoUrl && (
+                  <div className="bg-gray-50 rounded-lg p-4 md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-500 mb-2 flex items-center">
+                      <FaBuilding className="mr-2 text-red-500" />
+                      Business Logo
+                    </label>
+                    <div className="flex items-center space-x-4">
                       <img
                         src={clientData.businessLogoUrl}
                         alt="Business Logo"
-                        className="w-16 h-16 object-cover rounded-md border"
+                        className="w-20 h-20 object-cover rounded-lg border-2 border-gray-200 shadow-sm"
                       />
-                    )}
-                    <p className="text-sm text-gray-600">Logo URL available</p>
+                      <div>
+                        <p className="text-sm text-gray-600">Logo available</p>
+                        <p className="text-xs text-gray-500">
+                          Professional branding image
+                        </p>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
+            </div>
+
+            {/* Approval Decision Section */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <h3 className="text-xl font-semibold text-gray-800 mb-6 flex items-center">
+                <FaCheck className="mr-3 text-red-600" />
+                Review Decision
+              </h3>
+
+              <div className="flex justify-end space-x-4">
+                {clientData?.isApproved ? (
+                  // Show Already Approved button when client is approved
+                  <button
+                    disabled
+                    className="px-8 py-4 bg-blue-500 text-white rounded-lg flex items-center cursor-not-allowed font-medium text-lg opacity-75"
+                  >
+                    Already Approved
+                  </button>
+                ) : (
+                  // Show Approve button when conditions are not met
+                  <button
+                    onClick={handleApprove}
+                    disabled={approving}
+                    className="px-8 py-4 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center disabled:opacity-50 font-medium text-lg shadow-sm hover:shadow-md"
+                  >
+                    {approving ? (
+                      <>
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-3"></div>
+                        Approving...
+                      </>
+                    ) : (
+                      <>
+                        <FaCheck className="mr-3" />
+                        Approve Client {clientData.name}
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         )}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mt-6">
-          <h2 className="text-xl font-semibold text-gray-800 mb-4">
-            Review Decision
-          </h2>
-          <div className="flex justify-end space-x-4">
-            {clientData?.isApproved ? (
-              // Show Already Approved button when client is approved
-              <button
-                disabled
-                className="px-6 py-3 bg-green-500 text-white rounded-md flex items-center cursor-not-allowed"
-              >
-                Already Approved
-              </button>
-            ) : (
-              // Show Approve button when conditions are not met
-              <button
-                onClick={handleApprove}
-                disabled={approving}
-                className="px-6 py-3 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors flex items-center disabled:opacity-50"
-              >
-                {approving ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                    Approving...
-                  </>
-                ) : (
-                  <>
-                    <FaCheck className="mr-2" />
-                    Approve Client
-                  </>
-                )}
-              </button>
-            )}
-          </div>
-        </div>
       </div>
     </div>
   );
