@@ -1,5 +1,6 @@
 "use client";
-import { FiMail, FiMessageSquare } from "react-icons/fi";
+import { FiMail, FiMessageSquare, FiEye, FiTrash2, FiRotateCcw, FiHelpCircle } from "react-icons/fi";
+import { FaWhatsapp, FaTelegram } from "react-icons/fa";
 import { useState, useEffect } from "react";
 import VoiceSynthesizer from "./VoiceSynthesizer";
 import AudioRecorder from "./AudioRecorder";
@@ -50,6 +51,11 @@ const AgentForm = ({
   const [myRequests, setMyRequests] = useState([]);
   const [loadingRequests, setLoadingRequests] = useState(false);
   const [defaultTemplate, setDefaultTemplate] = useState(null);
+  const [requestReason, setRequestReason] = useState("");
+  const [viewTemplateModal, setViewTemplateModal] = useState({ open: false, template: null });
+  const [templateListTab, setTemplateListTab] = useState('available');
+  const [templateFilter, setTemplateFilter] = useState('');
+  const [templateCategoryFilter, setTemplateCategoryFilter] = useState('');
 
   const tabs = [
     { key: "starting", label: "Starting Messages" },
@@ -223,21 +229,49 @@ const AgentForm = ({
   const fetchWhatsappTemplates = async () => {
     try {
       setLoadingWhatsappTemplates(true);
-      // Get templates from agent's whatsappTemplates array   (already saved in database)
-      if (agent && agent.whatsappTemplates && Array.isArray(agent.whatsappTemplates)) {
-        const normalized = agent.whatsappTemplates.map(t => ({
-          _id: t.templateId,
-          name: t.templateName,
-          url: t.templateUrl,
-          imageUrl: '', // Not stored in current schema
-          description: t.description,
-          language: t.language,
-          status: t.status,
-          category: t.category,
-          platform: 'whatsapp'
-        }));
-        setWhatsappTemplates(normalized);
+      
+      // Fetch fresh agent data from server to get updated templates
+      if (agent && agent._id) {
+        const authToken = clientToken || sessionStorage.getItem("clienttoken") || localStorage.getItem("admintoken");
+        const resp = await fetch(`${API_BASE_URL}/client/agents/${agent._id}`, {
+          headers: {
+            Authorization: `Bearer ${authToken}`,
+          },
+        });
+        
+        if (resp.ok) {
+          const agentData = await resp.json();
+          if (agentData.success && agentData.data) {
+            const freshAgent = agentData.data;
+            if (freshAgent.whatsappTemplates && Array.isArray(freshAgent.whatsappTemplates)) {
+              const normalized = freshAgent.whatsappTemplates.map(t => ({
+                _id: t.templateId,
+                name: t.templateName,
+                url: t.templateUrl,
+                imageUrl: '', // Not stored in current schema
+                description: t.description,
+                language: t.language,
+                status: t.status,
+                category: t.category,
+                platform: 'whatsapp',
+                assignedAt: t.assignedAt
+              }));
+              console.log('Fetched fresh WhatsApp templates:', normalized);
+              setWhatsappTemplates(normalized);
+            } else {
+              console.log('No WhatsApp templates found for agent');
+              setWhatsappTemplates([]);
+            }
+          } else {
+            console.log('Failed to fetch agent data');
+            setWhatsappTemplates([]);
+          }
+        } else {
+          console.log('Failed to fetch agent data from server');
+          setWhatsappTemplates([]);
+        }
       } else {
+        console.log('No agent ID available');
         setWhatsappTemplates([]);
       }
     } catch (e) {
@@ -988,7 +1022,7 @@ const AgentForm = ({
       {
         id: "whatsapp",
         name: "WhatsApp",
-        icon: "📱",
+        icon: <FaWhatsapp />,
         color: "bg-green-500",
         hoverColor: "hover:bg-green-600",
         placeholder: "https://wa.me/1234567890",
@@ -996,7 +1030,7 @@ const AgentForm = ({
       {
         id: "telegram",
         name: "Telegram",
-        icon: "✈️",
+        icon: <FaTelegram />,
         color: "bg-blue-500",
         hoverColor: "hover:bg-blue-600",
         placeholder: "https://t.me/username",
@@ -1035,10 +1069,19 @@ const AgentForm = ({
       const status = latestReq?.status; // 'pending' | 'approved' | 'rejected'
       const approvedTemplateName = latestReq?.templateName;
 
-      // Get assigned templates for this platform - only show approved templates
-      const assignedTemplatesForPlatform = platform.id === 'whatsapp' 
-        ? whatsappTemplates.filter(t => t.status === 'APPROVED')
-        : assignedTemplates.filter(t => t.platform === platform.id && t.status === 'APPROVED');
+      // Get assigned templates for this platform - filter by tab for WhatsApp
+      let assignedTemplatesForPlatform = [];
+      if (platform.id === 'whatsapp') {
+        if (templateListTab === 'available') {
+          assignedTemplatesForPlatform = whatsappTemplates.filter(t => t.status === 'APPROVED');
+        } else {
+          assignedTemplatesForPlatform = whatsappTemplates.filter(t => t.status === 'REMOVED');
+        }
+        
+
+      } else {
+        assignedTemplatesForPlatform = assignedTemplates.filter(t => t.platform === platform.id && t.status === 'APPROVED');
+      }
 
       return (
         <div className="space-y-4">
@@ -1125,48 +1168,121 @@ const AgentForm = ({
           {/* Content when enabled */}
           {isEnabled && (
             <div className="space-y-4">
-              {/* Show approved WhatsApp link if available */}
-              {platform.id === 'whatsapp' && agent?.whatsapplink && status === 'approved' && (
-                <div className="p-4 rounded border border-green-200 bg-white">
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-gray-800 mb-1">
-                        Approved Template{approvedTemplateName ? `: ${approvedTemplateName}` : ''}
-                      </div>
-                    
-                    </div>
-                    <button
-                      type="button"
-                      className="ml-2 px-3 py-1 text-white text-sm rounded bg-green-600 hover:bg-green-700 transition-colors"
-                      onClick={() => {
-                        const next = socialMediaLinks.map((l) => 
-                          l.platform === 'whatsapp' ? { ...l, url: agent.whatsapplink } : l
-                        );
-                        if (!next.find(l => l.platform === 'whatsapp')) {
-                          next.push({ platform: 'whatsapp', url: agent.whatsapplink });
-                        }
-                        setSocialMediaLinks(next);
-                      }}
-                    >
-                      Use
-                    </button>
-                  </div>
-                </div>
-              )}
+              
 
                              {/* Show assigned templates if available */}
-               {assignedTemplatesForPlatform.length > 0 && (
-                 <div className="space-y-2">
+               <div className="space-y-2">
+                 <div className="flex items-center justify-between">
                    <div className="text-sm font-medium text-gray-700 uppercase tracking-wide">
                      Templates ({assignedTemplatesForPlatform.length})
                    </div>
-                   <div className="grid grid-cols-1 gap-2">
-                     {assignedTemplatesForPlatform.map(t => (
+                   {/* WhatsApp tabs for Available/Removed - Always show for WhatsApp */}
+                   {platform.id === 'whatsapp' && (
+                     <div className="flex gap-1 bg-gray-100 p-1 rounded-lg">
+                       <button
+                         type="button"
+                         onClick={() => setTemplateListTab('available')}
+                         className={`px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
+                           templateListTab === 'available'
+                             ? 'bg-white text-green-700 shadow-sm border border-green-200'
+                             : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50'
+                         }`}
+                       >
+                         <span className="flex items-center gap-2">
+                           <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                           Available
+                           <span className="bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded-full">
+                             {whatsappTemplates.filter(t => t.status === 'APPROVED').length}
+                           </span>
+                         </span>
+                       </button>
+                       <button
+                         type="button"
+                         onClick={() => setTemplateListTab('removed')}
+                         className={`px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
+                           templateListTab === 'removed'
+                             ? 'bg-white text-red-700 shadow-sm border border-red-200'
+                             : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50'
+                         }`}
+                       >
+                         <span className="flex items-center gap-2">
+                           <span className="w-2 h-2 rounded-full bg-red-500"></span>
+                           Removed
+                           <span className="bg-red-100 text-red-700 text-xs px-2 py-0.5 rounded-full">
+                             {whatsappTemplates.filter(t => t.status === 'REMOVED').length}
+                           </span>
+                         </span>
+                       </button>
+                     </div>
+                   )}
+                 </div>
+                 
+                 {assignedTemplatesForPlatform.length > 0 ? (
+                   <>
+                     {/* Template Filters */}
+                     <div className="bg-white/80 backdrop-blur-sm rounded-lg p-4 border border-gray-200 mb-4">
+                       <div className="flex flex-col sm:flex-row gap-3">
+                         <div className="flex-1">
+                           <label className="block text-sm font-medium text-gray-700 mb-1">Search Templates</label>
+                           <input
+                             type="text"
+                             placeholder="Search by template name..."
+                             value={templateFilter}
+                             onChange={(e) => setTemplateFilter(e.target.value)}
+                             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                           />
+                         </div>
+                         <div className="flex-1">
+                           <label className="block text-sm font-medium text-gray-700 mb-1">Filter by Category</label>
+                           <select
+                             value={templateCategoryFilter}
+                             onChange={(e) => setTemplateCategoryFilter(e.target.value)}
+                             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                           >
+                             <option value="">All Categories</option>
+                             <option value="MARKETING">Marketing</option>
+                             <option value="UTILITY">Utility</option>
+                           </select>
+                         </div>
+                         <div className="flex items-end">
+                           <button
+                             type="button"
+                             onClick={() => {
+                               setTemplateFilter('');
+                               setTemplateCategoryFilter('');
+                             }}
+                             className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors"
+                           >
+                             Clear Filters
+                           </button>
+                         </div>
+                       </div>
+                     </div>
+                     
+                     <div className="grid grid-cols-1 gap-2">
+                       {assignedTemplatesForPlatform
+                         .filter(t => {
+                           const matchesSearch = templateFilter === '' || 
+                             t.name.toLowerCase().includes(templateFilter.toLowerCase()) ||
+                             (t.description && t.description.toLowerCase().includes(templateFilter.toLowerCase()));
+                           
+                           // More flexible category matching
+                           const matchesCategory = templateCategoryFilter === '' || 
+                             (t.category && (
+                               t.category.toLowerCase() === templateCategoryFilter.toLowerCase() ||
+                               t.category.toLowerCase().replace(/[_-]/g, '') === templateCategoryFilter.toLowerCase().replace(/[_-]/g, '') ||
+                               t.category.toLowerCase().includes(templateCategoryFilter.toLowerCase()) ||
+                               templateCategoryFilter.toLowerCase().includes(t.category.toLowerCase())
+                             ));
+                           
+                           return matchesSearch && matchesCategory;
+                         })
+                         .map(t => (
                        <div
                          key={t._id}
-                         className={`border rounded-lg p-4 bg-white hover:shadow-sm transition-all ${
-                           defaultTemplate && defaultTemplate.templateId === t._id ? 'ring-2 ring-blue-500 bg-blue-50' : ''
-                         }`}
+                         className={`border rounded-xl p-6 bg-gray-50/80 backdrop-blur-sm hover:shadow-md transition-all duration-200 ${
+                           defaultTemplate && defaultTemplate.templateId === t._id ? 'ring-2 ring-blue-500 bg-blue-50/90 border-blue-200' : 'border-gray-200'
+                         } ${t.status === 'REMOVED' ? 'opacity-75 bg-gray-100/80 border-gray-300' : ''}`}
                        >
                          <div className="flex items-start justify-between gap-3 mb-3">
                            <div className="flex items-center gap-3 flex-1">
@@ -1174,99 +1290,172 @@ const AgentForm = ({
                                <img src={t.imageUrl} alt={t.name} className="w-12 h-12 object-cover rounded flex-shrink-0" />
                              )}
                              <div className="flex-1 min-w-0">
-                               <div className="flex items-center gap-2">
-                                 <div className="font-semibold text-gray-900 text-lg truncate">{t.name}</div>
-                                 {defaultTemplate && defaultTemplate.templateId === t._id && (
-                                   <span className="inline-flex items-center text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-700">
-                                     Default
-                                   </span>
-                                 )}
+                               <div className="flex items-center gap-3">
+                                 <div className="font-semibold text-gray-900 text-xl truncate">{t.name}</div>
+                                 <div className="flex items-center gap-2">
+                                   {defaultTemplate && defaultTemplate.templateId === t._id && (
+                                     <span className="inline-flex items-center text-xs px-3 py-1 rounded-full bg-blue-100 text-blue-700 font-medium">
+                                       ✓ Default
+                                     </span>
+                                   )}
+                                   {t.status === 'REMOVED' && (
+                                     <span className="inline-flex items-center text-xs px-3 py-1 rounded-full bg-red-100 text-red-700 font-medium">
+                                       🗑️ Removed
+                                     </span>
+                                   )}
+                                 </div>
                                </div>
-                               <div className="flex items-center gap-2 mt-1">
-                                 {t.status && (
-                                   <span className={`text-xs px-2 py-1 rounded-full ${
-                                     t.status === 'APPROVED' ? 'bg-green-100 text-green-700' : 
-                                     t.status === 'PENDING' ? 'bg-yellow-100 text-yellow-700' : 
-                                     'bg-gray-100 text-gray-700'
+                               <div className="flex items-center gap-2 mt-2">
+                                 {t.status && t.status !== 'REMOVED' && (
+                                   <span className={`text-xs px-3 py-1 rounded-full font-medium ${
+                                     t.status === 'APPROVED' ? 'bg-green-100 text-green-700 border border-green-200' : 
+                                     t.status === 'PENDING' ? 'bg-yellow-100 text-yellow-700 border border-yellow-200' : 
+                                     'bg-gray-100 text-gray-700 border border-gray-200'
                                    }`}>
-                                     {t.status}
+                                     {t.status === 'APPROVED' ? '✓ Approved' : t.status}
                                    </span>
                                  )}
                                  {t.language && (
-                                   <span className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-700">
-                                     {t.language}
+                                   <span className="text-xs px-3 py-1 rounded-full bg-blue-100 text-blue-700 font-medium border border-blue-200">
+                                     🌐 {t.language}
                                    </span>
                                  )}
                                  {t.category && (
-                                   <span className="text-xs px-2 py-1 rounded-full bg-purple-100 text-purple-700">
-                                     {t.category}
+                                   <span className="text-xs px-3 py-1 rounded-full bg-purple-100 text-purple-700 font-medium border border-purple-200">
+                                     📂 {t.category}
                                    </span>
                                  )}
                                </div>
                              </div>
                            </div>
-                           <div className="flex flex-col gap-2">
-                            
+                           <div className="flex items-center gap-4">
+                             {/* View Button - Left side */}
                              <button
                                type="button"
-                               onClick={() => {
-                                 // For WhatsApp, generate the template module URL instead of using the template's actual URL
-                                 let urlToUse = t.url;
-                                 if (platform.id === 'whatsapp') {
-                                   const base = 'https://whatsapp-template-module.onrender.com/api/whatsapp/send';
-                                   const suffix = t.name ? `-${t.name}` : '';
-                                   urlToUse = base + suffix;
-                                 }
-                                 
-                                 setDefaultTemplate({
-                                   templateId: t._id,
-                                   templateName: t.name,
-                                   templateUrl: urlToUse,
-                                   platform: platform.id
-                                 });
-                               }}
-                               className={`flex-shrink-0 px-3 py-1 text-xs rounded transition-colors ${
-                                 defaultTemplate && defaultTemplate.templateId === t._id
-                                   ? 'bg-blue-600 text-white'
-                                   : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                               }`}
+                               onClick={() => setViewTemplateModal({ open: true, template: t })}
+                               className="flex-shrink-0 px-3 py-2 text-sm font-medium rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 transition-all duration-200 border border-blue-200"
+                               title="View template details"
                              >
-                               {defaultTemplate && defaultTemplate.templateId === t._id ? 'Selected' : 'Select'}
+                               <FiEye className="w-4 h-4" />
                              </button>
+                             
+                             {/* Default Template Toggle - Center */}
+                             {templateListTab === 'available' && (
+                               <div className="flex items-center gap-3">
+                                 <span className="text-sm font-medium text-gray-700">Default:</span>
+                                 <label className="relative inline-flex items-center cursor-pointer">
+                                   <input
+                                     type="checkbox"
+                                     className="sr-only peer"
+                                     checked={defaultTemplate && defaultTemplate.templateId === t._id}
+                                     onChange={() => {
+                                       // For WhatsApp, generate the template module URL instead of using the template's actual URL
+                                       let urlToUse = t.url;
+                                       if (platform.id === 'whatsapp') {
+                                         const base = 'https://whatsapp-template-module.onrender.com/api/whatsapp/send';
+                                         const suffix = t.name ? `-${t.name}` : '';
+                                         urlToUse = base + suffix;
+                                       }
+                                       
+                                       if (defaultTemplate && defaultTemplate.templateId === t._id) {
+                                         // Remove from default
+                                         setDefaultTemplate(null);
+                                       } else {
+                                         // Set as default
+                                         setDefaultTemplate({
+                                           templateId: t._id,
+                                           templateName: t.name,
+                                           templateUrl: urlToUse,
+                                           platform: platform.id
+                                         });
+                                       }
+                                     }}
+                                   />
+                                   <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                 </label>
+                               </div>
+                             )}
+                             
+                             
                            </div>
                          </div>
                          
                          {t.description && (
-                           <div className="text-sm text-gray-700 mb-3 whitespace-pre-wrap line-clamp-3">
-                             {t.description}
+                           <div className="text-sm text-gray-600 mb-4 whitespace-pre-wrap line-clamp-3 bg-gray-50 p-3 rounded-lg border border-gray-200">
+                             <span className="font-medium text-gray-700">Description:</span> {t.description}
                            </div>
                          )}
                          
-                         {t.url && !t.url.includes('whatsapp-template-module.onrender.com') && (
-                           <div className="flex items-center justify-between">
-                             <a 
-                               href={t.url} 
-                               target="_blank" 
-                               rel="noopener noreferrer" 
-                               className="inline-flex items-center text-sm text-blue-600 hover:underline"
-                             >
-                               View Template Link
-                               <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                               </svg>
-                             </a>
-                             {t.parameter_format && (
-                               <span className="text-xs text-gray-500">
-                                 Format: {t.parameter_format}
-                               </span>
+                         
+                         {/* Action buttons section - always show */}
+                         <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-200">
+                           <div className="flex items-center gap-4">
+                             {t.url && !t.url.includes('whatsapp-template-module.onrender.com') && (
+                               <>
+                                 <a 
+                                   href={t.url} 
+                                   target="_blank" 
+                                   rel="noopener noreferrer" 
+                                   className="inline-flex items-center text-sm text-blue-600 hover:underline"
+                                 >
+                                   View Template Link
+                                   <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                   </svg>
+                                 </a>
+                                 {t.parameter_format && (
+                                   <span className="text-xs text-gray-500">
+                                     Format: {t.parameter_format}
+                                   </span>
+                                 )}
+                               </>
                              )}
                            </div>
-                         )}
+                           
+                           {/* Remove/Restore Button - Right side */}
+                           {templateListTab === 'available' ? (
+                             <button
+                               type="button"
+                               onClick={() => handleTemplateStatusChange(t._id, 'REMOVED')}
+                               className="flex-shrink-0 px-2 py-2 text-sm font-medium rounded-lg bg-red-50 text-red-700 hover:bg-red-100 transition-all duration-200 border border-red-200"
+                             >
+                               <FiTrash2 className="w-4 h-4 inline" />
+                             </button>
+                           ) : (
+                             <button
+                               type="button"
+                               onClick={() => handleTemplateStatusChange(t._id, 'APPROVED')}
+                               className="flex-shrink-0 px-4 py-2 text-sm font-medium rounded-lg bg-green-50 text-green-700 hover:bg-green-100 transition-all duration-200 border border-green-200"
+                             >
+                               <FiRotateCcw className="w-4 h-4 inline" />
+                             </button>
+                           )}
+                         </div>
                        </div>
-                     ))}
+                                              ))}
+                       </div>
+                     </>
+                   ) : (
+                   <div className="text-center py-12 text-gray-500">
+                     <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
+                       {templateListTab === 'removed' ? (
+                         <FiTrash2 className="w-8 h-8 text-gray-400" />
+                       ) : (
+                         <FiEye className="w-8 h-8 text-gray-400" />
+                       )}
+                     </div>
+                     <h3 className="text-lg font-medium text-gray-700 mb-2">
+                       No {templateListTab} templates
+                     </h3>
+                     <p className="text-sm text-gray-500">
+                       {templateListTab === 'removed' 
+                         ? 'Templates will appear here after being removed from the available list.'
+                         : 'No templates are currently available for this agent.'
+                       }
+                     </p>
                    </div>
-                 </div>
-               )}
+                 )}
+               </div>
 
               {/* Loading state for WhatsApp templates */}
               {platform.id === 'whatsapp' && loadingWhatsappTemplates && (
@@ -1276,65 +1465,69 @@ const AgentForm = ({
                 </div>
               )}
 
-              {/* Show contact admin and request buttons (always show for WhatsApp) */}
+              {/* Show raise request UI for WhatsApp */}
               {platform.id === 'whatsapp' && (
                 <div className="p-4 rounded border border-dashed border-gray-300 bg-white">
-                  <div className="text-sm text-gray-700 mb-2">
-                    Need more templates? Contact admin to get access.
+                  <div className="text-sm text-gray-700 mb-3">
+                    Need more templates? Raise a request for template approval.
                   </div>
-                  <div className="flex gap-2">
-                    <a
-                      href="https://web.whatsapp.com/send/?phone=8147540362&text=I%20want%20to%20enable%20my%20business%20with%20Aitota.%20My%20name%20is"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className={`inline-flex items-center px-3 py-2 text-white text-sm rounded ${platform.color} ${platform.hoverColor} transition-colors`}
-                    >
-                      Contact Admin
-                    </a>
-                    <button
-                      type="button"
-                      disabled={requesting || !agent?._id || status === 'pending'}
-                      onClick={async () => {
-                        try {
-                          setRequesting(true);
-                          const authToken =
-                            clientToken ||
-                            sessionStorage.getItem("clienttoken") ||
-                            localStorage.getItem("admintoken");
-                          const resp = await fetch(`${API_BASE_URL}/agent-access/request`, {
-                            method: 'POST',
-                            headers: {
-                              'Content-Type': 'application/json',
-                              Authorization: `Bearer ${authToken}`,
-                            },
-                            body: JSON.stringify({
-                              clientId: clientId || agent?.clientId || '',
-                              agentId: agent?._id,
-                              platform: 'whatsapp'
-                            })
-                          });
-                          const json = await resp.json();
-                          if (json.success) {
-                            alert('Request submitted! Admin will review and approve.');
-                            // refresh requests
-                            try {
-                              const r = await fetch(`${API_BASE_URL}/agent-access/requests?agentId=${agent._id}`);
-                              const rj = await r.json();
-                              setMyRequests(rj?.success ? (rj.data || []) : []);
-                            } catch {}
-                          } else {
-                            alert(json.message || 'Failed to submit request');
+                  <div className="space-y-3">
+                    <textarea
+                      placeholder="Describe the template you need and why..."
+                      value={requestReason}
+                      onChange={(e) => setRequestReason(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
+                      rows={3}
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        disabled={requesting || !agent?._id || status === 'pending' || !requestReason.trim()}
+                        onClick={async () => {
+                          try {
+                            setRequesting(true);
+                            const authToken =
+                              clientToken ||
+                              sessionStorage.getItem("clienttoken") ||
+                              localStorage.getItem("admintoken");
+                            const resp = await fetch(`${API_BASE_URL}/agent-access/request`, {
+                              method: 'POST',
+                              headers: {
+                                'Content-Type': 'application/json',
+                                Authorization: `Bearer ${authToken}`,
+                              },
+                              body: JSON.stringify({
+                                clientId: clientId || agent?.clientId || '',
+                                agentId: agent?._id,
+                                platform: 'whatsapp',
+                                reason: requestReason.trim()
+                              })
+                            });
+                            const json = await resp.json();
+                            if (json.success) {
+                              alert('Request submitted! Admin will review and approve.');
+                              setRequestReason('');
+                              // refresh requests
+                              try {
+                                const r = await fetch(`${API_BASE_URL}/agent-access/requests?agentId=${agent._id}`);
+                                const rj = await r.json();
+                                setMyRequests(rj?.success ? (rj.data || []) : []);
+                              } catch {}
+                            } else {
+                              alert(json.message || 'Failed to submit request');
+                            }
+                          } catch (e) {
+                            alert('Failed to submit request');
+                          } finally {
+                            setRequesting(false);
                           }
-                        } catch (e) {
-                          alert('Failed to submit request');
-                        } finally {
-                          setRequesting(false);
-                        }
-                      }}
-                      className={`px-3 py-2 text-white text-sm rounded bg-black hover:bg-gray-800 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors`}
-                    >
-                      {status === 'pending' ? 'Requested' : requesting ? 'Requesting...' : 'Request'}
-                    </button>
+                        }}
+                        className={`px-4 py-2 text-white text-sm rounded bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors`}
+                      >
+                        {status === 'pending' ? 'Requested' : requesting ? 'Submitting...' : 'Raise Request'}
+                      </button>
+                     
+                    </div>
                   </div>
                 </div>
               )}
@@ -1351,7 +1544,7 @@ const AgentForm = ({
             Action Integration
           </h3>
           <div className="text-sm text-gray-500">
-            Enable platforms and manage templates for your agent
+            Manage templates for your agent
           </div>
         </div>
 
@@ -1397,6 +1590,47 @@ const AgentForm = ({
     }
   };
 
+  const handleTemplateStatusChange = async (templateId, newStatus) => {
+    try {
+      const authToken =
+        clientToken ||
+        sessionStorage.getItem("clienttoken") ||
+        localStorage.getItem("admintoken");
+      
+      // Convert status to action for backend
+      const action = newStatus === 'REMOVED' ? 'remove' : 'restore';
+      
+      const resp = await fetch(`${API_BASE_URL}/templates/agent/template-status`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${authToken}`,
+        },
+        body: JSON.stringify({
+          agentId: agent._id,
+          templateId,
+          action: action
+        }),
+      });
+      const json = await resp.json();
+      console.log('Template status change response:', json);
+      if (json.success) {
+        alert(`Template ${action === 'remove' ? 'removed' : 'restored'} successfully!`);
+        // Refresh WhatsApp templates
+        await fetchWhatsappTemplates();
+        // Clear default template if it was removed
+        if (newStatus === 'REMOVED' && defaultTemplate?.templateId === templateId) {
+          setDefaultTemplate(null);
+        }
+      } else {
+        alert(`Failed to ${action} template: ${json.message}`);
+      }
+    } catch (e) {
+      console.error('Error updating template status:', e);
+      alert('Failed to update template status');
+    }
+  };
+
   const renderTabContent = () => {
     switch (selectedTab) {
       case "starting":
@@ -1422,9 +1656,19 @@ const AgentForm = ({
   return (
     <div className="bg-white rounded-lg shadow-lg w-[90%] mx-auto">
       <div className="border-b border-gray-200 p-6">
-        <h2 className="text-2xl font-bold text-gray-800">
-          {agent ? "Edit Agent" : "Create New Agent"}
-        </h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-2xl font-bold text-gray-800">
+            {agent ? "Edit Agent" : "Create New Agent"}
+          </h2>
+          <button
+            type="button"
+            title="Help"
+            onClick={() => window.open('https://web.whatsapp.com/send/?phone=8147540362&text=I%20need%20help%20with%20agent%20templates', '_blank')}
+            className="w-9 h-9 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 text-gray-700"
+          >
+            ?
+          </button>
+        </div>
       </div>
 
       <form>
@@ -1502,6 +1746,103 @@ const AgentForm = ({
           </div>
         </div>
       </form>
+
+      {/* View Template Modal */}
+      {viewTemplateModal.open && viewTemplateModal.template && (
+        <div className="fixed inset-0 bg-gray-50/80 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xl font-semibold text-gray-800">Template Details</h3>
+                <button
+                  type="button"
+                  onClick={() => setViewTemplateModal({ open: false, template: null })}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <div className="p-6">
+              <div className="space-y-4">
+                <div>
+                  <h4 className="font-semibold text-lg text-gray-900">{viewTemplateModal.template.name}</h4>
+                  <div className="flex items-center gap-2 mt-2">
+                    <span className={`text-xs px-2 py-1 rounded-full ${
+                      viewTemplateModal.template.status === 'APPROVED' ? 'bg-green-100 text-green-700' : 
+                      viewTemplateModal.template.status === 'PENDING' ? 'bg-yellow-100 text-yellow-700' : 
+                      viewTemplateModal.template.status === 'REMOVED' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'
+                    }`}>
+                      {viewTemplateModal.template.status}
+                    </span>
+                    {viewTemplateModal.template.language && (
+                      <span className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-700">
+                        {viewTemplateModal.template.language}
+                      </span>
+                    )}
+                    {viewTemplateModal.template.category && (
+                      <span className="text-xs px-2 py-1 rounded-full bg-purple-100 text-purple-700">
+                        {viewTemplateModal.template.category}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                
+                {viewTemplateModal.template.imageUrl && (
+                  <div>
+                    <img 
+                      src={viewTemplateModal.template.imageUrl} 
+                      alt={viewTemplateModal.template.name} 
+                      className="w-full max-w-md h-48 object-cover rounded-lg border"
+                    />
+                  </div>
+                )}
+                
+                {viewTemplateModal.template.description && (
+                  <div>
+                    <h5 className="font-medium text-gray-700 mb-2">Description</h5>
+                    <p className="text-gray-600 whitespace-pre-wrap">{viewTemplateModal.template.description}</p>
+                  </div>
+                )}
+                
+                {viewTemplateModal.template.url && (
+                  <div>
+                    <h5 className="font-medium text-gray-700 mb-2">Template URL</h5>
+                    <a 
+                      href={viewTemplateModal.template.url} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:underline break-all"
+                    >
+                      {viewTemplateModal.template.url}
+                    </a>
+                  </div>
+                )}
+                
+                {viewTemplateModal.template.assignedAt && (
+                  <div>
+                    <h5 className="font-medium text-gray-700 mb-2">Approval Date & Time</h5>
+                    <p className="text-gray-600">
+                      {new Date(viewTemplateModal.template.assignedAt).toLocaleString()}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="p-6 border-t border-gray-200 bg-gray-50">
+              <button
+                type="button"
+                onClick={() => setViewTemplateModal({ open: false, template: null })}
+                className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
