@@ -218,18 +218,18 @@ const AdminDashboard = ({ user, onLogout }) => {
       const selectedTemplates = templates.filter((t) =>
         selectedTemplateIds.includes(t._id)
       );
-
+      
       const resp = await fetch(`${API_BASE_URL}/templates/assign`, {
         method: "POST",
-        headers: {
+        headers: { 
           "Content-Type": "application/json",
           Authorization: `Bearer ${
             localStorage.getItem("admintoken") ||
             sessionStorage.getItem("admintoken")
           }`,
         },
-        body: JSON.stringify({
-          agentId: assignAgentId,
+        body: JSON.stringify({ 
+          agentId: assignAgentId, 
           templateIds: selectedTemplateIds,
           templates: selectedTemplates, // Send full template data for WhatsApp
         }),
@@ -462,7 +462,7 @@ const AdminDashboard = ({ user, onLogout }) => {
           return (client.clientType || "").toLowerCase() === clientTypeFilter;
         })
         .filter(
-          (client) =>
+        (client) =>
             client.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             client.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             client.businessName
@@ -472,7 +472,7 @@ const AdminDashboard = ({ user, onLogout }) => {
             client.city?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             client.gstNo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             client.panNo?.toLowerCase().includes(searchTerm.toLowerCase())
-        )
+      )
     : [];
 
   const navItems = [
@@ -750,12 +750,12 @@ const AdminDashboard = ({ user, onLogout }) => {
                   Add New Client
                 </h2>
               </div>
-              <button
+            <button
                 className="text-white hover:text-red-200 transition-colors p-1"
-                onClick={() => setShowAddClientModal(false)}
-              >
-                <FaTimes size={20} />
-              </button>
+              onClick={() => setShowAddClientModal(false)}
+            >
+              <FaTimes size={20} />
+            </button>
             </div>
 
             {/* Content */}
@@ -766,90 +766,90 @@ const AdminDashboard = ({ user, onLogout }) => {
                   Personal Information
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
+                <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Full Name *
-                    </label>
-                    <input
-                      type="text"
+                  </label>
+                  <input
+                    type="text"
                       className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors"
                       placeholder="Enter full name"
-                      value={newClient.name}
-                      onChange={(e) =>
-                        setNewClient({ ...newClient, name: e.target.value })
-                      }
-                    />
-                  </div>
-                  <div>
+                    value={newClient.name}
+                    onChange={(e) =>
+                      setNewClient({ ...newClient, name: e.target.value })
+                    }
+                  />
+                </div>
+                <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Email Address *
-                    </label>
-                    <input
-                      type="email"
+                  </label>
+                  <input
+                    type="email"
                       className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors"
                       placeholder="Enter email address"
-                      value={newClient.email}
-                      onChange={(e) =>
-                        setNewClient({ ...newClient, email: e.target.value })
-                      }
-                    />
-                  </div>
-                  <div>
+                    value={newClient.email}
+                    onChange={(e) =>
+                      setNewClient({ ...newClient, email: e.target.value })
+                    }
+                  />
+                </div>
+                <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Mobile Number *
-                    </label>
-                    <input
+                  </label>
+                  <input
                       type="tel"
                       className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors"
                       placeholder="Enter mobile number"
                       value={newClient.mobileNo}
-                      onChange={(e) =>
+                    onChange={(e) =>
                         setNewClient({ ...newClient, mobileNo: e.target.value })
-                      }
-                    />
-                  </div>
-                  <div>
+                    }
+                  />
+                </div>
+                <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Address
-                    </label>
-                    <input
+                  </label>
+                  <input
                       type="text"
                       className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors"
                       placeholder="Enter address"
                       value={newClient.address}
-                      onChange={(e) =>
+                    onChange={(e) =>
                         setNewClient({ ...newClient, address: e.target.value })
-                      }
-                    />
-                  </div>
-                  <div>
+                    }
+                  />
+                </div>
+                <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       City
-                    </label>
-                    <input
-                      type="text"
+                  </label>
+                  <input
+                    type="text"
                       className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors"
                       placeholder="Enter city"
                       value={newClient.city}
-                      onChange={(e) =>
+                    onChange={(e) =>
                         setNewClient({ ...newClient, city: e.target.value })
-                      }
-                    />
-                  </div>
-                  <div>
+                    }
+                  />
+                </div>
+                <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Pincode
-                    </label>
-                    <input
+                  </label>
+                  <input
                       type="text"
                       className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors"
                       placeholder="Enter pincode"
                       value={newClient.pincode}
-                      onChange={(e) =>
+                    onChange={(e) =>
                         setNewClient({ ...newClient, pincode: e.target.value })
-                      }
-                    />
-                  </div>
+                    }
+                  />
+                </div>
                 </div>
               </div>
 
@@ -859,74 +859,74 @@ const AdminDashboard = ({ user, onLogout }) => {
                   Business Information
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
+                <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Business Name *
-                    </label>
-                    <input
-                      type="text"
+                  </label>
+                  <input
+                    type="text"
                       className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors"
                       placeholder="Enter business name"
                       value={newClient.businessName}
-                      onChange={(e) =>
+                    onChange={(e) =>
                         setNewClient({
                           ...newClient,
                           businessName: e.target.value,
                         })
-                      }
-                    />
-                  </div>
-                  <div>
+                    }
+                  />
+                </div>
+                <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Website URL
-                    </label>
-                    <input
+                  </label>
+                  <input
                       type="url"
                       className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors"
                       placeholder="https://example.com"
                       value={newClient.websiteUrl}
-                      onChange={(e) =>
+                    onChange={(e) =>
                         setNewClient({
                           ...newClient,
                           websiteUrl: e.target.value,
                         })
-                      }
-                    />
-                  </div>
-                  <div>
+                    }
+                  />
+                </div>
+                <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      GST Number
-                    </label>
-                    <input
-                      type="text"
+                    GST Number
+                  </label>
+                  <input
+                    type="text"
                       className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors"
                       placeholder="Enter GST number"
-                      value={newClient.gstNo}
-                      onChange={(e) =>
-                        setNewClient({ ...newClient, gstNo: e.target.value })
-                      }
-                    />
-                  </div>
-                  <div>
+                    value={newClient.gstNo}
+                    onChange={(e) =>
+                      setNewClient({ ...newClient, gstNo: e.target.value })
+                    }
+                  />
+                </div>
+                <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      PAN Number
-                    </label>
-                    <input
-                      type="text"
+                    PAN Number
+                  </label>
+                  <input
+                    type="text"
                       className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors"
                       placeholder="Enter PAN number"
-                      value={newClient.panNo}
-                      onChange={(e) =>
-                        setNewClient({ ...newClient, panNo: e.target.value })
-                      }
-                    />
-                  </div>
+                    value={newClient.panNo}
+                    onChange={(e) =>
+                      setNewClient({ ...newClient, panNo: e.target.value })
+                    }
+                  />
+                </div>
                   <div className="md:col-span-2">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Business Logo
-                    </label>
+                  </label>
                     <div className="w-full px-4 py-6 border-2 border-dashed border-gray-300 rounded-lg hover:border-red-500 transition-colors">
-                      <input
+                  <input
                         type="file"
                         accept="image/*"
                         className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-red-50 file:text-red-700 hover:file:bg-red-100"
@@ -935,7 +935,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                       <p className="text-xs text-gray-500 mt-2">
                         Upload your business logo (PNG, JPG, GIF up to 10MB)
                       </p>
-                    </div>
+                </div>
                   </div>
                 </div>
               </div>
@@ -946,25 +946,25 @@ const AdminDashboard = ({ user, onLogout }) => {
                   Account Security
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
+                <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Password *
-                    </label>
-                    <input
+                  </label>
+                  <input
                       type="password"
                       className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors"
                       placeholder="Enter password"
                       value={newClient.password}
-                      onChange={(e) =>
+                    onChange={(e) =>
                         setNewClient({ ...newClient, password: e.target.value })
-                      }
-                    />
-                  </div>
-                  <div>
+                    }
+                  />
+                </div>
+                <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Confirm Password *
-                    </label>
-                    <input
+                  </label>
+                  <input
                       type="password"
                       className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors"
                       placeholder="Confirm password"
@@ -975,9 +975,9 @@ const AdminDashboard = ({ user, onLogout }) => {
                           confirmPassword: e.target.value,
                         })
                       }
-                    />
-                  </div>
+                  />
                 </div>
+              </div>
               </div>
             </div>
 
@@ -1110,13 +1110,13 @@ const AdminDashboard = ({ user, onLogout }) => {
           <div className="flex-1 py-4">
             {navItems.map((item, index) => (
               <div key={index}>
-                <button
-                  className={`flex items-center w-full py-3 px-4 text-left transition-colors duration-200 ${
+              <button
+                className={`flex items-center w-full py-3 px-4 text-left transition-colors duration-200 ${
                     activeTab === item.name ||
                     (item.subItems && item.subItems.includes(activeTab))
-                      ? "bg-red-50 text-red-600 border-r-4 border-red-500"
-                      : "text-gray-600 hover:bg-gray-50"
-                  }`}
+                    ? "bg-red-50 text-red-600 border-r-4 border-red-500"
+                    : "text-gray-600 hover:bg-gray-50"
+                }`}
                   onClick={() => {
                     if (item.subItems) {
                       // For Accounts, show submenu and select Plans by default
@@ -1150,11 +1150,11 @@ const AdminDashboard = ({ user, onLogout }) => {
                       handleTabClick(item.name);
                     }
                   }}
-                >
-                  <span className="text-xl flex-shrink-0">{item.icon}</span>
-                  {(isSidebarOpen || isMobile) && (
-                    <span className="ml-3 font-medium">{item.name}</span>
-                  )}
+              >
+                <span className="text-xl flex-shrink-0">{item.icon}</span>
+                {(isSidebarOpen || isMobile) && (
+                  <span className="ml-3 font-medium">{item.name}</span>
+                )}
                 </button>
 
                 {/* Submenu for Accounts and Datastore */}
@@ -1174,7 +1174,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                           onClick={() => setActiveTab(subItem)}
                         >
                           <span>{subItem}</span>
-                        </button>
+              </button>
                       ))}
                     </div>
                   )}
@@ -1247,16 +1247,16 @@ const AdminDashboard = ({ user, onLogout }) => {
                   item.subItems &&
                   (item.subItems.includes(activeTab) ||
                     activeTab === item.name) && (
-                    <div className="ml-12 mt-1">
-                      {item.subItems.map((subItem, subIndex) => (
-                        <button
-                          key={subIndex}
+                  <div className="ml-12 mt-1">
+                    {item.subItems.map((subItem, subIndex) => (
+                      <button
+                        key={subIndex}
                           className={`flex items-center w-full py-2 text-left transition-colors duration-200 ${
                             activeTab === subItem
                               ? "text-red-600 font-medium"
                               : "text-gray-600 hover:text-red-600"
                           }`}
-                          onClick={() => {
+                        onClick={() => {
                             if (subItem === "Log out") {
                               onLogout();
                             } else if (
@@ -1266,16 +1266,16 @@ const AdminDashboard = ({ user, onLogout }) => {
                             ) {
                               setActiveTab(subItem);
                             }
-                          }}
-                        >
-                          {subItem === "Log out" && (
-                            <FaSignOutAlt className="mr-2" />
-                          )}
-                          <span>{subItem}</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                        }}
+                      >
+                        {subItem === "Log out" && (
+                          <FaSignOutAlt className="mr-2" />
+                        )}
+                        <span>{subItem}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -1358,7 +1358,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                 <p className="text-gray-600">
                   Payment management functionality coming soon...
                 </p>
-              </div>
+                </div>
             )}
 
             {activeTab === "Datastore" && (
@@ -1369,8 +1369,8 @@ const AdminDashboard = ({ user, onLogout }) => {
                 <p className="text-gray-600">
                   Datastore management functionality coming soon...
                 </p>
-              </div>
-            )}
+                        </div>
+                      )}
 
             {activeTab === "Chats" && (
               <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
@@ -1380,7 +1380,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                 <p className="text-gray-600">
                   Chat management functionality coming soon...
                 </p>
-              </div>
+                                            </div>
             )}
 
             {activeTab === "Support" && (
@@ -1391,8 +1391,8 @@ const AdminDashboard = ({ user, onLogout }) => {
                 <p className="text-gray-600">
                   Support management functionality coming soon...
                 </p>
-              </div>
-            )}
+                  </div>
+                )}
 
             {activeTab === "Tickets" && (
               <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
@@ -1543,8 +1543,8 @@ const AdminDashboard = ({ user, onLogout }) => {
                                   />
                                 ) : (
                                   <div className="flex-shrink-0 h-12 w-12 rounded-full bg-red-100 flex items-center justify-center text-red-600 font-semibold">
-                                    {client.name.charAt(0).toUpperCase()}
-                                  </div>
+                                  {client.name.charAt(0).toUpperCase()}
+                                </div>
                                 )}
                                 <div className="ml-3">
                                   <div className="text-sm font-medium text-gray-900">
@@ -1617,18 +1617,17 @@ const AdminDashboard = ({ user, onLogout }) => {
                             <td className="px-4 py-6 text-center">
                               <div className="flex flex-row items-center gap-1 justify-center">
                                 <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
+                                  onClick={() =>
                                     openClientLogin(
                                       client._id,
                                       client.email,
                                       client.name
-                                    );
-                                  }}
+                                    )
+                                  }
                                   className={`inline-flex items-center justify-center w-24 ${
-                                    loggedInClients.has(client._id)
-                                      ? "bg-green-600 hover:bg-green-700"
-                                      : "bg-red-600 hover:bg-red-700"
+                                  loggedInClients.has(client._id)
+                                    ? "bg-green-600 hover:bg-green-700"
+                                    : "bg-red-600 hover:bg-red-700"
                                   } text-white px-3 py-2 rounded-md transition-colors text-xs font-semibold`}
                                   title={
                                     loggedInClients.has(client._id)
@@ -1640,11 +1639,36 @@ const AdminDashboard = ({ user, onLogout }) => {
                                     ? "Logged In"
                                     : "Authenticate"}
                                 </button>
+                                <button
+                                  onClick={() =>
+                                    openHumanAgentManagement(
+                                      client._id,
+                                      client.name
+                                    )
+                                  }
+                                  disabled={loadingClientId === client._id}
+                                  className="inline-flex items-center justify-center w-10 h-10 transition-colors disabled:opacity-50"
+                                  title="Settings"
+                                >
+                                  {loadingClientId === client._id ? (
+                                    "..."
+                                  ) : (
+                                    <FaCog className="text-sm" />
+                                  )}
+                                </button>
                               </div>
-                              <div></div>
                             </td>
                             <td className="px-4 py-6 text-center">
-                              {/* <div className="flex flex-col items-center gap-3">
+                              <div className="flex flex-col items-center gap-3">
+                                <span
+                                  className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${
+                                    client.isApproved
+                                      ? "bg-green-100 text-green-800"
+                                      : "bg-yellow-100 text-yellow-800"
+                                  }`}
+                                >
+                                  {client.isApproved ? "Approved" : "Pending"}
+                                </span>
                                 <button
                                   className="w-20 px-2 py-2 bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200 text-xs font-medium transition-colors"
                                   onClick={() => {
@@ -1654,25 +1678,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                                 >
                                   Review
                                 </button>
-                              </div> */}
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  openHumanAgentManagement(
-                                    client._id,
-                                    client.name
-                                  );
-                                }}
-                                disabled={loadingClientId === client._id}
-                                className="inline-flex items-center justify-center w-10 h-10 transition-colors disabled:opacity-50"
-                                title="Settings"
-                              >
-                                {loadingClientId === client._id ? (
-                                  "..."
-                                ) : (
-                                  <FaCog className="text-sm" />
-                                )}
-                              </button>
+                              </div>
                             </td>
                           </tr>
                         ))}
