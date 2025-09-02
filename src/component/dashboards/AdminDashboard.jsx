@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useAsyncError, useNavigate } from "react-router-dom";
 import { API_BASE_URL } from "../../config";
 import {
@@ -81,6 +81,7 @@ const AdminDashboard = ({ user, onLogout }) => {
   const [assignAgentId, setAssignAgentId] = useState("");
   const [accessRequests, setAccessRequests] = useState([]);
   const [loadingRequests, setLoadingRequests] = useState(false);
+  // const [agentCounts, setAgentCounts] = useState({}); // temporarily disabled
   const [openMenuTemplateId, setOpenMenuTemplateId] = useState(null);
   const [clientStatusFilter, setClientStatusFilter] = useState("all"); // all | approved | pending
 
@@ -422,12 +423,43 @@ const AdminDashboard = ({ user, onLogout }) => {
   };
 
   // Filter clients based on search term
+  const [clientTypeFilter, setClientTypeFilter] = useState("all");
+
+  const clientTypeCounts = useMemo(() => {
+    const counts = {
+      all: 0,
+      prime: 0,
+      demo: 0,
+      owned: 0,
+      testing: 0,
+      new: 0,
+      rejected: 0,
+    };
+    if (Array.isArray(clients)) {
+      counts.all = clients.length;
+      clients.forEach((c) => {
+        const t = (c.clientType || "").toLowerCase();
+        if (t === "prime") counts.prime++;
+        else if (t === "demo") counts.demo++;
+        else if (t === "owned") counts.owned++;
+        else if (t === "testing") counts.testing++;
+        else if (t === "new") counts.new++;
+        else if (t === "rejected") counts.rejected++;
+      });
+    }
+    return counts;
+  }, [clients]);
+
   const filteredClients = clients
     ? clients
         .filter((client) => {
           if (clientStatusFilter === "approved") return !!client.isApproved;
           if (clientStatusFilter === "pending") return !client.isApproved;
           return true;
+        })
+        .filter((client) => {
+          if (clientTypeFilter === "all") return true;
+          return (client.clientType || "").toLowerCase() === clientTypeFilter;
         })
         .filter(
           (client) =>
@@ -654,6 +686,53 @@ const AdminDashboard = ({ user, onLogout }) => {
       setLoadingClientId(null);
     }
   };
+
+  // Fetch agent count per client using admin token -> client token -> /client/agents
+  // const fetchAgentCountForClient = async (clientId) => {
+  //   try {
+  //     if (!clientId || agentCounts[clientId] !== undefined) return; // skip if already fetched
+  //     const adminToken =
+  //       localStorage.getItem("admintoken") ||
+  //       sessionStorage.getItem("admintoken");
+  //     if (!adminToken) return;
+  //     const tokenResp = await fetch(
+  //       `${API_BASE_URL}/admin/get-client-token/${clientId}`,
+  //       {
+  //         headers: { Authorization: `Bearer ${adminToken}` },
+  //       }
+  //     );
+  //     if (!tokenResp.ok) return;
+  //     const tokenJson = await tokenResp.json();
+  //     const clientToken = tokenJson?.token;
+  //     if (!clientToken) return;
+  //     const agentsResp = await fetch(`${API_BASE_URL}/client/agents`, {
+  //       headers: {
+  //         Authorization: `Bearer ${clientToken}`,
+  //         "Content-Type": "application/json",
+  //       },
+  //     });
+  //     if (!agentsResp.ok) return;
+  //     const agentsJson = await agentsResp.json();
+  //     const count = Array.isArray(agentsJson?.data)
+  //       ? agentsJson.data.length
+  //       : Array.isArray(agentsJson)
+  //       ? agentsJson.length
+  //       : 0;
+  //     setAgentCounts((prev) => ({ ...prev, [clientId]: count }));
+  //   } catch (e) {
+  //     // Silent fail; keep UI responsive
+  //     setAgentCounts((prev) => ({ ...prev, [clientId]: 0 }));
+  //   }
+  // };
+
+  // When filtered clients change, prefetch counts (best-effort)
+  // useEffect(() => {
+  //   try {
+  //     (filteredClients || [])
+  //       .slice(0, 50)
+  //       .forEach((c) => fetchAgentCountForClient(c._id));
+  //   } catch {}
+  // }, [filteredClients]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -979,6 +1058,10 @@ const AdminDashboard = ({ user, onLogout }) => {
               setSelectedClientForHumanAgent(null);
               setClientTokenForHumanAgent(null);
             }}
+            onUpdated={() => {
+              // Refresh clients after updates in modal (e.g., clientType changes)
+              getclients();
+            }}
           />
         )}
 
@@ -1224,7 +1307,6 @@ const AdminDashboard = ({ user, onLogout }) => {
         {/* Page Content */}
         <main className="p-6">
           <div className="max-w-7xl mx-auto">
-
             {/* Dashboard Content based on active tab */}
             {activeTab === "Overview" && (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -1342,31 +1424,54 @@ const AdminDashboard = ({ user, onLogout }) => {
                         <FaPlus className="mr-2" />
                         Add Client
                       </button>
-                      <div>
-                        <select
-                          value={clientStatusFilter}
-                          onChange={(e) =>
-                            setClientStatusFilter(e.target.value)
-                          }
-                          className="px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+                    </div>
+                  </div>
+                </div>
+
+                {/* filter Button for type of clients*/}
+                <div className="p-4 border-b border-gray-100 flex justify-between">
+                  <div className="flex flex-wrap gap-2 items-center">
+                    {[
+                      { key: "all", label: "All" },
+                      { key: "new", label: "New" },
+                      { key: "prime", label: "Prime" },
+                      { key: "demo", label: "Demo" },
+                      { key: "owned", label: "Owned" },
+                      { key: "testing", label: "Testing" },
+                      { key: "rejected", label: "Rejected" },
+                    ].map((btn) => (
+                      <button
+                        key={btn.key}
+                        onClick={() => setClientTypeFilter(btn.key)}
+                        className={`px-4 py-2 rounded-full text-sm font-medium border transition-colors ${
+                          clientTypeFilter === btn.key
+                            ? "bg-red-600 text-white border-red-600"
+                            : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                        }`}
+                      >
+                        {btn.label}
+                        <span
+                          className={`ml-2 inline-block text-xs rounded-full px-2 py-0.5 ${
+                            clientTypeFilter === btn.key
+                              ? "bg-red-500 text-white"
+                              : "bg-gray-200 text-gray-800"
+                          }`}
                         >
-                          <option value="all">All</option>
-                          <option value="pending">Pending</option>
-                          <option value="approved">Approved</option>
-                        </select>
-                      </div>
-                      <div className="relative">
-                        <input
-                          type="text"
-                          placeholder="Search clients..."
-                          className="pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
-                          value={searchTerm}
-                          onChange={(e) => setSearchTerm(e.target.value)}
-                        />
-                        <div className="absolute left-3 top-1/2 transform -translate-y-1/2">
-                          <FaSearch className="text-gray-400" />
-                        </div>
-                      </div>
+                          {clientTypeCounts[btn.key] ?? 0}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="Search clients..."
+                      className="pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                    <div className="absolute left-3 top-1/2 transform -translate-y-1/2">
+                      <FaSearch className="text-gray-400" />
                     </div>
                   </div>
                 </div>
@@ -1386,8 +1491,14 @@ const AdminDashboard = ({ user, onLogout }) => {
                     <table className="min-w-full divide-y divide-gray-200">
                       <thead className="bg-gray-50">
                         <tr>
+                          <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-12">
+                            SNo.
+                          </th>
                           <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/6">
                             Name
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/6">
+                            Agents
                           </th>
                           <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/6">
                             Business Details
@@ -1396,13 +1507,13 @@ const AdminDashboard = ({ user, onLogout }) => {
                             Contact Info
                           </th>
                           <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/8">
-                            ID Details
+                            KYC
                           </th>
                           <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-1/6">
                             Actions
                           </th>
                           <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-1/8">
-                            Client Status
+                            Team Settings
                           </th>
                         </tr>
                       </thead>
@@ -1410,10 +1521,18 @@ const AdminDashboard = ({ user, onLogout }) => {
                         {filteredClients.map((client, index) => (
                           <tr
                             key={index}
-                            className={
+                            onClick={() => {
+                              setReviewClientId(client._id);
+                              setShowApprovalModal(true);
+                            }}
+                            className={`${
                               index % 2 === 0 ? "bg-white" : "bg-gray-50"
-                            }
+                            } hover:bg-gray-100 cursor-pointer`}
+                            title="Click to review client"
                           >
+                            <td className="px-3 py-2 whitespace-nowrap text-center text-xs text-gray-500">
+                              {index + 1}
+                            </td>
                             <td className="px-4 py-6 whitespace-nowrap">
                               <div className="flex items-center">
                                 {client.businessLogoUrl ? (
@@ -1429,13 +1548,26 @@ const AdminDashboard = ({ user, onLogout }) => {
                                 )}
                                 <div className="ml-3">
                                   <div className="text-sm font-medium text-gray-900">
-                                  {client.businessName}
+                                    {client.businessName}
                                   </div>
                                   <div className="text-xs text-gray-500 mt-1">
                                     Client since {formatDate(client.createdAt)}
                                   </div>
                                 </div>
                               </div>
+                            </td>
+                            <td className="px-4 py-6">
+                              {/* {agentCounts[client._id] === undefined ? (
+                                <span className="inline-flex items-center px-2 py-1 text-gray-500 text-xs">
+                                  <span className="inline-block h-3 w-3 mr-2 animate-spin rounded-full border-[2px] border-gray-300 border-t-gray-600"></span>
+                                  Loading
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center px-2 py-1 text-gray-700 text-xs">
+                                  {agentCounts[client._id]}
+                                </span>
+                              )} */}
+                              <span>-</span>
                             </td>
                             <td className="px-4 py-6">
                               <div className="text-sm font-medium text-gray-900">
@@ -1481,16 +1613,18 @@ const AdminDashboard = ({ user, onLogout }) => {
                                 </div>
                               </div>
                             </td>
+
                             <td className="px-4 py-6 text-center">
                               <div className="flex flex-row items-center gap-1 justify-center">
                                 <button
-                                  onClick={() =>
+                                  onClick={(e) => {
+                                    e.stopPropagation();
                                     openClientLogin(
                                       client._id,
                                       client.email,
                                       client.name
-                                    )
-                                  }
+                                    );
+                                  }}
                                   className={`inline-flex items-center justify-center w-24 ${
                                     loggedInClients.has(client._id)
                                       ? "bg-green-600 hover:bg-green-700"
@@ -1506,36 +1640,11 @@ const AdminDashboard = ({ user, onLogout }) => {
                                     ? "Logged In"
                                     : "Authenticate"}
                                 </button>
-                                <button
-                                  onClick={() =>
-                                    openHumanAgentManagement(
-                                      client._id,
-                                      client.name
-                                    )
-                                  }
-                                  disabled={loadingClientId === client._id}
-                                  className="inline-flex items-center justify-center w-10 h-10 transition-colors disabled:opacity-50"
-                                  title="Settings"
-                                >
-                                  {loadingClientId === client._id ? (
-                                    "..."
-                                  ) : (
-                                    <FaCog className="text-sm" />
-                                  )}
-                                </button>
                               </div>
+                              <div></div>
                             </td>
                             <td className="px-4 py-6 text-center">
-                              <div className="flex flex-col items-center gap-3">
-                                <span
-                                  className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${
-                                    client.isApproved
-                                      ? "bg-green-100 text-green-800"
-                                      : "bg-yellow-100 text-yellow-800"
-                                  }`}
-                                >
-                                  {client.isApproved ? "Approved" : "Pending"}
-                                </span>
+                              {/* <div className="flex flex-col items-center gap-3">
                                 <button
                                   className="w-20 px-2 py-2 bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200 text-xs font-medium transition-colors"
                                   onClick={() => {
@@ -1545,7 +1654,25 @@ const AdminDashboard = ({ user, onLogout }) => {
                                 >
                                   Review
                                 </button>
-                              </div>
+                              </div> */}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openHumanAgentManagement(
+                                    client._id,
+                                    client.name
+                                  );
+                                }}
+                                disabled={loadingClientId === client._id}
+                                className="inline-flex items-center justify-center w-10 h-10 transition-colors disabled:opacity-50"
+                                title="Settings"
+                              >
+                                {loadingClientId === client._id ? (
+                                  "..."
+                                ) : (
+                                  <FaCog className="text-sm" />
+                                )}
+                              </button>
                             </td>
                           </tr>
                         ))}
