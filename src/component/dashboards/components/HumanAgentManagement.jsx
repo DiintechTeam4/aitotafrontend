@@ -1,8 +1,13 @@
 import React, { useState, useEffect } from "react";
-import { FiPlus, FiUser } from "react-icons/fi";
+import { FiPlus, FiUser, FiArrowLeft } from "react-icons/fi";
 import { API_BASE_URL } from "../../../config";
 
-const HumanAgentManagement = ({ clientId, clientToken, onClose }) => {
+const HumanAgentManagement = ({
+  clientId,
+  clientToken,
+  onClose,
+  onUpdated,
+}) => {
   const [humanAgents, setHumanAgents] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -15,6 +20,27 @@ const HumanAgentManagement = ({ clientId, clientToken, onClose }) => {
     role: "executive",
   });
   const [availableAgents, setAvailableAgents] = useState([]);
+  const [clientInfo, setClientInfo] = useState({
+    clientName: "",
+    name: "",
+    businessName: "",
+    businessLogoUrl: "",
+    email: "",
+    settings: {},
+    clientType: "new",
+    createdAt: "",
+  });
+  const [clientTypeSaving, setClientTypeSaving] = useState(false);
+  const [logoError, setLogoError] = useState(false);
+
+  const formatDate = (dt) => {
+    if (!dt) return "—";
+    try {
+      return new Date(dt).toLocaleDateString();
+    } catch {
+      return "—";
+    }
+  };
 
   // Fetch human agents
   const fetchHumanAgents = async () => {
@@ -61,6 +87,72 @@ const HumanAgentManagement = ({ clientId, clientToken, onClose }) => {
       }
     } catch (error) {
       console.error("Error fetching available agents:", error);
+    }
+  };
+
+  // Fetch client info to manage clientType
+  const fetchClientInfo = async () => {
+    try {
+      // Use admin endpoint that returns fresh S3 logo URL
+      const adminToken =
+        localStorage.getItem("admintoken") ||
+        sessionStorage.getItem("admintoken");
+      const response = await fetch(
+        `${API_BASE_URL}/admin/getclient/${clientId}`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${adminToken}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+      if (!response.ok) return;
+      const data = await response.json();
+      const c = data?.data || {};
+      setClientInfo({
+        clientName: c.name || "",
+        name: c.name || "",
+        businessName: c.businessName || "",
+        businessLogoUrl: c.businessLogoUrl || "",
+        email: c.email || "",
+        settings: c.settings || {},
+        clientType: c.clientType || "new",
+        createdAt: c.createdAt || "",
+      });
+      setLogoError(false);
+    } catch (e) {
+      // no-op
+    }
+  };
+
+  const handleSaveClientType = async () => {
+    try {
+      setClientTypeSaving(true);
+      const body = { clientType: clientInfo.clientType };
+      const response = await fetch(`${API_BASE_URL}/client/client-type`, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${clientToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      });
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(
+          err?.error || err?.message || "Failed to update client type"
+        );
+      }
+      await fetchClientInfo();
+      if (onUpdated) {
+        onUpdated();
+      }
+      alert("Client type updated");
+    } catch (e) {
+      alert(e.message || "Failed to update client type");
+    } finally {
+      setClientTypeSaving(false);
     }
   };
 
@@ -242,29 +334,123 @@ const HumanAgentManagement = ({ clientId, clientToken, onClose }) => {
   useEffect(() => {
     fetchHumanAgents();
     fetchAvailableAgents();
+    fetchClientInfo();
   }, [clientId, clientToken]);
 
+  useEffect(() => {
+    if (clientInfo.businessLogoUrl) {
+      console.log(
+        "[HumanAgentManagement] businessLogoUrl updated:",
+        clientInfo.businessLogoUrl
+      );
+    } else {
+      console.log("[HumanAgentManagement] No businessLogoUrl available");
+    }
+  }, [clientInfo.businessLogoUrl]);
+
   return (
-    <div className="min-h-screen bg-gray-50 p-6 ml-64">
-      <div className="max-w-7xl mx-auto">
+    <div className="fixed inset-0 bg-gray-50 p-6 ml-64 z-50 overflow-auto">
+      <div className="w-full">
         <div className="bg-white rounded-lg shadow-sm border border-gray-200">
           <div className="px-6 py-4 border-b border-gray-200">
-            <div className="flex justify-between items-center">
-              <h2 className="text-2xl font-bold text-gray-800">
-                Sales Staff Management
-              </h2>
-              {onClose && (
+            <div className="flex items-center justify-between">
+              <div className="flex justify-between items-center gap-3">
                 <button
-                  onClick={onClose}
-                  className="text-gray-500 hover:text-gray-700 text-xl"
+                  type="button"
+                  onClick={() => {
+                    if (onUpdated) {
+                      onUpdated();
+                    }
+                    onClose && onClose();
+                  }}
+                  className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-100 focus:outline-none"
+                  title="Back"
                 >
-                  ×
+                  <FiArrowLeft className="w-5 h-5 mr-2" /> Back
                 </button>
-              )}
+                <h2 className="text-2xl font-bold text-gray-800">
+                  {clientInfo.clientName ||
+                    clientInfo.businessName ||
+                    "Unknown"}
+                </h2>
+              </div>
+              <div />
             </div>
           </div>
 
           <div className="p-6">
+            {/* Client overview + Client Type (compact)
+            <div className="mb-4 p-4 border border-gray-200 rounded-lg bg-gray-50">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
+                <div className="flex items-center m-2">
+                  {clientInfo.businessLogoUrl && !logoError ? (
+                    <img
+                      src={clientInfo.businessLogoUrl}
+                      alt={clientInfo.businessName || clientInfo.name}
+                      className="flex-shrink-0 h-12 w-12 rounded-full object-cover"
+                      onError={() => setLogoError(true)}
+                    />
+                  ) : (
+                    <div className="flex-shrink-0 h-12 w-12 rounded-full bg-red-100 flex items-center justify-center text-red-600 font-semibold">
+                      {(clientInfo.businessName || clientInfo.clientName || "?")
+                        .charAt(0)
+                        .toUpperCase()}
+                    </div>
+                  )}
+                  <div className="ml-3">
+                    <div className="text-sm font-medium text-gray-900">
+                      {clientInfo.businessName ||
+                        clientInfo.clientName ||
+                        "Unknown"}
+                    </div>
+                    <div className="text-xs text-gray-500 mt-1">
+                      Client since {formatDate(clientInfo.createdAt)}
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="text-xs text-gray-500">Email</div>
+                  <div className="text-sm text-gray-800">
+                    {clientInfo.email || "—"}
+                  </div>
+                </div>
+
+                <div className="flex items-end md:justify-end gap-2">
+                  <div className="flex flex-col w-full md:w-auto">
+                    <label className="text-xs text-gray-500 mb-1">
+                      Client Type
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={clientInfo.clientType}
+                        onChange={(e) =>
+                          setClientInfo({
+                            ...clientInfo,
+                            clientType: e.target.value,
+                          })
+                        }
+                        className="px-3 py-2 border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="Prime">Prime</option>
+                        <option value="owned">owned</option>
+                        <option value="demo">demo</option>
+                        <option value="testing">testing</option>
+                        <option value="new">new</option>
+                      </select>
+                      <button
+                        onClick={handleSaveClientType}
+                        disabled={clientTypeSaving}
+                        className="h-9 px-4 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50"
+                      >
+                        {clientTypeSaving ? "Saving..." : "Save"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div> */}
+
             {/* Add New Agent Button */}
             {!showForm && (
               <div className="flex justify-end mb-6">
@@ -273,7 +459,7 @@ const HumanAgentManagement = ({ clientId, clientToken, onClose }) => {
                   className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition-colors flex items-center"
                 >
                   <FiPlus className="w-4 h-4 mr-2" />
-                  Add Sales Staff
+                  Add Team
                 </button>
               </div>
             )}
@@ -282,7 +468,7 @@ const HumanAgentManagement = ({ clientId, clientToken, onClose }) => {
             {showForm && (
               <div className="mb-6 p-6 border border-gray-200 rounded-lg bg-gray-50">
                 <h3 className="text-lg font-semibold mb-4">
-                  {editingAgent ? "Edit Sales Staff" : "Add New Sales Staff"}
+                  {editingAgent ? "Edit Team" : "Add New Team"}
                 </h3>
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -481,7 +667,7 @@ const HumanAgentManagement = ({ clientId, clientToken, onClose }) => {
             <div>
               <h3 className="text-lg font-semibold mb-4 flex items-center">
                 <FiUser className="w-5 h-5 mr-2 text-blue-600" />
-                Sales Staff
+                Team
               </h3>
               {loading ? (
                 <div className="text-center py-8">
@@ -491,10 +677,8 @@ const HumanAgentManagement = ({ clientId, clientToken, onClose }) => {
               ) : humanAgents.length === 0 ? (
                 <div className="text-center py-8 text-gray-500">
                   <FiUser className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-                  <p>No Sales staff found</p>
-                  <p className="text-sm">
-                    Click "Add Sales Staff" to get started
-                  </p>
+                  <p>No Team found</p>
+                  <p className="text-sm">Click "Add Team" to get started</p>
                 </div>
               ) : (
                 <div className="overflow-x-auto">

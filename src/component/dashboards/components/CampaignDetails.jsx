@@ -3029,7 +3029,9 @@ function CampaignDetails({ campaignId, onBack }) {
                       })
                       .map((lead, idx) => (
                         <tr
-                          key={lead.documentId || lead.contactId || idx}
+                          key={`${
+                            lead.documentId || lead.contactId || "row"
+                          }-${idx}`}
                           className="border-t border-gray-100"
                         >
                           <td className="py-2 pr-4 text-gray-700">{idx + 1}</td>
@@ -3091,11 +3093,7 @@ function CampaignDetails({ campaignId, onBack }) {
                                   : "bg-green-100 text-green-700"
                               }`}
                             >
-                              {lead.status === "completed"
-                                ? "ongoing"
-                                : lead.status === "ongoing"
-                                ? "completed"
-                                : lead.status}
+                              {lead.status}
                             </span>
                           </td>
                           <td className="py-2 pr-4">
