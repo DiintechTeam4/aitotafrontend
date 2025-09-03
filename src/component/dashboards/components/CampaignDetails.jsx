@@ -645,7 +645,17 @@ function CampaignDetails({ campaignId, onBack }) {
       }
 
       // Ensure name is properly handled - if no name, send empty string
-      const contactName = getContactName(contact);
+      // Use empty string when name is missing or number-like to avoid polluting name fields with phone
+      const rawName = getContactName(contact);
+      const digitsOnly = (s) => (s || "").replace(/\D/g, "");
+      const isNumberLike =
+        rawName &&
+        digitsOnly(rawName).length >= 6 &&
+        !isNaN(Number(digitsOnly(rawName)));
+      const sameAsPhone =
+        rawName && digitsOnly(rawName) === digitsOnly(contact.phone || "");
+      const contactName =
+        rawName && !isNumberLike && !sameAsPhone ? rawName : "";
 
       const callPayload = {
         transaction_id: "CTI_BOT_DIAL",
@@ -778,7 +788,15 @@ function CampaignDetails({ campaignId, onBack }) {
       const contact = uniqueContacts[contactIdx];
 
       // Create a unique key for this contact
-      const contactName = getContactName(contact);
+      const rawName2 = getContactName(contact);
+      const isNumberLike2 =
+        rawName2 &&
+        digitsOnly(rawName2).length >= 6 &&
+        !isNaN(Number(digitsOnly(rawName2)));
+      const sameAsPhone2 =
+        rawName2 && digitsOnly(rawName2) === digitsOnly(contact.phone || "");
+      const contactName =
+        rawName2 && !isNumberLike2 && !sameAsPhone2 ? rawName2 : "";
       const contactKey = `${contact.phone}-${contactName}`;
 
       // Check if this contact was already called in this session or in previous results
@@ -1380,6 +1398,12 @@ function CampaignDetails({ campaignId, onBack }) {
         // Mark this transcript as viewed
         setViewedTranscripts((prev) => new Set([...prev, lead.documentId]));
         await openTranscript(lead.documentId, lead);
+      } else {
+        // Open modal even when there's no document so user gets feedback
+        setSelectedCall(lead);
+        setTranscriptDocId(null);
+        setTranscriptContent("");
+        setShowTranscriptModal(true);
       }
     } catch (e) {
       console.error("Failed to open transcript smartly:", e);
@@ -2665,7 +2689,7 @@ function CampaignDetails({ campaignId, onBack }) {
 
             {/* Metrics Grid */}
             <div
-              className={`grid grid-cols-3 gap-4 mb-4 ${
+              className={`grid grid-cols-4 gap-4 mb-4 ${
                 statusLogsCollapsed ? "hidden" : ""
               }`}
             >
@@ -2754,6 +2778,35 @@ function CampaignDetails({ campaignId, onBack }) {
                   })()}
                 </div>
                 <div className="text-xs text-gray-500">Missed</div>
+              </div>
+              <div className="text-center">
+                <div className="text-lg font-semibold text-purple-600">
+                  {(() => {
+                    // Sum durations on current page and estimate for total if available
+                    const pageSum = apiMergedCalls.reduce((sum, call) => {
+                      const d = Number(call?.duration) || 0;
+                      return sum + d;
+                    }, 0);
+                    let totalSeconds = pageSum;
+                    if (
+                      apiMergedCallsTotalItems > 0 &&
+                      apiMergedCalls.length > 0
+                    ) {
+                      const avg = pageSum / apiMergedCalls.length;
+                      totalSeconds = Math.round(avg * apiMergedCallsTotalItems);
+                    }
+                    const fmt = (secs) => {
+                      const s = Number(secs) || 0;
+                      const h = Math.floor(s / 3600);
+                      const m = Math.floor((s % 3600) / 60);
+                      const sec = s % 60;
+                      if (h > 0) return `${h}h ${m}m ${sec}s`;
+                      return `${m}m ${sec}s`;
+                    };
+                    return fmt(totalSeconds);
+                  })()}
+                </div>
+                <div className="text-xs text-gray-500">Total Duration</div>
               </div>
             </div>
 
@@ -3020,8 +3073,7 @@ function CampaignDetails({ campaignId, onBack }) {
                           callFilter === "all"
                             ? true
                             : callFilter === "connected"
-                            ? lead.status === "ongoing" ||
-                              lead.status === "completed"
+                            ? lead.status === "ongoing"
                             : lead.status === "missed" ||
                               lead.status === "not_connected" ||
                               lead.status === "failed";
@@ -3144,16 +3196,16 @@ function CampaignDetails({ campaignId, onBack }) {
                               title={
                                 !lead.number
                                   ? "No phone number available"
-                                  : lead.status === "completed" ||
-                                    lead.status === "ringing"
+                                  : lead.status === "ringing" ||
+                                    lead.status === "ongoing"
                                   ? "Call already in progress"
                                   : "Retry this contact"
                               }
                               onClick={() => handleRetryLead(lead)}
                               disabled={
                                 !lead.number ||
-                                lead.status === "completed" ||
-                                lead.status === "ringing"
+                                lead.status === "ringing" ||
+                                lead.status === "ongoing"
                               }
                             >
                               <FiPhone
