@@ -2752,14 +2752,10 @@ function CampaignDetails({ campaignId, onBack }) {
               <div className="text-center">
                 <div className="text-lg font-semibold text-orange-600">
                   {(() => {
-                    // Count missed calls (status: missed, not_connected, failed)
+                    // Count missed calls strictly per backend logic
                     const missedCount = apiMergedCalls.filter((call) => {
                       const s = (call.status || "").toLowerCase();
-                      return (
-                        s === "missed" ||
-                        s === "not_connected" ||
-                        s === "failed"
-                      );
+                      return call?.isMissed === true || s === "missed";
                     }).length;
 
                     // If we have API total, estimate missed based on current page ratio
