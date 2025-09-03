@@ -1183,23 +1183,7 @@ const AgentForm = ({
                              </div>
                            </div>
                            <div className="flex flex-col gap-2">
-                             <button
-                               type="button"
-                               onClick={() => {
-                                 const newLinks = socialMediaLinks.map((link) =>
-                                   link.platform === platform.id
-                                     ? { ...link, url: t.url }
-                                     : link
-                                 );
-                                 if (!newLinks.find(l => l.platform === platform.id)) {
-                                   newLinks.push({ platform: platform.id, url: t.url });
-                                 }
-                                 setSocialMediaLinks(newLinks);
-                               }}
-                               className="flex-shrink-0 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors text-sm font-medium"
-                             >
-                               Select
-                             </button>
+
                              <button
                                type="button"
                                onClick={() => {
