@@ -3259,9 +3259,9 @@ function CampaignDetails({ campaignId, onBack }) {
       {showTranscriptModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl w-11/12 max-w-4xl max-h-[90vh] overflow-y-auto shadow-2xl">
-            <div className="flex justify-between items-center p-6 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-blue-100">
+            <div className="flex justify-between items-center p-3 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-blue-100">
               <div className="flex-1">
-                <h3 className="text-2xl font-bold text-gray-800 flex items-center">
+                <h3 className="text-lg font-bold text-gray-800 flex items-center">
                   <svg
                     className="w-6 h-6 mr-2 text-blue-600"
                     fill="none"
@@ -3280,7 +3280,7 @@ function CampaignDetails({ campaignId, onBack }) {
 
                 {/* Call Details */}
                 {selectedCall && (
-                  <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="mt-1 grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="p-3">
                       <div className="text-sm text-gray-500 mb-1">
                         Contact Name
@@ -3321,7 +3321,7 @@ function CampaignDetails({ campaignId, onBack }) {
                   <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
                   </div>
-                  <p className="text-gray-500 mt-4 text-lg">
+                  <p className="text-gray-500 mt-4 text-xl">
                     Loading transcript...
                   </p>
                 </div>
@@ -3348,7 +3348,7 @@ function CampaignDetails({ campaignId, onBack }) {
                                 </svg>
                               </div>
                               <div className="bg-blue-500 text-white rounded-lg px-4 py-2 shadow-sm">
-                                <div className="text-sm">{message.text}</div>
+                                <div className="text-lg">{message.text}</div>
                                 {message.timestamp && (
                                   <div className="text-xs text-blue-100 mt-1">
                                     {message.timestamp}
