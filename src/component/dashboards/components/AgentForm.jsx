@@ -80,7 +80,7 @@ const AgentForm = ({
     { key: "personal", label: "Personal Information", icon: <FiUser />, gradient: "from-purple-500 to-pink-500" },
     { key: "voice", label: "Voice Configuration", icon: <FiMic />, gradient: "from-green-500 to-emerald-500" },
     { key: "system", label: "System Configuration", icon: <FiCode />, gradient: "from-orange-500 to-red-500" },
-    { key: "integration", label: "Telephony Settings", icon: <FiSettings />, gradient: "from-gray-600 to-gray-800" },
+    // { key: "integration", label: "Telephony Settings", icon: <FiSettings />, gradient: "from-gray-600 to-gray-800" },
     { key: "social", label: "Action", icon: <FiLink />, gradient: "from-indigo-500 to-blue-600" },
   ];
 
@@ -436,11 +436,6 @@ const AgentForm = ({
       }
       if (!formData.description.trim()) {
         alert("Description is required");
-        setIsLoading(false);
-        return;
-      }
-      if (!formData.callingNumber.trim()) {
-        alert("Calling number is required");
         setIsLoading(false);
         return;
       }
@@ -911,7 +906,7 @@ const AgentForm = ({
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <div className="space-y-6">
+        {/* <div className="space-y-6">
           <div className="group">
             <label htmlFor="callingType" className="block mb-3 font-semibold text-gray-800 text-lg">
               Calling Type
@@ -944,7 +939,7 @@ const AgentForm = ({
               className="w-full px-4 py-4 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-orange-100 focus:border-orange-400 transition-all duration-200 text-lg placeholder-gray-400"
             />
           </div>
-        </div>
+        </div> */}
 
         <div className="lg:col-span-2">
           <div className="group">
@@ -1831,7 +1826,7 @@ const AgentForm = ({
                       ) : (
                         <>
                           <FiSave className="w-5 h-5" />
-                          {agent ? "Update Agent" : "Create Agent"}
+                          {agent ? "Update Agent" : "Request Agent"}
                         </>
                       )}
                     </button>
