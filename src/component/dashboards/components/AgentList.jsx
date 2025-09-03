@@ -3467,6 +3467,14 @@ const AgentList = ({ agents, isLoading, onEdit, onDelete, clientId }) => {
                     {callStage === "timeout" && "Connection Timeout"}
                     {callStage === "terminated" && "Call Ended"}
                   </h3>
+                  {/* Context chips: contact name, phone, agent */}
+                  <div className="mt-1 flex flex-wrap gap-2 text-s">
+                    {contactName && (
+                      <span className="inline-flex items-center gap-1 text-white">
+                       Contact name: {contactName}
+                      </span>
+                    )}
+                  </div>
                   {/* Call Duration Display in Header */}
                   {(callStage === "connecting" ||
                     callStage === "connected" ||
