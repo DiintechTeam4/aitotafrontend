@@ -1656,6 +1656,58 @@ const AgentList = ({ agents, isLoading, onEdit, onDelete, clientId }) => {
     }
   };
 
+  // New: Unified outbound dial that routes SANPBX vs existing flow
+  const makeUnifiedOutboundCall = async (
+    targetPhoneNumber,
+    agent,
+    clientUuid,
+    providedUniqueId
+  ) => {
+    try {
+      const token = sessionStorage.getItem("clienttoken");
+      if (!token) throw new Error("Client token not found. Please log in.");
+
+      const phoneDigits = String(targetPhoneNumber || "").replace(/[^\d]/g, "");
+      const uniqueId =
+        providedUniqueId || `aidial-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+      const provider = String(agent?.serviceProvider || '').toLowerCase();
+
+      if (provider === 'snapbx' || provider === 'sanpbx') {
+        // Use backend single-call which handles SANPBX token + dial
+        const resp = await fetch(`${API_BASE_URL}/client/calls/single`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            contact: { name: contactName || "", phone: phoneDigits },
+            agentId: agent?._id,
+            campaignId: null,
+          }),
+        });
+        const data = await resp.json();
+        if (!resp.ok || data?.success !== true) {
+          throw new Error(data?.error || "Failed to initiate SANPBX call");
+        }
+        return { success: true, data };
+      }
+
+      // Default: existing C-Zentrax click-to-bot route
+      return await makeAIDialCall(
+        phoneDigits,
+        agent?.callerId,
+        agent?.X_API_KEY,
+        clientUuid,
+        uniqueId
+      );
+    } catch (error) {
+      console.error("Unified outbound call error:", error);
+      return { success: false, error: error.message };
+    }
+  };
+
   // Fetch recent 3 calls for this client
   const fetchRecentCalls = async () => {
     try {
@@ -1732,10 +1784,9 @@ const AgentList = ({ agents, isLoading, onEdit, onDelete, clientId }) => {
       .substr(2, 9)}`;
     setDialUniqueId(generatedUniqueId);
 
-    const result = await makeAIDialCall(
+    const result = await makeUnifiedOutboundCall(
       phoneNumber,
-      selectedAgentForCall.callerId,
-      selectedAgentForCall.X_API_KEY,
+      selectedAgentForCall,
       clientId,
       generatedUniqueId
     );
