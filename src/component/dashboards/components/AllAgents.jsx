@@ -31,6 +31,16 @@ const AllAgents = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedAgentForEdit, setSelectedAgentForEdit] = useState(null);
   const [editingAgent, setEditingAgent] = useState(false);
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [selectedAgentForAssign, setSelectedAgentForAssign] = useState(null);
+  const [assignProvider, setAssignProvider] = useState("snapbx");
+  const [assignFormData, setAssignFormData] = useState({
+    serviceProvider: "snapbx",
+    didNumber: "",
+    accessToken: "",
+    accessKey: "",
+    callerId: "",
+  });
   const [editFormData, setEditFormData] = useState({
     agentName: "",
     description: "",
@@ -356,6 +366,74 @@ const AllAgents = () => {
     setOpenDropdown(null);
   };
 
+  const openAssign = (agent) => {
+    setSelectedAgentForAssign(agent);
+    setAssignProvider(agent.serviceProvider || "snapbx");
+    setAssignFormData({
+      serviceProvider: agent.serviceProvider || "snapbx",
+      didNumber: agent.didNumber || "",
+      accessToken: agent.accessToken || "",
+      accessKey: agent.accessKey || "",
+      callerId: agent.callerId || "",
+    });
+    setShowAssignModal(true);
+    setOpenDropdown(null);
+  };
+
+  const closeAssignModal = () => {
+    setShowAssignModal(false);
+    setSelectedAgentForAssign(null);
+    setAssignProvider("snapbx");
+    setAssignFormData({
+      serviceProvider: "snapbx",
+      didNumber: "",
+      accessToken: "",
+      accessKey: "",
+      callerId: "",
+    });
+  };
+
+  const handleAssignChange = (field, value) => {
+    setAssignFormData((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleAssignSubmit = async (e) => {
+    e.preventDefault();
+    if (!selectedAgentForAssign) return;
+    try {
+      const token =
+        localStorage.getItem("admintoken") ||
+        sessionStorage.getItem("admintoken");
+
+      const payload = {
+        ...assignFormData,
+        serviceProvider: assignProvider,
+      };
+
+      const response = await fetch(
+        `${API_BASE_URL}/admin/update-agent/${selectedAgentForAssign._id}`,
+        {
+          method: "PUT",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+        }
+      );
+
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || "Failed to assign provider");
+      }
+      alert("Assigned successfully");
+      closeAssignModal();
+      fetchAllAgents();
+    } catch (err) {
+      alert(err.message || "Failed to assign");
+    }
+  };
+
   const handleDelete = async (agent) => {
     if (
       window.confirm(
@@ -620,6 +698,9 @@ const AllAgents = () => {
                         Category: {agent.category || "General"}
                       </div>
                       <div className="text-xs text-gray-400">
+                        Service: {agent.serviceProvider || "-"}
+                      </div>
+                      <div className="text-xs text-gray-400">
                         Personality: {agent.personality || "Formal"}
                       </div>
                     </div>
@@ -676,7 +757,7 @@ const AllAgents = () => {
 
                   {/* Status */}
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
+                    <div className="flex items-center space-x-3">
                       <button
                         onClick={() =>
                           toggleAgentStatus(agent._id, agent.isActive)
@@ -701,6 +782,13 @@ const AllAgents = () => {
                           "Inactive"
                         )}
                       </span>
+                      <button
+                        onClick={() => openAssign(agent)}
+                        className="px-2 py-1 text-xs font-medium text-white bg-purple-600 hover:bg-purple-700 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
+                        title="Assign provider"
+                      >
+                        Assign
+                      </button>
                     </div>
                   </td>
 
@@ -908,7 +996,7 @@ const AllAgents = () => {
                   </select>
                 </div>
               </div>
-
+              
               {/* Action Buttons */}
               <div className="flex justify-end space-x-4 pt-4 border-t border-gray-200">
                 <button
@@ -1367,6 +1455,110 @@ const AllAgents = () => {
                       <span>Update Agent</span>
                     </>
                   )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Assign Provider Modal */}
+      {showAssignModal && (
+        <div className="fixed inset-0 bg-black/50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-10 mx-auto p-0 border-0 w-11/12 max-w-2xl shadow-2xl rounded-xl bg-white overflow-hidden">
+            <div className="bg-gradient-to-r from-purple-600 to-purple-700 px-6 py-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <div className="p-2 bg-white bg-opacity-20 rounded-lg">
+                    <FaUserTie className="h-6 w-6 text-purple-200" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-semibold text-white">Assign Provider</h3>
+                    <p className="text-purple-100 text-sm">Link agent to telephony provider</p>
+                  </div>
+                </div>
+                <button onClick={closeAssignModal} className="text-white hover:text-purple-100 transition-colors duration-200">
+                  <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <form onSubmit={handleAssignSubmit} className="p-6">
+              <div className="mb-4">
+                <label className="block text-xs font-medium text-gray-700 mb-1">Provider</label>
+                <div className="flex space-x-2">
+                  {[
+                    { key: "c-zentrax", label: "C-Zentrax" },
+                    { key: "tata", label: "Tata" },
+                    { key: "snapbx", label: "SnapBX" },
+                  ].map((p) => (
+                    <button
+                      type="button"
+                      key={p.key}
+                      onClick={() => setAssignProvider(p.key)}
+                      className={`${assignProvider === p.key ? "bg-purple-600 text-white" : "bg-white text-gray-700"} px-3 py-1.5 border rounded-md text-sm`}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {assignProvider === "snapbx" && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">DID Number</label>
+                    <input
+                      type="text"
+                      value={assignFormData.didNumber}
+                      onChange={(e) => handleAssignChange("didNumber", e.target.value)}
+                      className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                      placeholder="e.g., 9123456789"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Access Token</label>
+                    <input
+                      type="text"
+                      value={assignFormData.accessToken}
+                      onChange={(e) => handleAssignChange("accessToken", e.target.value)}
+                      className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Access Key</label>
+                    <input
+                      type="text"
+                      value={assignFormData.accessKey}
+                      onChange={(e) => handleAssignChange("accessKey", e.target.value)}
+                      className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Caller ID</label>
+                    <input
+                      type="text"
+                      value={assignFormData.callerId}
+                      onChange={(e) => handleAssignChange("callerId", e.target.value)}
+                      className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                      placeholder="e.g., 01123456789"
+                      required
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200 mt-6">
+                <button type="button" onClick={closeAssignModal} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">
+                  Cancel
+                </button>
+                <button type="submit" className="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-purple-600 to-purple-700 border border-transparent rounded-md hover:from-purple-700 hover:to-purple-800">
+                  Save
                 </button>
               </div>
             </form>
