@@ -33,6 +33,10 @@ const AgentForm = ({
     callingNumber: "",
     callerId: "",
     X_API_KEY: "",
+    // Customization
+    uiImage: "",
+    backgroundImage: "",
+    backgroundColor: "",
   });
 
   const [startingMessages, setStartingMessages] = useState([{ text: "" }]);
@@ -47,6 +51,8 @@ const AgentForm = ({
   const [myRequests, setMyRequests] = useState([]);
   const [loadingRequests, setLoadingRequests] = useState(false);
   const [defaultTemplate, setDefaultTemplate] = useState(null);
+  const [uiImagePreview, setUiImagePreview] = useState("");
+  const [backgroundImagePreview, setBackgroundImagePreview] = useState("");
 
   const tabs = [
     { key: "starting", label: "Starting Messages" },
@@ -55,6 +61,7 @@ const AgentForm = ({
     { key: "system", label: "System Configuration" },
     { key: "integration", label: "Telephony Settings" },
     { key: "social", label: "Action" },
+    { key: "customization", label: "Customization" },
   ];
 
   useEffect(() => {
@@ -76,6 +83,9 @@ const AgentForm = ({
         serviceProvider: agent.serviceProvider || "",
         callerId: agent.callerId || "",
         X_API_KEY: agent.X_API_KEY || "",
+        uiImage: agent.uiImage || "",
+        backgroundImage: agent.backgroundImage || "",
+        backgroundColor: agent.backgroundColor || "",
       });
 
       // Load starting messages if they exist
@@ -172,7 +182,10 @@ const AgentForm = ({
 
   useEffect(() => {
     if (agent && agent._id) {
-      fetchAudio(agent._id);
+      // Only attempt load if audio hints exist to avoid 404 spam
+      if (agent.audioBytes || agent.audioFile) {
+        fetchAudio(agent._id);
+      }
     }
   }, [agent, clientId]);
 
@@ -300,6 +313,101 @@ const AgentForm = ({
       reader.readAsDataURL(audioBlob);
     }
   };
+
+  // S3 Upload helper using presigned URL flow
+  const uploadCustomizationFile = async (file, targetField, setPreview) => {
+    try {
+      if (!file) return;
+      setPreview && setPreview( URL.createObjectURL(file) );
+      const authToken =
+        clientToken ||
+        sessionStorage.getItem("clienttoken") ||
+        localStorage.getItem("admintoken");
+
+      const qs = new URLSearchParams({ fileName: file.name, fileType: file.type });
+      const resp = await fetch(`${API_BASE_URL}/client/upload-url-customization?${qs.toString()}`, {
+        headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+      });
+      const data = await resp.json();
+      if (!resp.ok || !data?.success || !data?.url || !data?.key) {
+        alert("Failed to get upload URL");
+        return;
+      }
+
+      const putResp = await fetch(data.url, {
+        method: "PUT",
+        headers: { "Content-Type": file.type },
+        body: file,
+      });
+      if (!putResp.ok) {
+        alert("Failed to upload file to storage");
+        return;
+      }
+
+      // Save only the S3 key to DB
+      setFormData((prev) => ({ ...prev, [targetField]: data.key }));
+    } catch (e) {
+      console.error("Upload failed", e);
+      alert("Upload failed");
+    }
+  };
+
+  const renderCustomizationTab = () => (
+    <div className="space-y-6">
+      <h3 className="text-xl font-semibold text-gray-800 mb-4">Customization</h3>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+          <label className="block mb-2 font-semibold text-gray-700">Agent Image</label>
+          <input
+            type="file"
+            accept="image/*"
+            onChange={(e) => uploadCustomizationFile(e.target.files?.[0], "uiImage", setUiImagePreview)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+          />
+          {uiImagePreview && (
+            <div className="mt-3">
+              <img
+                src={uiImagePreview}
+                alt="Agent"
+                className="h-24 w-24 object-cover rounded"
+              />
+            </div>
+          )}
+        </div>
+
+        <div>
+          <label className="block mb-2 font-semibold text-gray-700">Background Color</label>
+          <input
+            type="color"
+            name="backgroundColor"
+            value={formData.backgroundColor || "#ffffff"}
+            onChange={handleInputChange}
+            className="w-14 h-10 p-1 border border-gray-300 rounded"
+          />
+        </div>
+
+        <div className="md:col-span-2">
+          <label className="block mb-2 font-semibold text-gray-700">Background Image</label>
+          <input
+            type="file"
+            accept="image/*"
+            onChange={(e) => uploadCustomizationFile(e.target.files?.[0], "backgroundImage", setBackgroundImagePreview)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+          />
+          {backgroundImagePreview && (
+            <div className="mt-3">
+              <img
+                src={backgroundImagePreview}
+                alt="Background"
+                className="h-28 w-full object-cover rounded"
+              />
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 
   const handleStartingMessageChange = (idx, value) => {
     const newMessages = [...startingMessages];
@@ -456,6 +564,14 @@ const AgentForm = ({
         defaultTemplate,
         ...deriveSocials(),
       };
+
+      // Ensure S3 keys for customization are included explicitly
+      if (typeof formData.uiImage === 'string') {
+        payload.uiImage = formData.uiImage;
+      }
+      if (typeof formData.backgroundImage === 'string') {
+        payload.backgroundImage = formData.backgroundImage;
+      }
 
       // Only add serviceProvider if it's not empty
       if (serviceProvider && serviceProvider.trim() !== "") {
@@ -1458,6 +1574,8 @@ const AgentForm = ({
         return renderIntegrationSettingsTab();
       case "social":
         return renderSocialMediaTab();
+      case "customization":
+        return renderCustomizationTab();
       default:
         return renderStartingMessagesTab();
     }

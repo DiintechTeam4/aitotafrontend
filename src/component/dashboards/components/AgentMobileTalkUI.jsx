@@ -921,8 +921,24 @@ const AgentMobileTalkUI = ({ agent, clientId, onClose }) => {
 
   // --- UI ---
   const client = agent?.__clientPublic || getClientInfo();
+  const backgroundStyle = (() => {
+    if (agent?.backgroundImageUrl) {
+      return {
+        backgroundImage: `url(${agent.backgroundImageUrl})`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center'
+      };
+    }
+    if (agent?.backgroundColor) {
+      return { backgroundColor: agent.backgroundColor };
+    }
+    return {};
+  })();
+
+  const businessLogoUrl = agent?.__clientPublic?.businessLogoUrl || agent?.__clientPublic?.logoUrl || agent?.__clientPublic?.image?.url;
+
   return (
-    <div className="min-h-screen flex flex-col bg-gradient-to-b from-blue-50 to-white">
+    <div className="min-h-screen flex flex-col" style={backgroundStyle}>
       {/* Top: Client Details */}
       <div className="flex items-center gap-3 px-4 py-3 bg-blue-600 text-white shadow-md">
         <button onClick={onClose} className="p-2 rounded-full bg-blue-500 hover:bg-blue-700"><FiArrowLeft size={22} /></button>
@@ -934,8 +950,12 @@ const AgentMobileTalkUI = ({ agent, clientId, onClose }) => {
       </div>
       {/* Middle: Agent Details */}
       <div className="flex flex-col items-center py-4">
-        <div className="rounded-full bg-gray-200 w-20 h-20 flex items-center justify-center mb-2">
-          <FiUser size={40} className="text-blue-600" />
+        <div className="rounded-full bg-gray-200 w-20 h-20 flex items-center justify-center mb-2 overflow-hidden">
+          {businessLogoUrl ? (
+            <img src={businessLogoUrl} alt="Business" className="w-full h-full object-cover" />
+          ) : (
+            <FiUser size={40} className="text-blue-600" />
+          )}
         </div>
         <div className="font-semibold text-xl text-blue-900">{agent.agentName}</div>
         <div className="text-xs text-gray-500">{agent.category || "Agent"}</div>
@@ -944,7 +964,7 @@ const AgentMobileTalkUI = ({ agent, clientId, onClose }) => {
       {/* Main: Mic Button */}
       <div className="flex-1 flex flex-col items-center justify-center">
         <button
-          className={`rounded-full shadow-lg flex items-center justify-center transition-all duration-200
+          className={`rounded-full shadow-lg flex items-center justify-center overflow-hidden transition-all duration-200
             ${wsStatus === "connected" ? "bg-green-500" : wsStatus === "connecting" ? "bg-yellow-400" : "bg-blue-500"}
             ${isStreaming ? "scale-110" : ""}
           `}
@@ -955,7 +975,9 @@ const AgentMobileTalkUI = ({ agent, clientId, onClose }) => {
           }}
           disabled={isConnecting}
         >
-          {wsStatus === "connecting" ? (
+          {agent?.uiImageUrl ? (
+            <img src={agent.uiImageUrl} alt="Agent" className="w-full h-full object-cover" />
+          ) : wsStatus === "connecting" ? (
             <FiLoader size={60} className="text-white animate-spin" />
           ) : wsStatus === "connected" ? (
             <FiMic size={60} className="text-white" />
@@ -1002,26 +1024,26 @@ const AgentMobileTalkUI = ({ agent, clientId, onClose }) => {
         {/* AI Talking Indicator */}
         {isAITalking && (
           <div className="mt-4 text-blue-600 font-medium flex items-center gap-2">
-            <FiMic className="animate-pulse" /> AI Speaking...
+            <FiMic className="animate-pulse" /> {agent?.agentName || 'Agent'} Speaking...
           </div>
         )}
         
         {/* AI Status Messages (like AgentDetails) */}
         {aiStatus === 'listening' && (
           <div className="mt-2 text-blue-600 font-medium">
-            👂 AI is listening...
+            👂 {agent?.agentName || 'Agent'} is listening...
           </div>
         )}
         
         {aiStatus === 'thinking' && (
           <div className="mt-2 text-purple-600 font-medium">
-            🤔 AI is thinking...
+            🤔 {agent?.agentName || 'Agent'} is thinking...
           </div>
         )}
         
         {aiStatus === 'speaking' && (
           <div className="mt-2 text-green-600 font-medium">
-            🔊 AI is speaking...
+            🔊 {agent?.agentName || 'Agent'} is speaking...
           </div>
         )}
 
@@ -1151,6 +1173,10 @@ const AgentMobileTalkUI = ({ agent, clientId, onClose }) => {
             Send
           </button>
         </div>
+      </div>
+      {/* Footer */}
+      <div className="w-full py-2 text-center text-xs text-gray-600 bg-white/70 mt-auto">
+        Powered by Aitota
       </div>
     </div>
   );
