@@ -32,6 +32,57 @@ function CampaignDetails({ campaignId, onBack }) {
   // Cache for fetching single agent by id when not present in agents list
   const [agentMap, setAgentMap] = useState({});
 
+  // Mini chat widget state
+  const [waChatOpen, setWaChatOpen] = useState(false);
+  const [waChatMessages, setWaChatMessages] = useState([]);
+  const [waChatInput, setWaChatInput] = useState("");
+  const [waTyping, setWaTyping] = useState(false);
+  const [waChatContact, setWaChatContact] = useState({ name: "", number: "" });
+
+  const openWhatsAppMiniChat = (lead) => {
+    const derivedName =
+      lead?.name ||
+      lead?.contactName ||
+      lead?.fullName ||
+      lead?.agentName ||
+      "";
+    const derivedNumber =
+      lead?.number ||
+      lead?.mobile ||
+      lead?.phone ||
+      lead?.metadata?.callerId ||
+      "";
+    setWaChatContact({ name: derivedName, number: derivedNumber });
+
+    // Initialize with a right-side message "Hi client"
+    setWaChatMessages([
+      { id: 1, text: "Hi this is Demo templet", side: "right", time: new Date() },
+    ]);
+    setWaChatOpen(true);
+  };
+
+  const sendWaChatMessage = () => {
+    const text = waChatInput.trim();
+    if (!text) return;
+    const msg = { id: Date.now(), text, side: "right", time: new Date() };
+    setWaChatMessages((prev) => [...prev, msg]);
+    setWaChatInput("");
+    setWaTyping(true);
+    // Simulate reply after a short delay
+    setTimeout(() => {
+      setWaTyping(false);
+      setWaChatMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now() + 1,
+          text: "Thanks for reaching out!",
+          side: "left",
+          time: new Date(),
+        },
+      ]);
+    }, 1000);
+  };
+
   // Utility: robustly extract assigned agent id and optional name from various shapes
   const getPrimaryAgentIdentity = () => {
     // Case 1: campaign.agent is an array [id | object]
@@ -3189,9 +3240,16 @@ function CampaignDetails({ campaignId, onBack }) {
                           </td>
                           <td className="py-2 pr-4 text-gray-700">
                             {lead.whatsappRequested ? (
-                              <FaWhatsapp className="w-4 h-4 text-green-600" />
+                              <button
+                                type="button"
+                                onClick={() => openWhatsAppMiniChat(lead)}
+                                title="Open WhatsApp chat"
+                                className="inline-flex items-center justify-center"
+                              >
+                                <FaWhatsapp className="w-4 h-4 text-green-600" />
+                              </button>
                             ) : (
-                              "-"
+                              ""
                             )}
                           </td>
                           <td className="py-2 pr-4">
@@ -5000,6 +5058,78 @@ function CampaignDetails({ campaignId, onBack }) {
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {waChatOpen && (
+        <div className="fixed bottom-4 right-4 w-90 h-1/2 bg-white border border-gray-200 rounded-lg shadow-xl z-50 flex flex-col overflow-hidden">
+          <div className="px-3 py-2 bg-green-600 text-white text-sm font-semibold flex items-center justify-between">
+            <span>
+              WhatsApp Chat
+              {waChatContact?.name || waChatContact?.number
+                ? ` of ${waChatContact?.name ? waChatContact.name : ""}${
+                    waChatContact?.name && waChatContact?.number ? " (" : ""
+                  }${waChatContact?.number || ""}${
+                    waChatContact?.name && waChatContact?.number ? ")" : ""
+                  }`
+                : ""}
+            </span>
+            <button
+              type="button"
+              className="p-1 hover:bg-green-700 rounded"
+              onClick={() => setWaChatOpen(false)}
+              title="Close"
+            >
+              <FiX className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="p-3 space-y-2 flex-1 overflow-y-auto">
+            {waChatMessages.map((m) => (
+              <div
+                key={m.id}
+                className={`flex ${
+                  m.side === "right" ? "justify-end" : "justify-start"
+                }`}
+              >
+                <div
+                  className={`px-3 py-2 rounded-lg text-sm ${
+                    m.side === "right" ? "bg-green-100" : "bg-gray-100"
+                  } text-gray-900`}
+                >
+                  <div>{m.text}</div>
+                  <div className="text-[10px] text-gray-500 mt-1">
+                    {new Date(m.time).toLocaleTimeString()}
+                  </div>
+                </div>
+              </div>
+            ))}
+            {waTyping && (
+              <div className="flex justify-start">
+                <div className="px-3 py-2 rounded-lg bg-gray-100 text-gray-700 text-sm italic">
+                  typing...
+                </div>
+              </div>
+            )}
+          </div>
+          <div className="border-t border-gray-200 p-2 flex items-center gap-2">
+            <input
+              type="text"
+              value={waChatInput}
+              onChange={(e) => setWaChatInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") sendWaChatMessage();
+              }}
+              placeholder="Type a message"
+              className="flex-1 px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-green-500"
+            />
+            <button
+              type="button"
+              onClick={sendWaChatMessage}
+              className="px-3 py-1.5 text-sm bg-green-600 text-white rounded-md hover:bg-green-700"
+            >
+              Send
+            </button>
           </div>
         </div>
       )}

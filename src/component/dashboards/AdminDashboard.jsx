@@ -35,7 +35,13 @@ import ToolsManagement from "./components/ToolsManagement";
 const AdminDashboard = ({ user, onLogout }) => {
   const navigate = useNavigate();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [activeTab, setActiveTab] = useState("Overview");
+  const [activeTab, setActiveTab] = useState(() => {
+    try {
+      return localStorage.getItem("admin_active_tab") || "Overview";
+    } catch {
+      return "Overview";
+    }
+  });
   const [isMobile, setIsMobile] = useState(false);
   const [clients, setclients] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -72,6 +78,30 @@ const AdminDashboard = ({ user, onLogout }) => {
     useState(null);
   const [clientTokenForHumanAgent, setClientTokenForHumanAgent] =
     useState(null);
+
+  // Persist active tab across refreshes
+  useEffect(() => {
+    try {
+      localStorage.setItem("admin_active_tab", activeTab);
+    } catch {}
+  }, [activeTab]);
+
+  // Auto-close modals when switching tabs to avoid overlap
+  useEffect(() => {
+    if (showApprovalModal || reviewClientId) {
+      setShowApprovalModal(false);
+      setReviewClientId(null);
+    }
+    if (
+      showHumanAgentModal ||
+      selectedClientForHumanAgent ||
+      clientTokenForHumanAgent
+    ) {
+      setShowHumanAgentModal(false);
+      setSelectedClientForHumanAgent(null);
+      setClientTokenForHumanAgent(null);
+    }
+  }, [activeTab]);
 
   // Tools/Templates state
   const [activeTool, setActiveTool] = useState(null); // 'whatsapp' | 'telegram' | 'email' | 'sms'
@@ -1617,13 +1647,15 @@ const AdminDashboard = ({ user, onLogout }) => {
                             <td className="px-4 py-6 text-center">
                               <div className="flex flex-row items-center gap-1 justify-center">
                                 <button
-                                  onClick={() =>
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+
                                     openClientLogin(
                                       client._id,
                                       client.email,
                                       client.name
-                                    )
-                                  }
+                                    );
+                                  }}
                                   className={`inline-flex items-center justify-center w-24 ${
                                     loggedInClients.has(client._id)
                                       ? "bg-green-600 hover:bg-green-700"
@@ -1643,12 +1675,14 @@ const AdminDashboard = ({ user, onLogout }) => {
                             </td>
                             <td className="px-4 py-6 text-center">
                               <button
-                                onClick={() =>
+                                onClick={(e) => {
+                                  e.stopPropagation();
+
                                   openHumanAgentManagement(
                                     client._id,
                                     client.name
-                                  )
-                                }
+                                  );
+                                }}
                                 disabled={loadingClientId === client._id}
                                 className="inline-flex items-center justify-center w-10 h-10 transition-colors disabled:opacity-50"
                                 title="Settings"
