@@ -16,8 +16,8 @@ import {
   FiBarChart2,
   FiUserPlus,
   FiFolder,
-  FiMessageCircle,
 } from "react-icons/fi";
+import { FaWhatsapp } from "react-icons/fa";
 import { API_BASE_URL } from "../../../config";
 
 function CampaignDetails({ campaignId, onBack }) {
@@ -3093,7 +3093,7 @@ function CampaignDetails({ campaignId, onBack }) {
                               ? new Date(lead.time).toLocaleTimeString()
                               : "-"}
                           </td>
-                          
+
                           <td className="py-2 pr-4 text-gray-900">
                             {getContactDisplayNameBlank(lead)}
                           </td>
@@ -3188,8 +3188,8 @@ function CampaignDetails({ campaignId, onBack }) {
                             )}
                           </td>
                           <td className="py-2 pr-4 text-gray-700">
-                            {lead.whatsappMessageSent ? (
-                              <FiMessageCircle className="w-4 h-4 text-green-600" />
+                            {lead.whatsappRequested ? (
+                              <FaWhatsapp className="w-4 h-4 text-green-600" />
                             ) : (
                               "-"
                             )}
