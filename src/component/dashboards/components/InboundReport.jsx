@@ -8,7 +8,7 @@ import {
 } from "react-icons/fi";
 import { API_BASE_URL } from "../../../config";
 
-const InboundReport = ({ clientId }) => {
+const InboundReport = ({ clientId, filter, startDate, endDate }) => {
   const [report, setReport] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -23,7 +23,17 @@ const InboundReport = ({ clientId }) => {
           sessionStorage.getItem("clienttoken") ||
           sessionStorage.getItem("usertoken") ||
           localStorage.getItem("usertoken");
-        const response = await fetch(`${API_BASE_URL}/client/inbound/report`, {
+        const params = new URLSearchParams();
+        if (filter) params.append("filter", filter);
+        if (!filter && startDate && endDate) {
+          params.append("startDate", startDate);
+          params.append("endDate", endDate);
+        }
+        const qs = params.toString();
+        const url = `${API_BASE_URL}/client/inbound/report${
+          qs ? `?${qs}` : ""
+        }`;
+        const response = await fetch(url, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -49,7 +59,7 @@ const InboundReport = ({ clientId }) => {
     };
 
     fetchReport();
-  }, [clientId]);
+  }, [clientId, filter, startDate, endDate]);
 
   if (loading) {
     return (

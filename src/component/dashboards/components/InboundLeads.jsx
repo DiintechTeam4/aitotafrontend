@@ -34,7 +34,7 @@ const statusColors = {
   notConnected: "bg-red-100 text-red-800",
 };
 
-const InboundLeads = ({ clientId }) => {
+const InboundLeads = ({ clientId, filter, startDate, endDate }) => {
   const [leads, setLeads] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -49,7 +49,15 @@ const InboundLeads = ({ clientId }) => {
           sessionStorage.getItem("clienttoken") ||
           sessionStorage.getItem("usertoken") ||
           localStorage.getItem("usertoken");
-        const response = await fetch(`${API_BASE_URL}/client/inbound/leads`, {
+        const params = new URLSearchParams();
+        if (filter) params.append("filter", filter);
+        if (!filter && startDate && endDate) {
+          params.append("startDate", startDate);
+          params.append("endDate", endDate);
+        }
+        const qs = params.toString();
+        const url = `${API_BASE_URL}/client/inbound/leads${qs ? `?${qs}` : ""}`;
+        const response = await fetch(url, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -75,7 +83,7 @@ const InboundLeads = ({ clientId }) => {
     };
 
     fetchLeads();
-  }, [clientId]);
+  }, [clientId, filter, startDate, endDate]);
 
   if (loading) {
     return (
