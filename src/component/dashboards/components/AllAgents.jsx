@@ -40,6 +40,8 @@ const AllAgents = () => {
     accessToken: "",
     accessKey: "",
     callerId: "",
+    xApiKey: "",
+    accountSid: "",
   });
   const [editFormData, setEditFormData] = useState({
     agentName: "",
@@ -368,13 +370,16 @@ const AllAgents = () => {
 
   const openAssign = (agent) => {
     setSelectedAgentForAssign(agent);
-    setAssignProvider(agent.serviceProvider || "snapbx");
+    const prov = (agent.serviceProvider || "snapbx").toLowerCase();
+    setAssignProvider(prov);
     setAssignFormData({
-      serviceProvider: agent.serviceProvider || "snapbx",
+      serviceProvider: prov,
       didNumber: agent.didNumber || "",
       accessToken: agent.accessToken || "",
       accessKey: agent.accessKey || "",
       callerId: agent.callerId || "",
+      xApiKey: agent.X_API_KEY || "",
+      accountSid: agent.accountSid || "",
     });
     setShowAssignModal(true);
     setOpenDropdown(null);
@@ -390,6 +395,8 @@ const AllAgents = () => {
       accessToken: "",
       accessKey: "",
       callerId: "",
+      xApiKey: "",
+      accountSid: "",
     });
   };
 
@@ -405,10 +412,33 @@ const AllAgents = () => {
         localStorage.getItem("admintoken") ||
         sessionStorage.getItem("admintoken");
 
-      const payload = {
-        ...assignFormData,
-        serviceProvider: assignProvider,
-      };
+      let payload = {};
+      if (assignProvider === "snapbx") {
+        payload = {
+          serviceProvider: "snapbx",
+          didNumber: assignFormData.didNumber,
+          accessToken: assignFormData.accessToken,
+          accessKey: assignFormData.accessKey,
+          callerId: assignFormData.callerId,
+        };
+      } else if (
+        assignProvider === "c-zentrix" ||
+        assignProvider === "c-zentrax"
+      ) {
+        payload = {
+          serviceProvider: "c-zentrix",
+          didNumber: assignFormData.didNumber,
+          callerId: assignFormData.callerId,
+          accountSid: assignFormData.accountSid,
+          X_API_KEY: assignFormData.xApiKey,
+        };
+      } else {
+        payload = {
+          serviceProvider: assignProvider,
+          didNumber: assignFormData.didNumber,
+          callerId: assignFormData.callerId,
+        };
+      }
 
       const response = await fetch(
         `${API_BASE_URL}/admin/update-agent/${selectedAgentForAssign._id}`,
@@ -996,7 +1026,7 @@ const AllAgents = () => {
                   </select>
                 </div>
               </div>
-              
+
               {/* Action Buttons */}
               <div className="flex justify-end space-x-4 pt-4 border-t border-gray-200">
                 <button
@@ -1473,13 +1503,30 @@ const AllAgents = () => {
                     <FaUserTie className="h-6 w-6 text-purple-200" />
                   </div>
                   <div>
-                    <h3 className="text-xl font-semibold text-white">Assign Provider</h3>
-                    <p className="text-purple-100 text-sm">Link agent to telephony provider</p>
+                    <h3 className="text-xl font-semibold text-white">
+                      Assign Provider
+                    </h3>
+                    <p className="text-purple-100 text-sm">
+                      Link agent to telephony provider
+                    </p>
                   </div>
                 </div>
-                <button onClick={closeAssignModal} className="text-white hover:text-purple-100 transition-colors duration-200">
-                  <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                <button
+                  onClick={closeAssignModal}
+                  className="text-white hover:text-purple-100 transition-colors duration-200"
+                >
+                  <svg
+                    className="h-6 w-6"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M6 18L18 6M6 6l12 12"
+                    />
                   </svg>
                 </button>
               </div>
@@ -1487,7 +1534,9 @@ const AllAgents = () => {
 
             <form onSubmit={handleAssignSubmit} className="p-6">
               <div className="mb-4">
-                <label className="block text-xs font-medium text-gray-700 mb-1">Provider</label>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  Provider
+                </label>
                 <div className="flex space-x-2">
                   {[
                     { key: "c-zentrax", label: "C-Zentrax" },
@@ -1498,7 +1547,11 @@ const AllAgents = () => {
                       type="button"
                       key={p.key}
                       onClick={() => setAssignProvider(p.key)}
-                      className={`${assignProvider === p.key ? "bg-purple-600 text-white" : "bg-white text-gray-700"} px-3 py-1.5 border rounded-md text-sm`}
+                      className={`${
+                        assignProvider === p.key
+                          ? "bg-purple-600 text-white"
+                          : "bg-white text-gray-700"
+                      } px-3 py-1.5 border rounded-md text-sm`}
                     >
                       {p.label}
                     </button>
@@ -1509,42 +1562,58 @@ const AllAgents = () => {
               {assignProvider === "snapbx" && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">DID Number</label>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      DID Number
+                    </label>
                     <input
                       type="text"
                       value={assignFormData.didNumber}
-                      onChange={(e) => handleAssignChange("didNumber", e.target.value)}
+                      onChange={(e) =>
+                        handleAssignChange("didNumber", e.target.value)
+                      }
                       className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                       placeholder="e.g., 9123456789"
                       required
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">Access Token</label>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      Access Token
+                    </label>
                     <input
                       type="text"
                       value={assignFormData.accessToken}
-                      onChange={(e) => handleAssignChange("accessToken", e.target.value)}
+                      onChange={(e) =>
+                        handleAssignChange("accessToken", e.target.value)
+                      }
                       className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                       required
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">Access Key</label>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      Access Key
+                    </label>
                     <input
                       type="text"
                       value={assignFormData.accessKey}
-                      onChange={(e) => handleAssignChange("accessKey", e.target.value)}
+                      onChange={(e) =>
+                        handleAssignChange("accessKey", e.target.value)
+                      }
                       className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                       required
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">Caller ID</label>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      Caller ID
+                    </label>
                     <input
                       type="text"
                       value={assignFormData.callerId}
-                      onChange={(e) => handleAssignChange("callerId", e.target.value)}
+                      onChange={(e) =>
+                        handleAssignChange("callerId", e.target.value)
+                      }
                       className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                       placeholder="e.g., 01123456789"
                       required
@@ -1553,11 +1622,81 @@ const AllAgents = () => {
                 </div>
               )}
 
+              {assignProvider === "c-zentrax" && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      X API Key
+                    </label>
+                    <input
+                      type="text"
+                      value={assignFormData.xApiKey}
+                      onChange={(e) =>
+                        handleAssignChange("xApiKey", e.target.value)
+                      }
+                      className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      Account SID
+                    </label>
+                    <input
+                      type="text"
+                      value={assignFormData.accountSid}
+                      onChange={(e) =>
+                        handleAssignChange("accountSid", e.target.value)
+                      }
+                      className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      Caller ID
+                    </label>
+                    <input
+                      type="text"
+                      value={assignFormData.callerId}
+                      onChange={(e) =>
+                        handleAssignChange("callerId", e.target.value)
+                      }
+                      className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                      placeholder="e.g., 01123456789"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      DID Number
+                    </label>
+                    <input
+                      type="text"
+                      value={assignFormData.didNumber}
+                      onChange={(e) =>
+                        handleAssignChange("didNumber", e.target.value)
+                      }
+                      className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                      placeholder="e.g., 9123456789"
+                      required
+                    />
+                  </div>
+                </div>
+              )}
+
               <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200 mt-6">
-                <button type="button" onClick={closeAssignModal} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">
+                <button
+                  type="button"
+                  onClick={closeAssignModal}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+                >
                   Cancel
                 </button>
-                <button type="submit" className="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-purple-600 to-purple-700 border border-transparent rounded-md hover:from-purple-700 hover:to-purple-800">
+                <button
+                  type="submit"
+                  className="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-purple-600 to-purple-700 border border-transparent rounded-md hover:from-purple-700 hover:to-purple-800"
+                >
                   Save
                 </button>
               </div>
