@@ -55,6 +55,7 @@ const AgentMobileTalkUI = ({ agent, clientId, onClose }) => {
   const loginPromptDismissedRef = useRef(false);
   const loginPromptShownRef = useRef(false);
   
+  
   // Server logs from backend (STT/LLM/TTS + errors)
   const [serverLogs, setServerLogs] = useState([]);
   const [showServerLogs, setShowServerLogs] = useState(false);
