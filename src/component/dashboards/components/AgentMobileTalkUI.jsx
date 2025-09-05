@@ -50,9 +50,10 @@ const AgentMobileTalkUI = ({ agent, clientId, onClose }) => {
   const [showConversation, setShowConversation] = useState(false);
   const [currentUserMessage, setCurrentUserMessage] = useState('');
   const [currentAIResponse, setCurrentAIResponse] = useState('');
-  const [userMessageCount, setUserMessageCount] = useState(0);
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
-  const lastPromptCountRef = useRef(0);
+  const loginPromptTimerRef = useRef(null);
+  const loginPromptDismissedRef = useRef(false);
+  const loginPromptShownRef = useRef(false);
   
   // Server logs from backend (STT/LLM/TTS + errors)
   const [serverLogs, setServerLogs] = useState([]);
@@ -93,17 +94,7 @@ const AgentMobileTalkUI = ({ agent, clientId, onClose }) => {
       ];
     });
 
-    // Track user messages and trigger login prompt after every 3
-    if (role === 'user') {
-      setUserMessageCount(prev => {
-        const next = prev + 1;
-        if (next % 3 === 0 && lastPromptCountRef.current !== next) {
-          lastPromptCountRef.current = next;
-          setShowLoginPrompt(true);
-        }
-        return next;
-      });
-    }
+    // Removed message-count based login prompt trigger
   };
   
   // --- Refs ---
@@ -178,6 +169,19 @@ const AgentMobileTalkUI = ({ agent, clientId, onClose }) => {
       setReconnectAttempts(0);
       setReconnectDelay(INITIAL_RECONNECT_DELAY);
       setLastDisconnectReason("");
+      // Schedule login prompt once after 2 minutes if not dismissed or already shown
+      if (loginPromptTimerRef.current) {
+        clearTimeout(loginPromptTimerRef.current);
+        loginPromptTimerRef.current = null;
+      }
+      if (!loginPromptDismissedRef.current && !loginPromptShownRef.current) {
+        loginPromptTimerRef.current = setTimeout(() => {
+          if (!loginPromptDismissedRef.current && !loginPromptShownRef.current) {
+            setShowLoginPrompt(true);
+            loginPromptShownRef.current = true;
+          }
+        }, 120000);
+      }
       // Generate streamSid
       const streamId = `stream_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       streamSidRef.current = streamId;
@@ -249,6 +253,10 @@ const AgentMobileTalkUI = ({ agent, clientId, onClose }) => {
       clearTimeout(connectionTimeout);
       const reason = event?.reason || `Code: ${event?.code}`;
       addDebugLog(`WebSocket disconnected. Code: ${event?.code}, Reason: ${event?.reason}`, "warning");
+      if (loginPromptTimerRef.current) {
+        clearTimeout(loginPromptTimerRef.current);
+        loginPromptTimerRef.current = null;
+      }
       setWsStatus("disconnected");
       setIsStreaming(false);
       setIsConnecting(false);
@@ -398,6 +406,10 @@ const AgentMobileTalkUI = ({ agent, clientId, onClose }) => {
       );
       wsRef.current.close(1000, "Manual disconnect");
       wsRef.current = null;
+    }
+    if (loginPromptTimerRef.current) {
+      clearTimeout(loginPromptTimerRef.current);
+      loginPromptTimerRef.current = null;
     }
     setWsStatus("disconnected");
     setIsStreaming(false);
@@ -916,6 +928,11 @@ const AgentMobileTalkUI = ({ agent, clientId, onClose }) => {
     if (silenceTimerRef.current) {
       clearTimeout(silenceTimerRef.current);
       silenceTimerRef.current = null;
+    }
+    // Clear login prompt timer
+    if (loginPromptTimerRef.current) {
+      clearTimeout(loginPromptTimerRef.current);
+      loginPromptTimerRef.current = null;
     }
   }, []);
 
