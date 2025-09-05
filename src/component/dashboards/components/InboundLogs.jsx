@@ -16,7 +16,7 @@ const statusTextColors = {
   not_connected: "text-gray-700",
 };
 
-const InboundLogs = ({ clientId }) => {
+const InboundLogs = ({ clientId, filter, startDate, endDate }) => {
   const [logs, setLogs] = useState([]);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -31,7 +31,15 @@ const InboundLogs = ({ clientId }) => {
           sessionStorage.getItem("clienttoken") ||
           sessionStorage.getItem("usertoken") ||
           localStorage.getItem("usertoken");
-        const response = await fetch(`${API_BASE_URL}/client/inbound/logs`, {
+        const params = new URLSearchParams();
+        if (filter) params.append("filter", filter);
+        if (!filter && startDate && endDate) {
+          params.append("startDate", startDate);
+          params.append("endDate", endDate);
+        }
+        const qs = params.toString();
+        const url = `${API_BASE_URL}/client/inbound/logs${qs ? `?${qs}` : ""}`;
+        const response = await fetch(url, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -57,7 +65,7 @@ const InboundLogs = ({ clientId }) => {
     };
 
     fetchLogs();
-  }, [clientId]);
+  }, [clientId, filter, startDate, endDate]);
 
   if (loading) {
     return (
