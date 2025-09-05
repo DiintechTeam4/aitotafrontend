@@ -16,6 +16,7 @@ import {
   FiBarChart2,
   FiUserPlus,
   FiFolder,
+  FiMessageCircle,
 } from "react-icons/fi";
 import { API_BASE_URL } from "../../../config";
 
@@ -3044,8 +3045,7 @@ function CampaignDetails({ campaignId, onBack }) {
                   <thead>
                     <tr className="text-left text-gray-600">
                       <th className="py-2 pr-4">S. No.</th>
-                      <th className="py-2 pr-4">Date</th>
-                      <th className="py-2 pr-4">Time</th>
+                      <th className="py-2 pr-4">Date & Time</th>
                       <th className="py-2 pr-4">Name</th>
                       <th className="py-2 pr-4">Number</th>
                       <th className="py-2 pr-4">Status</th>
@@ -3053,6 +3053,7 @@ function CampaignDetails({ campaignId, onBack }) {
                         <FiClock />
                       </th>
                       <th className="py-2 pr-4">Conversation</th>
+                      <th className="py-2 pr-4">Action</th>
                       <th className="py-2 pr-4">Redial</th>
                     </tr>
                   </thead>
@@ -3086,13 +3087,13 @@ function CampaignDetails({ campaignId, onBack }) {
                           <td className="py-2 pr-4 text-gray-700">
                             {lead.time
                               ? new Date(lead.time).toLocaleDateString()
-                              : "-"}
-                          </td>
-                          <td className="py-2 pr-4 text-gray-700">
+                              : "-"}{" "}
+                            ,
                             {lead.time
                               ? new Date(lead.time).toLocaleTimeString()
                               : "-"}
                           </td>
+                          
                           <td className="py-2 pr-4 text-gray-900">
                             {getContactDisplayNameBlank(lead)}
                           </td>
@@ -3184,6 +3185,13 @@ function CampaignDetails({ campaignId, onBack }) {
                                   ? "Viewed"
                                   : "Transcript"}
                               </button>
+                            )}
+                          </td>
+                          <td className="py-2 pr-4 text-gray-700">
+                            {lead.whatsappMessageSent ? (
+                              <FiMessageCircle className="w-4 h-4 text-green-600" />
+                            ) : (
+                              "-"
                             )}
                           </td>
                           <td className="py-2 pr-4">
