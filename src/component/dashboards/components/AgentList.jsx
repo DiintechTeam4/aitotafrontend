@@ -1668,12 +1668,14 @@ const AgentList = ({ agents, isLoading, onEdit, onDelete, clientId }) => {
       if (!token) throw new Error("Client token not found. Please log in.");
 
       const phoneDigits = String(targetPhoneNumber || "").replace(/[^\d]/g, "");
+      console.log(phoneDigits);
       const uniqueId =
-        providedUniqueId || `aidial-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        providedUniqueId ||
+        `aidial-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-      const provider = String(agent?.serviceProvider || '').toLowerCase();
+      const provider = String(agent?.serviceProvider || "").toLowerCase();
 
-      if (provider === 'snapbx' || provider === 'sanpbx') {
+      if (provider === "snapbx" || provider === "sanpbx") {
         // Use backend single-call which handles SANPBX token + dial
         const resp = await fetch(`${API_BASE_URL}/client/calls/single`, {
           method: "POST",
@@ -1682,9 +1684,14 @@ const AgentList = ({ agents, isLoading, onEdit, onDelete, clientId }) => {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            contact: { name: contactName || "", phone: phoneDigits },
+            appid: 2,
+            contact: phoneDigits,
+            caller_id: agent?.callerId,
             agentId: agent?._id,
-            campaignId: null,
+            custom_field: {
+              name: contactName || "",
+              uniqueId: uniqueId,
+            },
           }),
         });
         const data = await resp.json();
@@ -3522,7 +3529,7 @@ const AgentList = ({ agents, isLoading, onEdit, onDelete, clientId }) => {
                   <div className="mt-1 flex flex-wrap gap-2 text-s">
                     {contactName && (
                       <span className="inline-flex items-center gap-1 text-white">
-                       Contact name: {contactName}
+                        Contact name: {contactName}
                       </span>
                     )}
                   </div>
