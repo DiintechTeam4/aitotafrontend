@@ -38,8 +38,328 @@ function CampaignDetails({ campaignId, onBack }) {
   const [waChatInput, setWaChatInput] = useState("");
   const [waTyping, setWaTyping] = useState(false);
   const [waChatContact, setWaChatContact] = useState({ name: "", number: "" });
+  const [waTemplatesOpen, setWaTemplatesOpen] = useState(false);
+  const [waTemplates, setWaTemplates] = useState([]);
+  const [waTemplatesLoading, setWaTemplatesLoading] = useState(false);
 
-  const openWhatsAppMiniChat = (lead) => {
+  // Helper function to normalize phone number to +91XXXXXXXXXX format
+  const normalizePhoneNumber = (phoneNumber) => {
+    if (!phoneNumber) return "";
+
+    // Remove all non-digit characters
+    const digits = String(phoneNumber).replace(/[^\d]/g, "");
+
+    // Remove leading '0' if present
+    const cleanDigits = digits.startsWith("0") ? digits.substring(1) : digits;
+
+    // Ensure it's exactly 10 digits
+    if (cleanDigits.length === 10) {
+      return `+91${cleanDigits}`;
+    }
+
+    // If it's already 12 digits and starts with 91, return as is
+    if (cleanDigits.length === 12 && cleanDigits.startsWith("91")) {
+      return `+${cleanDigits}`;
+    }
+
+    // If it's 11 digits and starts with 91, return as is
+    if (cleanDigits.length === 11 && cleanDigits.startsWith("91")) {
+      return `+${cleanDigits}`;
+    }
+
+    // For any other case, try to extract last 10 digits
+    if (cleanDigits.length >= 10) {
+      const last10Digits = cleanDigits.slice(-10);
+      return `+91${last10Digits}`;
+    }
+
+    // If less than 10 digits, return original with +91 prefix
+    return `+91${cleanDigits}`;
+  };
+
+  // Helper function to format message timestamp with date and time
+  const formatMessageTimestamp = (timestamp) => {
+    if (!timestamp) return "";
+
+    try {
+      const date = timestamp instanceof Date ? timestamp : new Date(timestamp);
+      if (isNaN(date.getTime())) return "Invalid Date";
+
+      const now = new Date();
+      const isToday = date.toDateString() === now.toDateString();
+      const isYesterday =
+        new Date(now.getTime() - 24 * 60 * 60 * 1000).toDateString() ===
+        date.toDateString();
+
+      if (isToday) {
+        return `Today ${date.toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        })}`;
+      } else if (isYesterday) {
+        return `Yesterday ${date.toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        })}`;
+      } else {
+        return `${date.toLocaleDateString([], {
+          month: "short",
+          day: "numeric",
+        })} ${date.toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        })}`;
+      }
+    } catch (error) {
+      console.error("Error formatting message timestamp:", error);
+      return "Error";
+    }
+  };
+
+  // Helper function to get date label for separators
+  const getDateLabel = (timestamp) => {
+    if (!timestamp) return "";
+
+    try {
+      const date = timestamp instanceof Date ? timestamp : new Date(timestamp);
+      if (isNaN(date.getTime())) return "Invalid Date";
+
+      const now = new Date();
+      const isToday = date.toDateString() === now.toDateString();
+      const isYesterday =
+        new Date(now.getTime() - 24 * 60 * 60 * 1000).toDateString() ===
+        date.toDateString();
+
+      if (isToday) {
+        return "Today";
+      } else if (isYesterday) {
+        return "Yesterday";
+      } else {
+        return date.toLocaleDateString([], {
+          weekday: "long",
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        });
+      }
+    } catch (error) {
+      console.error("Error getting date label:", error);
+      return "Error";
+    }
+  };
+
+  // Helper function to render messages with date separators
+  const renderMessagesWithDateSeparators = () => {
+    if (!waChatMessages || waChatMessages.length === 0) return null;
+
+    const elements = [];
+    let lastDate = null;
+
+    waChatMessages.forEach((message, index) => {
+      const messageDate =
+        message.time instanceof Date ? message.time : new Date(message.time);
+      const currentDateString = messageDate.toDateString();
+
+      // Add date separator if this is a new day
+      if (lastDate !== currentDateString) {
+        elements.push(
+          <div
+            key={`date-${index}`}
+            className="flex items-center justify-center my-4"
+          >
+            <div className="flex-1 h-px bg-gray-300"></div>
+            <div className="px-3 py-1 bg-gray-100 text-gray-600 text-xs rounded-full mx-2">
+              {getDateLabel(message.time)}
+            </div>
+            <div className="flex-1 h-px bg-gray-300"></div>
+          </div>
+        );
+        lastDate = currentDateString;
+      }
+
+      // Add the message
+      elements.push(
+        <div
+          key={message.id}
+          className={`flex ${
+            message.side === "right" ? "justify-end" : "justify-start"
+          } mb-3`}
+        >
+          <div
+            className={`max-w-[80%] px-4 py-3 rounded-2xl text-sm shadow-sm transition-all duration-200 hover:shadow-md ${
+              message.side === "right"
+                ? "bg-gradient-to-r from-green-500 to-green-600 text-white rounded-br-md"
+                : "bg-white text-gray-900 border border-gray-200 rounded-bl-md"
+            }`}
+          >
+            <div className="break-words leading-relaxed">{message.text}</div>
+            <div
+              className={`text-[10px] mt-2 ${
+                message.side === "right" ? "text-green-100" : "text-gray-500"
+              }`}
+            >
+              {formatMessageTimestamp(message.time)}
+            </div>
+          </div>
+        </div>
+      );
+    });
+
+    return elements;
+  };
+
+  // Function to fetch WhatsApp templates
+  const fetchWaTemplates = async () => {
+    setWaTemplatesLoading(true);
+    try {
+      const response = await fetch(
+        "https://whatsapp-template-module.onrender.com/api/whatsapp/get-templates"
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.templates) {
+          setWaTemplates(data.templates);
+        } else {
+          console.error("Failed to fetch templates:", data);
+          setWaTemplates([]);
+        }
+      } else {
+        console.error("Failed to fetch templates:", response.status);
+        setWaTemplates([]);
+      }
+    } catch (error) {
+      console.error("Error fetching WhatsApp templates:", error);
+      setWaTemplates([]);
+    } finally {
+      setWaTemplatesLoading(false);
+    }
+  };
+
+  // Function to toggle template selector
+  const toggleWaTemplates = async () => {
+    if (!waTemplatesOpen) {
+      await fetchWaTemplates();
+    }
+    setWaTemplatesOpen(!waTemplatesOpen);
+  };
+
+  // Function to send template message using template-specific API
+  const sendWaTemplateMessage = async (template) => {
+    if (!waChatContact?.number) return;
+
+    // Get the template body text to show in chat
+    const templateBody =
+      template.components?.find((c) => c.type === "BODY")?.text ||
+      `Template: ${template.name}`;
+
+    const msg = {
+      id: Date.now(),
+      text: templateBody,
+      side: "right",
+      time: new Date(),
+    };
+    setWaChatMessages((prev) => [...prev, msg]);
+    setWaTemplatesOpen(false);
+    setWaTyping(true);
+
+    try {
+      const normalizedNumber = normalizePhoneNumber(waChatContact.number);
+
+      // Create template-specific API URL
+      const templateApiUrl = `https://whatsapp-template-module.onrender.com/api/whatsapp/send-${template.name}`;
+
+      console.log(`Sending template "${template.name}" via: ${templateApiUrl}`);
+
+      const response = await fetch(templateApiUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          to: normalizedNumber,
+          // You can add other template-specific parameters here if needed
+        }),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        console.log(
+          `WhatsApp template "${template.name}" sent successfully:`,
+          result.messageId
+        );
+
+        // After template success, also send the template text as a regular message
+        try {
+          const templateText = template.components?.find(
+            (c) => c.type === "BODY"
+          )?.text;
+          if (templateText) {
+            const textResponse = await fetch(
+              "https://whatsapp-template-module.onrender.com/api/whatsapp/send-message",
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  to: normalizedNumber,
+                  message: templateText,
+                }),
+              }
+            );
+
+            const textResult = await textResponse.json();
+            if (textResult.success) {
+              console.log("Template text message also sent successfully");
+            } else {
+              console.log("Template sent but text message failed:", textResult);
+            }
+          }
+        } catch (textError) {
+          console.log("Template sent but text message failed:", textError);
+        }
+
+        // Refresh messages after sending
+        await fetchWaChatMessages(normalizedNumber);
+      } else {
+        console.error(
+          `Failed to send WhatsApp template "${template.name}":`,
+          result
+        );
+        // Add error message to chat
+        setWaChatMessages((prev) => [
+          ...prev,
+          {
+            id: Date.now() + 1,
+            text: `Failed to send ${template.name} template. Please try again.`,
+            side: "left",
+            time: new Date(),
+          },
+        ]);
+      }
+    } catch (error) {
+      console.error(
+        `Error sending WhatsApp template "${template.name}":`,
+        error
+      );
+      // Add error message to chat
+      setWaChatMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now() + 1,
+          text: `Error sending ${template.name} template. Please try again.`,
+          side: "left",
+          time: new Date(),
+        },
+      ]);
+    } finally {
+      setWaTyping(false);
+    }
+  };
+
+  const openWhatsAppMiniChat = async (lead) => {
     const derivedName =
       lead?.name ||
       lead?.contactName ||
@@ -52,35 +372,109 @@ function CampaignDetails({ campaignId, onBack }) {
       lead?.phone ||
       lead?.metadata?.callerId ||
       "";
-    setWaChatContact({ name: derivedName, number: derivedNumber });
 
-    // Initialize with a right-side message "Hi client"
-    setWaChatMessages([
-      { id: 1, text: "Hi this is Demo templet", side: "right", time: new Date() },
-    ]);
+    // Normalize the phone number
+    const normalizedNumber = normalizePhoneNumber(derivedNumber);
+
+    setWaChatContact({ name: derivedName, number: normalizedNumber });
     setWaChatOpen(true);
+
+    // Fetch real messages from WhatsApp API
+    await fetchWaChatMessages(normalizedNumber);
   };
 
-  const sendWaChatMessage = () => {
+  const fetchWaChatMessages = async (phoneNumber) => {
+    try {
+      const response = await fetch(
+        `https://whatsapp-template-module.onrender.com/api/chat/messages/${phoneNumber}`
+      );
+
+      if (response.ok) {
+        const messages = await response.json();
+
+        // Convert API messages to chat format
+        const formattedMessages = messages.map((msg) => ({
+          id: msg._id,
+          text: msg.text,
+          side: msg.direction === "received" ? "left" : "right",
+          time: new Date(msg.timestamp),
+          messageId: msg.messageId,
+          type: msg.type,
+          status: msg.status,
+        }));
+
+        setWaChatMessages(formattedMessages);
+      } else {
+        console.error("Failed to fetch WhatsApp messages");
+        setWaChatMessages([]);
+      }
+    } catch (error) {
+      console.error("Error fetching WhatsApp messages:", error);
+      setWaChatMessages([]);
+    }
+  };
+
+  const sendWaChatMessage = async () => {
     const text = waChatInput.trim();
-    if (!text) return;
+    if (!text || !waChatContact?.number) return;
+
     const msg = { id: Date.now(), text, side: "right", time: new Date() };
     setWaChatMessages((prev) => [...prev, msg]);
     setWaChatInput("");
     setWaTyping(true);
-    // Simulate reply after a short delay
-    setTimeout(() => {
-      setWaTyping(false);
+
+    try {
+      // Ensure the phone number is normalized before sending
+      const normalizedNumber = normalizePhoneNumber(waChatContact.number);
+
+      const response = await fetch(
+        "https://whatsapp-template-module.onrender.com/api/whatsapp/send-message",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            to: normalizedNumber,
+            message: text,
+          }),
+        }
+      );
+
+      const result = await response.json();
+
+      if (result.success) {
+        console.log("WhatsApp message sent successfully:", result.messageId);
+        // Refresh messages after sending
+        await fetchWaChatMessages(normalizedNumber);
+      } else {
+        console.error("Failed to send WhatsApp message:", result);
+        // Add error message to chat
+        setWaChatMessages((prev) => [
+          ...prev,
+          {
+            id: Date.now() + 1,
+            text: "Failed to send message. Please try again.",
+            side: "left",
+            time: new Date(),
+          },
+        ]);
+      }
+    } catch (error) {
+      console.error("Error sending WhatsApp message:", error);
+      // Add error message to chat
       setWaChatMessages((prev) => [
         ...prev,
         {
           id: Date.now() + 1,
-          text: "Thanks for reaching out!",
+          text: "Error sending message. Please try again.",
           side: "left",
           time: new Date(),
         },
       ]);
-    }, 1000);
+    } finally {
+      setWaTyping(false);
+    }
   };
 
   // Utility: robustly extract assigned agent id and optional name from various shapes
@@ -149,7 +543,8 @@ function CampaignDetails({ campaignId, onBack }) {
   const [transcriptContent, setTranscriptContent] = useState("");
   const [transcriptLoading, setTranscriptLoading] = useState(false);
   const [viewedTranscripts, setViewedTranscripts] = useState(new Set());
-  const [callFilter, setCallFilter] = useState("all"); // all | connected | missed
+  const [callFilter, setCallFilter] = useState("all");
+  const [durationSort, setDurationSort] = useState("none"); // all | connected | missed
 
   // Merged calls API states
   const [apiMergedCalls, setApiMergedCalls] = useState([]);
@@ -1612,6 +2007,15 @@ function CampaignDetails({ campaignId, onBack }) {
         return;
       }
 
+      // Find the agent object to get callerId
+      const primaryAgent = (agents || []).find((a) => a._id === primaryAgentId);
+
+      // Generate uniqueId for the call
+      const uniqueId = `aidial-${Date.now()}-${performance
+        .now()
+        .toString(36)
+        .replace(".", "")}-${Math.random().toString(36).substr(2, 9)}`;
+
       const token = sessionStorage.getItem("clienttoken");
       // Optimistic UI: mark this row as redialing
       setRedialingCalls(
@@ -1624,13 +2028,14 @@ function CampaignDetails({ campaignId, onBack }) {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          contact: {
-            name: getContactName(lead),
-            phone,
-            contactId: lead._id || lead.contactId || null,
-          },
+          appid: 2,
+          contact: phone,
+          caller_id: primaryAgent?.callerId,
           agentId: primaryAgentId,
-          campaignId: campaign?._id || null,
+          custom_field: {
+            name: getContactName(lead) || "",
+            uniqueId: uniqueId,
+          },
         }),
       });
       // Handle insufficient credits with modal
@@ -3059,6 +3464,15 @@ function CampaignDetails({ campaignId, onBack }) {
                   <option value="connected">Connected</option>
                   <option value="missed">Missed</option>
                 </select>
+                <select
+                  className="text-sm border border-gray-300 rounded-md px-2 py-1"
+                  value={durationSort}
+                  onChange={(e) => setDurationSort(e.target.value)}
+                >
+                  <option value="none">Sort by</option>
+                  <option value="longest">Longest First</option>
+                  <option value="shortest">Shortest First</option>
+                </select>
                 {callFilter === "missed" && (
                   <button
                     className="text-sm px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
@@ -3126,6 +3540,49 @@ function CampaignDetails({ campaignId, onBack }) {
                               lead.status === "not_connected" ||
                               lead.status === "failed";
                         return byData && byStatus;
+                      })
+                      .sort((a, b) => {
+                        if (durationSort === "none") return 0;
+
+                        // Convert duration to seconds for comparison
+                        const getDurationInSeconds = (lead) => {
+                          const duration = lead.duration;
+
+                          // Handle different duration formats
+                          if (!duration) return 0;
+
+                          // Convert to string if it's not already
+                          const durationStr = String(duration);
+
+                          // Handle MM:SS format
+                          if (durationStr.includes(":")) {
+                            const parts = durationStr.split(":");
+                            if (parts.length === 2) {
+                              const minutes = parseInt(parts[0]) || 0;
+                              const seconds = parseInt(parts[1]) || 0;
+                              return minutes * 60 + seconds;
+                            }
+                          }
+
+                          // Handle pure number (assume seconds)
+                          const numDuration = parseInt(durationStr);
+                          if (!isNaN(numDuration)) {
+                            return numDuration;
+                          }
+
+                          return 0;
+                        };
+
+                        const durationA = getDurationInSeconds(a);
+                        const durationB = getDurationInSeconds(b);
+
+                        if (durationSort === "longest") {
+                          return durationB - durationA; // Descending order
+                        } else if (durationSort === "shortest") {
+                          return durationA - durationB; // Ascending order
+                        }
+
+                        return 0;
                       })
                       .map((lead, idx) => (
                         <tr
@@ -5063,73 +5520,249 @@ function CampaignDetails({ campaignId, onBack }) {
       )}
 
       {waChatOpen && (
-        <div className="fixed bottom-4 right-4 w-90 h-1/2 bg-white border border-gray-200 rounded-lg shadow-xl z-50 flex flex-col overflow-hidden">
-          <div className="px-3 py-2 bg-green-600 text-white text-sm font-semibold flex items-center justify-between">
-            <span>
-              WhatsApp Chat
-              {waChatContact?.name || waChatContact?.number
-                ? ` of ${waChatContact?.name ? waChatContact.name : ""}${
-                    waChatContact?.name && waChatContact?.number ? " (" : ""
-                  }${waChatContact?.number || ""}${
-                    waChatContact?.name && waChatContact?.number ? ")" : ""
-                  }`
-                : ""}
-            </span>
-            <button
-              type="button"
-              className="p-1 hover:bg-green-700 rounded"
-              onClick={() => setWaChatOpen(false)}
-              title="Close"
-            >
-              <FiX className="w-4 h-4" />
-            </button>
-          </div>
-          <div className="p-3 space-y-2 flex-1 overflow-y-auto">
-            {waChatMessages.map((m) => (
-              <div
-                key={m.id}
-                className={`flex ${
-                  m.side === "right" ? "justify-end" : "justify-start"
-                }`}
+        <div className="fixed bottom-4 right-4 w-110 h-[650px] bg-white border border-gray-200 rounded-2xl shadow-2xl z-50 flex flex-col overflow-hidden backdrop-blur-sm">
+          {/* Enhanced Header */}
+          <div className="px-4 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white flex items-center justify-between shadow-lg">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
+                <FaWhatsapp className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-sm">
+                  {waChatContact?.name || "WhatsApp Chat"}
+                </h3>
+                <p className="text-xs text-green-100">
+                  {waChatContact?.number || ""}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center space-x-2">
+              <button
+                type="button"
+                className="p-2 hover:bg-white/20 rounded-full transition-colors"
+                onClick={() => fetchWaChatMessages(waChatContact?.number)}
+                title="Refresh messages"
               >
-                <div
-                  className={`px-3 py-2 rounded-lg text-sm ${
-                    m.side === "right" ? "bg-green-100" : "bg-gray-100"
-                  } text-gray-900`}
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
                 >
-                  <div>{m.text}</div>
-                  <div className="text-[10px] text-gray-500 mt-1">
-                    {new Date(m.time).toLocaleTimeString()}
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                  />
+                </svg>
+              </button>
+              <button
+                type="button"
+                className="p-2 hover:bg-white/20 rounded-full transition-colors"
+                onClick={() => setWaChatOpen(false)}
+                title="Close"
+              >
+                <FiX className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+          {/* Enhanced Chat Area */}
+          <div className="flex-1 overflow-y-auto relative bg-gradient-to-b from-gray-50 to-white">
+            <div className="p-4 space-y-3">
+              {renderMessagesWithDateSeparators()}
+              {waTyping && (
+                <div className="flex justify-start">
+                  <div className="px-4 py-3 rounded-2xl bg-gray-100 text-gray-700 text-sm italic shadow-sm animate-pulse">
+                    <div className="flex items-center space-x-2">
+                      <div className="flex space-x-1">
+                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                        <div
+                          className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+                          style={{ animationDelay: "0.1s" }}
+                        ></div>
+                        <div
+                          className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+                          style={{ animationDelay: "0.2s" }}
+                        ></div>
+                      </div>
+                      <span>typing...</span>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-            {waTyping && (
-              <div className="flex justify-start">
-                <div className="px-3 py-2 rounded-lg bg-gray-100 text-gray-700 text-sm italic">
-                  typing...
+              )}
+            </div>
+          </div>
+
+          {/* Enhanced Template Selector Popup */}
+          {waTemplatesOpen && (
+            <div className="absolute top-4 right-4 w-80 bg-white border border-gray-200 rounded-2xl shadow-2xl z-10 backdrop-blur-sm">
+              {/* Enhanced Header */}
+              <div className="px-4 py-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-t-2xl">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
+                      <svg
+                        className="w-4 h-4 text-white"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                        />
+                      </svg>
+                    </div>
+                    <h3 className="text-base font-semibold text-gray-800">
+                      Select Template
+                    </h3>
+                  </div>
+                  <button
+                    onClick={() => setWaTemplatesOpen(false)}
+                    className="text-gray-500 hover:text-gray-700 p-2 rounded-full hover:bg-white/50 transition-colors"
+                  >
+                    <FiX className="w-5 h-5" />
+                  </button>
                 </div>
               </div>
-            )}
-          </div>
-          <div className="border-t border-gray-200 p-2 flex items-center gap-2">
-            <input
-              type="text"
-              value={waChatInput}
-              onChange={(e) => setWaChatInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") sendWaChatMessage();
-              }}
-              placeholder="Type a message"
-              className="flex-1 px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-green-500"
-            />
-            <button
-              type="button"
-              onClick={sendWaChatMessage}
-              className="px-3 py-1.5 text-sm bg-green-600 text-white rounded-md hover:bg-green-700"
-            >
-              Send
-            </button>
+
+              {/* Content */}
+              <div className="max-h-80 overflow-y-auto">
+                {waTemplatesLoading ? (
+                  <div className="text-center py-8">
+                    <div className="text-sm text-gray-500">
+                      Loading templates...
+                    </div>
+                  </div>
+                ) : waTemplates.length > 0 ? (
+                  <div>
+                    {waTemplates.map((template) => (
+                      <div
+                        key={template.id}
+                        className="flex items-center justify-between px-4 py-4 hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 cursor-pointer border-b border-gray-100 last:border-b-0 transition-all duration-200 hover:shadow-sm"
+                        onClick={() => sendWaTemplateMessage(template)}
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className="text-sm font-semibold text-gray-800 truncate">
+                              {template.name}
+                            </div>
+                            <span
+                              className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                                template.status === "APPROVED"
+                                  ? "bg-green-100 text-green-700 border border-green-200"
+                                  : "bg-yellow-100 text-yellow-700 border border-yellow-200"
+                              }`}
+                            >
+                              {template.status}
+                            </span>
+                          </div>
+                          <div className="text-xs text-gray-600 line-clamp-2 leading-relaxed">
+                            {template.components
+                              ?.find((c) => c.type === "BODY")
+                              ?.text?.substring(0, 80)}
+                            {template.components?.find((c) => c.type === "BODY")
+                              ?.text?.length > 80
+                              ? "..."
+                              : ""}
+                          </div>
+                          {template.components?.find(
+                            (c) => c.type === "BUTTONS"
+                          ) && (
+                            <div className="text-xs text-blue-600 mt-2 flex items-center">
+                              <svg
+                                className="w-3 h-3 mr-1"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122"
+                                />
+                              </svg>
+                              Has interactive buttons
+                            </div>
+                          )}
+                        </div>
+                        <div className="ml-3 flex-shrink-0">
+                          <div className="w-10 h-10 bg-gradient-to-r from-green-500 to-green-600 rounded-full flex items-center justify-center hover:from-green-600 hover:to-green-700 transition-all duration-200 shadow-sm hover:shadow-md transform hover:scale-105">
+                            <svg
+                              className="w-5 h-5 text-white"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
+                              />
+                            </svg>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <div className="text-sm text-gray-500">
+                      No templates available
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+          {/* Enhanced Input Area */}
+          <div className="border-t border-gray-200 bg-white p-4">
+            <div className="flex items-end space-x-3">
+              <button
+                className="p-3 bg-gray-100 hover:bg-gray-200 rounded-full transition-colors duration-200 shadow-sm hover:shadow-md"
+                onClick={toggleWaTemplates}
+                title="Templates"
+              >
+                <FiPlus className="w-5 h-5 text-gray-600" />
+              </button>
+              <div className="flex-1 relative">
+                <input
+                  type="text"
+                  value={waChatInput}
+                  onChange={(e) => setWaChatInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") sendWaChatMessage();
+                  }}
+                  placeholder="Type a message..."
+                  className="w-full px-4 py-3 pr-12 text-sm border border-gray-300 rounded-full focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 shadow-sm hover:shadow-md"
+                />
+                <button
+                  type="button"
+                  onClick={sendWaChatMessage}
+                  disabled={!waChatInput.trim()}
+                  className="absolute right-2 top-1/2 transform -translate-y-1/2 p-2 bg-green-500 hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-full transition-all duration-200 shadow-sm hover:shadow-md"
+                >
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
+                    />
+                  </svg>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
