@@ -79,11 +79,67 @@ const AdminDashboard = ({ user, onLogout }) => {
   const [clientTokenForHumanAgent, setClientTokenForHumanAgent] =
     useState(null);
 
+  // Helpers: JWT decode and expiry check
+  const decodeJwt = (token) => {
+    try {
+      const base64Url = token.split(".")[1];
+      const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+      const jsonPayload = decodeURIComponent(
+        atob(base64)
+          .split("")
+          .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+          .join("")
+      );
+      return JSON.parse(jsonPayload);
+    } catch (e) {
+      return null;
+    }
+  };
+
+  const isTokenExpired = (token) => {
+    if (!token) return true;
+    const payload = decodeJwt(token);
+    if (!payload || !payload.exp) return true;
+    const nowInSeconds = Math.floor(Date.now() / 1000);
+    return payload.exp <= nowInSeconds;
+  };
+
+  const redirectToAdminLogin = () => {
+    try {
+      navigate("/auth/admin/login");
+    } catch {
+      window.location.href = "/auth/admin/login";
+    }
+  };
+
+  const ensureAdminAuthValid = () => {
+    const token =
+      localStorage.getItem("admintoken") ||
+      sessionStorage.getItem("admintoken");
+    if (!token || isTokenExpired(token)) {
+      redirectToAdminLogin();
+      return false;
+    }
+    return true;
+  };
+
+  // On mount, ensure token is valid; if expired, redirect to admin login
+  useEffect(() => {
+    ensureAdminAuthValid();
+  }, []);
+
   // Persist active tab across refreshes
   useEffect(() => {
     try {
       localStorage.setItem("admin_active_tab", activeTab);
     } catch {}
+  }, [activeTab]);
+
+  // Default Client tab to show Prime list
+  useEffect(() => {
+    if (activeTab === "Client") {
+      setClientTypeFilter("prime");
+    }
   }, [activeTab]);
 
   // Auto-close modals when switching tabs to avoid overlap
@@ -311,6 +367,7 @@ const AdminDashboard = ({ user, onLogout }) => {
   };
   const getclients = async (req, res) => {
     try {
+      if (!ensureAdminAuthValid()) return;
       setIsLoading(true);
       const adminToken =
         localStorage.getItem("admintoken") ||
@@ -319,6 +376,7 @@ const AdminDashboard = ({ user, onLogout }) => {
       if (!adminToken) {
         console.error("No admin token found");
         setIsLoading(false);
+        redirectToAdminLogin();
         return;
       }
 
@@ -328,6 +386,11 @@ const AdminDashboard = ({ user, onLogout }) => {
           "Content-Type": "application/json",
         },
       });
+
+      if (response.status === 401) {
+        redirectToAdminLogin();
+        return;
+      }
 
       const data = await response.json();
       console.log(data.data);

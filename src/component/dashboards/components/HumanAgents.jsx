@@ -15,13 +15,11 @@ const HumanAgents = () => {
   const [showForm, setShowForm] = useState(false);
   const [editingAgent, setEditingAgent] = useState(null);
   const [formData, setFormData] = useState({
-    humanAgentName: "",
+    name: "",
     email: "",
-    mobileNumber: "",
-    selectAgent: "",
+    contactNumber: "",
+    selectedAgents: [],
     role: "executive",
-    isprofileCompleted: true,
-    isApproved: true,
   });
   const [availableAgents, setAvailableAgents] = useState([]);
 
@@ -92,42 +90,102 @@ const HumanAgents = () => {
       setLoading(true);
       const token = sessionStorage.getItem("clienttoken");
 
-      const url = editingAgent
-        ? `${API_BASE_URL}/client/human-agents/${editingAgent._id}`
-        : `${API_BASE_URL}/client/human-agents`;
+      if (editingAgent) {
+        // Update existing human agent (replicate HumanAgentManagement)
+        const humanAgentData = {
+          humanAgentName: formData.name,
+          email: formData.email,
+          mobileNumber: formData.contactNumber,
+          agentIds: formData.selectedAgents,
+          role: formData.role,
+        };
 
-      const method = editingAgent ? "PUT" : "POST";
+        const response = await fetch(
+          `${API_BASE_URL}/client/human-agents/${editingAgent._id}`,
+          {
+            method: "PUT",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(humanAgentData),
+          }
+        );
 
-      const response = await fetch(url, {
-        method,
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(formData),
-      });
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || "Failed to update sales staff");
+        }
+        alert("Sales Staff updated successfully");
+      } else {
+        // Create new human agent (replicate HumanAgentManagement)
+        const humanAgentData = {
+          humanAgentName: formData.name,
+          email: formData.email,
+          mobileNumber: formData.contactNumber,
+          agentIds: formData.selectedAgents,
+          role: formData.role,
+          isprofileCompleted: false,
+          isApproved: true,
+        };
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Failed to save sales staff");
+        const humanAgentResponse = await fetch(
+          `${API_BASE_URL}/client/human-agents`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(humanAgentData),
+          }
+        );
+
+        if (!humanAgentResponse.ok) {
+          const errorData = await humanAgentResponse.json();
+          throw new Error(errorData.message || "Failed to create sales staff");
+        }
+
+        const humanAgentResult = await humanAgentResponse.json();
+        const humanAgentId = humanAgentResult.data._id;
+        const humangAgentRole = humanAgentResult.data.role;
+
+        // Create minimal profile
+        const profileData = {
+          businessName: formData.name,
+          contactNumber: formData.contactNumber,
+          role: humangAgentRole,
+          contactName: formData.name,
+          humanAgentId,
+        };
+
+        const profileResponse = await fetch(
+          `${API_BASE_URL}/auth/client/profile`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(profileData),
+          }
+        );
+
+        if (!profileResponse.ok) {
+          const errorData = await profileResponse.json();
+          throw new Error(errorData.message || "Failed to create profile");
+        }
+
+        alert("Sales Staff created successfully");
       }
-
-      const data = await response.json();
-      alert(
-        editingAgent
-          ? "Sales Staff updated successfully"
-          : "Sales Staff created successfully"
-      );
 
       // Reset form and refresh list
       setFormData({
-        humanAgentName: "",
+        name: "",
         email: "",
-        mobileNumber: "",
-        selectAgent: "",
+        contactNumber: "",
+        selectedAgents: [],
         role: "executive",
-        isprofileCompleted: true,
-        isApproved: true,
       });
       setEditingAgent(null);
       setShowForm(false);
@@ -179,13 +237,12 @@ const HumanAgents = () => {
   const handleEdit = (agent) => {
     setEditingAgent(agent);
     setFormData({
-      humanAgentName: agent.humanAgentName,
+      name: agent.humanAgentName,
       email: agent.email,
-      mobileNumber: agent.mobileNumber || "",
-      selectAgent: agent.selectAgent || "",
+      contactNumber: agent.mobileNumber || "",
+      selectedAgents:
+        agent.agentIds || (agent.selectAgent ? [agent.selectAgent] : []),
       role: agent.role || "executive",
-      isprofileCompleted: agent.isprofileCompleted,
-      isApproved: agent.isApproved,
     });
     setShowForm(true);
   };
@@ -193,13 +250,11 @@ const HumanAgents = () => {
   // Reset form
   const handleCancel = () => {
     setFormData({
-      humanAgentName: "",
+      name: "",
       email: "",
-      mobileNumber: "",
-      selectAgent: "",
+      contactNumber: "",
+      selectedAgents: [],
       role: "executive",
-      isprofileCompleted: true,
-      isApproved: true,
     });
     setEditingAgent(null);
     setShowForm(false);
@@ -247,7 +302,7 @@ const HumanAgents = () => {
       <div className="flex justify-between items-center mb-6">
         <div className="flex items-center">
           <FiUserCheck className="w-6 h-6 text-blue-600 mr-3" />
-          <h2 className="text-2xl font-bold text-gray-800">Sales Staff</h2>
+          <h2 className="text-2xl font-bold text-gray-800">Team</h2>
         </div>
         {!showForm && (
           <button
@@ -255,7 +310,7 @@ const HumanAgents = () => {
             className="bg-black hover:bg-black text-white px-4 py-3 rounded-lg font-semibold transition-all duration-200 flex items-center"
           >
             <FiUserPlus className="w-5 h-5 mr-2" />
-            Add New Sales Staff
+            Add New Team
           </button>
         )}
       </div>
@@ -264,22 +319,39 @@ const HumanAgents = () => {
       {showForm && (
         <div className="mb-8 bg-gray-50 p-6 rounded-xl border border-gray-200">
           <h3 className="text-xl font-semibold mb-6 text-gray-800">
-            {editingAgent ? "Edit Sales Staff" : "Add New Sales Staff"}
+            {editingAgent ? "Edit Team" : "Add New Team"}
           </h3>
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Role *
+                </label>
+                <select
+                  value={formData.role}
+                  onChange={(e) =>
+                    setFormData({ ...formData, role: e.target.value })
+                  }
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  required
+                >
+                  <option value="executive">Executive</option>
+                  <option value="team leads">Team Leads</option>
+                  <option value="deputy manager">Deputy Manager</option>
+                  <option value="deputy director">Deputy Director</option>
+                  <option value="manager">Manager</option>
+                  <option value="director">Director</option>
+                </select>
+              </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Sales Staff Name *
+                  Name *
                 </label>
                 <input
                   type="text"
-                  value={formData.humanAgentName}
+                  value={formData.name}
                   onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      humanAgentName: e.target.value,
-                    })
+                    setFormData({ ...formData, name: e.target.value })
                   }
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                   placeholder="Enter agent name"
@@ -307,9 +379,9 @@ const HumanAgents = () => {
                 </label>
                 <input
                   type="tel"
-                  value={formData.mobileNumber}
+                  value={formData.contactNumber}
                   onChange={(e) =>
-                    setFormData({ ...formData, mobileNumber: e.target.value })
+                    setFormData({ ...formData, contactNumber: e.target.value })
                   }
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                   placeholder="Enter mobile number"
@@ -318,39 +390,92 @@ const HumanAgents = () => {
               </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Select Agent *
+                  Select Agents *
                 </label>
-                <select
-                  value={formData.selectAgent}
-                  onChange={(e) =>
-                    setFormData({ ...formData, selectAgent: e.target.value })
-                  }
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                  required
-                >
-                  <option value="">Select an agent</option>
-                  {availableAgents.map((agent) => (
-                    <option key={agent._id} value={agent._id}>
-                      {agent.name || agent.agentName}
-                    </option>
-                  ))}
-                </select>
+                <div className="border border-gray-300 rounded-md p-3 max-h-48 overflow-y-auto bg-white">
+                  {availableAgents.length === 0 ? (
+                    <p className="text-gray-500 text-sm">No agents available</p>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2">
+                      {availableAgents.map((agent) => (
+                        <label
+                          key={agent._id}
+                          className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-2 rounded transition-colors border border-transparent hover:border-gray-200"
+                        >
+                          <input
+                            type="checkbox"
+                            value={agent._id}
+                            checked={formData.selectedAgents.includes(
+                              agent._id
+                            )}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setFormData({
+                                  ...formData,
+                                  selectedAgents: [
+                                    ...formData.selectedAgents,
+                                    agent._id,
+                                  ],
+                                });
+                              } else {
+                                setFormData({
+                                  ...formData,
+                                  selectedAgents:
+                                    formData.selectedAgents.filter(
+                                      (id) => id !== agent._id
+                                    ),
+                                });
+                              }
+                            }}
+                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded flex-shrink-0"
+                          />
+                          <span className="text-sm text-gray-700 truncate">
+                            {agent.name || agent.agentName}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {formData.selectedAgents.length > 0 && (
+                  <div className="mt-2">
+                    <p className="text-xs text-gray-600 mb-1">
+                      Selected ({formData.selectedAgents.length}):
+                    </p>
+                    <div className="flex flex-wrap gap-1">
+                      {formData.selectedAgents.map((agentId) => {
+                        const agent = availableAgents.find(
+                          (a) => a._id === agentId
+                        );
+                        return (
+                          <span
+                            key={agentId}
+                            className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
+                          >
+                            {agent ? agent.name || agent.agentName : agentId}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setFormData({
+                                  ...formData,
+                                  selectedAgents:
+                                    formData.selectedAgents.filter(
+                                      (id) => id !== agentId
+                                    ),
+                                });
+                              }}
+                              className="ml-1 text-blue-600 hover:text-blue-800"
+                            >
+                              ×
+                            </button>
+                          </span>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Role *
-                </label>
-                <select
-                  value={formData.role}
-                  onChange={(e) =>
-                    setFormData({ ...formData, role: e.target.value })
-                  }
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                  required
-                >
-                  <option value="executive">Executive</option>
-                </select>
-              </div>
+              
             </div>
 
             <div className="flex space-x-4 pt-4">
@@ -362,8 +487,8 @@ const HumanAgents = () => {
                 {loading
                   ? "Saving..."
                   : editingAgent
-                  ? "Update Agent"
-                  : "Create Agent"}
+                  ? "Update Team"
+                  : "Create Team"}
               </button>
               <button
                 type="button"
@@ -405,7 +530,7 @@ const HumanAgents = () => {
                       Mobile Number
                     </th>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                      Selected Agent
+                      Selected Agents
                     </th>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                       Role
@@ -450,6 +575,32 @@ const HumanAgents = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {(() => {
+                          if (agent.agentIds && agent.agentIds.length > 0) {
+                            const names = agent.agentIds.map((agentId) => {
+                              const actualAgentId =
+                                typeof agentId === "object"
+                                  ? agentId._id || agentId.id
+                                  : agentId;
+                              const selectedAgent = availableAgents.find(
+                                (a) => a._id === actualAgentId
+                              );
+                              if (selectedAgent) {
+                                return (
+                                  selectedAgent.name ||
+                                  selectedAgent.agentName ||
+                                  "Unknown Agent"
+                                );
+                              } else {
+                                return typeof agentId === "object"
+                                  ? agentId.name ||
+                                      agentId.agentName ||
+                                      "Unknown Agent"
+                                  : `Agent ID: ${actualAgentId}`;
+                              }
+                            });
+                            return names.join(", ");
+                          }
+                          // Fallback for older records with single selectAgent
                           const selectedAgent = availableAgents.find(
                             (a) => a._id === agent.selectAgent
                           );
@@ -463,7 +614,7 @@ const HumanAgents = () => {
                           {agent.role || "N/A"}
                         </span>
                       </td>
-                     
+
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {new Date(agent.createdAt).toLocaleDateString()}
                       </td>
