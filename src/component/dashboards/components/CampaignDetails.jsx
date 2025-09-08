@@ -549,9 +549,17 @@ function CampaignDetails({ campaignId, onBack }) {
   // Merged calls API states
   const [apiMergedCalls, setApiMergedCalls] = useState([]);
   const [apiMergedCallsLoading, setApiMergedCallsLoading] = useState(false);
+  const [apiMergedCallsInitialLoad, setApiMergedCallsInitialLoad] =
+    useState(true);
   const [apiMergedCallsPage, setApiMergedCallsPage] = useState(1);
   const [apiMergedCallsTotalPages, setApiMergedCallsTotalPages] = useState(0);
   const [apiMergedCallsTotalItems, setApiMergedCallsTotalItems] = useState(0);
+  const [apiMergedCallsTotals, setApiMergedCallsTotals] = useState({
+    totalItems: 0,
+    totalConnected: 0,
+    totalMissed: 0,
+    totalDuration: 0,
+  });
   const [redialingCalls, setRedialingCalls] = useState(new Set());
 
   // Call details states
@@ -585,12 +593,13 @@ function CampaignDetails({ campaignId, onBack }) {
     const intervalId = setInterval(() => {
       try {
         fetchCampaignCallLogs(1);
+        fetchApiMergedCalls(apiMergedCallsPage, true); // Pass true for auto-refresh
       } catch (err) {
         // no-op
       }
     }, 2000);
     return () => clearInterval(intervalId);
-  }, [statusLogsCollapsed]);
+  }, [statusLogsCollapsed, apiMergedCallsPage]);
   const connectionTimeoutRef = useRef(null);
 
   // Campaign contacts management states
@@ -1647,9 +1656,44 @@ function CampaignDetails({ campaignId, onBack }) {
       if (!resp.ok || result.success === false) {
         throw new Error(result.error || "Failed to fetch call logs");
       }
-      setCallDetails(result.data || []);
-      setCallDetailsMeta(result.pagination || { totalPages: 0, totalLogs: 0 });
-      setCallDetailsPage(page);
+      // Only update state if there are actual changes
+      const newCallDetails = result.data || [];
+      const newCallDetailsMeta = result.pagination || {
+        totalPages: 0,
+        totalLogs: 0,
+      };
+
+      // Check if call details data has changed
+      const callDetailsChanged =
+        JSON.stringify(newCallDetails) !== JSON.stringify(callDetails);
+
+      // Check if call details meta has changed
+      const callDetailsMetaChanged =
+        JSON.stringify(newCallDetailsMeta) !== JSON.stringify(callDetailsMeta);
+
+      // Check if page has changed
+      const callDetailsPageChanged = page !== callDetailsPage;
+
+      // Only update state if there are changes
+      if (callDetailsChanged) {
+        setCallDetails(newCallDetails);
+      }
+
+      if (callDetailsMetaChanged) {
+        setCallDetailsMeta(newCallDetailsMeta);
+      }
+
+      if (callDetailsPageChanged) {
+        setCallDetailsPage(page);
+      }
+
+      console.log("Campaign Call Logs API Response:", {
+        changesDetected: {
+          callDetailsChanged,
+          callDetailsMetaChanged,
+          callDetailsPageChanged,
+        },
+      });
     } catch (e) {
       console.error("Error fetching campaign call logs:", e);
       setCallDetails([]);
@@ -1660,10 +1704,14 @@ function CampaignDetails({ campaignId, onBack }) {
   };
 
   // Fetch merged calls from new API
-  const fetchApiMergedCalls = async (page = 1) => {
+  const fetchApiMergedCalls = async (page = 1, isAutoRefresh = false) => {
     try {
       if (!campaignId) return;
-      setApiMergedCallsLoading(true);
+
+      // Only show loading spinner on initial load, not on auto-refresh
+      if (!isAutoRefresh) {
+        setApiMergedCallsLoading(true);
+      }
       const token = sessionStorage.getItem("clienttoken");
       const params = new URLSearchParams({
         page: String(page),
@@ -1682,15 +1730,62 @@ function CampaignDetails({ campaignId, onBack }) {
       if (!resp.ok || result.success === false) {
         throw new Error(result.error || "Failed to fetch merged calls");
       }
-      setApiMergedCalls(result.data || []);
-      setApiMergedCallsPage(result.pagination?.currentPage || page);
-      setApiMergedCallsTotalPages(result.pagination?.totalPages || 0);
-      setApiMergedCallsTotalItems(result.pagination?.totalItems || 0);
+      // Only update state if there are actual changes
+      const newData = result.data || [];
+      const newTotals = result.totals || {
+        totalItems: 0,
+        totalConnected: 0,
+        totalMissed: 0,
+        totalDuration: 0,
+      };
+      const newPage = result.pagination?.currentPage || page;
+      const newTotalPages = result.pagination?.totalPages || 0;
+      const newTotalItems = result.pagination?.totalItems || 0;
+
+      // Check if call logs data has changed
+      const callLogsChanged =
+        JSON.stringify(newData) !== JSON.stringify(apiMergedCalls);
+
+      // Check if totals have changed
+      const totalsChanged =
+        JSON.stringify(newTotals) !== JSON.stringify(apiMergedCallsTotals);
+
+      // Check if pagination has changed
+      const paginationChanged =
+        newPage !== apiMergedCallsPage ||
+        newTotalPages !== apiMergedCallsTotalPages ||
+        newTotalItems !== apiMergedCallsTotalItems;
+
+      // Only update state if there are changes
+      if (callLogsChanged) {
+        setApiMergedCalls(newData);
+      }
+
+      if (totalsChanged) {
+        setApiMergedCallsTotals(newTotals);
+      }
+
+      if (paginationChanged) {
+        setApiMergedCallsPage(newPage);
+        setApiMergedCallsTotalPages(newTotalPages);
+        setApiMergedCallsTotalItems(newTotalItems);
+      }
+
+      // Mark initial load as complete
+      if (apiMergedCallsInitialLoad) {
+        setApiMergedCallsInitialLoad(false);
+      }
 
       console.log("Merged Calls API Response:", {
         data: result.data,
         pagination: result.pagination,
         campaign: result.campaign,
+        totals: result.totals,
+        changesDetected: {
+          callLogsChanged,
+          totalsChanged,
+          paginationChanged,
+        },
       });
     } catch (e) {
       console.error("Error fetching API merged calls:", e);
@@ -1698,6 +1793,13 @@ function CampaignDetails({ campaignId, onBack }) {
       setApiMergedCallsPage(1);
       setApiMergedCallsTotalPages(0);
       setApiMergedCallsTotalItems(0);
+      setApiMergedCallsTotals({
+        totalItems: 0,
+        totalConnected: 0,
+        totalMissed: 0,
+        totalDuration: 0,
+      });
+      setApiMergedCallsInitialLoad(false);
     } finally {
       setApiMergedCallsLoading(false);
     }
@@ -3152,112 +3254,68 @@ function CampaignDetails({ campaignId, onBack }) {
             >
               <div className="text-center">
                 <div className="text-lg font-semibold text-gray-900">
-                  {(() => {
-                    const total = Array.isArray(campaignContacts)
-                      ? campaignContacts.length
-                      : 0;
-                    // Calculate total calls made (completed + ongoing + missed)
-                    const totalCallsMade = (() => {
-                      if (apiMergedCallsTotalItems > 0) {
-                        // If we have API total, use it
-                        return apiMergedCallsTotalItems;
-                      } else {
-                        // Fallback to current page count
-                        return apiMergedCalls.filter((call) => {
-                          const s = (call.status || "").toLowerCase();
-                          return (
-                            s === "ongoing" ||
-                            s === "completed" ||
-                            s === "missed"
-                          );
-                        }).length;
-                      }
-                    })();
-                    const callsMade = Math.min(total, totalCallsMade);
-                    return `${callsMade || 0} / ${total || 0}`;
-                  })()}
+                  {apiMergedCallsLoading && apiMergedCallsInitialLoad ? (
+                    <div className="flex justify-center">
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-gray-900"></div>
+                    </div>
+                  ) : (
+                    (() => {
+                      const total = Array.isArray(campaignContacts)
+                        ? campaignContacts.length
+                        : 0;
+                      const callsMade = Math.min(
+                        total,
+                        apiMergedCallsTotals.totalItems
+                      );
+                      return `${callsMade || 0} / ${total || 0}`;
+                    })()
+                  )}
                 </div>
                 <div className="text-xs text-gray-500">Progress</div>
               </div>
               <div className="text-center">
                 <div className="text-lg font-semibold text-blue-600">
-                  {(() => {
-                    // Count completed calls (status: ongoing or completed)
-                    const completedCount = apiMergedCalls.filter((call) => {
-                      const s = (call.status || "").toLowerCase();
-                      return s === "ongoing" || s === "completed";
-                    }).length;
-
-                    // If we have API total, estimate completed based on current page ratio
-                    if (
-                      apiMergedCallsTotalItems > 0 &&
-                      apiMergedCalls.length > 0
-                    ) {
-                      const completedRatio =
-                        completedCount / apiMergedCalls.length;
-                      const estimatedTotalCompleted = Math.round(
-                        apiMergedCallsTotalItems * completedRatio
-                      );
-                      return estimatedTotalCompleted;
-                    }
-
-                    return completedCount;
-                  })()}
+                  {apiMergedCallsLoading && apiMergedCallsInitialLoad ? (
+                    <div className="flex justify-center">
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+                    </div>
+                  ) : (
+                    apiMergedCallsTotals.totalConnected
+                  )}
                 </div>
                 <div className="text-xs text-gray-500">Connected</div>
               </div>
               <div className="text-center">
                 <div className="text-lg font-semibold text-orange-600">
-                  {(() => {
-                    // Count missed calls strictly per backend logic
-                    const missedCount = apiMergedCalls.filter((call) => {
-                      const s = (call.status || "").toLowerCase();
-                      return call?.isMissed === true || s === "missed";
-                    }).length;
-
-                    // If we have API total, estimate missed based on current page ratio
-                    if (
-                      apiMergedCallsTotalItems > 0 &&
-                      apiMergedCalls.length > 0
-                    ) {
-                      const missedRatio = missedCount / apiMergedCalls.length;
-                      const estimatedTotalMissed = Math.round(
-                        apiMergedCallsTotalItems * missedRatio
-                      );
-                      return estimatedTotalMissed;
-                    }
-
-                    return missedCount;
-                  })()}
+                  {apiMergedCallsLoading && apiMergedCallsInitialLoad ? (
+                    <div className="flex justify-center">
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-orange-600"></div>
+                    </div>
+                  ) : (
+                    apiMergedCallsTotals.totalMissed
+                  )}
                 </div>
                 <div className="text-xs text-gray-500">Missed</div>
               </div>
               <div className="text-center">
                 <div className="text-lg font-semibold text-purple-600">
-                  {(() => {
-                    // Sum durations on current page and estimate for total if available
-                    const pageSum = apiMergedCalls.reduce((sum, call) => {
-                      const d = Number(call?.duration) || 0;
-                      return sum + d;
-                    }, 0);
-                    let totalSeconds = pageSum;
-                    if (
-                      apiMergedCallsTotalItems > 0 &&
-                      apiMergedCalls.length > 0
-                    ) {
-                      const avg = pageSum / apiMergedCalls.length;
-                      totalSeconds = Math.round(avg * apiMergedCallsTotalItems);
-                    }
-                    const fmt = (secs) => {
-                      const s = Number(secs) || 0;
-                      const h = Math.floor(s / 3600);
-                      const m = Math.floor((s % 3600) / 60);
-                      const sec = s % 60;
-                      if (h > 0) return `${h}h ${m}m ${sec}s`;
-                      return `${m}m ${sec}s`;
-                    };
-                    return fmt(totalSeconds);
-                  })()}
+                  {apiMergedCallsLoading && apiMergedCallsInitialLoad ? (
+                    <div className="flex justify-center">
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-purple-600"></div>
+                    </div>
+                  ) : (
+                    (() => {
+                      const fmt = (secs) => {
+                        const s = Number(secs) || 0;
+                        const h = Math.floor(s / 3600);
+                        const m = Math.floor((s % 3600) / 60);
+                        const sec = s % 60;
+                        if (h > 0) return `${h}h ${m}m ${sec}s`;
+                        return `${m}m ${sec}s`;
+                      };
+                      return fmt(apiMergedCallsTotals.totalDuration);
+                    })()
+                  )}
                 </div>
                 <div className="text-xs text-gray-500">Total Duration</div>
               </div>
@@ -3270,52 +3328,19 @@ function CampaignDetails({ campaignId, onBack }) {
                   Progress Bar
                 </span>
                 <span className="text-xs text-gray-500">
-                  {(() => {
-                    const total = Array.isArray(campaignContacts)
-                      ? campaignContacts.length
-                      : 0;
-
-                    // Count different statuses from current page
-                    const connectedCount = apiMergedCalls.filter((call) => {
-                      const s = (call.status || "").toLowerCase();
-                      return s === "ongoing" || s === "completed";
-                    }).length;
-
-                    const missedCount = apiMergedCalls.filter((call) => {
-                      const s = (call.status || "").toLowerCase();
-                      return (
-                        s === "missed" ||
-                        s === "not_connected" ||
-                        s === "failed"
-                      );
-                    }).length;
-
-                    // If we have API total, estimate totals based on current page ratio
-                    if (
-                      apiMergedCallsTotalItems > 0 &&
-                      apiMergedCalls.length > 0
-                    ) {
-                      const connectedRatio =
-                        connectedCount / apiMergedCalls.length;
-                      const missedRatio = missedCount / apiMergedCalls.length;
-
-                      const estimatedTotalConnected = Math.round(
-                        apiMergedCallsTotalItems * connectedRatio
-                      );
-                      const estimatedTotalMissed = Math.round(
-                        apiMergedCallsTotalItems * missedRatio
-                      );
-
-                      return `${estimatedTotalConnected} connected, ${estimatedTotalMissed} missed of ${total} total`;
-                    }
-
-                    // Fallback to current page counts
-                    if (total > 0 && (connectedCount > 0 || missedCount > 0)) {
-                      return `${connectedCount} connected, ${missedCount} missed (current page)`;
-                    }
-
-                    return "";
-                  })()}
+                  {apiMergedCallsLoading && apiMergedCallsInitialLoad ? (
+                    <div className="flex items-center">
+                      <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-gray-500 mr-2"></div>
+                      Loading stats...
+                    </div>
+                  ) : (
+                    (() => {
+                      const total = Array.isArray(campaignContacts)
+                        ? campaignContacts.length
+                        : 0;
+                      return `${apiMergedCallsTotals.totalConnected} connected, ${apiMergedCallsTotals.totalMissed} missed of ${total} total`;
+                    })()
+                  )}
                 </span>
               </div>
               <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
@@ -3325,24 +3350,10 @@ function CampaignDetails({ campaignId, onBack }) {
                       const total = Array.isArray(campaignContacts)
                         ? campaignContacts.length
                         : 0;
-                      // Calculate total calls made (completed + ongoing + missed)
-                      const totalCallsMade = (() => {
-                        if (apiMergedCallsTotalItems > 0) {
-                          // If we have API total, use it
-                          return apiMergedCallsTotalItems;
-                        } else {
-                          // Fallback to current page count
-                          return apiMergedCalls.filter((call) => {
-                            const s = (call.status || "").toLowerCase();
-                            return (
-                              s === "ongoing" ||
-                              s === "completed" ||
-                              s === "missed"
-                            );
-                          }).length;
-                        }
-                      })();
-                      const callsMade = Math.min(total, totalCallsMade);
+                      const callsMade = Math.min(
+                        total,
+                        apiMergedCallsTotals.totalItems
+                      );
                       return total > 0 && callsMade > 0;
                     })()
                       ? "bg-gradient-to-r from-green-400 to-green-500"
@@ -3354,24 +3365,10 @@ function CampaignDetails({ campaignId, onBack }) {
                         ? campaignContacts.length
                         : 0;
                       if (total === 0) return "0%";
-                      // Calculate total calls made (completed + ongoing + missed)
-                      const totalCallsMade = (() => {
-                        if (apiMergedCallsTotalItems > 0) {
-                          // If we have API total, use it
-                          return apiMergedCallsTotalItems;
-                        } else {
-                          // Fallback to current page count
-                          return apiMergedCalls.filter((call) => {
-                            const s = (call.status || "").toLowerCase();
-                            return (
-                              s === "ongoing" ||
-                              s === "completed" ||
-                              s === "missed"
-                            );
-                          }).length;
-                        }
-                      })();
-                      const callsMade = Math.min(total, totalCallsMade);
+                      const callsMade = Math.min(
+                        total,
+                        apiMergedCallsTotals.totalItems
+                      );
                       const pct = Math.max((callsMade / total) * 100, 0);
                       return `${pct}%`;
                     })(),
@@ -3433,28 +3430,6 @@ function CampaignDetails({ campaignId, onBack }) {
                 Recent call logs
               </h2>
               <div className="flex items-center gap-3">
-                <button
-                  className="inline-flex items-center px-2 py-1 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50"
-                  onClick={() => {
-                    fetchApiMergedCalls(1);
-                  }}
-                  title="Refresh call logs"
-                >
-                  <svg
-                    className="w-4 h-4 mr-1"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2"
-                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                    />
-                  </svg>
-                  Refresh
-                </button>
                 <select
                   className="text-sm border border-gray-300 rounded-md px-2 py-1"
                   value={callFilter}
