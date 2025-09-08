@@ -560,6 +560,8 @@ function CampaignDetails({ campaignId, onBack }) {
     totalMissed: 0,
     totalDuration: 0,
   });
+  const [apiMergedCallsLoadingMore, setApiMergedCallsLoadingMore] =
+    useState(false);
   const [redialingCalls, setRedialingCalls] = useState(new Set());
 
   // Call details states
@@ -580,6 +582,7 @@ function CampaignDetails({ campaignId, onBack }) {
   const [liveTranscriptLines, setLiveTranscriptLines] = useState([]);
   const [isPolling, setIsPolling] = useState(false);
   const [liveCallDetails, setLiveCallDetails] = useState(null);
+  const [transcriptCounts, setTranscriptCounts] = useState(new Map());
   const [callConnectionStatus, setCallConnectionStatus] = useState("connected"); // connected, not_connected
   const [callResultsConnectionStatus, setCallResultsConnectionStatus] =
     useState({}); // Track connection status for each call result
@@ -587,20 +590,30 @@ function CampaignDetails({ campaignId, onBack }) {
   const logsPollRef = useRef(null);
   const transcriptRef = useRef(null);
 
-  // Auto-refresh recent call logs every 2 seconds (pauses when collapsed)
+  // Auto-refresh recent call logs every 2 seconds (only when expanded and campaign is active)
   useEffect(() => {
-    if (statusLogsCollapsed) return;
+    if (statusLogsCollapsed || !campaign?.isActive) return;
     const intervalId = setInterval(() => {
       try {
         fetchCampaignCallLogs(1);
-        fetchApiMergedCalls(apiMergedCallsPage, true); // Pass true for auto-refresh
+        fetchApiMergedCalls(apiMergedCallsPage, true, true); // Auto-refresh with append to preserve accumulated list
       } catch (err) {
         // no-op
       }
     }, 2000);
     return () => clearInterval(intervalId);
-  }, [statusLogsCollapsed, apiMergedCallsPage]);
+  }, [statusLogsCollapsed, apiMergedCallsPage, campaign?.isActive]);
   const connectionTimeoutRef = useRef(null);
+
+  // When campaign transitions from active -> inactive, refresh status once to update UI
+  const prevIsActiveRef = useRef(campaign?.isActive);
+  useEffect(() => {
+    const prev = prevIsActiveRef.current;
+    if (prev === true && campaign?.isActive === false) {
+      fetchCampaignCallingStatus();
+    }
+    prevIsActiveRef.current = campaign?.isActive;
+  }, [campaign?.isActive]);
 
   // Campaign contacts management states
   const [campaignContacts, setCampaignContacts] = useState([]);
@@ -1704,17 +1717,33 @@ function CampaignDetails({ campaignId, onBack }) {
   };
 
   // Fetch merged calls from new API
-  const fetchApiMergedCalls = async (page = 1, isAutoRefresh = false) => {
+  // Helper to build a stable key for deduping loaded leads
+  const getLeadKey = (lead) =>
+    lead?.documentId ||
+    lead?.contactId ||
+    `${lead?.number || ""}-${lead?.time || ""}`;
+
+  const fetchApiMergedCalls = async (
+    page = 1,
+    isAutoRefresh = false,
+    append = false
+  ) => {
     try {
       if (!campaignId) return;
 
       // Only show loading spinner on initial load, not on auto-refresh
       if (!isAutoRefresh) {
-        setApiMergedCallsLoading(true);
+        if (append) {
+          setApiMergedCallsLoadingMore(true);
+        } else {
+          setApiMergedCallsLoading(true);
+        }
       }
+      // Clamp requested page to valid lower bound; upper bound handled after fetch when totalPages is known
+      const requestedPage = Math.max(1, Number(page) || 1);
       const token = sessionStorage.getItem("clienttoken");
       const params = new URLSearchParams({
-        page: String(page),
+        page: String(requestedPage),
         limit: String(50),
       });
       const resp = await fetch(
@@ -1738,13 +1767,25 @@ function CampaignDetails({ campaignId, onBack }) {
         totalMissed: 0,
         totalDuration: 0,
       };
-      const newPage = result.pagination?.currentPage || page;
+      const newPage = result.pagination?.currentPage || requestedPage;
       const newTotalPages = result.pagination?.totalPages || 0;
       const newTotalItems = result.pagination?.totalItems || 0;
 
+      // Compute updated list (append or replace)
+      let updatedList = apiMergedCalls;
+      if (append && newPage > apiMergedCallsPage) {
+        const existingKeys = new Set((apiMergedCalls || []).map(getLeadKey));
+        const filteredToAppend = newData.filter(
+          (item) => !existingKeys.has(getLeadKey(item))
+        );
+        updatedList = [...apiMergedCalls, ...filteredToAppend];
+      } else {
+        updatedList = newData;
+      }
+
       // Check if call logs data has changed
       const callLogsChanged =
-        JSON.stringify(newData) !== JSON.stringify(apiMergedCalls);
+        JSON.stringify(updatedList) !== JSON.stringify(apiMergedCalls);
 
       // Check if totals have changed
       const totalsChanged =
@@ -1758,7 +1799,7 @@ function CampaignDetails({ campaignId, onBack }) {
 
       // Only update state if there are changes
       if (callLogsChanged) {
-        setApiMergedCalls(newData);
+        setApiMergedCalls(updatedList);
       }
 
       if (totalsChanged) {
@@ -1802,6 +1843,7 @@ function CampaignDetails({ campaignId, onBack }) {
       setApiMergedCallsInitialLoad(false);
     } finally {
       setApiMergedCallsLoading(false);
+      setApiMergedCallsLoadingMore(false);
     }
   };
 
@@ -1831,7 +1873,19 @@ function CampaignDetails({ campaignId, onBack }) {
       if (!resp.ok || result.success === false) {
         throw new Error(result.error || "Failed to fetch transcript");
       }
-      setTranscriptContent(result.transcript || "");
+      const fetchedTranscript = result.transcript || "";
+      setTranscriptContent(fetchedTranscript);
+
+      // Cache message count for this document to display near Transcript button
+      const docKey = documentId;
+      if (docKey && fetchedTranscript) {
+        const msgCount = countMessagesInTranscript(fetchedTranscript);
+        setTranscriptCounts((prev) => {
+          const next = new Map(prev);
+          next.set(docKey, msgCount);
+          return next;
+        });
+      }
 
       // Store lead data for display in modal
       if (leadData) {
@@ -1926,6 +1980,43 @@ function CampaignDetails({ campaignId, onBack }) {
     return groupedMessages;
   };
 
+  // Count grouped conversation messages (user+AI) in a transcript
+  const countMessagesInTranscript = (transcriptText) => {
+    if (!transcriptText) return 0;
+    const lines = transcriptText.split("\n").filter((line) => line.trim());
+    let lastSpeaker = null;
+    let count = 0;
+    for (const line of lines) {
+      const lineWithoutTimestamp = line.replace(/\[[^\]]+\]\s*/, "");
+      const colonIndex = lineWithoutTimestamp.indexOf(":");
+      if (colonIndex !== -1) {
+        const speaker = lineWithoutTimestamp.substring(0, colonIndex).trim();
+        if (speaker && speaker !== lastSpeaker) {
+          count += 1;
+          lastSpeaker = speaker;
+        }
+      }
+    }
+    return count;
+  };
+
+  // Get cached count or compute and cache per lead/document
+  const getTranscriptMessageCount = (lead) => {
+    if (!lead) return 0;
+    const key = lead.documentId || getLeadKey(lead);
+    const cached = transcriptCounts.get(key);
+    if (typeof cached === "number") return cached;
+    const text = lead.transcript || "";
+    if (!text) return 0;
+    const count = countMessagesInTranscript(text);
+    setTranscriptCounts((prev) => {
+      const next = new Map(prev);
+      next.set(key, count);
+      return next;
+    });
+    return count;
+  };
+
   // Open transcript intelligently: if call is ongoing and we have uniqueId, show live logs; else load saved transcript
   const openTranscriptSmart = async (lead) => {
     try {
@@ -1977,10 +2068,14 @@ function CampaignDetails({ campaignId, onBack }) {
       if (response.ok) {
         const result = await response.json();
         if (result.success && result.data) {
-          // Update campaign status if it's running
-          if (result.data.isRunning !== campaign?.isRunning) {
+          // Update campaign active status from backend
+          const nextIsActive =
+            typeof result.data.isActive === "boolean"
+              ? result.data.isActive
+              : result.data.isRunning;
+          if (nextIsActive !== campaign?.isActive) {
             setCampaign((prev) =>
-              prev ? { ...prev, isRunning: result.data.isRunning } : null
+              prev ? { ...prev, isActive: nextIsActive } : null
             );
           }
 
@@ -1994,7 +2089,7 @@ function CampaignDetails({ campaignId, onBack }) {
 
               if (completedPercentage === 100) {
                 setCallingStatus("completed");
-              } else if (progress.isRunning) {
+              } else if (progress.isActive || progress.isRunning) {
                 setCallingStatus("calling");
               } else if (progress.isPaused) {
                 setCallingStatus("paused");
@@ -2624,7 +2719,7 @@ function CampaignDetails({ campaignId, onBack }) {
         toast.error(result.error || "Failed to start campaign calling");
         return;
       }
-      setCampaign((prev) => (prev ? { ...prev, isRunning: true } : prev));
+      setCampaign((prev) => (prev ? { ...prev, isActive: true } : prev));
       setLastUpdated(new Date());
     } catch (e) {
       console.error("Start calling failed:", e);
@@ -2654,7 +2749,7 @@ function CampaignDetails({ campaignId, onBack }) {
         toast.error(result.error || "Failed to stop campaign calling");
         return;
       }
-      setCampaign((prev) => (prev ? { ...prev, isRunning: false } : prev));
+      setCampaign((prev) => (prev ? { ...prev, isActive: false } : prev));
       setLastUpdated(new Date());
     } catch (e) {
       console.error("Stop calling failed:", e);
@@ -2665,7 +2760,7 @@ function CampaignDetails({ campaignId, onBack }) {
   };
 
   const handleToggleCampaignCalling = async () => {
-    if (campaign?.isRunning) {
+    if (campaign?.isActive) {
       await stopCampaignCallingBackend();
     } else {
       await startCampaignCallingBackend();
@@ -2836,6 +2931,20 @@ function CampaignDetails({ campaignId, onBack }) {
             const lines = groupedMessages;
 
             setLiveTranscriptLines(lines);
+
+            // Cache live message count for selected call (if has documentId)
+            try {
+              const liveDocKey =
+                (selectedCall && selectedCall.documentId) || null;
+              if (liveDocKey) {
+                const msgCount = Array.isArray(lines) ? lines.length : 0;
+                setTranscriptCounts((prev) => {
+                  const next = new Map(prev);
+                  next.set(liveDocKey, msgCount);
+                  return next;
+                });
+              }
+            } catch (_) {}
 
             // Auto-scroll to bottom when new messages are added
             setTimeout(() => {
@@ -3036,7 +3145,7 @@ function CampaignDetails({ campaignId, onBack }) {
                       : !Array.isArray(campaign?.agent) ||
                         campaign.agent.length === 0
                       ? "Cannot start: No agent assigned"
-                      : campaign?.isRunning
+                      : campaign?.isActive
                       ? "Stop campaign"
                       : "Start campaign"
                   }
@@ -3047,18 +3156,18 @@ function CampaignDetails({ campaignId, onBack }) {
                     !Array.isArray(campaign?.agent) ||
                     campaign.agent.length === 0
                       ? "bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed"
-                      : campaign?.isRunning
+                      : campaign?.isActive
                       ? "bg-red-100 border-red-600 text-red-800 hover:bg-red-100"
                       : "bg-green-100 border-green-600 text-green-800 hover:bg-green-100"
                   }`}
                 >
-                  {campaign?.isRunning ? (
+                  {campaign?.isActive ? (
                     <FiPause className="w-4 h-4" />
                   ) : (
                     <FiPlay className="w-4 h-4" />
                   )}
                   <span className="mx-2 text-lg text-gray-600">
-                    {campaign?.isRunning ? "Stop" : "Run"}
+                    {campaign?.isActive ? "Stop" : "Run"}
                   </span>
                 </button>
               </div>
@@ -3194,12 +3303,12 @@ function CampaignDetails({ campaignId, onBack }) {
                 </h3>
                 <span
                   className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                    campaign?.isRunning
+                    campaign?.isActive
                       ? "bg-green-50 text-green-700 border border-green-200"
                       : "bg-gray-50 text-gray-600 border border-gray-200"
                   }`}
                 >
-                  {campaign?.isRunning ? "🟢 Running" : "⚪ Not Running"}
+                  {campaign?.isActive ? "🟢 Running" : "⚪ Not Running"}
                 </span>
               </div>
               <div className="flex items-center justify-between space-x-2">
@@ -3430,6 +3539,26 @@ function CampaignDetails({ campaignId, onBack }) {
                 Recent call logs
               </h2>
               <div className="flex items-center gap-3">
+                <button
+                  onClick={() => fetchApiMergedCalls(1, false, false)}
+                  className="text-sm px-2 py-1 bg-gray-50 text-black rounded-md hover:bg-gray-100 transition-colors border border-gray-200 flex items-center justify-between"
+                  title="Refresh"
+                >
+                  <svg
+                    className="w-3 h-3 mx-1"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                    />
+                  </svg>
+                  <span>Refresh</span>
+                </button>
                 <select
                   className="text-sm border border-gray-300 rounded-md px-2 py-1"
                   value={callFilter}
@@ -3506,14 +3635,23 @@ function CampaignDetails({ campaignId, onBack }) {
                         const hasRealNumber =
                           number && number !== "-" && /\d/.test(number);
                         const byData = hasRealName || hasRealNumber;
+                        const status = (lead.status || "").toLowerCase();
+                        const connectedStatuses = [
+                          "connected",
+                          "completed",
+                          "ongoing",
+                        ];
+                        const missedStatuses = [
+                          "missed",
+                          "not_connected",
+                          "failed",
+                        ];
                         const byStatus =
                           callFilter === "all"
                             ? true
                             : callFilter === "connected"
-                            ? lead.status === "ongoing"
-                            : lead.status === "missed" ||
-                              lead.status === "not_connected" ||
-                              lead.status === "failed";
+                            ? connectedStatuses.includes(status)
+                            : missedStatuses.includes(status);
                         return byData && byStatus;
                       })
                       .sort((a, b) => {
@@ -3663,15 +3801,26 @@ function CampaignDetails({ campaignId, onBack }) {
                                     d="M8 16h8M8 12h8M8 8h8M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H7l-2 2H3v12a2 2 0 002 2z"
                                   />
                                 </svg>
-                                {lead.documentId &&
-                                viewedTranscripts.has(lead.documentId)
-                                  ? "Viewed"
-                                  : "Transcript"}
+                                {(() => {
+                                  const baseLabel =
+                                    lead.documentId &&
+                                    viewedTranscripts.has(lead.documentId)
+                                      ? "Viewed"
+                                      : "Transcript";
+                                  const count =
+                                    (typeof lead.transcriptCount === "number"
+                                      ? lead.transcriptCount
+                                      : undefined) ??
+                                    getTranscriptMessageCount(lead);
+                                  return count > 0
+                                    ? `${baseLabel} (${count})`
+                                    : baseLabel;
+                                })()}
                               </button>
                             )}
                           </td>
                           <td className="py-2 pr-4 text-gray-700">
-                            {lead.whatsappRequested ? (
+                            {lead.whatsappRequested && whatsappRequested? (
                               <button
                                 type="button"
                                 onClick={() => openWhatsAppMiniChat(lead)}
@@ -3715,33 +3864,30 @@ function CampaignDetails({ campaignId, onBack }) {
                 </table>
                 <div className="flex items-center justify-between mt-4">
                   <div className="text-sm text-gray-600">
-                    Page {apiMergedCallsPage} of {apiMergedCallsTotalPages || 1}{" "}
-                    ({apiMergedCallsTotalItems} total items)
+                    Loaded {apiMergedCalls.length} of {apiMergedCallsTotalItems}{" "}
+                    items
                   </div>
                   <div className="flex gap-2">
+                    {apiMergedCallsLoadingMore && (
+                      <div className="flex items-center text-xs text-gray-500">
+                        <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-gray-500 mr-2"></div>
+                        Loading more...
+                      </div>
+                    )}
                     <button
                       className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 disabled:opacity-50"
                       onClick={() =>
-                        fetchApiMergedCalls(apiMergedCallsPage - 1)
-                      }
-                      disabled={
-                        apiMergedCallsLoading || apiMergedCallsPage <= 1
-                      }
-                    >
-                      Prev
-                    </button>
-                    <button
-                      className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 disabled:opacity-50"
-                      onClick={() =>
-                        fetchApiMergedCalls(apiMergedCallsPage + 1)
+                        fetchApiMergedCalls(apiMergedCallsPage + 1, false, true)
                       }
                       disabled={
                         apiMergedCallsLoading ||
-                        (apiMergedCallsTotalPages &&
-                          apiMergedCallsPage >= apiMergedCallsTotalPages)
+                        apiMergedCallsLoadingMore ||
+                        apiMergedCallsPage >=
+                          Math.max(1, apiMergedCallsTotalPages || 0)
                       }
+                      title="Load next 50"
                     >
-                      Next
+                      Load more
                     </button>
                   </div>
                 </div>
