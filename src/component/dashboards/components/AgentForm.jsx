@@ -59,7 +59,7 @@ const AgentForm = ({
     { key: "personal", label: "Personal Information" },
     { key: "voice", label: "Voice Configuration" },
     { key: "system", label: "System Configuration" },
-    { key: "integration", label: "Telephony Settings" },
+    // { key: "integration", label: "Telephony Settings" },
     { key: "social", label: "Action" },
     { key: "customization", label: "Customization" },
   ];
@@ -946,7 +946,7 @@ const AgentForm = ({
           </select>
         </div> */}
 
-        <div>
+        {/* <div>
           <label
             htmlFor="callingType"
             className="block mb-2 font-semibold text-gray-700"
@@ -983,7 +983,7 @@ const AgentForm = ({
             required
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors"
           />
-        </div>
+        </div> */}
       </div>
 
       <div>
