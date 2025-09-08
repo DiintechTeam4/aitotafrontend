@@ -318,16 +318,22 @@ const AgentForm = ({
   const uploadCustomizationFile = async (file, targetField, setPreview) => {
     try {
       if (!file) return;
-      setPreview && setPreview( URL.createObjectURL(file) );
+      setPreview && setPreview(URL.createObjectURL(file));
       const authToken =
         clientToken ||
         sessionStorage.getItem("clienttoken") ||
         localStorage.getItem("admintoken");
 
-      const qs = new URLSearchParams({ fileName: file.name, fileType: file.type });
-      const resp = await fetch(`${API_BASE_URL}/client/upload-url-customization?${qs.toString()}`, {
-        headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+      const qs = new URLSearchParams({
+        fileName: file.name,
+        fileType: file.type,
       });
+      const resp = await fetch(
+        `${API_BASE_URL}/client/upload-url-customization?${qs.toString()}`,
+        {
+          headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+        }
+      );
       const data = await resp.json();
       if (!resp.ok || !data?.success || !data?.url || !data?.key) {
         alert("Failed to get upload URL");
@@ -354,15 +360,25 @@ const AgentForm = ({
 
   const renderCustomizationTab = () => (
     <div className="space-y-6">
-      <h3 className="text-xl font-semibold text-gray-800 mb-4">Customization</h3>
+      <h3 className="text-xl font-semibold text-gray-800 mb-4">
+        Customization
+      </h3>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
-          <label className="block mb-2 font-semibold text-gray-700">Agent Image</label>
+          <label className="block mb-2 font-semibold text-gray-700">
+            Agent Image
+          </label>
           <input
             type="file"
             accept="image/*"
-            onChange={(e) => uploadCustomizationFile(e.target.files?.[0], "uiImage", setUiImagePreview)}
+            onChange={(e) =>
+              uploadCustomizationFile(
+                e.target.files?.[0],
+                "uiImage",
+                setUiImagePreview
+              )
+            }
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
           />
           {uiImagePreview && (
@@ -377,7 +393,9 @@ const AgentForm = ({
         </div>
 
         <div>
-          <label className="block mb-2 font-semibold text-gray-700">Background Color</label>
+          <label className="block mb-2 font-semibold text-gray-700">
+            Background Color
+          </label>
           <input
             type="color"
             name="backgroundColor"
@@ -388,11 +406,19 @@ const AgentForm = ({
         </div>
 
         <div className="md:col-span-2">
-          <label className="block mb-2 font-semibold text-gray-700">Background Image</label>
+          <label className="block mb-2 font-semibold text-gray-700">
+            Background Image
+          </label>
           <input
             type="file"
             accept="image/*"
-            onChange={(e) => uploadCustomizationFile(e.target.files?.[0], "backgroundImage", setBackgroundImagePreview)}
+            onChange={(e) =>
+              uploadCustomizationFile(
+                e.target.files?.[0],
+                "backgroundImage",
+                setBackgroundImagePreview
+              )
+            }
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
           />
           {backgroundImagePreview && (
@@ -457,6 +483,10 @@ const AgentForm = ({
         return formData.systemPrompt.trim() !== "";
       case "integration":
         return true; // Integration settings are optional
+        case "social":
+        return true; // Social actions are optional
+      case "customization":
+        return true;
       default:
         return false;
     }
@@ -493,11 +523,6 @@ const AgentForm = ({
       }
       if (!formData.description.trim()) {
         alert("Description is required");
-        setIsLoading(false);
-        return;
-      }
-      if (!formData.callingNumber.trim()) {
-        alert("Calling number is required");
         setIsLoading(false);
         return;
       }
@@ -538,28 +563,33 @@ const AgentForm = ({
           smsEnabled: false,
         };
         const enabledSet = new Set(
-          socialMediaLinks
-            .filter((l) => l && l.platform)
-            .map((l) => l.platform)
+          socialMediaLinks.filter((l) => l && l.platform).map((l) => l.platform)
         );
         const linkMap = Object.fromEntries(
           socialMediaLinks
             .filter((l) => l && l.platform)
-            .map((l) => [l.platform, typeof l.url === "string" ? l.url.trim() : ""])
+            .map((l) => [
+              l.platform,
+              typeof l.url === "string" ? l.url.trim() : "",
+            ])
         );
         platforms.forEach((p) => {
           const isEnabled = enabledSet.has(p);
           const url = linkMap[p] || "";
           socials[`${p}Enabled`] = isEnabled;
           if (isEnabled) {
-            if (p === 'whatsapp') {
-              const TEMPLATE_BASE = 'https://whatsapp-template-module.onrender.com/api/whatsapp/';
-              const chosenTemplateName = (defaultTemplate && defaultTemplate.templateName) 
-                || (Array.isArray(whatsappTemplates) && whatsappTemplates.find(t => t.status === 'APPROVED')?.name)
-                || '';
+            if (p === "whatsapp") {
+              const TEMPLATE_BASE =
+                "https://whatsapp-template-module.onrender.com/api/whatsapp/";
+              const chosenTemplateName =
+                (defaultTemplate && defaultTemplate.templateName) ||
+                (Array.isArray(whatsappTemplates) &&
+                  whatsappTemplates.find((t) => t.status === "APPROVED")
+                    ?.name) ||
+                "";
               const constructedUrl = chosenTemplateName
                 ? `${TEMPLATE_BASE}send-${chosenTemplateName}`
-                : (url || '');
+                : url || "";
               socials[p] = constructedUrl ? [{ link: constructedUrl }] : [];
             } else {
               socials[p] = url ? [{ link: url }] : [];
@@ -582,17 +612,19 @@ const AgentForm = ({
 
       // Preserve the user's original WhatsApp link separately
       try {
-        const rawWhatsAppLink = (socialMediaLinks.find(l => l.platform === 'whatsapp')?.url || '').trim();
+        const rawWhatsAppLink = (
+          socialMediaLinks.find((l) => l.platform === "whatsapp")?.url || ""
+        ).trim();
         if (rawWhatsAppLink) {
           payload.whatsapplink = rawWhatsAppLink;
         }
       } catch {}
 
       // Ensure S3 keys for customization are included explicitly
-      if (typeof formData.uiImage === 'string') {
+      if (typeof formData.uiImage === "string") {
         payload.uiImage = formData.uiImage;
       }
-      if (typeof formData.backgroundImage === 'string') {
+      if (typeof formData.backgroundImage === "string") {
         payload.backgroundImage = formData.backgroundImage;
       }
 
@@ -1011,105 +1043,105 @@ const AgentForm = ({
     </div>
   );
 
-  const renderIntegrationSettingsTab = () => (
-    <div className="space-y-6">
-      <h3 className="text-xl font-semibold text-gray-800 mb-4">
-        Integration Settings
-      </h3>
+  // const renderIntegrationSettingsTab = () => (
+  //   <div className="space-y-6">
+  //     <h3 className="text-xl font-semibold text-gray-800 mb-4">
+  //       Integration Settings
+  //     </h3>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* <div>
-          <label
-            htmlFor="serviceProvider"
-            className="block mb-2 font-semibold text-gray-700"
-          >
-            Service Provider
-          </label>
-          <select
-            id="serviceProvider"
-            name="serviceProvider"
-            value={formData.serviceProvider}
-            onChange={handleInputChange}
-            disabled={lockServiceProvider}
-            className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors ${
-              lockServiceProvider ? "bg-gray-100 cursor-not-allowed" : ""
-            }`}
-          >
-            <option value="">Select Provider</option>
-            <option value="c-zentrix">C-zentrix</option>
-            <option value="tata">TATA</option>
-            <option value="twilio">Twilio</option>
-            <option value="vonage">Vonage</option>
-            <option value="aws">AWS Connect</option>
-          </select>
-        </div> */}
+  //     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+  //       {/* <div>
+  //         <label
+  //           htmlFor="serviceProvider"
+  //           className="block mb-2 font-semibold text-gray-700"
+  //         >
+  //           Service Provider
+  //         </label>
+  //         <select
+  //           id="serviceProvider"
+  //           name="serviceProvider"
+  //           value={formData.serviceProvider}
+  //           onChange={handleInputChange}
+  //           disabled={lockServiceProvider}
+  //           className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors ${
+  //             lockServiceProvider ? "bg-gray-100 cursor-not-allowed" : ""
+  //           }`}
+  //         >
+  //           <option value="">Select Provider</option>
+  //           <option value="c-zentrix">C-zentrix</option>
+  //           <option value="tata">TATA</option>
+  //           <option value="twilio">Twilio</option>
+  //           <option value="vonage">Vonage</option>
+  //           <option value="aws">AWS Connect</option>
+  //         </select>
+  //       </div> */}
 
-        <div>
-          <label
-            htmlFor="X_API_KEY"
-            className="block mb-2 font-semibold text-gray-700"
-          >
-            X API Key
-          </label>
-          <input
-            type="password"
-            id="X_API_KEY"
-            name="X_API_KEY"
-            value={formData.X_API_KEY}
-            onChange={handleInputChange}
-            placeholder="Enter X API Key"
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors"
-          />
-        </div>
+  //       <div>
+  //         <label
+  //           htmlFor="X_API_KEY"
+  //           className="block mb-2 font-semibold text-gray-700"
+  //         >
+  //           X API Key
+  //         </label>
+  //         <input
+  //           type="password"
+  //           id="X_API_KEY"
+  //           name="X_API_KEY"
+  //           value={formData.X_API_KEY}
+  //           onChange={handleInputChange}
+  //           placeholder="Enter X API Key"
+  //           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors"
+  //         />
+  //       </div>
 
-        <div>
-          {(!formData.serviceProvider ||
-            formData.serviceProvider !== "tata") && (
-            <>
-              <label
-                htmlFor="accountSid"
-                className="block mb-2 font-semibold text-gray-700"
-              >
-                Account SID
-              </label>
-              <input
-                type="text"
-                id="accountSid"
-                name="accountSid"
-                value={formData.accountSid}
-                onChange={handleInputChange}
-                placeholder="Enter your account SID"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors"
-              />
-            </>
-          )}
-        </div>
+  //       <div>
+  //         {(!formData.serviceProvider ||
+  //           formData.serviceProvider !== "tata") && (
+  //           <>
+  //             <label
+  //               htmlFor="accountSid"
+  //               className="block mb-2 font-semibold text-gray-700"
+  //             >
+  //               Account SID
+  //             </label>
+  //             <input
+  //               type="text"
+  //               id="accountSid"
+  //               name="accountSid"
+  //               value={formData.accountSid}
+  //               onChange={handleInputChange}
+  //               placeholder="Enter your account SID"
+  //               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors"
+  //             />
+  //           </>
+  //         )}
+  //       </div>
 
-        <div>
-          {(!formData.serviceProvider ||
-            formData.serviceProvider !== "tata") && (
-            <>
-              <label
-                htmlFor="callerId"
-                className="block mb-2 font-semibold text-gray-700"
-              >
-                Caller ID
-              </label>
-              <input
-                type="text"
-                id="callerId"
-                name="callerId"
-                value={formData.callerId}
-                onChange={handleInputChange}
-                placeholder="Enter caller ID (phone number)"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors"
-              />
-            </>
-          )}
-        </div>
-      </div>
-    </div>
-  );
+  //       <div>
+  //         {(!formData.serviceProvider ||
+  //           formData.serviceProvider !== "tata") && (
+  //           <>
+  //             <label
+  //               htmlFor="callerId"
+  //               className="block mb-2 font-semibold text-gray-700"
+  //             >
+  //               Caller ID
+  //             </label>
+  //             <input
+  //               type="text"
+  //               id="callerId"
+  //               name="callerId"
+  //               value={formData.callerId}
+  //               onChange={handleInputChange}
+  //               placeholder="Enter caller ID (phone number)"
+  //               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors"
+  //             />
+  //           </>
+  //         )}
+  //       </div>
+  //     </div>
+  //   </div>
+  // );
 
   const renderSocialMediaTab = () => {
     // Define social media platforms with their icons and colors
@@ -1593,8 +1625,8 @@ const AgentForm = ({
         return renderVoiceConfigTab();
       case "system":
         return renderSystemConfigTab();
-      case "integration":
-        return renderIntegrationSettingsTab();
+      // case "integration":
+      //   return renderIntegrationSettingsTab();
       case "social":
         return renderSocialMediaTab();
       case "customization":
