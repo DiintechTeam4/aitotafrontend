@@ -527,7 +527,6 @@ const AgentForm = ({
         }
       }
 
-      // Create payload without empty serviceProvider
       const { serviceProvider, ...formDataWithoutServiceProvider } = formData;
       // Derive socials payload from current selections
       const deriveSocials = () => {
