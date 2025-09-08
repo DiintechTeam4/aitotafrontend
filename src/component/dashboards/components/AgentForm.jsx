@@ -538,17 +538,33 @@ const AgentForm = ({
           emailEnabled: false,
           smsEnabled: false,
         };
+        const enabledSet = new Set(
+          socialMediaLinks
+            .filter((l) => l && l.platform)
+            .map((l) => l.platform)
+        );
         const linkMap = Object.fromEntries(
           socialMediaLinks
-            .filter((l) => l && l.platform && typeof l.url === "string")
-            .map((l) => [l.platform, l.url.trim()])
+            .filter((l) => l && l.platform)
+            .map((l) => [l.platform, typeof l.url === "string" ? l.url.trim() : ""])
         );
         platforms.forEach((p) => {
-          const url = linkMap[p];
-          const enabled = !!url;
-          socials[`${p}Enabled`] = enabled;
-          if (enabled) {
-            socials[p] = [{ link: url }];
+          const isEnabled = enabledSet.has(p);
+          const url = linkMap[p] || "";
+          socials[`${p}Enabled`] = isEnabled;
+          if (isEnabled) {
+            if (p === 'whatsapp') {
+              const TEMPLATE_BASE = 'https://whatsapp-template-module.onrender.com/api/whatsapp/';
+              const chosenTemplateName = (defaultTemplate && defaultTemplate.templateName) 
+                || (Array.isArray(whatsappTemplates) && whatsappTemplates.find(t => t.status === 'APPROVED')?.name)
+                || '';
+              const constructedUrl = chosenTemplateName
+                ? `${TEMPLATE_BASE}send-${chosenTemplateName}`
+                : (url || '');
+              socials[p] = constructedUrl ? [{ link: constructedUrl }] : [];
+            } else {
+              socials[p] = url ? [{ link: url }] : [];
+            }
           }
         });
         return socials;
@@ -564,6 +580,14 @@ const AgentForm = ({
         defaultTemplate,
         ...deriveSocials(),
       };
+
+      // Preserve the user's original WhatsApp link separately
+      try {
+        const rawWhatsAppLink = (socialMediaLinks.find(l => l.platform === 'whatsapp')?.url || '').trim();
+        if (rawWhatsAppLink) {
+          payload.whatsapplink = rawWhatsAppLink;
+        }
+      } catch {}
 
       // Ensure S3 keys for customization are included explicitly
       if (typeof formData.uiImage === 'string') {
