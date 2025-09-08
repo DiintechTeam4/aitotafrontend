@@ -29,6 +29,7 @@ import MyBusiness from "./components/MyBusiness";
 import { API_BASE_URL } from "../../config";
 import MyDials from "./components/MyDials";
 import CreditsOverview from "./components/CreditsOverview";
+import AiTotaLogo from "../../../public/AitotaLogo.png";
 import PlansBrowse from "./components/PlansBrowse";
 import Pricing from "./components/Pricing";
 
@@ -107,9 +108,11 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
         .then((data) => {
           if (data.success && data.data) {
             setClientInfo({
-              name: data.data.name || 'Unknown',
-              email: data.data.email || 'No email',
-              clientId: currentClient
+              name: data.data.name || "Unknown",
+              email: data.data.email || "No email",
+              businessName: data.data.businessName || "Unknown",
+              businessLogoUrl: data.data.businessLogoUrl || "",
+              clientId: currentClient,
             });
           }
         })
@@ -117,9 +120,10 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
           console.error("Error fetching client data:", error);
           // Set fallback info
           setClientInfo({
-            name: 'Unknown',
-            email: 'No email',
-            clientId: currentClient
+            name: "Unknown",
+            email: "No email",
+            businessLogoUrl: "",
+            clientId: currentClient,
           });
         });
     }
@@ -400,42 +404,42 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
           </div>
         );
 
-             case "agents":
-         return (
-           <div className="h-full flex flex-col">
-             {activeTab !== "form" && (
-               <div className="px-8 py-6 bg-white border-b border-gray-200">
-                 <h2 className="text-3xl font-bold mb-4 text-gray-900">
-                   AI Agents
-                 </h2>
-                 <nav className="flex gap-2 justify-between items-center">
-                   <div className="flex gap-2">
-                     <button
-                       className={`px-5 py-3 text-sm font-medium rounded-md transition-all ${
-                         activeTab === "list"
-                           ? "bg-black text-white"
-                           : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
-                       }`}
-                       onClick={() => persistTabChange("list")}
-                     >
-                       Agents ({agents.length})
-                     </button>
-                   </div>
+      case "agents":
+        return (
+          <div className="h-full flex flex-col">
+            {activeTab !== "form" && (
+              <div className="px-8 py-6 bg-white border-b border-gray-200">
+                <h2 className="text-3xl font-bold mb-4 text-gray-900">
+                  AI Agents
+                </h2>
+                <nav className="flex gap-2 justify-between items-center">
+                  <div className="flex gap-2">
+                    <button
+                      className={`px-5 py-3 text-sm font-medium rounded-md transition-all ${
+                        activeTab === "list"
+                          ? "bg-black text-white"
+                          : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                      }`}
+                      onClick={() => persistTabChange("list")}
+                    >
+                      Agents ({agents.length})
+                    </button>
+                  </div>
 
-                   <button
-                     className="px-5 py-3 text-sm font-medium rounded-md transition-all bg-black text-white hover:bg-gray-800"
-                     onClick={() => {
-                       persistTabChange("form");
-                       setEditingAgent(null);
-                     }}
-                   >
-                     {editingAgent ? "Update Agent" : "Create Agent"}
-                   </button>
-                 </nav>
-               </div>
-             )}
+                  <button
+                    className="px-5 py-3 text-sm font-medium rounded-md transition-all bg-black text-white hover:bg-gray-800"
+                    onClick={() => {
+                      persistTabChange("form");
+                      setEditingAgent(null);
+                    }}
+                  >
+                    {editingAgent ? "Update Agent" : "Create Agent"}
+                  </button>
+                </nav>
+              </div>
+            )}
 
-             <div className="flex-1 p-8 overflow-y-auto">
+            <div className="flex-1 p-8 overflow-y-auto">
               {activeTab === "list" && (
                 <AgentList
                   agents={agents}
@@ -578,24 +582,80 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
       <div className="flex h-full">
         {/* Sidebar */}
         <aside className="w-64 bg-gradient-to-b from-gray-900 to-black text-white flex flex-col shadow-lg">
-          <div className="p-6 border-b border-gray-700">
-            <h1 className="text-2xl font-bold text-white mb-3">AI Manager</h1>
-            <div className="flex flex-col gap-2">
-              <span className="text-xs text-gray-400 uppercase tracking-wider">
-                Client Information
-              </span>
+          <div className="p-5 border-b border-gray-700">
+            <div className="flex items-center gap-3 mb-3">
+              <img
+                src={AiTotaLogo}
+                alt="AiTota Logo"
+                className="h-10 w-10 rounded-full object-cover bg-gray-800 ring-1 ring-gray-700 shadow-md"
+                referrerPolicy="no-referrer"
+              />
+              <div className="flex-1 min-w-0">
+                <h1 className="text-2xl font-bold text-white leading-tight truncate">
+                  AItota
+                </h1>
+              </div>
+            </div>
+            <div className="h-px w-full bg-gradient-to-r from-transparent via-gray-700 to-transparent mb-3" />
+            <div className="flex flex-col gap-3">
               {clientInfo ? (
-                <>
-                  <div className="text-xl text-gray-300 font-semibold">
-                    {clientInfo.name}
+                <div className="rounded-xl bg-gradient-to-br from-gray-800/40 to-gray-900/30 border border-gray-700/60 p-3 shadow-inner">
+                  <div className="flex items-center gap-2 mb-2">
+                    {clientInfo.businessLogoUrl ? (
+                      <img
+                        src={clientInfo.businessLogoUrl}
+                        alt={clientInfo.businessName}
+                        className="h-10 w-10 rounded-full object-cover bg-gray-800 ring-1 ring-gray-700 shadow-md"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <div className="h-10 w-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-sm font-bold shadow-md">
+                        {(clientInfo.businessName || "C")[0]?.toUpperCase()}
+                      </div>
+                    )}
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="text-sm font-semibold text-gray-100 truncate max-w-[9rem]"
+                          title={clientInfo.businessName}
+                        >
+                          {clientInfo.businessName}
+                        </div>
+                      </div>
+                      <div
+                        className="text-[11px] text-gray-400 uppercase tracking-wider mt-0.5 truncate max-w-[11rem]"
+                        title={clientInfo.name}
+                      >
+                        {clientInfo.name}
+                      </div>
+                    </div>
                   </div>
-                  <div className="text-lg text-gray-400">
-                    {clientInfo.email}
+                  <div
+                    className="flex items-center gap-2 text-xs text-gray-300 truncate"
+                    title={clientInfo.email}
+                  >
+                    <svg
+                      className="w-3.5 h-3.5 text-gray-400 flex-shrink-0"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        d="M16 12H8m0 0l3 3m-3-3l3-3m9 3a9 9 0 11-18 0 9 9 0 0118 0z"
+                      />
+                    </svg>
+                    <span className="truncate">{clientInfo.email}</span>
                   </div>
-                </>
+                </div>
               ) : (
-                <div className="text-sm text-gray-400">
-                  Loading client info...
+                <div className="rounded-xl bg-gradient-to-br from-gray-800/40 to-gray-900/30 border border-gray-700/60 p-4 flex items-center gap-3">
+                  <div className="h-8 w-8 rounded-full border-2 border-gray-700 border-t-transparent animate-spin" />
+                  <div className="text-sm text-gray-400">
+                    Loading client info...
+                  </div>
                 </div>
               )}
             </div>
@@ -697,7 +757,6 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
               <FiTrendingUp className="text-xl w-6 text-center" />
               <span className="flex-1 font-medium">Credits</span>
             </button>
-
           </nav>
 
           <div className="p-4">
