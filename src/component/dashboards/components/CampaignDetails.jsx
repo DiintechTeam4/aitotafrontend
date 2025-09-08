@@ -545,6 +545,8 @@ function CampaignDetails({ campaignId, onBack }) {
   const [viewedTranscripts, setViewedTranscripts] = useState(new Set());
   const [callFilter, setCallFilter] = useState("all");
   const [durationSort, setDurationSort] = useState("none"); // all | connected | missed
+  const [rowDisposition, setRowDisposition] = useState({}); // { [rowId]: 'interested'|'not interested'|'maybe'|undefined }
+  const [openDispositionFor, setOpenDispositionFor] = useState(null); // rowId for which dropdown is open
 
   // Merged calls API states
   const [apiMergedCalls, setApiMergedCalls] = useState([]);
@@ -3313,26 +3315,6 @@ function CampaignDetails({ campaignId, onBack }) {
               </div>
               <div className="flex items-center justify-between space-x-2">
                 <button
-                  onClick={fetchCampaignCallingStatus}
-                  className="text-xs px-2 py-1 bg-gray-50 text-gray-500 rounded-md hover:bg-gray-100 transition-colors border border-gray-200 flex items-center justify-between"
-                  title="Refresh status"
-                >
-                  <svg
-                    className="w-3 h-3 mx-1"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2"
-                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                    />
-                  </svg>
-                  <span>Refresh</span>
-                </button>
-                <button
                   onClick={() => setStatusLogsCollapsed((v) => !v)}
                   className="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-md border border-gray-200"
                   title={statusLogsCollapsed ? "Expand" : "Collapse"}
@@ -3622,6 +3604,8 @@ function CampaignDetails({ campaignId, onBack }) {
                         <FiClock />
                       </th>
                       <th className="py-2 pr-4">Conversation</th>
+                      <th className="py-2 pr-4">Flag</th>
+                      <th className="py-2 pr-4">Disposition</th>
                       <th className="py-2 pr-4">Action</th>
                       <th className="py-2 pr-4">Redial</th>
                     </tr>
@@ -3702,17 +3686,32 @@ function CampaignDetails({ campaignId, onBack }) {
                           key={`${
                             lead.documentId || lead.contactId || "row"
                           }-${idx}`}
-                          className="border-t border-gray-100"
+                          className={`border-t border-gray-100 ${(() => {
+                            const rowId =
+                              lead.documentId || lead.contactId || `${idx}`;
+                            const status = rowDisposition[rowId];
+                            if (status === "interested") return "bg-green-200";
+                            if (status === "not interested")
+                              return "bg-red-200";
+                            if (status === "maybe") return "bg-yellow-200";
+                            return "";
+                          })()}`}
                         >
                           <td className="py-2 pr-4 text-gray-700">{idx + 1}</td>
-                          <td className="py-2 pr-4 text-gray-700">
-                            {lead.time
-                              ? new Date(lead.time).toLocaleDateString()
-                              : "-"}{" "}
-                            ,
-                            {lead.time
-                              ? new Date(lead.time).toLocaleTimeString()
-                              : "-"}
+                          <td className="py-2 pr-4 text-gray-700 flex flex-col items-center gap-2">
+                            <span>
+                              {lead.time
+                                ? new Date(lead.time).toLocaleDateString()
+                                : "-"}{" "}
+                            </span>
+                            <span>
+                              {lead.time
+                                ? new Date(lead.time).toLocaleTimeString([], {
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })
+                                : "-"}
+                            </span>
                           </td>
 
                           <td className="py-2 pr-4 text-gray-900">
@@ -3819,8 +3818,217 @@ function CampaignDetails({ campaignId, onBack }) {
                               </button>
                             )}
                           </td>
+                          <td className="py-2 pr-4">
+                            {(() => {
+                              const rowId =
+                                lead.documentId || lead.contactId || `${idx}`;
+                              const selected = rowDisposition[rowId];
+                              const colorClass =
+                                selected === "interested"
+                                  ? "bg-green-200 text-green-900 border-green-300"
+                                  : selected === "not interested"
+                                  ? "bg-red-200 text-red-900 border-red-300"
+                                  : selected === "maybe"
+                                  ? "bg-yellow-200 text-yellow-900 border-yellow-300"
+                                  : "bg-gray-50 text-gray-700 border-gray-200";
+                              const label = selected ? selected : "Default";
+                              const icon =
+                                selected === "interested" ? (
+                                  <svg
+                                    className="w-4 h-4 mr-2"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                    stroke="currentColor"
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth="2"
+                                      d="M5 13l4 4L19 7"
+                                    />
+                                  </svg>
+                                ) : selected === "not interested" ? (
+                                  <svg
+                                    className="w-4 h-4 mr-2"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                    stroke="currentColor"
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth="2"
+                                      d="M6 18L18 6M6 6l12 12"
+                                    />
+                                  </svg>
+                                ) : selected === "maybe" ? (
+                                  <svg
+                                    className="w-4 h-4 mr-2"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                    stroke="currentColor"
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth="2"
+                                      d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                                    />
+                                  </svg>
+                                ) : (
+                                  <svg
+                                    className="w-4 h-4 mr-2"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                    stroke="currentColor"
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth="2"
+                                      d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                                    />
+                                  </svg>
+                                );
+
+                              return (
+                                <div className="relative inline-block text-left">
+                                  <button
+                                    type="button"
+                                    className={`inline-flex items-center px-3 py-1 text-xs border rounded ${colorClass}`}
+                                    onClick={() =>
+                                      setOpenDispositionFor(
+                                        openDispositionFor === rowId
+                                          ? null
+                                          : rowId
+                                      )
+                                    }
+                                  >
+                                    {icon}
+                                    {label}
+                                    <svg
+                                      className="w-4 h-4 ml-2"
+                                      fill="none"
+                                      viewBox="0 0 24 24"
+                                      stroke="currentColor"
+                                    >
+                                      <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        strokeWidth="2"
+                                        d="M19 9l-7 7-7-7"
+                                      />
+                                    </svg>
+                                  </button>
+
+                                  {openDispositionFor === rowId && (
+                                    <div className="absolute z-10 mt-1 w-40 bg-white border border-gray-200 rounded shadow">
+                                      {[
+                                        {
+                                          key: "interested",
+                                          label: "Interested",
+                                          cls: "text-green-700",
+                                        },
+                                        {
+                                          key: "not interested",
+                                          label: "Not Interested",
+                                          cls: "text-red-700",
+                                        },
+                                        {
+                                          key: "maybe",
+                                          label: "Maybe",
+                                          cls: "text-yellow-700",
+                                        },
+                                        {
+                                          key: undefined,
+                                          label: "Default",
+                                          cls: "text-gray-700",
+                                        },
+                                      ].map((opt) => (
+                                        <button
+                                          key={`${rowId}-${opt.label}`}
+                                          type="button"
+                                          className={`w-full text-left px-3 py-2 text-xs hover:bg-gray-50 ${opt.cls}`}
+                                          onClick={() => {
+                                            setRowDisposition((prev) => ({
+                                              ...prev,
+                                              [rowId]: opt.key,
+                                            }));
+                                            // Persist to backend
+                                            try {
+                                              const authToken =
+                                                sessionStorage.getItem(
+                                                  "clienttoken"
+                                                ) ||
+                                                localStorage.getItem(
+                                                  "admintoken"
+                                                );
+                                              const url = `${API_BASE}/groups/mark-contact-status`;
+                                              const payload = {
+                                                campaignId:
+                                                  campaign && campaign._id,
+                                                phone:
+                                                  lead &&
+                                                  (lead.number || lead.phone),
+                                                status: opt.key || "default",
+                                              };
+                                              console.log(
+                                                "Marking contact status →",
+                                                url,
+                                                payload
+                                              );
+                                              fetch(url, {
+                                                method: "POST",
+                                                headers: {
+                                                  "Content-Type":
+                                                    "application/json",
+                                                  ...(authToken
+                                                    ? {
+                                                        Authorization: `Bearer ${authToken}`,
+                                                      }
+                                                    : {}),
+                                                },
+                                                body: JSON.stringify(payload),
+                                              })
+                                                .then(async (r) => {
+                                                  let body;
+                                                  try {
+                                                    body = await r.json();
+                                                  } catch (e) {}
+                                                  console.log(
+                                                    "Mark contact status response",
+                                                    r.status,
+                                                    body
+                                                  );
+                                                })
+                                                .catch((e) => {
+                                                  console.warn(
+                                                    "Mark contact status failed",
+                                                    e
+                                                  );
+                                                });
+                                            } catch (e) {
+                                              console.warn(
+                                                "Mark contact status exception",
+                                                e
+                                              );
+                                            }
+                                            setOpenDispositionFor(null);
+                                          }}
+                                        >
+                                          {opt.label}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })()}
+                          </td>
+                          <td className="py-2 pr-4">{lead.leadStatus}</td>
                           <td className="py-2 pr-4 text-gray-700">
-                            {lead.whatsappRequested && whatsappRequested? (
+                            {lead.whatsappRequested &&
+                            lead.whatsappMessageSent ? (
                               <button
                                 type="button"
                                 onClick={() => openWhatsAppMiniChat(lead)}
@@ -3855,7 +4063,6 @@ function CampaignDetails({ campaignId, onBack }) {
                                 className="w-3 h-3 text-green-700 mx-2"
                                 style={{ minWidth: "16px", minHeight: "16px" }}
                               />
-                              Retry
                             </button>
                           </td>
                         </tr>
