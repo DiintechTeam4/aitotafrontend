@@ -372,14 +372,15 @@ const AllAgents = () => {
     setSelectedAgentForAssign(agent);
     const prov = (agent.serviceProvider || "snapbx").toLowerCase();
     setAssignProvider(prov);
+    const temp = getTempCredentials(prov);
     setAssignFormData({
       serviceProvider: prov,
-      didNumber: agent.didNumber || "",
-      accessToken: agent.accessToken || "",
-      accessKey: agent.accessKey || "",
-      callerId: agent.callerId || "",
-      xApiKey: agent.X_API_KEY || "",
-      accountSid: agent.accountSid || "",
+      didNumber: temp?.didNumber || agent.didNumber || "",
+      accessToken: temp?.accessToken || agent.accessToken || "",
+      accessKey: temp?.accessKey || agent.accessKey || "",
+      callerId: temp?.callerId || agent.callerId || "",
+      xApiKey: (temp && (temp.X_API_KEY || temp.xApiKey)) || agent.X_API_KEY || "",
+      accountSid: temp?.accountSid || agent.accountSid || "",
     });
     setShowAssignModal(true);
     setOpenDropdown(null);
@@ -461,6 +462,68 @@ const AllAgents = () => {
       fetchAllAgents();
     } catch (err) {
       alert(err.message || "Failed to assign");
+    }
+  };
+
+  // Temporary credentials helper
+  const getTempCredentials = (providerKey) => {
+    const key = (providerKey || "").toLowerCase();
+    if (key === "c-zentrix" || key === "c-zentrax") {
+      return {
+        serviceProvider: "c-zentrix",
+        didNumber: "01244793997",
+        callerId: "168353225",
+        accountSid: "5104",
+        X_API_KEY: "629lXqsiDk85lfMub7RsN73u4741MlOl4Dv8kJE9",
+      };
+    }
+    if (key === "snapbx" || key === "sanpbx") {
+      return {
+        serviceProvider: "snapbx",
+        didNumber: "01246745647",
+        accessToken: "265b2d7e5d1a5d9c33fc22b01e5d0f19",
+        accessKey: "mob",
+        callerId: "6745649",
+      };
+    }
+    return null;
+  };
+
+  const assignWithTempCredentials = async () => {
+    if (!selectedAgentForAssign) return;
+    const temp = getTempCredentials(assignProvider);
+    if (!temp) {
+      alert("No temporary credentials available for selected provider.");
+      return;
+    }
+    const confirmed = window.confirm(
+      "Use temporary credentials and save to database?"
+    );
+    if (!confirmed) return;
+    try {
+      const token =
+        localStorage.getItem("admintoken") ||
+        sessionStorage.getItem("admintoken");
+      const response = await fetch(
+        `${API_BASE_URL}/admin/update-agent/${selectedAgentForAssign._id}`,
+        {
+          method: "PUT",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(temp),
+        }
+      );
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || "Failed to assign temp credentials");
+      }
+      alert("Assigned temporary credentials successfully");
+      closeAssignModal();
+      fetchAllAgents();
+    } catch (err) {
+      alert(err.message || "Failed to assign temp credentials");
     }
   };
 
@@ -1546,7 +1609,20 @@ const AllAgents = () => {
                     <button
                       type="button"
                       key={p.key}
-                      onClick={() => setAssignProvider(p.key)}
+                      onClick={() => {
+                        setAssignProvider(p.key);
+                        const temp = getTempCredentials(p.key);
+                        setAssignFormData((prev) => ({
+                          ...prev,
+                          serviceProvider: p.key,
+                          didNumber: temp?.didNumber || "",
+                          accessToken: temp?.accessToken || "",
+                          accessKey: temp?.accessKey || "",
+                          callerId: temp?.callerId || "",
+                          xApiKey: (temp && (temp.X_API_KEY || temp.xApiKey)) || "",
+                          accountSid: temp?.accountSid || "",
+                        }));
+                      }}
                       className={`${
                         assignProvider === p.key
                           ? "bg-purple-600 text-white"

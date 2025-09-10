@@ -21,6 +21,8 @@ export default function CreditsOverview() {
   const [history, setHistory] = useState([]);
   const [filteredHistory, setFilteredHistory] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [campaigns, setCampaigns] = useState([]);
+  const [uniqueIdToCampaign, setUniqueIdToCampaign] = useState({});
   const [activeTab, setActiveTab] = useState("overview");
   const [selectedFilter, setSelectedFilter] = useState("credit");
   const [dateFilter, setDateFilter] = useState("all");
@@ -262,16 +264,20 @@ export default function CreditsOverview() {
     try {
       setLoading(true);
       console.log(token);
-      const [balRes, histRes] = await Promise.all([
+      const [balRes, histRes, campRes] = await Promise.all([
         fetch(`${API_BASE_URL}/client/credits/balance`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
         fetch(`${API_BASE_URL}/client/credits/history`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
+        fetch(`${API_BASE_URL}/client/campaigns`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
       ]);
       const bal = await balRes.json();
       const hist = await histRes.json();
+      const camp = await campRes.json();
       if (bal.success) setBalance(bal.data);
       if (hist.success) {
         const rows = Array.isArray(hist.data?.history)
@@ -281,6 +287,21 @@ export default function CreditsOverview() {
           : [];
         setHistory(rows);
         setFilteredHistory(rows.filter((item) => item.amount > 0));
+      }
+      if (camp.success && Array.isArray(camp.data)) {
+        setCampaigns(camp.data);
+        // Build uniqueId -> campaignName map
+        const mapping = {};
+        camp.data.forEach((c) => {
+          if (Array.isArray(c.details)) {
+            c.details.forEach((d) => {
+              if (d && d.uniqueId) {
+                mapping[d.uniqueId] = c.name;
+              }
+            });
+          }
+        });
+        setUniqueIdToCampaign(mapping);
       }
     } catch (e) {
       console.error("Failed to load credits:", e);
@@ -864,6 +885,7 @@ export default function CreditsOverview() {
       callDirection: item.metadata?.callDirection || "unknown",
       duration: item.duration || 0,
       uniqueId: item.metadata?.uniqueid || null,
+      campaignName: (item.metadata?.uniqueid && uniqueIdToCampaign[item.metadata.uniqueid]) || "-",
     }));
   };
 
@@ -1090,7 +1112,7 @@ export default function CreditsOverview() {
                   Credits Used
                 </th>
                 <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Transcript
+                  Campaign
                 </th>
               </tr>
             </thead>
@@ -1153,16 +1175,7 @@ export default function CreditsOverview() {
                     <div className="text-xs text-gray-500">credits</div>
                   </td>
                   <td className="py-4 px-4">
-                    {usage.uniqueId && usage.callDirection === "outbound" ? (
-                      <button
-                        onClick={() => openTranscript(usage.uniqueId)}
-                        className="px-3 py-1 bg-blue-600 text-white text-xs rounded-md hover:bg-blue-700 transition-colors"
-                      >
-                        View Transcript
-                      </button>
-                    ) : (
-                      <span className="text-xs text-gray-400">-</span>
-                    )}
+                    <div className="text-sm text-gray-900 font-medium">{usage.campaignName}</div>
                   </td>
                 </tr>
               ))}
