@@ -12,6 +12,8 @@ import {
   FiPlay,
   FiPause,
   FiSkipForward,
+  FiGrid,
+  FiList,
 } from "react-icons/fi";
 import { API_BASE_URL } from "../../../config";
 import * as XLSX from "xlsx";
@@ -52,6 +54,9 @@ function GroupDetails({ groupId, onBack }) {
   // Selection states for bulk operations
   const [selectedContacts, setSelectedContacts] = useState([]);
   const [selectAll, setSelectAll] = useState(false);
+
+  // View mode for contacts (grid | list)
+  const [viewMode, setViewMode] = useState("grid");
 
   // API base URL
   const API_BASE = `${API_BASE_URL}/client`;
@@ -906,13 +911,38 @@ function GroupDetails({ groupId, onBack }) {
         {/* Current Contacts */}
         <div>
           <div className="flex items-center justify-between mb-4">
-            <h4 className="text-lg font-medium text-gray-700">
-              Current Contacts
-            </h4>
+            <h4 className="text-lg font-medium text-gray-700">Current Contacts</h4>
 
-            {/* Selection Controls */}
+            {/* Controls */}
             {contacts.length > 0 && (
               <div className="flex items-center gap-3">
+                {/* View mode toggle */}
+                <div className="flex items-center gap-1 mr-2">
+                  <button
+                    className={`p-2 rounded-lg border ${
+                      viewMode === "grid"
+                        ? "bg-blue-600 text-white border-blue-600"
+                        : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"
+                    }`}
+                    title="Grid view"
+                    onClick={() => setViewMode("grid")}
+                  >
+                    <FiGrid />
+                  </button>
+                  <button
+                    className={`p-2 rounded-lg border ${
+                      viewMode === "list"
+                        ? "bg-blue-600 text-white border-blue-600"
+                        : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"
+                    }`}
+                    title="List view"
+                    onClick={() => setViewMode("list")}
+                  >
+                    <FiList />
+                  </button>
+                </div>
+
+                {/* Selection Controls */}
                 <div className="flex items-center gap-2">
                   <input
                     type="checkbox"
@@ -964,52 +994,97 @@ function GroupDetails({ groupId, onBack }) {
               <p className="text-gray-500">Add contacts to get started</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {contacts.map((contact) => (
-                <div
-                  key={contact._id}
-                  className={`bg-white border rounded-lg p-4 hover:shadow-md transition-all ${
-                    selectedContacts.includes(contact._id)
-                      ? "border-blue-500 bg-blue-50"
-                      : "border-gray-200"
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-3">
-                      <input
-                        type="checkbox"
-                        checked={selectedContacts.includes(contact._id)}
-                        onChange={() => handleSelectContact(contact._id)}
-                        className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
-                      />
-                      <h5 className="font-semibold text-gray-800">
-                        {contact.name}
-                      </h5>
-                    </div>
-                    <button
-                      onClick={() => handleDeleteContact(contact._id)}
-                      className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
-                      disabled={loading}
+            <>
+              {viewMode === "grid" ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {contacts.map((contact) => (
+                    <div
+                      key={contact._id}
+                      className={`bg-white border rounded-lg p-4 hover:shadow-md transition-all ${
+                        selectedContacts.includes(contact._id)
+                          ? "border-blue-500 bg-blue-50"
+                          : "border-gray-200"
+                      }`}
                     >
-                      <FiTrash2 className="text-sm" />
-                    </button>
-                  </div>
-                  <div className="text-sm text-gray-600 space-y-2">
-                    <div className="flex items-center gap-2">
-                      <FiPhone className="text-xs" />
-                      {contact.phone}
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="checkbox"
+                            checked={selectedContacts.includes(contact._id)}
+                            onChange={() => handleSelectContact(contact._id)}
+                            className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+                          />
+                          <h5 className="font-semibold text-gray-800">
+                            {contact.name}
+                          </h5>
+                        </div>
+                        <button
+                          onClick={() => handleDeleteContact(contact._id)}
+                          className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
+                          disabled={loading}
+                        >
+                          <FiTrash2 className="text-sm" />
+                        </button>
+                      </div>
+                      <div className="text-sm text-gray-600 space-y-2">
+                        <div className="flex items-center gap-2">
+                          <FiPhone className="text-xs" />
+                          {contact.phone}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <FiMail className="text-xs" />
+                          {contact.email}
+                        </div>
+                        <div className="text-xs text-gray-400">
+                          Added: {new Date(contact.createdAt).toLocaleDateString()}
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <FiMail className="text-xs" />
-                      {contact.email}
-                    </div>
-                    <div className="text-xs text-gray-400">
-                      Added: {new Date(contact.createdAt).toLocaleDateString()}
-                    </div>
-                  </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              ) : (
+                <div className="divide-y divide-gray-200 border border-gray-200 rounded-xl bg-white">
+                  {contacts.map((contact) => (
+                    <div
+                      key={contact._id}
+                      className={`flex items-center justify-between p-4 ${
+                        selectedContacts.includes(contact._id) ? "bg-blue-50" : ""
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="checkbox"
+                          checked={selectedContacts.includes(contact._id)}
+                          onChange={() => handleSelectContact(contact._id)}
+                          className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+                        />
+                        <div>
+                          <div className="text-sm font-semibold text-gray-900">{contact.name}</div>
+                          <div className="text-sm text-gray-600 flex gap-4">
+                            <span className="inline-flex items-center gap-1"><FiPhone className="text-xs" />{contact.phone}</span>
+                            <span className="inline-flex items-center gap-1"><FiMail className="text-xs" />{contact.email}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="hidden md:block w-48 text-xs text-gray-400">
+                        <div>Added</div>
+                        <div>{new Date(contact.createdAt).toLocaleDateString()}</div>
+                      </div>
+                      <div className="ml-2">
+                        <button
+                          onClick={() => handleDeleteContact(contact._id)}
+                          className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg"
+                          disabled={loading}
+                          title="Delete contact"
+                        >
+                          <FiTrash2 />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
