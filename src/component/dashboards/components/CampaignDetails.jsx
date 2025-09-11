@@ -41,6 +41,34 @@ function CampaignDetails({ campaignId, onBack }) {
   const [waTemplatesOpen, setWaTemplatesOpen] = useState(false);
   const [waTemplates, setWaTemplates] = useState([]);
   const [waTemplatesLoading, setWaTemplatesLoading] = useState(false);
+  // WhatsApp mini chat countdown (24h)
+  const [waChatDeadline, setWaChatDeadline] = useState(null);
+  const [waChatRemaining, setWaChatRemaining] = useState("24:00:00");
+
+  // Campaign history state
+  const [campaignHistory, setCampaignHistory] = useState([]);
+  const [currentRunId, setCurrentRunId] = useState(null);
+  const [campaignStartTime, setCampaignStartTime] = useState(null);
+  // Guard refs to avoid duplicate autosaves
+  const autoSavingRef = useRef(false);
+  const lastSavedRunIdRef = useRef(null);
+
+  // Initialize lastSavedRunId from sessionStorage to avoid multiple saves after remount
+  useEffect(() => {
+    const key = `campaign_${campaignId}_lastSavedRunId`;
+    const persisted = sessionStorage.getItem(key);
+    if (persisted) {
+      lastSavedRunIdRef.current = persisted;
+    }
+  }, [campaignId]);
+
+  // Selected contacts for bulk calling
+  const [selectedContacts, setSelectedContacts] = useState([]);
+  const [selectAllContacts, setSelectAllContacts] = useState(false);
+
+  // Selected call logs for bulk calling
+  const [selectedCallLogs, setSelectedCallLogs] = useState([]);
+  const [selectAllCallLogs, setSelectAllCallLogs] = useState(false);
 
   // Helper function to normalize phone number to +91XXXXXXXXXX format
   const normalizePhoneNumber = (phoneNumber) => {
@@ -378,10 +406,38 @@ function CampaignDetails({ campaignId, onBack }) {
 
     setWaChatContact({ name: derivedName, number: normalizedNumber });
     setWaChatOpen(true);
+    // Start a new 24h deadline whenever chat opens
+    try {
+      const deadline = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      setWaChatDeadline(deadline);
+    } catch (_) {}
 
     // Fetch real messages from WhatsApp API
     await fetchWaChatMessages(normalizedNumber);
   };
+
+  // Tick countdown every second while chat is open
+  useEffect(() => {
+    if (!waChatOpen || !waChatDeadline) return;
+    const tick = () => {
+      const now = Date.now();
+      const diff = Math.max(0, waChatDeadline.getTime() - now);
+      const totalSeconds = Math.floor(diff / 1000);
+      const hours = Math.floor(totalSeconds / 3600)
+        .toString()
+        .padStart(2, "0");
+      const minutes = Math.floor((totalSeconds % 3600) / 60)
+        .toString()
+        .padStart(2, "0");
+      const seconds = Math.floor(totalSeconds % 60)
+        .toString()
+        .padStart(2, "0");
+      setWaChatRemaining(`${hours}:${minutes}:${seconds}`);
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [waChatOpen, waChatDeadline]);
 
   const fetchWaChatMessages = async (phoneNumber) => {
     try {
@@ -404,6 +460,15 @@ function CampaignDetails({ campaignId, onBack }) {
         }));
 
         setWaChatMessages(formattedMessages);
+
+        // Persist fetched messages to backend (upsert)
+        try {
+          await saveWaChatToBackend(
+            formattedMessages,
+            phoneNumber,
+            waChatContact?.name || ""
+          );
+        } catch (_) {}
       } else {
         console.error("Failed to fetch WhatsApp messages");
         setWaChatMessages([]);
@@ -447,6 +512,7 @@ function CampaignDetails({ campaignId, onBack }) {
         console.log("WhatsApp message sent successfully:", result.messageId);
         // Refresh messages after sending
         await fetchWaChatMessages(normalizedNumber);
+        // Avoid double-save: skip optimistic save because fetch immediately persists
       } else {
         console.error("Failed to send WhatsApp message:", result);
         // Add error message to chat
@@ -474,6 +540,41 @@ function CampaignDetails({ campaignId, onBack }) {
       ]);
     } finally {
       setWaTyping(false);
+    }
+  };
+
+  // Persist WhatsApp chat to backend (upsert per client+number)
+  const saveWaChatToBackend = async (
+    messages,
+    phoneNumber,
+    contactName = ""
+  ) => {
+    try {
+      const token = sessionStorage.getItem("clienttoken");
+      if (!token || !phoneNumber || !Array.isArray(messages)) return;
+      const payload = {
+        phoneNumber,
+        contactName,
+        messages: messages.map((m) => ({
+          messageId: m.messageId || m.id,
+          direction: m.direction || (m.side === "right" ? "sent" : "received"),
+          text: m.text,
+          status: m.status || "",
+          type: m.type || "text",
+          timestamp: m.time || m.timestamp || new Date(),
+        })),
+      };
+      await fetch(`${API_BASE}/wa/chat/save`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+    } catch (e) {
+      // silent failure to avoid UX interruption
+      console.warn("Failed to save WA chat:", e?.message);
     }
   };
 
@@ -543,6 +644,8 @@ function CampaignDetails({ campaignId, onBack }) {
   const [transcriptContent, setTranscriptContent] = useState("");
   const [transcriptLoading, setTranscriptLoading] = useState(false);
   const [viewedTranscripts, setViewedTranscripts] = useState(new Set());
+  // Track expanded state of history cards by a stable run key
+  const [historyExpanded, setHistoryExpanded] = useState({});
   const [callFilter, setCallFilter] = useState("all");
   const [durationSort, setDurationSort] = useState("none"); // all | connected | missed
   const [rowDisposition, setRowDisposition] = useState({}); // { [rowId]: 'interested'|'not interested'|'maybe'|undefined }
@@ -591,10 +694,16 @@ function CampaignDetails({ campaignId, onBack }) {
   const [statusLogsCollapsed, setStatusLogsCollapsed] = useState(false);
   const logsPollRef = useRef(null);
   const transcriptRef = useRef(null);
+  // When true, clear current dashboard lists to be ready for next run
+  const [readyForNextRun, setReadyForNextRun] = useState(false);
+  // Show all history modal
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  // Collapsible Campaign Runs section
+  const [campaignRunsCollapsed, setCampaignRunsCollapsed] = useState(false);
 
   // Auto-refresh recent call logs every 2 seconds (only when expanded and campaign is active)
   useEffect(() => {
-    if (statusLogsCollapsed || !campaign?.isActive) return;
+    if (statusLogsCollapsed || !campaign?.isActive || readyForNextRun) return;
     const intervalId = setInterval(() => {
       try {
         fetchCampaignCallLogs(1);
@@ -604,7 +713,12 @@ function CampaignDetails({ campaignId, onBack }) {
       }
     }, 2000);
     return () => clearInterval(intervalId);
-  }, [statusLogsCollapsed, apiMergedCallsPage, campaign?.isActive]);
+  }, [
+    statusLogsCollapsed,
+    apiMergedCallsPage,
+    campaign?.isActive,
+    readyForNextRun,
+  ]);
   const connectionTimeoutRef = useRef(null);
 
   // When campaign transitions from active -> inactive, refresh status once to update UI
@@ -637,6 +751,39 @@ function CampaignDetails({ campaignId, onBack }) {
     const secs = total % 60;
     return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
+
+  // Format seconds as MM:SSsec or HH:MM:SSsec when hours are present
+  const formatHMSCompact = (seconds) => {
+    const total = Math.max(0, Number(seconds) || 0);
+    const hours = Math.floor(total / 3600);
+    const minutes = Math.floor((total % 3600) / 60);
+    const secs = total % 60;
+    const two = (n) => String(n).padStart(2, "0");
+    return hours > 0
+      ? `${two(hours)}:${two(minutes)}:${two(secs)}sec`
+      : `${two(minutes)}:${two(secs)}sec`;
+  };
+
+  // Live run timer derived from campaignStartTime
+  const [runSeconds, setRunSeconds] = useState(0);
+  useEffect(() => {
+    if (!campaign?.isActive || !campaignStartTime) {
+      setRunSeconds(0);
+      return;
+    }
+    const tick = () => {
+      const now = Date.now();
+      const start =
+        campaignStartTime instanceof Date
+          ? campaignStartTime.getTime()
+          : new Date(campaignStartTime).getTime();
+      const diff = Math.max(0, Math.floor((now - start) / 1000));
+      setRunSeconds(diff);
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [campaign?.isActive, campaignStartTime]);
 
   // Helper function to safely get contact name
   const getContactName = (contact) => {
@@ -744,6 +891,27 @@ function CampaignDetails({ campaignId, onBack }) {
     localStorage.removeItem(getStorageKey("callingState"));
   };
 
+  // Persist/restore the "ready for next run" UI flag so refresh keeps it
+  const setReadyFlag = (value) => {
+    setReadyForNextRun(value);
+    try {
+      if (value) {
+        localStorage.setItem(getStorageKey("readyNextRun"), "1");
+      } else {
+        localStorage.removeItem(getStorageKey("readyNextRun"));
+      }
+    } catch (_) {}
+  };
+
+  useEffect(() => {
+    try {
+      const v = localStorage.getItem(getStorageKey("readyNextRun"));
+      if (v === "1" && !campaign?.isActive) {
+        setReadyForNextRun(true);
+      }
+    } catch (_) {}
+  }, [campaignId, campaign?.isActive]);
+
   // Utility function to safely format timestamps
   const safeFormatTimestamp = (timestamp) => {
     if (!timestamp) return "";
@@ -829,6 +997,20 @@ function CampaignDetails({ campaignId, onBack }) {
   useEffect(() => {
     if (campaignId) {
       saveCallingState();
+      try {
+        // Persist isActive and currentRunId explicitly to survive navigation/back
+        if (typeof campaign?.isActive === "boolean") {
+          localStorage.setItem(
+            getStorageKey("isActive"),
+            campaign.isActive ? "1" : "0"
+          );
+        }
+        if (currentRunId) {
+          localStorage.setItem(getStorageKey("currentRunId"), currentRunId);
+        } else {
+          localStorage.removeItem(getStorageKey("currentRunId"));
+        }
+      } catch (_) {}
     }
   }, [
     showCallModal,
@@ -838,6 +1020,8 @@ function CampaignDetails({ campaignId, onBack }) {
     selectedAgent,
     callResultsConnectionStatus,
     campaignId,
+    campaign?.isActive,
+    currentRunId,
   ]);
 
   // Save viewed transcripts whenever they change
@@ -848,16 +1032,47 @@ function CampaignDetails({ campaignId, onBack }) {
   }, [viewedTranscripts, campaignId]);
 
   useEffect(() => {
+    // Restore persisted state FIRST to avoid UI flicker
+    try {
+      const savedRunId = localStorage.getItem(getStorageKey("currentRunId"));
+      const savedIsActive = localStorage.getItem(getStorageKey("isActive"));
+      if (savedRunId) setCurrentRunId(savedRunId);
+      if (savedIsActive !== null) {
+        setCampaign((prev) =>
+          prev ? { ...prev, isActive: savedIsActive === "1" } : prev
+        );
+      }
+    } catch (_) {}
+
+    // Then load fresh data from backend
     fetchCampaignDetails();
     fetchAvailableGroups();
     fetchAgents();
     fetchClientData();
     fetchCampaignGroups();
+    fetchCampaignHistory(campaignId);
+    fetchCampaignCallingStatus();
+  }, [campaignId]);
+
+  // Defer heavy data fetching until the campaign is actually running
+  useEffect(() => {
+    const isRunning =
+      (campaign && campaign.isActive) || callingStatus === "calling";
+    if (!campaignId || !isRunning) return;
+
     // Load merged calls from new API
     fetchApiMergedCalls(1);
     // Load viewed transcripts
     loadViewedTranscripts();
-  }, [campaignId]);
+  }, [campaign?.isActive, callingStatus, campaignId]);
+
+  // Refresh history when calling stops or completes so the last run appears
+  useEffect(() => {
+    if (!campaignId) return;
+    if (callingStatus !== "calling") {
+      fetchCampaignHistory(campaignId);
+    }
+  }, [callingStatus, campaignId]);
 
   // Ensure agent name is resolved when campaign agent changes
   useEffect(() => {
@@ -1162,7 +1377,11 @@ function CampaignDetails({ campaignId, onBack }) {
               Authorization: `Bearer ${token}`,
               "Content-Type": "application/json",
             },
-            body: JSON.stringify({ uniqueId, contactId: contact._id || null }),
+            body: JSON.stringify({
+              uniqueId,
+              contactId: contact._id || null,
+              runId: currentRunId || null,
+            }),
           });
         } catch (error) {
           console.error("Failed to store unique ID in campaign:", error);
@@ -1548,7 +1767,32 @@ function CampaignDetails({ campaignId, onBack }) {
 
       const result = await response.json();
       if (result.success) {
-        setCampaign(result.data);
+        const next = result.data;
+        // Merge with any persisted isActive to avoid immediate flip on mount
+        try {
+          const savedIsActive = localStorage.getItem(getStorageKey("isActive"));
+          if (savedIsActive !== null && typeof next?.isActive !== "boolean") {
+            next.isActive = savedIsActive === "1";
+          }
+        } catch (_) {}
+        setCampaign(next);
+        try {
+          const savedRunId = localStorage.getItem(
+            getStorageKey("currentRunId")
+          );
+          const savedIsActive = localStorage.getItem(getStorageKey("isActive"));
+          if (savedRunId && !currentRunId) setCurrentRunId(savedRunId);
+          if (typeof next?.isActive === "boolean") {
+            localStorage.setItem(
+              getStorageKey("isActive"),
+              next.isActive ? "1" : "0"
+            );
+          } else if (savedIsActive !== null) {
+            setCampaign((prev) =>
+              prev ? { ...prev, isActive: savedIsActive === "1" } : prev
+            );
+          }
+        } catch (_) {}
         // Remove this call to prevent re-rendering issues
         // fetchCampaignGroups();
       } else {
@@ -1581,6 +1825,38 @@ function CampaignDetails({ campaignId, onBack }) {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Reset all runtime lists/UI to be ready for a fresh run
+  const resetSectionForNextRun = () => {
+    setCallingStatus("idle");
+    setCurrentContactIndex(0);
+    setCallResults([]);
+    setCallResultsConnectionStatus({});
+    setApiMergedCalls([]);
+    setApiMergedCallsTotals({
+      totalItems: 0,
+      totalConnected: 0,
+      totalMissed: 0,
+      totalDuration: 0,
+    });
+    setApiMergedCallsPage(1);
+    setApiMergedCallsTotalPages(0);
+    setApiMergedCallsTotalItems(0);
+    setCallDetails([]);
+    setCallDetailsMeta({ totalPages: 0, totalLogs: 0 });
+    // Clear transcript and live-call UI state
+    setTranscriptCounts(new Map());
+    setTranscriptContent("");
+    setShowTranscriptModal(false);
+    setSelectedCall(null);
+    setTranscriptDocId(null);
+    setLiveTranscript("");
+    setLiveTranscriptLines([]);
+    stopLiveCallPolling();
+    // Clear any persisted calling state for a fresh start
+    clearCallingState();
+    setReadyFlag(true);
   };
 
   const fetchAvailableGroups = async () => {
@@ -1648,6 +1924,12 @@ function CampaignDetails({ campaignId, onBack }) {
   const fetchCampaignCallLogs = async (page = 1) => {
     try {
       if (!campaign?._id) return;
+      // Only fetch when campaign is running/active
+      const running =
+        (campaign && campaign.isActive) || callingStatus === "calling";
+      if (!running) {
+        return;
+      }
       setCallDetailsLoading(true);
       const token = sessionStorage.getItem("clienttoken");
       const params = new URLSearchParams({
@@ -1656,6 +1938,10 @@ function CampaignDetails({ campaignId, onBack }) {
         sortBy: "createdAt",
         sortOrder: "desc",
       });
+      // If the backend provided a runId for this session, filter logs to that run
+      if (currentRunId) {
+        params.set("runId", String(currentRunId));
+      }
       const resp = await fetch(
         `${API_BASE}/campaigns/${
           campaign._id
@@ -1732,6 +2018,12 @@ function CampaignDetails({ campaignId, onBack }) {
   ) => {
     try {
       if (!campaignId) return;
+      // Only fetch when campaign is running/active
+      const running =
+        (campaign && campaign.isActive) || callingStatus === "calling";
+      if (!running) {
+        return;
+      }
 
       // Only show loading spinner on initial load, not on auto-refresh
       if (!isAutoRefresh) {
@@ -1748,6 +2040,9 @@ function CampaignDetails({ campaignId, onBack }) {
         page: String(requestedPage),
         limit: String(50),
       });
+      if (currentRunId) {
+        params.set("runId", String(currentRunId));
+      }
       const resp = await fetch(
         `${API_BASE}/campaigns/${campaignId}/merged-calls?${params.toString()}`,
         {
@@ -1906,17 +2201,15 @@ function CampaignDetails({ campaignId, onBack }) {
     if (!transcriptText) return [];
 
     const lines = transcriptText.split("\n").filter((line) => line.trim());
-    const groupedMessages = [];
-    let currentMessage = null;
+    const messages = [];
+    let lastMessage = null;
 
     for (const line of lines) {
-      // Extract timestamp from format [2025-08-16T07:20:20.885Z]
       const timestampMatch = line.match(/\[([^\]]+)\]/);
       let timestamp = null;
 
       if (timestampMatch) {
         try {
-          // Parse the timestamp and format it nicely
           const date = new Date(timestampMatch[1]);
           if (!isNaN(date.getTime())) {
             timestamp = date.toLocaleTimeString("en-US", {
@@ -1931,10 +2224,8 @@ function CampaignDetails({ campaignId, onBack }) {
         }
       }
 
-      // Remove timestamp from line
       const lineWithoutTimestamp = line.replace(/\[[^\]]+\]\s*/, "");
 
-      // Extract speaker and text
       const colonIndex = lineWithoutTimestamp.indexOf(":");
       if (colonIndex !== -1) {
         const speaker = lineWithoutTimestamp.substring(0, colonIndex).trim();
@@ -1947,39 +2238,16 @@ function CampaignDetails({ campaignId, onBack }) {
           speaker.toLowerCase().includes("user") ||
           speaker.toLowerCase().includes("customer");
 
-        // If this is a new speaker or first message, start a new message
-        if (!currentMessage || currentMessage.speaker !== speaker) {
-          // Save previous message if exists
-          if (currentMessage) {
-            groupedMessages.push(currentMessage);
-          }
-
-          // Start new message
-          currentMessage = {
-            speaker,
-            text: text,
-            timestamp,
-            isAI,
-            isUser,
-          };
-        } else {
-          // Same speaker, append to current message
-          currentMessage.text += " " + text;
-        }
-      } else {
-        // No speaker found, treat as continuation of previous message
-        if (currentMessage) {
-          currentMessage.text += " " + lineWithoutTimestamp.trim();
-        }
+        // Always create a new message entry, even if the speaker is the same
+        messages.push({ speaker, text, timestamp, isAI, isUser });
+        lastMessage = messages[messages.length - 1];
+      } else if (lastMessage) {
+        // No explicit speaker: treat as continuation of the last message only
+        lastMessage.text += " " + lineWithoutTimestamp.trim();
       }
     }
 
-    // Add the last message
-    if (currentMessage) {
-      groupedMessages.push(currentMessage);
-    }
-
-    return groupedMessages;
+    return messages;
   };
 
   // Count grouped conversation messages (user+AI) in a transcript
@@ -2075,6 +2343,52 @@ function CampaignDetails({ campaignId, onBack }) {
             typeof result.data.isActive === "boolean"
               ? result.data.isActive
               : result.data.isRunning;
+          // Auto-save history when backend indicates calling has become inactive
+          try {
+            const wasActive = campaign?.isActive;
+            const backendAllFinalized = !!result?.data?.allCallsFinalized;
+            const effectiveRunId = currentRunId || result?.data?.latestRunId;
+            if (
+              ((wasActive && !nextIsActive) || backendAllFinalized) &&
+              effectiveRunId &&
+              !autoSavingRef.current &&
+              lastSavedRunIdRef.current !== effectiveRunId
+            ) {
+              autoSavingRef.current = true;
+              const endTime = new Date();
+              const inferredStart = result?.data?.runStartTime
+                ? new Date(result.data.runStartTime)
+                : null;
+              const startTime = campaignStartTime || inferredStart || endTime;
+              const runTime = calculateRunTime(startTime, endTime);
+              const callLogs = await fetchCurrentRunCallLogs(effectiveRunId);
+              await saveCampaignRun(
+                campaignId,
+                formatTime(startTime),
+                formatTime(endTime),
+                runTime,
+                callLogs,
+                effectiveRunId
+              );
+              lastSavedRunIdRef.current = effectiveRunId;
+              try {
+                sessionStorage.setItem(
+                  `campaign_${campaignId}_lastSavedRunId`,
+                  String(effectiveRunId)
+                );
+              } catch (_) {}
+              // Reset run tracking and UI state for next run
+              setCurrentRunId(null);
+              setCampaignStartTime(null);
+              resetSectionForNextRun();
+              setReadyFlag(true);
+              stopLiveCallPolling();
+            }
+          } catch (e) {
+            console.error("Auto-save on inactive failed:", e);
+          } finally {
+            autoSavingRef.current = false;
+          }
           if (nextIsActive !== campaign?.isActive) {
             setCampaign((prev) =>
               prev ? { ...prev, isActive: nextIsActive } : null
@@ -2113,160 +2427,601 @@ function CampaignDetails({ campaignId, onBack }) {
     }
   };
 
-  // Call again via backend: dial missed contacts server-side
-  const callMissedCalls = async () => {
+  // Poll calling status while on page so button state and auto-save react live
+  useEffect(() => {
+    if (!campaignId) return;
+    let intervalId = null;
+    const poll = () => fetchCampaignCallingStatus();
+    poll();
+    intervalId = setInterval(poll, 3000);
+    return () => intervalId && clearInterval(intervalId);
+  }, [campaignId]);
+
+  // Universal calling function that handles all calling scenarios
+  const universalCalling = async (options = {}) => {
+    const {
+      type = "single", // 'single', 'missed', 'selected', 'campaign'
+      contacts = [], // Array of contact objects for selected calls
+      lead = null, // Single lead object for single calls
+      agentId = null, // Specific agent ID (optional)
+      delayBetweenCalls = 2000, // Delay between calls for bulk operations
+      runId = undefined, // Run ID for tracking; if undefined and newInstance we will create a fresh one
+      newInstance = true, // Always start a fresh run instance for single/missed/selected by default
+      onSuccess = null, // Success callback
+      onError = null, // Error callback
+      showToast = true, // Whether to show toast messages
+    } = options;
+
     try {
-      // Check if campaign has groups
+      // Common validation checks
       if (!campaignGroups || campaignGroups.length === 0) {
-        toast.error(
-          "Cannot call missed contacts: No groups assigned. Please add groups first."
-        );
-        return;
+        const errorMsg =
+          "Cannot make calls: No groups assigned. Please add groups first.";
+        if (showToast) toast.error(errorMsg);
+        if (onError) onError(new Error(errorMsg));
+        return { success: false, error: errorMsg };
       }
 
-      // Check if campaign has an agent
-      const { id: primaryAgentId } = getPrimaryAgentIdentity();
-      const resolvedAgentId =
-        (selectedAgent && (selectedAgent._id || selectedAgent)) ||
-        primaryAgentId ||
-        (Array.isArray(agents) && agents[0] && (agents[0]._id || agents[0].id));
+      // Resolve agent ID
+      let resolvedAgentId = agentId;
       if (!resolvedAgentId) {
-        toast.error(
-          "Cannot call missed contacts: No agent available. Please add/select an agent first."
-        );
-        return;
+        const { id: primaryAgentId } = getPrimaryAgentIdentity();
+        resolvedAgentId =
+          (selectedAgent && (selectedAgent._id || selectedAgent)) ||
+          primaryAgentId ||
+          (Array.isArray(agents) &&
+            agents[0] &&
+            (agents[0]._id || agents[0].id));
       }
 
-      // Check if campaign has contacts
-      if (!campaignContacts || campaignContacts.length === 0) {
-        toast.error(
-          "Cannot call missed contacts: No contacts available. Please sync contacts from groups first."
-        );
-        return;
+      if (!resolvedAgentId) {
+        const errorMsg =
+          "Cannot make calls: No agent available. Please add/select an agent first.";
+        if (showToast) toast.error(errorMsg);
+        if (onError) onError(new Error(errorMsg));
+        return { success: false, error: errorMsg };
       }
 
-      if (!campaignId) return;
+      // Check if campaign has contacts (for bulk operations)
+      if (
+        (type === "missed" || type === "selected" || type === "campaign") &&
+        (!campaignContacts || campaignContacts.length === 0)
+      ) {
+        const errorMsg =
+          "Cannot make calls: No contacts available. Please sync contacts from groups first.";
+        if (showToast) toast.error(errorMsg);
+        if (onError) onError(new Error(errorMsg));
+        return { success: false, error: errorMsg };
+      }
+
+      if (!campaignId) {
+        const errorMsg = "Campaign ID not found";
+        if (showToast) toast.error(errorMsg);
+        if (onError) onError(new Error(errorMsg));
+        return { success: false, error: errorMsg };
+      }
 
       const token = sessionStorage.getItem("clienttoken");
-      const resp = await fetch(
-        `${API_BASE}/campaigns/${campaignId}/call-missed`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            agentId: resolvedAgentId,
-            delayBetweenCalls: 2000,
-          }),
+      // Decide effective run id. For single/missed/selected, we FIRST ask backend to start a run
+      // so that a campaign details document is created and subsequent merge/logs can attach.
+      let effectiveRunId = runId;
+      if (
+        (type === "single" || type === "missed" || type === "selected") &&
+        newInstance
+      ) {
+        try {
+          const respStart = await fetch(
+            `${API_BASE}/campaigns/${campaignId}/start-calling`,
+            {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${token}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                agentId: resolvedAgentId,
+                delayBetweenCalls: delayBetweenCalls,
+              }),
+            }
+          );
+          if (respStart.status === 402) {
+            setShowCreditsModal(true);
+            return { success: false, error: "Insufficient credits" };
+          }
+          const startResult = await respStart.json();
+          if (!respStart.ok || startResult.success === false) {
+            throw new Error(
+              startResult.error || "Failed to start campaign run"
+            );
+          }
+          effectiveRunId =
+            startResult?.data?.runId ||
+            `run_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+          setCurrentRunId(effectiveRunId);
+          setCampaignStartTime(new Date());
+          setCampaign((prev) => (prev ? { ...prev, isActive: true } : prev));
+          setReadyFlag(false);
+          // Proactive short burst refresh to ensure new run logs appear quickly
+          const refreshBurst = () => {
+            try {
+              fetchCampaignCallLogs(1);
+              fetchApiMergedCalls(1);
+            } catch (_) {}
+          };
+          setTimeout(refreshBurst, 600);
+          setTimeout(refreshBurst, 2000);
+          setTimeout(refreshBurst, 5000);
+        } catch (e) {
+          console.error("Failed to ensure backend run instance:", e);
+          return { success: false, error: e.message || "Failed to start run" };
         }
-      );
-      const result = await resp.json();
-      if (!resp.ok || result.success === false) {
-        throw new Error(
-          result.error || "Failed to trigger missed-calls dialing"
-        );
+      }
+      let response, result;
+
+      // Handle different calling types
+      switch (type) {
+        case "single":
+          if (!lead) {
+            const errorMsg = "Lead object is required for single calls";
+            if (showToast) toast.error(errorMsg);
+            if (onError) onError(new Error(errorMsg));
+            return { success: false, error: errorMsg };
+          }
+
+          const phone = (lead.number || "").toString().trim();
+          if (!phone) {
+            const errorMsg = "Phone number is required";
+            if (showToast) toast.error(errorMsg);
+            if (onError) onError(new Error(errorMsg));
+            return { success: false, error: errorMsg };
+          }
+
+          // Find the agent object to get callerId
+          const primaryAgent = (agents || []).find(
+            (a) => a._id === resolvedAgentId
+          );
+
+          // Generate uniqueId for the call
+          const uniqueId = `aidial-${Date.now()}-${performance
+            .now()
+            .toString(36)
+            .replace(".", "")}-${Math.random().toString(36).substr(2, 9)}`;
+
+          // Optimistic UI: mark this row as redialing
+          setRedialingCalls(
+            (prev) => new Set([...prev, lead.documentId || lead.contactId])
+          );
+
+          response = await fetch(`${API_BASE}/calls/single`, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              appid: 2,
+              contact: phone,
+              caller_id: primaryAgent?.callerId,
+              agentId: resolvedAgentId,
+              custom_field: {
+                name: getContactName(lead) || "",
+                uniqueId: uniqueId,
+                runId: effectiveRunId || currentRunId || undefined,
+              },
+            }),
+          });
+
+          if (response.status === 402) {
+            setShowCreditsModal(true);
+            return { success: false, error: "Insufficient credits" };
+          }
+
+          result = await response.json();
+          if (!response.ok || result.success === false) {
+            throw new Error(result.error || "Failed to initiate call");
+          }
+
+          if (showToast)
+            toast.success(`Calling to ${phone} started successfully`);
+          console.log("Single call initiated:", result.data?.uniqueId);
+
+          // Mark UI as calling for visibility in dashboards
+          setCallingStatus("calling");
+
+          // Register uniqueId to campaign run for log aggregation
+          try {
+            const uid = result?.data?.uniqueId;
+            if (uid && campaign?._id) {
+              await fetch(`${API_BASE}/campaigns/${campaign._id}/unique-ids`, {
+                method: "POST",
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  uniqueId: uid,
+                  contactId: lead._id || null,
+                  runId: effectiveRunId || currentRunId || undefined,
+                }),
+              });
+            }
+          } catch (_) {}
+
+          // Clean up redialing state after delay
+          setTimeout(() => {
+            setRedialingCalls((prev) => {
+              const newSet = new Set(prev);
+              newSet.delete(lead.documentId || lead.contactId);
+              return newSet;
+            });
+            fetchCampaignCallLogs(1);
+            fetchApiMergedCalls(1);
+          }, 1500);
+
+          break;
+
+        case "missed":
+          response = await fetch(
+            `${API_BASE}/campaigns/${campaignId}/call-missed`,
+            {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${token}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                agentId: resolvedAgentId,
+                delayBetweenCalls: delayBetweenCalls,
+                runId: effectiveRunId || currentRunId || undefined,
+              }),
+            }
+          );
+
+          result = await response.json();
+          if (!response.ok || result.success === false) {
+            throw new Error(
+              result.error || "Failed to trigger missed-calls dialing"
+            );
+          }
+
+          setCallingStatus("calling");
+          if (showToast)
+            toast.warn(
+              `Calling ${result.count || 0} missed contact(s) has started.`
+            );
+
+          // Kick a status refresh shortly after
+          setTimeout(() => {
+            fetchCampaignCallingStatus();
+            fetchApiMergedCalls(1);
+          }, 3000);
+
+          break;
+
+        case "selected":
+          if (!contacts || contacts.length === 0) {
+            const errorMsg = "No contacts selected for calling";
+            if (showToast) toast.error(errorMsg);
+            if (onError) onError(new Error(errorMsg));
+            return { success: false, error: errorMsg };
+          }
+
+          // For selected calls, we'll make individual API calls for each contact
+          // This could be optimized with a bulk endpoint if available
+          const selectedCalls = contacts.map(async (contact) => {
+            const phone = (contact.number || contact.phone || "")
+              .toString()
+              .trim();
+            if (!phone) return null;
+
+            const primaryAgent = (agents || []).find(
+              (a) => a._id === resolvedAgentId
+            );
+            const uniqueId = `aidial-${Date.now()}-${performance
+              .now()
+              .toString(36)
+              .replace(".", "")}-${Math.random().toString(36).substr(2, 9)}`;
+
+            try {
+              const resp = await fetch(`${API_BASE}/calls/single`, {
+                method: "POST",
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  appid: 2,
+                  contact: phone,
+                  caller_id: primaryAgent?.callerId,
+                  agentId: resolvedAgentId,
+                  custom_field: {
+                    name: getContactName(contact) || "",
+                    uniqueId: uniqueId,
+                    runId: effectiveRunId || currentRunId || undefined,
+                  },
+                }),
+              });
+
+              if (resp.status === 402) {
+                setShowCreditsModal(true);
+                return { success: false, error: "Insufficient credits" };
+              }
+
+              const res = await resp.json();
+              // Register uniqueId for each initiated call
+              try {
+                const uid = res?.data?.uniqueId;
+                if (resp.ok && res.success && uid && campaign?._id) {
+                  await fetch(
+                    `${API_BASE}/campaigns/${campaign._id}/unique-ids`,
+                    {
+                      method: "POST",
+                      headers: {
+                        Authorization: `Bearer ${token}`,
+                        "Content-Type": "application/json",
+                      },
+                      body: JSON.stringify({
+                        uniqueId: uid,
+                        contactId: contact._id || null,
+                        runId: effectiveRunId || currentRunId || undefined,
+                      }),
+                    }
+                  );
+                }
+              } catch (_) {}
+
+              return { success: resp.ok && res.success, contact, result: res };
+            } catch (error) {
+              return { success: false, contact, error: error.message };
+            }
+          });
+
+          const results = await Promise.all(selectedCalls);
+          const successful = results.filter((r) => r && r.success).length;
+          const failed = results.filter((r) => r && !r.success).length;
+
+          if (showToast) {
+            if (successful > 0)
+              toast.success(`Successfully initiated ${successful} call(s)`);
+            if (failed > 0) toast.warn(`Failed to initiate ${failed} call(s)`);
+          }
+
+          // Ensure UI shows as calling for this run
+          setCallingStatus("calling");
+
+          // Refresh data after calls
+          setTimeout(() => {
+            fetchCampaignCallLogs(1);
+            fetchApiMergedCalls(1);
+          }, 1500);
+
+          break;
+
+        case "campaign":
+          response = await fetch(
+            `${API_BASE}/campaigns/${campaignId}/start-calling`,
+            {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${token}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                agentId: resolvedAgentId,
+                delayBetweenCalls: delayBetweenCalls,
+              }),
+            }
+          );
+
+          result = await response.json();
+          if (response.status === 402) {
+            setShowCreditsModal(true);
+            return { success: false, error: "Insufficient credits" };
+          }
+          if (!response.ok || result.success === false) {
+            throw new Error(result.error || "Failed to start campaign calling");
+          }
+
+          // Capture runId from backend and start local tracking
+          try {
+            const newRunId = result?.data?.runId;
+            if (newRunId) {
+              setCurrentRunId(newRunId);
+              setCampaignStartTime(new Date());
+            }
+          } catch (_) {}
+
+          setCampaign((prev) => (prev ? { ...prev, isActive: true } : prev));
+          setLastUpdated(new Date());
+
+          if (showToast) toast.success("Campaign calling started successfully");
+
+          break;
+
+        default:
+          const errorMsg = `Unknown calling type: ${type}`;
+          if (showToast) toast.error(errorMsg);
+          if (onError) onError(new Error(errorMsg));
+          return { success: false, error: errorMsg };
       }
 
-      setCallingStatus("calling");
-      // Notify user calls are being initiated
-      toast.warn(`Calling ${result.count || 0} missed contact(s) has started.`);
-      // Kick a status refresh shortly after
-      setTimeout(() => {
-        fetchCampaignCallingStatus();
-        fetchApiMergedCalls(1);
-      }, 3000);
-    } catch (e) {
-      console.error("Error calling missed contacts via backend:", e);
-      toast.warn(e.message || "Failed to start missed-calls dialing");
-    }
-  };
+      // Call success callback if provided
+      if (onSuccess) onSuccess(result);
 
-  // Retry a single lead (row) via backend single-call API
-  const handleRetryLead = async (lead) => {
-    try {
-      const phone = (lead.number || "").toString().trim();
-      if (!phone) return;
+      return { success: true, data: result };
+    } catch (error) {
+      console.error(`Universal calling failed (${type}):`, error);
+      const errorMsg = error.message || `Failed to initiate ${type} calling`;
 
-      // Check if campaign has groups
-      if (!campaignGroups || campaignGroups.length === 0) {
-        toast.error(
-          "Cannot retry call: No groups assigned. Please add groups first."
-        );
-        return;
-      }
+      if (showToast) toast.warn(errorMsg);
+      if (onError) onError(error);
 
-      // Check if campaign has an agent
-      const { id: primaryAgentId } = getPrimaryAgentIdentity();
-      if (!primaryAgentId) {
-        toast.error(
-          "Cannot retry call: No agent available. Please add/select an agent first."
-        );
-        return;
-      }
-
-      // Find the agent object to get callerId
-      const primaryAgent = (agents || []).find((a) => a._id === primaryAgentId);
-
-      // Generate uniqueId for the call
-      const uniqueId = `aidial-${Date.now()}-${performance
-        .now()
-        .toString(36)
-        .replace(".", "")}-${Math.random().toString(36).substr(2, 9)}`;
-
-      const token = sessionStorage.getItem("clienttoken");
-      // Optimistic UI: mark this row as redialing
-      setRedialingCalls(
-        (prev) => new Set([...prev, lead.documentId || lead.contactId])
-      );
-      const resp = await fetch(`${API_BASE}/calls/single`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          appid: 2,
-          contact: phone,
-          caller_id: primaryAgent?.callerId,
-          agentId: primaryAgentId,
-          custom_field: {
-            name: getContactName(lead) || "",
-            uniqueId: uniqueId,
-          },
-        }),
-      });
-      // Handle insufficient credits with modal
-      if (resp.status === 402) {
-        setShowCreditsModal(true);
-        return;
-      }
-      const result = await resp.json();
-      if (!resp.ok || result.success === false) {
-        throw new Error(result.error || "Failed to initiate call");
-      }
-      // Success feedback and refresh
-      toast.success(`Calling to ${phone} started successfully`);
-      console.log("Single call initiated:", result.data?.uniqueId);
-      setTimeout(() => {
+      // Clean up redialing state on error for single calls
+      if (type === "single" && lead) {
         setRedialingCalls((prev) => {
           const newSet = new Set(prev);
           newSet.delete(lead.documentId || lead.contactId);
           return newSet;
         });
-        fetchCampaignCallLogs(1);
-        fetchApiMergedCalls(1);
-      }, 1500);
-    } catch (e) {
-      console.error("Retry call failed:", e);
-      toast.warn("Failed to initiate call.");
-      setRedialingCalls((prev) => {
-        const newSet = new Set(prev);
-        newSet.delete(lead.documentId || lead.contactId);
-        return newSet;
-      });
+      }
+
+      return { success: false, error: errorMsg };
     }
+  };
+
+  // Call again via backend: dial missed contacts server-side
+  const callMissedCalls = async () => {
+    await universalCalling({
+      type: "missed",
+      delayBetweenCalls: 2000,
+      runId: undefined,
+      newInstance: true,
+    });
+  };
+
+  // Select and call functionality
+  const handleSelectContact = (contact) => {
+    const contactId = contact.documentId || contact.contactId || contact._id;
+    setSelectedContacts((prev) => {
+      if (
+        prev.some((c) => (c.documentId || c.contactId || c._id) === contactId)
+      ) {
+        return prev.filter(
+          (c) => (c.documentId || c.contactId || c._id) !== contactId
+        );
+      } else {
+        return [...prev, contact];
+      }
+    });
+  };
+
+  const handleSelectAllContacts = () => {
+    if (selectAllContacts) {
+      setSelectedContacts([]);
+      setSelectAllContacts(false);
+    } else {
+      setSelectedContacts([...campaignContacts]);
+      setSelectAllContacts(true);
+    }
+  };
+
+  const callSelectedContacts = async () => {
+    if (selectedContacts.length === 0) {
+      toast.error("Please select contacts to call");
+      return;
+    }
+
+    await universalCalling({
+      type: "selected",
+      contacts: selectedContacts,
+      runId: undefined,
+      newInstance: true,
+    });
+
+    // Clear selection after calling
+    setSelectedContacts([]);
+    setSelectAllContacts(false);
+  };
+
+  const isContactSelected = (contact) => {
+    const contactId = contact.documentId || contact.contactId || contact._id;
+    return selectedContacts.some(
+      (c) => (c.documentId || c.contactId || c._id) === contactId
+    );
+  };
+
+  // Select and call functionality for call logs
+  const handleSelectCallLog = (callLog) => {
+    const callLogId =
+      callLog.documentId ||
+      callLog.contactId ||
+      getLeadKey(callLog) ||
+      callLog._id;
+    setSelectedCallLogs((prev) => {
+      if (
+        prev.some(
+          (c) =>
+            (c.documentId || c.contactId || getLeadKey(c) || c._id) ===
+            callLogId
+        )
+      ) {
+        return prev.filter(
+          (c) =>
+            (c.documentId || c.contactId || getLeadKey(c) || c._id) !==
+            callLogId
+        );
+      } else {
+        return [...prev, callLog];
+      }
+    });
+  };
+
+  const handleSelectAllCallLogs = () => {
+    if (selectAllCallLogs) {
+      setSelectedCallLogs([]);
+      setSelectAllCallLogs(false);
+    } else {
+      // Get filtered call logs (same logic as the table)
+      const filteredCallLogs = apiMergedCalls.filter((lead) => {
+        const name = (lead.name || "").toString().trim();
+        const number = (lead.number || "").toString().trim();
+        const hasRealName = name && name !== "-";
+        const hasRealNumber = number && number !== "-" && /\d/.test(number);
+        const byData = hasRealName || hasRealNumber;
+        const status = (lead.status || "").toLowerCase();
+        const connectedStatuses = ["connected", "completed", "ongoing"];
+        const missedStatuses = ["missed", "not_connected", "failed"];
+        const byStatus =
+          callFilter === "all"
+            ? true
+            : callFilter === "connected"
+            ? connectedStatuses.includes(status)
+            : missedStatuses.includes(status);
+        return byData && byStatus;
+      });
+      setSelectedCallLogs([...filteredCallLogs]);
+      setSelectAllCallLogs(true);
+    }
+  };
+
+  const callSelectedCallLogs = async () => {
+    if (selectedCallLogs.length === 0) {
+      toast.error("Please select call logs to call");
+      return;
+    }
+
+    await universalCalling({
+      type: "selected",
+      contacts: selectedCallLogs,
+      runId: undefined,
+      newInstance: true,
+    });
+
+    // Clear selection after calling
+    setSelectedCallLogs([]);
+    setSelectAllCallLogs(false);
+  };
+
+  const isCallLogSelected = (callLog) => {
+    const callLogId =
+      callLog.documentId ||
+      callLog.contactId ||
+      getLeadKey(callLog) ||
+      callLog._id;
+    return selectedCallLogs.some(
+      (c) =>
+        (c.documentId || c.contactId || getLeadKey(c) || c._id) === callLogId
+    );
+  };
+
+  // Retry a single lead (row) via backend single-call API
+  const handleRetryLead = async (lead) => {
+    await universalCalling({
+      type: "single",
+      lead: lead,
+      runId: undefined,
+      newInstance: true,
+    });
   };
 
   // Campaign contacts management functions
@@ -2668,61 +3423,39 @@ function CampaignDetails({ campaignId, onBack }) {
     try {
       if (!campaign?._id) return;
 
-      // Check if campaign has groups
-      if (!campaignGroups || campaignGroups.length === 0) {
-        toast.error(
-          "Cannot start campaign: No groups assigned. Please add groups first."
-        );
-        return;
-      }
-
-      // Check if campaign has an agent
+      // Get primary agent ID for campaign
       const primaryAgentId =
         Array.isArray(campaign.agent) && campaign.agent.length > 0
           ? campaign.agent[0]
           : null;
-      if (!primaryAgentId) {
-        toast.error(
-          "Cannot start campaign: No agent assigned. Please add an agent first."
-        );
-        return;
-      }
-
-      // Check if campaign has contacts
-      if (!campaignContacts || campaignContacts.length === 0) {
-        toast.error(
-          "Cannot start campaign: No contacts available. Please sync contacts from groups first."
-        );
-        return;
-      }
 
       setIsTogglingCampaign(true);
-      const token = sessionStorage.getItem("clienttoken");
-      const resp = await fetch(
-        `${API_BASE}/campaigns/${campaign._id}/start-calling`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            agentId: primaryAgentId,
-            delayBetweenCalls: 2000,
-          }),
-        }
-      );
-      const result = await resp.json();
-      if (resp.status === 402) {
-        setShowCreditsModal(true);
+
+      const result = await universalCalling({
+        type: "campaign",
+        agentId: primaryAgentId,
+        delayBetweenCalls: 2000,
+        onSuccess: (data) => {
+          // Capture runId from backend and start local tracking
+          try {
+            const newRunId = data?.data?.runId;
+            if (newRunId) {
+              setCurrentRunId(newRunId);
+              setCampaignStartTime(new Date());
+            }
+          } catch (_) {}
+          setCampaign((prev) => (prev ? { ...prev, isActive: true } : prev));
+          setLastUpdated(new Date());
+        },
+        onError: (error) => {
+          console.error("Start calling failed:", error);
+        },
+      });
+
+      if (!result.success) {
+        // Error handling is done in universalCalling
         return;
       }
-      if (!resp.ok || result.success === false) {
-        toast.error(result.error || "Failed to start campaign calling");
-        return;
-      }
-      setCampaign((prev) => (prev ? { ...prev, isActive: true } : prev));
-      setLastUpdated(new Date());
     } catch (e) {
       console.error("Start calling failed:", e);
       toast.error("Failed to start campaign calling");
@@ -2752,6 +3485,9 @@ function CampaignDetails({ campaignId, onBack }) {
         return;
       }
       setCampaign((prev) => (prev ? { ...prev, isActive: false } : prev));
+      // Mark UI as ready for next run and stop any live polling
+      setReadyFlag(true);
+      stopLiveCallPolling();
       setLastUpdated(new Date());
     } catch (e) {
       console.error("Stop calling failed:", e);
@@ -2761,12 +3497,830 @@ function CampaignDetails({ campaignId, onBack }) {
     }
   };
 
+  // Campaign history functions
+  const saveCampaignRun = async (
+    campaignId,
+    startTime,
+    endTime,
+    runTime,
+    callLogs,
+    runId
+  ) => {
+    try {
+      const response = await fetch(
+        `${API_BASE}/campaigns/${campaignId}/save-run`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${sessionStorage.getItem("clienttoken")}`,
+          },
+          body: JSON.stringify({
+            startTime,
+            endTime,
+            runTime,
+            callLogs,
+            runId: runId || currentRunId || undefined,
+          }),
+        }
+      );
+
+      const data = await response.json();
+      if (data.success) {
+        // Refresh campaign history
+        fetchCampaignHistory(campaignId);
+        toast.success(
+          `Campaign run #${data.data.instanceNumber} saved successfully`
+        );
+      }
+    } catch (error) {
+      console.error("Error saving campaign run:", error);
+      toast.error("Failed to save campaign run");
+    }
+  };
+
+  const fetchCampaignHistory = async (campaignId) => {
+    try {
+      const response = await fetch(
+        `${API_BASE}/campaigns/${campaignId}/history`,
+        {
+          headers: {
+            Authorization: `Bearer ${sessionStorage.getItem("clienttoken")}`,
+          },
+        }
+      );
+
+      const data = await response.json();
+      if (data.success) {
+        setCampaignHistory(data.data);
+      }
+    } catch (error) {
+      console.error("Error fetching campaign history:", error);
+    }
+  };
+
+  const fetchCurrentRunCallLogs = async (runId) => {
+    try {
+      const response = await fetch(
+        `${API_BASE}/campaigns/${campaignId}/merged-calls?runId=${runId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${sessionStorage.getItem("clienttoken")}`,
+          },
+        }
+      );
+
+      const data = await response.json();
+      if (data.success) {
+        return data.data;
+      }
+      return [];
+    } catch (error) {
+      console.error("Error fetching current run call logs:", error);
+      return [];
+    }
+  };
+
+  const calculateRunTime = (startTime, endTime) => {
+    const start = new Date(startTime);
+    const end = new Date(endTime);
+    const diffMs = end - start;
+
+    const hours = Math.floor(diffMs / (1000 * 60 * 60));
+    const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((diffMs % (1000 * 60)) / 1000);
+
+    return { hours, minutes, seconds };
+  };
+
+  const formatTime = (date) => {
+    return date.toLocaleTimeString("en-US", {
+      hour12: false,
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
+  };
+
   const handleToggleCampaignCalling = async () => {
     if (campaign?.isActive) {
+      // Stopping campaign - save history
+      const endTime = new Date();
+      const startTime = campaignStartTime || endTime;
+      const runTime = calculateRunTime(startTime, endTime);
+
+      // Get call logs for current run
+      const callLogs = await fetchCurrentRunCallLogs(currentRunId);
+
+      // Save campaign run history
+      await saveCampaignRun(
+        campaignId,
+        formatTime(startTime),
+        formatTime(endTime),
+        runTime,
+        callLogs
+      );
+
+      // Stop campaign
       await stopCampaignCallingBackend();
+
+      // Reset run tracking
+      setCurrentRunId(null);
+      setCampaignStartTime(null);
+
+      // Clear dashboards so section is fresh for next run
+      resetSectionForNextRun();
     } else {
+      // Starting campaign - generate new runId and start time
+      const newRunId = `run_${Date.now()}_${Math.random()
+        .toString(36)
+        .substr(2, 9)}`;
+      setCurrentRunId(newRunId);
+      setCampaignStartTime(new Date());
+
+      // Start campaign
       await startCampaignCallingBackend();
+
+      // When a new run begins, ensure we show live data again
+      setReadyFlag(false);
     }
+  };
+
+  // CampaignHistoryCard component
+  const CampaignHistoryCard = ({ run, index }) => {
+    const runKey = `run-${run._id || run.instanceNumber || index}`;
+    const isExpanded = !!historyExpanded[runKey];
+    const setIsExpanded = (val) =>
+      setHistoryExpanded((prev) => ({ ...prev, [runKey]: val }));
+
+    return (
+      <div className="bg-white rounded-lg shadow-md border border-gray-200 mb-4">
+        <div className="p-4 hover:bg-gray-50">
+          <div className="flex justify-between items-center">
+            <div className="flex items-center space-x-3">
+              <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                <span className="text-blue-600 font-semibold text-sm">
+                  #{run.instanceNumber}
+                </span>
+              </div>
+              <div>
+                <h3 className="font-semibold text-gray-900">
+                  Campaign Run #{run.instanceNumber}
+                </h3>
+                <p className="text-sm text-gray-500">
+                  <span className="mr-3">
+                    <strong>Start:</strong> {run.startTime}
+                  </span>
+                  <span className="mr-3">
+                    <strong>End:</strong> {run.endTime}
+                  </span>
+                  <span>
+                    <strong>Duration:</strong>{" "}
+                    {formatHMSCompact(
+                      (run.runTime?.hours || 0) * 3600 +
+                        (run.runTime?.minutes || 0) * 60 +
+                        (run.runTime?.seconds || 0)
+                    )}
+                  </span>
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center space-x-4">
+              {!isExpanded && (
+                <div className="text-right">
+                  <div className="text-sm font-medium text-gray-900">
+                    {run.stats.successfulCalls} Completed,{" "}
+                    {run.stats.failedCalls} Missed
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    {run.stats.totalContacts} total contacts
+                  </div>
+                </div>
+              )}
+              <button
+                type="button"
+                className="text-gray-600 hover:text-gray-800 p-1 rounded"
+                onClick={() => setIsExpanded(!isExpanded)}
+                title={isExpanded ? "Collapse" : "Expand"}
+              >
+                <span className="inline-block align-middle">
+                  {isExpanded ? "▼" : "▶"}
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {isExpanded && (
+          <div className="border-t border-gray-200 p-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+              <div className="bg-blue-50 p-3 rounded-lg">
+                <div className="text-2xl font-bold text-blue-600">
+                  {run.stats.totalContacts}
+                </div>
+                <div className="text-sm text-blue-800">Total Contacts</div>
+              </div>
+              <div className="bg-green-50 p-3 rounded-lg">
+                <div className="text-2xl font-bold text-green-600">
+                  {run.stats.successfulCalls}
+                </div>
+                <div className="text-sm text-green-800">Completed Calls</div>
+              </div>
+              <div className="bg-red-50 p-3 rounded-lg">
+                <div className="text-2xl font-bold text-red-600">
+                  {run.stats.failedCalls}
+                </div>
+                <div className="text-sm text-red-800">Missed Calls</div>
+              </div>
+              <div className="bg-purple-50 p-3 rounded-lg">
+                <div className="text-2xl font-bold text-purple-600">
+                  {formatHMSCompact(run.stats?.totalCallDuration || 0)}
+                </div>
+                <div className="text-sm text-purple-800">Total Duration</div>
+              </div>
+            </div>
+
+            {/* History table - mirrors Recent call logs */}
+            <div className="space-y-2">
+              <h4 className="font-semibold text-gray-900 mb-2">Call Logs</h4>
+              {/* Controls: filter, sort, call missed again */}
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <select
+                    className="text-sm border border-gray-300 rounded-md px-2 py-1"
+                    value={callFilter}
+                    onChange={(e) => setCallFilter(e.target.value)}
+                  >
+                    <option value="all">All</option>
+                    <option value="connected">Connected</option>
+                    <option value="missed">Missed</option>
+                  </select>
+                  <select
+                    className="text-sm border border-gray-300 rounded-md px-2 py-1"
+                    value={durationSort}
+                    onChange={(e) => setDurationSort(e.target.value)}
+                  >
+                    <option value="none">Sort by</option>
+                    <option value="longest">Longest First</option>
+                    <option value="shortest">Shortest First</option>
+                  </select>
+                </div>
+                <div className="flex items-center gap-2">
+                  {callFilter === "missed" && (
+                    <button
+                      className="text-sm px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+                      onClick={() => {
+                        callMissedCalls();
+                      }}
+                      disabled={
+                        apiMergedCallsLoading ||
+                        !campaignGroups ||
+                        campaignGroups.length === 0
+                      }
+                      title={
+                        !campaignGroups || campaignGroups.length === 0
+                          ? "No groups assigned to campaign"
+                          : "Call all missed contacts"
+                      }
+                    >
+                      Call Again
+                    </button>
+                  )}
+                  {/* Select & Call for history logs (per run) */}
+                  <button
+                    className="text-sm px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+                    onClick={() => {
+                      // Build a filtered list of this run's contacts using same filters
+                      const filtered = (run.contacts || []).filter((lead) => {
+                        const name = (lead.name || "").toString().trim();
+                        const number = (lead.number || lead.phone || "")
+                          .toString()
+                          .trim();
+                        const hasRealName = name && name !== "-";
+                        const hasRealNumber =
+                          number && number !== "-" && /\d/.test(number);
+                        const byData = hasRealName || hasRealNumber;
+                        const status = (lead.status || "").toLowerCase();
+                        const connectedStatuses = [
+                          "connected",
+                          "completed",
+                          "ongoing",
+                        ];
+                        const missedStatuses = [
+                          "missed",
+                          "not_connected",
+                          "failed",
+                        ];
+                        const byStatus =
+                          callFilter === "all"
+                            ? true
+                            : callFilter === "connected"
+                            ? connectedStatuses.includes(status)
+                            : missedStatuses.includes(status);
+                        return byData && byStatus;
+                      });
+                      if (filtered.length === 0) {
+                        toast.warn("No logs to call for the selected filter");
+                        return;
+                      }
+                      universalCalling({
+                        type: "selected",
+                        contacts: filtered,
+                        runId: undefined,
+                        newInstance: true,
+                      });
+                    }}
+                    title="Call the filtered logs from this run"
+                  >
+                    Call Selected
+                  </button>
+                </div>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-gray-600">
+                      <th className="py-2 pr-4 w-12">
+                        <input
+                          type="checkbox"
+                          checked={(() => {
+                            const filtered = (run.contacts || []).filter(
+                              (lead) => {
+                                const name = (lead.name || "")
+                                  .toString()
+                                  .trim();
+                                const number = (lead.number || lead.phone || "")
+                                  .toString()
+                                  .trim();
+                                const hasRealName = name && name !== "-";
+                                const hasRealNumber =
+                                  number && number !== "-" && /\d/.test(number);
+                                const byData = hasRealName || hasRealNumber;
+                                const status = (
+                                  lead.status || ""
+                                ).toLowerCase();
+                                const connectedStatuses = [
+                                  "connected",
+                                  "completed",
+                                  "ongoing",
+                                ];
+                                const missedStatuses = [
+                                  "missed",
+                                  "not_connected",
+                                  "failed",
+                                ];
+                                const byStatus =
+                                  callFilter === "all"
+                                    ? true
+                                    : callFilter === "connected"
+                                    ? connectedStatuses.includes(status)
+                                    : missedStatuses.includes(status);
+                                return byData && byStatus;
+                              }
+                            );
+                            return (
+                              filtered.length > 0 &&
+                              filtered.every((l) => isCallLogSelected(l))
+                            );
+                          })()}
+                          onChange={(e) => {
+                            const filtered = (run.contacts || []).filter(
+                              (lead) => {
+                                const name = (lead.name || "")
+                                  .toString()
+                                  .trim();
+                                const number = (lead.number || lead.phone || "")
+                                  .toString()
+                                  .trim();
+                                const hasRealName = name && name !== "-";
+                                const hasRealNumber =
+                                  number && number !== "-" && /\d/.test(number);
+                                const byData = hasRealName || hasRealNumber;
+                                const status = (
+                                  lead.status || ""
+                                ).toLowerCase();
+                                const connectedStatuses = [
+                                  "connected",
+                                  "completed",
+                                  "ongoing",
+                                ];
+                                const missedStatuses = [
+                                  "missed",
+                                  "not_connected",
+                                  "failed",
+                                ];
+                                const byStatus =
+                                  callFilter === "all"
+                                    ? true
+                                    : callFilter === "connected"
+                                    ? connectedStatuses.includes(status)
+                                    : missedStatuses.includes(status);
+                                return byData && byStatus;
+                              }
+                            );
+                            const allSelected =
+                              filtered.length > 0 &&
+                              filtered.every((l) => isCallLogSelected(l));
+                            if (allSelected) {
+                              // unselect these
+                              setSelectedCallLogs((prev) =>
+                                prev.filter(
+                                  (c) =>
+                                    !filtered.some(
+                                      (f) =>
+                                        (f.documentId ||
+                                          f.contactId ||
+                                          getLeadKey(f) ||
+                                          f._id) ===
+                                        (c.documentId ||
+                                          c.contactId ||
+                                          getLeadKey(c) ||
+                                          c._id)
+                                    )
+                                )
+                              );
+                            } else {
+                              // add all filtered (dedupe by key)
+                              setSelectedCallLogs((prev) => {
+                                const existing = new Set(
+                                  prev.map(
+                                    (c) =>
+                                      c.documentId ||
+                                      c.contactId ||
+                                      getLeadKey(c) ||
+                                      c._id
+                                  )
+                                );
+                                const toAdd = filtered.filter((f) => {
+                                  const k =
+                                    f.documentId ||
+                                    f.contactId ||
+                                    getLeadKey(f) ||
+                                    f._id;
+                                  return !existing.has(k);
+                                });
+                                return [...prev, ...toAdd];
+                              });
+                            }
+                          }}
+                          className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                        />
+                      </th>
+                      <th className="py-2 pr-4">S. No.</th>
+                      <th className="py-2 pr-4">Date & Time</th>
+                      <th className="py-2 pr-4">Name</th>
+                      <th className="py-2 pr-4">Number</th>
+                      <th className="py-2 pr-4">Status</th>
+                      <th className="py-2 pr-4">⏱</th>
+                      <th className="py-2 pr-4">Conversation</th>
+                      <th className="py-2 pr-4">Flag</th>
+                      <th className="py-2 pr-4">Disposition</th>
+                      <th className="py-2 pr-4">Action</th>
+                      <th className="py-2 pr-4">Redial</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(run.contacts || [])
+                      .filter((lead) => {
+                        const name = (lead.name || "").toString().trim();
+                        const number = (lead.number || lead.phone || "")
+                          .toString()
+                          .trim();
+                        const hasRealName = name && name !== "-";
+                        const hasRealNumber =
+                          number && number !== "-" && /\d/.test(number);
+                        const byData = hasRealName || hasRealNumber;
+                        const status = (lead.status || "").toLowerCase();
+                        const connectedStatuses = [
+                          "connected",
+                          "completed",
+                          "ongoing",
+                        ];
+                        const missedStatuses = [
+                          "missed",
+                          "not_connected",
+                          "failed",
+                        ];
+                        const byStatus =
+                          callFilter === "all"
+                            ? true
+                            : callFilter === "connected"
+                            ? connectedStatuses.includes(status)
+                            : missedStatuses.includes(status);
+                        return byData && byStatus;
+                      })
+                      .sort((a, b) => {
+                        if (durationSort === "none") return 0;
+                        const getSec = (lead) => {
+                          const d = lead.duration;
+                          if (!d) return 0;
+                          const s = String(d);
+                          if (s.includes(":")) {
+                            const p = s.split(":");
+                            if (p.length === 2)
+                              return (
+                                (parseInt(p[0]) || 0) * 60 +
+                                (parseInt(p[1]) || 0)
+                              );
+                          }
+                          const n = parseInt(s);
+                          return isNaN(n) ? 0 : n;
+                        };
+                        const A = getSec(a),
+                          B = getSec(b);
+                        return durationSort === "longest" ? B - A : A - B;
+                      })
+                      .map((lead, idx) => (
+                        <tr
+                          key={`${
+                            lead.documentId || lead.contactId || "hrow"
+                          }-${idx}`}
+                          className={`border-t border-gray-100 ${
+                            isCallLogSelected(lead)
+                              ? "bg-blue-50 border-blue-200"
+                              : ""
+                          }`}
+                        >
+                          <td className="py-2 pr-4 w-12">
+                            <input
+                              type="checkbox"
+                              checked={isCallLogSelected(lead)}
+                              onChange={() => handleSelectCallLog(lead)}
+                              className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                            />
+                          </td>
+                          <td className="py-2 pr-4 text-gray-700">{idx + 1}</td>
+                          <td className="py-2 pr-4 text-gray-700 flex flex-col items-center gap-2">
+                            <span>
+                              {lead.time
+                                ? new Date(lead.time).toLocaleDateString()
+                                : "-"}{" "}
+                            </span>
+                            <span>
+                              {lead.time
+                                ? new Date(lead.time).toLocaleTimeString([], {
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })
+                                : "-"}
+                            </span>
+                          </td>
+                          <td className="py-2 pr-4 text-gray-900">
+                            {getContactDisplayNameBlank(lead)}
+                          </td>
+                          <td className="py-2 pr-4 text-gray-900">
+                            {lead.number || lead.phone || "-"}
+                          </td>
+                          <td className="py-2 pr-4 capitalize">
+                            <span
+                              className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
+                                lead.status === "ringing"
+                                  ? "bg-yellow-100 text-yellow-700"
+                                  : lead.status === "ongoing"
+                                  ? "bg-blue-100 text-blue-700"
+                                  : lead.status === "missed" ||
+                                    lead.status === "not_connected" ||
+                                    lead.status === "failed"
+                                  ? "bg-red-100 text-red-700"
+                                  : "bg-green-100 text-green-700"
+                              }`}
+                            >
+                              {lead.status}
+                            </span>
+                          </td>
+                          <td className="py-2 pr-4">
+                            {formatDuration(lead.duration)}
+                          </td>
+                          <td className="py-2 pr-4">
+                            {lead.status === "missed" ? (
+                              <span className="text-gray-400 text-xs text-center"></span>
+                            ) : (
+                              <button
+                                className={`inline-flex items-center px-3 py-1 text-xs border rounded hover:opacity-80 transition-all duration-200 ${
+                                  lead.documentId &&
+                                  viewedTranscripts.has(lead.documentId)
+                                    ? "bg-green-50 text-fuchsia-700 border-green-200"
+                                    : "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
+                                }`}
+                                title={
+                                  lead.documentId &&
+                                  viewedTranscripts.has(lead.documentId)
+                                    ? "Transcript viewed"
+                                    : "View transcript"
+                                }
+                                onClick={() => openTranscriptSmart(lead)}
+                              >
+                                <svg
+                                  className="w-4 h-4 mr-1"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  viewBox="0 0 24 24"
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth="2"
+                                    d="M8 16h8M8 12h8M8 8h8M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H7l-2 2H3v12a2 2 0 002 2z"
+                                  />
+                                </svg>
+                                {(() => {
+                                  const baseLabel =
+                                    lead.documentId &&
+                                    viewedTranscripts.has(lead.documentId)
+                                      ? "Viewed"
+                                      : "Transcript";
+                                  const count =
+                                    (typeof lead.transcriptCount === "number"
+                                      ? lead.transcriptCount
+                                      : undefined) ??
+                                    getTranscriptMessageCount(lead);
+                                  return count > 0
+                                    ? `${baseLabel} (${count})`
+                                    : baseLabel;
+                                })()}
+                              </button>
+                            )}
+                          </td>
+                          <td className="py-2 pr-4">
+                            {/* Reuse same flag dropdown logic via rowDisposition */}
+                            {(() => {
+                              const uniquePrefix = `history-${
+                                run.instanceNumber || run._id || index
+                              }`;
+                              const rowId = `${uniquePrefix}-${
+                                lead.documentId || lead.contactId || `${idx}`
+                              }`;
+                              const selected = rowDisposition[rowId];
+                              const colorClass =
+                                selected === "interested"
+                                  ? "bg-green-200 text-green-900 border-green-300"
+                                  : selected === "not interested"
+                                  ? "bg-red-200 text-red-900 border-red-300"
+                                  : selected === "maybe"
+                                  ? "bg-yellow-200 text-yellow-900 border-yellow-300"
+                                  : "bg-gray-50 text-gray-700 border-gray-200";
+                              const label = selected ? selected : "Default";
+                              return (
+                                <div
+                                  className="relative inline-block text-left"
+                                  onClick={(e) => e.stopPropagation()}
+                                  onMouseDown={(e) => e.stopPropagation()}
+                                >
+                                  <button
+                                    type="button"
+                                    className={`inline-flex items-center px-3 py-1 text-xs border rounded ${colorClass}`}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      // Ensure the history card remains open while interacting
+                                      setIsExpanded(true);
+                                      setOpenDispositionFor(
+                                        openDispositionFor === rowId
+                                          ? null
+                                          : rowId
+                                      );
+                                    }}
+                                  >
+                                    {label}
+                                    <svg
+                                      className="w-4 h-4 ml-2"
+                                      fill="none"
+                                      viewBox="0 0 24 24"
+                                      stroke="currentColor"
+                                    >
+                                      <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        strokeWidth="2"
+                                        d="M19 9l-7 7-7-7"
+                                      />
+                                    </svg>
+                                  </button>
+                                  {openDispositionFor === rowId && (
+                                    <div
+                                      className="absolute z-10 mt-1 w-40 bg-white border border-gray-200 rounded shadow"
+                                      onClick={(e) => e.stopPropagation()}
+                                      onMouseDown={(e) => e.stopPropagation()}
+                                    >
+                                      {[
+                                        {
+                                          key: "interested",
+                                          label: "Interested",
+                                          cls: "text-green-700",
+                                        },
+                                        {
+                                          key: "not interested",
+                                          label: "Not Interested",
+                                          cls: "text-red-700",
+                                        },
+                                        {
+                                          key: "maybe",
+                                          label: "Maybe",
+                                          cls: "text-yellow-700",
+                                        },
+                                        {
+                                          key: undefined,
+                                          label: "Default",
+                                          cls: "text-gray-700",
+                                        },
+                                      ].map((opt) => (
+                                        <button
+                                          key={`${rowId}-${opt.label}`}
+                                          type="button"
+                                          className={`w-full text-left px-3 py-2 text-xs hover:bg-gray-50 ${opt.cls}`}
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            // Keep the history card expanded after selection
+                                            setIsExpanded(true);
+                                            setRowDisposition((prev) => ({
+                                              ...prev,
+                                              [rowId]: opt.key,
+                                            }));
+                                            try {
+                                              const authToken =
+                                                sessionStorage.getItem(
+                                                  "clienttoken"
+                                                ) ||
+                                                localStorage.getItem(
+                                                  "admintoken"
+                                                );
+                                              const url = `${API_BASE}/groups/mark-contact-status`;
+                                              const payload = {
+                                                campaignId:
+                                                  campaign && campaign._id,
+                                                phone:
+                                                  lead &&
+                                                  (lead.number || lead.phone),
+                                                status: opt.key || "default",
+                                              };
+                                              fetch(url, {
+                                                method: "POST",
+                                                headers: {
+                                                  "Content-Type":
+                                                    "application/json",
+                                                  ...(authToken
+                                                    ? {
+                                                        Authorization: `Bearer ${authToken}`,
+                                                      }
+                                                    : {}),
+                                                },
+                                                body: JSON.stringify(payload),
+                                              }).catch(() => {});
+                                            } catch (_) {}
+                                            setOpenDispositionFor(null);
+                                          }}
+                                        >
+                                          {opt.label}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })()}
+                          </td>
+                          <td className="py-2 pr-4">{lead.leadStatus}</td>
+                          <td className="py-2 pr-4 text-gray-700">
+                            {lead.whatsappRequested &&
+                            lead.whatsappMessageSent ? (
+                              <button
+                                type="button"
+                                onClick={() => openWhatsAppMiniChat(lead)}
+                                title="Open WhatsApp chat"
+                                className="inline-flex items-center justify-center"
+                              >
+                                <FaWhatsapp className="w-4 h-4 text-green-600" />
+                              </button>
+                            ) : (
+                              ""
+                            )}
+                          </td>
+                          <td className="py-2 pr-4">
+                            <button
+                              className="inline-flex items-center px-3 py-1 text-xs bg-green-50 text-green-700 border border-green-200 rounded hover:bg-green-100 disabled:opacity-50"
+                              title={
+                                !lead.number
+                                  ? "No phone number available"
+                                  : "Retry this contact"
+                              }
+                              onClick={() => handleRetryLead(lead)}
+                              disabled={!lead.number}
+                            >
+                              <FiPhone
+                                className="w-3 h-3 text-green-700 mx-2"
+                                style={{ minWidth: "16px", minHeight: "16px" }}
+                              />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
   };
 
   // Live call logs functions
@@ -2853,17 +4407,15 @@ function CampaignDetails({ campaignId, onBack }) {
               .split("\n")
               .filter((line) => line.trim());
 
-            const groupedMessages = [];
-            let currentMessage = null;
+            const parsedMessages = [];
+            let lastMessage = null;
 
             for (const line of rawLines) {
-              // Extract timestamp from format [2025-08-16T07:20:20.885Z]
               const timestampMatch = line.match(/\[([^\]]+)\]/);
               let timestamp = null;
 
               if (timestampMatch) {
                 try {
-                  // Parse the timestamp and format it nicely
                   const date = new Date(timestampMatch[1]);
                   if (!isNaN(date.getTime())) {
                     timestamp = date.toLocaleTimeString("en-US", {
@@ -2878,10 +4430,7 @@ function CampaignDetails({ campaignId, onBack }) {
                 }
               }
 
-              // Remove timestamp from line
               const lineWithoutTimestamp = line.replace(/\[[^\]]+\]\s*/, "");
-
-              // Extract speaker and text
               const colonIndex = lineWithoutTimestamp.indexOf(":");
               if (colonIndex !== -1) {
                 const speaker = lineWithoutTimestamp
@@ -2898,39 +4447,21 @@ function CampaignDetails({ campaignId, onBack }) {
                   speaker.toLowerCase().includes("user") ||
                   speaker.toLowerCase().includes("customer");
 
-                // If this is a new speaker or first message, start a new message
-                if (!currentMessage || currentMessage.speaker !== speaker) {
-                  // Save previous message if exists
-                  if (currentMessage) {
-                    groupedMessages.push(currentMessage);
-                  }
-
-                  // Start new message
-                  currentMessage = {
-                    speaker,
-                    text: text,
-                    timestamp,
-                    isAI,
-                    isUser,
-                  };
-                } else {
-                  // Same speaker, append to current message
-                  currentMessage.text += " " + text;
-                }
-              } else {
-                // No speaker found, treat as continuation of previous message
-                if (currentMessage) {
-                  currentMessage.text += " " + lineWithoutTimestamp.trim();
-                }
+                // Always create a new message entry, even if the speaker repeats
+                parsedMessages.push({
+                  speaker,
+                  text,
+                  timestamp,
+                  isAI,
+                  isUser,
+                });
+                lastMessage = parsedMessages[parsedMessages.length - 1];
+              } else if (lastMessage) {
+                lastMessage.text += " " + lineWithoutTimestamp.trim();
               }
             }
 
-            // Add the last message
-            if (currentMessage) {
-              groupedMessages.push(currentMessage);
-            }
-
-            const lines = groupedMessages;
+            const lines = parsedMessages;
 
             setLiveTranscriptLines(lines);
 
@@ -3296,6 +4827,60 @@ function CampaignDetails({ campaignId, onBack }) {
           </div>
 
           {/* Campaign Progress Section - Always Visible */}
+          {/* Campaign History Section (moved here after groups, before summary) */}
+          {Array.isArray(campaignHistory) && campaignHistory.length > 0 && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center space-x-3">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                  <h3 className="text-base font-medium text-gray-900">
+                    Campaign Runs History
+                  </h3>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="text-sm text-gray-500">
+                    {campaignHistory.length} saved run
+                    {campaignHistory.length > 1 ? "s" : ""}
+                  </div>
+                  <button
+                    onClick={() => setCampaignRunsCollapsed((v) => !v)}
+                    className="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-md border border-gray-200"
+                    title={campaignRunsCollapsed ? "Expand" : "Collapse"}
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className={`h-4 w-4 transition-transform ${
+                        campaignRunsCollapsed ? "transform rotate-180" : ""
+                      }`}
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M5.23 7.21a.75.75 0 011.06.02L10 11.094l3.71-3.864a.75.75 0 011.08 1.04l-4.24 4.41a.75.75 0 01-1.08 0l-4.24-4.41a.75.75 0 01.02-1.06z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+              <div className={`${campaignRunsCollapsed ? "hidden" : ""}`}>
+                {[...campaignHistory]
+                  .sort(
+                    (a, b) => (b.instanceNumber || 0) - (a.instanceNumber || 0)
+                  )
+                  .map((run, idx) => (
+                    <CampaignHistoryCard
+                      key={`${run._id || idx}`}
+                      run={run}
+                      index={idx}
+                    />
+                  ))}
+              </div>
+            </div>
+          )}
+
+          {/* Campaign Progress Section - Always Visible */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-6">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center space-x-3">
@@ -3312,6 +4897,21 @@ function CampaignDetails({ campaignId, onBack }) {
                 >
                   {campaign?.isActive ? "🟢 Running" : "⚪ Not Running"}
                 </span>
+                {campaign?.isActive && campaignStartTime && (
+                  <div className="ml-3 flex items-center space-x-3 text-xs text-gray-600">
+                    <span>
+                      <strong>Start:</strong>{" "}
+                      {new Date(campaignStartTime).toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        second: "2-digit",
+                      })}
+                    </span>
+                    <span>
+                      <strong>Duration:</strong> {formatHMSCompact(runSeconds)}
+                    </span>
+                  </div>
+                )}
               </div>
               <div className="flex items-center justify-between space-x-2">
                 <button
@@ -3395,17 +4995,7 @@ function CampaignDetails({ campaignId, onBack }) {
                       <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-purple-600"></div>
                     </div>
                   ) : (
-                    (() => {
-                      const fmt = (secs) => {
-                        const s = Number(secs) || 0;
-                        const h = Math.floor(s / 3600);
-                        const m = Math.floor((s % 3600) / 60);
-                        const sec = s % 60;
-                        if (h > 0) return `${h}h ${m}m ${sec}s`;
-                        return `${m}m ${sec}s`;
-                      };
-                      return fmt(apiMergedCallsTotals.totalDuration);
-                    })()
+                    formatHMSCompact(apiMergedCallsTotals.totalDuration)
                   )}
                 </div>
                 <div className="text-xs text-gray-500">Total Duration</div>
@@ -3568,14 +5158,11 @@ function CampaignDetails({ campaignId, onBack }) {
                     disabled={
                       apiMergedCallsLoading ||
                       !campaignGroups ||
-                      campaignGroups.length === 0 ||
-                      !selectedAgent
+                      campaignGroups.length === 0
                     }
                     title={
                       !campaignGroups || campaignGroups.length === 0
                         ? "No groups assigned to campaign"
-                        : !selectedAgent
-                        ? "Choose an agent, then calls will start"
                         : "Call all missed contacts"
                     }
                   >
@@ -3584,6 +5171,61 @@ function CampaignDetails({ campaignId, onBack }) {
                 )}
               </div>
             </div>
+
+            {/* Select and Call Controls for Call Logs */}
+            {apiMergedCalls.length > 0 && !apiMergedCallsLoading && (
+              <div className="mb-4 p-4 bg-gray-50 rounded-lg border">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={selectAllCallLogs}
+                        onChange={handleSelectAllCallLogs}
+                        className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                      />
+                      <span className="text-sm font-medium text-gray-700">
+                        Select All Call Logs ({selectedCallLogs.length}{" "}
+                        selected)
+                      </span>
+                    </label>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={callSelectedCallLogs}
+                      disabled={selectedCallLogs.length === 0}
+                      className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    >
+                      <svg
+                        className="w-4 h-4"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
+                        />
+                      </svg>
+                      Call Selected ({selectedCallLogs.length})
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSelectedCallLogs([]);
+                        setSelectAllCallLogs(false);
+                      }}
+                      disabled={selectedCallLogs.length === 0}
+                      className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Clear Selection
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {apiMergedCallsLoading ? (
               <div className="text-center py-10">Loading call logs...</div>
             ) : apiMergedCalls.length === 0 ? (
@@ -3595,6 +5237,14 @@ function CampaignDetails({ campaignId, onBack }) {
                 <table className="min-w-full text-sm">
                   <thead>
                     <tr className="text-left text-gray-600">
+                      <th className="py-2 pr-4 w-12">
+                        <input
+                          type="checkbox"
+                          checked={selectAllCallLogs}
+                          onChange={handleSelectAllCallLogs}
+                          className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                        />
+                      </th>
                       <th className="py-2 pr-4">S. No.</th>
                       <th className="py-2 pr-4">Date & Time</th>
                       <th className="py-2 pr-4">Name</th>
@@ -3695,8 +5345,20 @@ function CampaignDetails({ campaignId, onBack }) {
                               return "bg-red-200";
                             if (status === "maybe") return "bg-yellow-200";
                             return "";
-                          })()}`}
+                          })()} ${
+                            isCallLogSelected(lead)
+                              ? "bg-blue-50 border-blue-200"
+                              : ""
+                          }`}
                         >
+                          <td className="py-2 pr-4 w-12">
+                            <input
+                              type="checkbox"
+                              checked={isCallLogSelected(lead)}
+                              onChange={() => handleSelectCallLog(lead)}
+                              className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                            />
+                          </td>
                           <td className="py-2 pr-4 text-gray-700">{idx + 1}</td>
                           <td className="py-2 pr-4 text-gray-700 flex flex-col items-center gap-2">
                             <span>
@@ -5139,6 +6801,59 @@ function CampaignDetails({ campaignId, onBack }) {
                 </button>
               </div>
 
+              {/* Select and Call Controls */}
+              {campaignContacts.length > 0 && (
+                <div className="mb-4 p-4 bg-gray-50 rounded-lg border">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={selectAllContacts}
+                          onChange={handleSelectAllContacts}
+                          className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                        />
+                        <span className="text-sm font-medium text-gray-700">
+                          Select All ({selectedContacts.length} selected)
+                        </span>
+                      </label>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={callSelectedContacts}
+                        disabled={selectedContacts.length === 0}
+                        className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                      >
+                        <svg
+                          className="w-4 h-4"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
+                          />
+                        </svg>
+                        Call Selected ({selectedContacts.length})
+                      </button>
+                      <button
+                        onClick={() => {
+                          setSelectedContacts([]);
+                          setSelectAllContacts(false);
+                        }}
+                        disabled={selectedContacts.length === 0}
+                        className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Clear Selection
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Contacts List */}
               {loadingContacts ? (
                 <div className="text-center py-8">
@@ -5162,31 +6877,51 @@ function CampaignDetails({ campaignId, onBack }) {
                   {campaignContacts.map((contact) => (
                     <div
                       key={contact._id}
-                      className="border border-gray-200 rounded-lg p-4"
+                      className={`border rounded-lg p-4 ${
+                        isContactSelected(contact)
+                          ? "border-blue-500 bg-blue-50"
+                          : "border-gray-200"
+                      }`}
                     >
                       <div className="flex justify-between items-start">
-                        <div className="flex-1">
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <div>
-                              <div className="text-sm text-gray-500">Name</div>
-                              <div className="font-semibold">
-                                {getContactDisplayNameBlank(contact)}
+                        <div className="flex items-start gap-3 flex-1">
+                          <input
+                            type="checkbox"
+                            checked={isContactSelected(contact)}
+                            onChange={() => handleSelectContact(contact)}
+                            className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 mt-1"
+                          />
+                          <div className="flex-1">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                              <div>
+                                <div className="text-sm text-gray-500">
+                                  Name
+                                </div>
+                                <div className="font-semibold">
+                                  {getContactDisplayNameBlank(contact)}
+                                </div>
+                              </div>
+                              <div>
+                                <div className="text-sm text-gray-500">
+                                  Phone
+                                </div>
+                                <div className="font-medium">
+                                  {contact.phone}
+                                </div>
+                              </div>
+                              <div>
+                                <div className="text-sm text-gray-500">
+                                  Email
+                                </div>
+                                <div className="font-medium">
+                                  {contact.email || "-"}
+                                </div>
                               </div>
                             </div>
-                            <div>
-                              <div className="text-sm text-gray-500">Phone</div>
-                              <div className="font-medium">{contact.phone}</div>
+                            <div className="mt-2 text-xs text-gray-500">
+                              Added:{" "}
+                              {new Date(contact.addedAt).toLocaleDateString()}
                             </div>
-                            <div>
-                              <div className="text-sm text-gray-500">Email</div>
-                              <div className="font-medium">
-                                {contact.email || "-"}
-                              </div>
-                            </div>
-                          </div>
-                          <div className="mt-2 text-xs text-gray-500">
-                            Added:{" "}
-                            {new Date(contact.addedAt).toLocaleDateString()}
                           </div>
                         </div>
                         <div className="flex gap-2 ml-4">
@@ -5865,6 +7600,13 @@ function CampaignDetails({ campaignId, onBack }) {
               </div>
             </div>
             <div className="flex items-center space-x-2">
+              {/* 24h countdown timer */}
+              <div
+                className="px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-700 border border-red-200 shadow-sm"
+                title="Time left in this 24h session"
+              >
+                ⏱ {waChatRemaining}
+              </div>
               <button
                 type="button"
                 className="p-2 hover:bg-white/20 rounded-full transition-colors"
