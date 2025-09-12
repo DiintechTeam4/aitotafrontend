@@ -15,6 +15,9 @@ import {
   FiArrowUpRight,
   FiBriefcase,
   FiPhone,
+  FiSettings,
+  FiKey,
+  FiCopy,
 } from "react-icons/fi";
 import AgentForm from "./components/AgentForm";
 import AgentList from "./components/AgentList";
@@ -54,6 +57,9 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
     // Get persisted tab from localStorage, default to "list"
     return localStorage.getItem("clientDashboard_activeTab") || "list";
   });
+  const [apiSettingsTab, setApiSettingsTab] = useState("docs");
+  const [apiKey, setApiKey] = useState("");
+  const [apiKeyPreview, setApiKeyPreview] = useState("");
   const [isApproved, setIsApproved] = useState(null);
   const [isProfileCompleted, setIsProfileCompleted] = useState(null);
 
@@ -230,6 +236,99 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
   const handleSectionChange = (section) => {
     persistSectionChange(section);
   };
+
+  // API Key functions
+  const generateApiKey = async () => {
+    try {
+      const token = sessionStorage.getItem("clienttoken");
+      if (!token) {
+        alert("You must be logged in to generate an API key.");
+        return;
+      }
+      const resp = await fetch(`${API_BASE_URL}/client/api-key/generate`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const json = await resp.json();
+      if (resp.ok && json?.success && json?.data?.key) {
+        setApiKey(json.data.key);
+        // After generating, refresh preview to reflect the latest
+        setApiKeyPreview(
+          json.data.key.substring(0, 8) + "..." + json.data.key.slice(-4)
+        );
+        try {
+          const sessionClientData = sessionStorage.getItem("clientData");
+          const clientId = sessionClientData
+            ? JSON.parse(sessionClientData).clientId
+            : null;
+          if (clientId) {
+            localStorage.setItem(`client_api_key_${clientId}`, json.data.key);
+          }
+        } catch {}
+      } else {
+        alert(json?.error || "Failed to generate API key");
+      }
+    } catch (e) {
+      console.error("Failed to generate API key", e);
+      alert("Failed to generate API key");
+    }
+  };
+
+  // No regeneration allowed per requirements
+
+  const copyApiKey = async (keyFromState) => {
+    try {
+      const token = sessionStorage.getItem("clienttoken");
+      if (keyFromState && keyFromState.startsWith("ait_")) {
+        await navigator.clipboard.writeText(keyFromState);
+        alert("API key copied to clipboard!");
+        return;
+      }
+      if (!token) {
+        alert("Not authorized");
+        return;
+      }
+      const resp = await fetch(`${API_BASE_URL}/client/api-key/copy`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const json = await resp.json();
+      if (resp.ok && json?.success && json?.data?.key) {
+        await navigator.clipboard.writeText(json.data.key);
+        alert("API key copied to clipboard!");
+      } else {
+        alert(json?.error || "Failed to copy API key");
+      }
+    } catch (err) {
+      alert("Failed to copy API key");
+    }
+  };
+
+  // Fetch existing API key preview when opening the API Key tab
+  useEffect(() => {
+    const fetchPreview = async () => {
+      try {
+        const token = sessionStorage.getItem("clienttoken");
+        if (!token) return;
+        const resp = await fetch(`${API_BASE_URL}/client/api-key`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const json = await resp.json();
+        if (resp.ok && json?.success && json?.data?.keyPreview) {
+          setApiKeyPreview(json.data.keyPreview);
+        } else {
+          setApiKeyPreview("");
+        }
+        // Do not use localStorage; rely on server for copy action
+        setApiKey("");
+      } catch (_) {
+        setApiKeyPreview("");
+      }
+    };
+    if (apiSettingsTab === "api-key") {
+      fetchPreview();
+    }
+  }, [apiSettingsTab]);
 
   const renderMainContent = () => {
     switch (activeSection) {
@@ -501,6 +600,177 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
       case "credits":
         return <CreditsOverview />;
 
+      case "api-settings":
+        return (
+          <div className="h-full flex flex-col">
+            <div className="bg-white border-b border-gray-200 px-8 py-6">
+              <h2 className="text-3xl font-bold text-gray-900 mb-4">
+                API Settings
+              </h2>
+              <nav className="flex gap-2">
+                <button
+                  className={`px-5 py-3 text-sm font-medium rounded-md transition-all ${
+                    apiSettingsTab === "docs"
+                      ? "bg-black text-white"
+                      : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                  }`}
+                  onClick={() => setApiSettingsTab("docs")}
+                >
+                  <FiEye className="inline w-4 h-4 mr-2" />
+                  Docs
+                </button>
+                <button
+                  className={`px-5 py-3 text-sm font-medium rounded-md transition-all ${
+                    apiSettingsTab === "api-key"
+                      ? "bg-black text-white"
+                      : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                  }`}
+                  onClick={() => setApiSettingsTab("api-key")}
+                >
+                  <FiKey className="inline w-4 h-4 mr-2" />
+                  API Key
+                </button>
+              </nav>
+            </div>
+
+            <div className="flex-1 p-8 overflow-y-auto">
+              {apiSettingsTab === "docs" && (
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
+                  <div className="text-center py-12">
+                    <FiEye className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                    <h3 className="text-xl font-semibold text-gray-500 mb-2">
+                      Documentation Coming Soon
+                    </h3>
+                    <p className="text-gray-400">
+                      API documentation will be available here soon.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {apiSettingsTab === "api-key" && (
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
+                  <div className="max-w-2xl">
+                    <h3 className="text-xl font-semibold text-gray-900 mb-6">
+                      API Key Management
+                    </h3>
+
+                    {!apiKey && apiKeyPreview ? (
+                      <div className="space-y-6">
+                        <div className="bg-gray-50 rounded-lg p-4">
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Active Key (preview)
+                          </label>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="text"
+                              value={apiKeyPreview}
+                              readOnly
+                              className="flex-1 px-3 py-2 border border-gray-300 rounded-md bg-white font-mono text-sm"
+                            />
+                            <button
+                              onClick={() => copyApiKey(apiKey)}
+                              className="px-3 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors flex items-center gap-2"
+                              title="Copies securely via server."
+                            >
+                              <FiCopy className="w-4 h-4" />
+                              Copy
+                            </button>
+                          </div>
+                          <p className="text-xs text-gray-500 mt-2">
+                            Key is already generated. For security, it cannot be
+                            regenerated or revealed again.
+                          </p>
+                        </div>
+                      </div>
+                    ) : !apiKey ? (
+                      <div className="text-center py-8">
+                        <FiKey className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                        <h4 className="text-lg font-medium text-gray-700 mb-2">
+                          No API Key Generated
+                        </h4>
+                        <p className="text-gray-500 mb-6">
+                          Generate an API key to start using our API services.
+                        </p>
+                        <button
+                          onClick={generateApiKey}
+                          disabled={!!apiKeyPreview}
+                          className={`px-6 py-3 rounded-lg transition-colors font-medium ${
+                            apiKeyPreview
+                              ? "bg-gray-300 text-white cursor-not-allowed"
+                              : "bg-black text-white hover:bg-gray-800"
+                          }`}
+                        >
+                          {apiKeyPreview
+                            ? "Key Already Generated"
+                            : "Generate API Key"}
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="space-y-6">
+                        <div className="bg-gray-50 rounded-lg p-4">
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Your API Key (hidden)
+                          </label>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="text"
+                              value={
+                                apiKey.substring(0, 8) +
+                                "..." +
+                                apiKey.slice(-4)
+                              }
+                              readOnly
+                              className="flex-1 px-3 py-2 border border-gray-300 rounded-md bg-white font-mono text-sm"
+                            />
+                            <button
+                              onClick={() => copyApiKey(apiKey)}
+                              className="px-3 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors flex items-center gap-2"
+                            >
+                              <FiCopy className="w-4 h-4" />
+                              Copy
+                            </button>
+                          </div>
+                          <p className="text-xs text-gray-500 mt-2">
+                            Copy and store it securely now. You will not be able
+                            to view the full key again.
+                          </p>
+                        </div>
+
+                        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                          <div className="flex items-start gap-3">
+                            <div className="w-5 h-5 text-yellow-600 mt-0.5">
+                              <svg viewBox="0 0 20 20" fill="currentColor">
+                                <path
+                                  fillRule="evenodd"
+                                  d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                                  clipRule="evenodd"
+                                />
+                              </svg>
+                            </div>
+                            <div>
+                              <h4 className="text-sm font-medium text-yellow-800">
+                                Important Security Notice
+                              </h4>
+                              <p className="text-sm text-yellow-700 mt-1">
+                                This API key provides access to your account.
+                                Store it securely and never expose it in
+                                client-side code or public repositories.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Regeneration disabled by requirement */}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+
       default:
         return <div>Select a section from the sidebar</div>;
     }
@@ -756,6 +1026,18 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
             >
               <FiTrendingUp className="text-xl w-6 text-center" />
               <span className="flex-1 font-medium">Credits</span>
+            </button>
+
+            <button
+              className={`flex items-center w-full px-6 py-4 text-left transition-all duration-200 gap-3 ${
+                activeSection === "api-settings"
+                  ? "bg-black text-white border-r-4 border-white"
+                  : "text-gray-300 hover:bg-gray-800 hover:text-white"
+              }`}
+              onClick={() => handleSectionChange("api-settings")}
+            >
+              <FiSettings className="text-xl w-6 text-center" />
+              <span className="flex-1 font-medium">API Settings</span>
             </button>
           </nav>
 
