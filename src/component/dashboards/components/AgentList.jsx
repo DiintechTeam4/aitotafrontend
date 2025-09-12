@@ -351,6 +351,11 @@ const AgentList = ({ agents, isLoading, onEdit, onDelete, clientId }) => {
   const playbackStartTimeRef = useRef(0);
   const nextPlayTimeRef = useRef(0);
 
+  // Call activity debounce refs to avoid false disconnects
+  const lastActivityTimeRef = useRef(Date.now());
+  const inactiveSinceRef = useRef(null);
+  const lastActiveStatusRef = useRef(null);
+
   // Speech detection refs
   const silenceTimerRef = useRef(null);
   const silenceStartTimeRef = useRef(null);
@@ -1791,6 +1796,10 @@ const AgentList = ({ agents, isLoading, onEdit, onDelete, clientId }) => {
       .substr(2, 9)}`;
     setDialUniqueId(generatedUniqueId);
 
+    // Reset activity tracking at call start
+    lastActivityTimeRef.current = Date.now();
+    inactiveSinceRef.current = null;
+
     const result = await makeUnifiedOutboundCall(
       phoneNumber,
       selectedAgentForCall,
@@ -1810,109 +1819,34 @@ const AgentList = ({ agents, isLoading, onEdit, onDelete, clientId }) => {
         fetchCallTerminationData();
       }, 1000);
 
-      // Set 40-second timeout to check for progress
+      // Set 40-second timeout to check for progress (if active, ensure UI shows connected)
       callTimeoutRef.current = setTimeout(() => {
         // Check if we have any transcript or call activity
         if (
           !liveTranscriptRef.current ||
           liveTranscriptRef.current.trim() === ""
         ) {
-          console.log(
-            "40-second timeout reached - no transcript progress detected"
-          );
-          setCallStage("timeout");
-          setIsCallConnected(false);
-          stopCallTimer();
-          stopLogsPolling();
+          // Only show timeout if call isn't marked active by provider
+          if (lastActiveStatusRef.current === false) {
+            console.log(
+              "40-second timeout reached and provider shows inactive -> timing out"
+            );
+            setCallStage("timeout");
+            setIsCallConnected(false);
+            stopCallTimer();
+            stopLogsPolling();
+          } else {
+            console.log(
+              "40-second timeout reached but call is still active -> keep live"
+            );
+            // Ensure UI reflects connected state if provider says active
+            setCallStage("connected");
+            setIsCallConnected(true);
+          }
         }
       }, 40000); // 40 seconds
 
-      // Additional aggressive timeout for mobile disconnection detection
-      setTimeout(() => {
-        if (callStageRef.current === "connected" && logsPollRef.current) {
-          console.log("Setting up aggressive mobile disconnection check...");
-
-          // Check every 30 seconds if call is still active
-          const mobileDisconnectCheck = setInterval(() => {
-            if (callStageRef.current === "connected") {
-              console.log(
-                "Aggressive check: Verifying mobile call is still active..."
-              );
-
-              // Check if we're still in grace period
-              const timeSinceInitiation = callInitiatedTimeRef.current
-                ? Date.now() - callInitiatedTimeRef.current
-                : 0;
-              const isInGracePeriod = timeSinceInitiation < 15000; // 15-second grace period
-
-              if (isInGracePeriod) {
-                console.log("Still in grace period, skipping aggressive check");
-                return;
-              }
-
-              // Force a poll and check if we're getting any response
-              const forceCheck = async () => {
-                try {
-                  const params = new URLSearchParams({
-                    uniqueid: generatedUniqueId,
-                    clientId: String(clientId || ""),
-                    limit: "1",
-                    sortBy: "createdAt",
-                    sortOrder: "desc",
-                  });
-                  const resp = await fetch(
-                    `${API_BASE_URL}/logs?${params.toString()}`
-                  );
-                  if (resp.ok) {
-                    const data = await resp.json();
-                    const log = data?.logs?.[0];
-
-                    if (log) {
-                      const timeSinceLastUpdate =
-                        Date.now() -
-                        new Date(
-                          log.metadata?.lastUpdated || log.createdAt
-                        ).getTime();
-                      console.log(
-                        `Time since last update: ${timeSinceLastUpdate}ms`
-                      );
-
-                      // If no activity for more than 2 minutes, consider call disconnected
-                      if (timeSinceLastUpdate > 120000) {
-                        // 2 minutes
-                        console.log(
-                          "No recent activity detected, considering call disconnected from mobile"
-                        );
-                        clearInterval(mobileDisconnectCheck);
-                        handleAutomaticCallTermination({
-                          ...log,
-                          leadStatus: "not_connected",
-                          metadata: { ...log.metadata, isActive: false },
-                        });
-                      }
-                    } else {
-                      console.log(
-                        "No log found, considering call disconnected"
-                      );
-                      clearInterval(mobileDisconnectCheck);
-                      handleAutomaticCallTermination({
-                        leadStatus: "not_connected",
-                        metadata: { isActive: false },
-                      });
-                    }
-                  }
-                } catch (e) {
-                  console.error("Aggressive check failed:", e);
-                }
-              };
-
-              forceCheck();
-            } else {
-              clearInterval(mobileDisconnectCheck);
-            }
-          }, 30000); // Check every 30 seconds
-        }
-      }, 60000); // Start after 1 minute
+      // Removed aggressive mobile disconnection check; only terminate on isActive === false
     } else {
       setCallStage("input");
       setIsCallConnected(false);
@@ -1998,6 +1932,9 @@ const AgentList = ({ agents, isLoading, onEdit, onDelete, clientId }) => {
           const active = log?.metadata?.isActive;
           const leadStatus = log?.leadStatus;
 
+          // Track last seen active status
+          lastActiveStatusRef.current = active;
+
           console.log("Polling call status:", {
             uniqueId: uniqueIdToTrack,
             isActive: active,
@@ -2017,6 +1954,9 @@ const AgentList = ({ agents, isLoading, onEdit, onDelete, clientId }) => {
               "Call transitioning from connecting to connected due to transcript activity"
             );
             setCallStage("connected");
+            // Mark activity on transcript
+            lastActivityTimeRef.current = Date.now();
+            inactiveSinceRef.current = null;
           }
 
           // If we're in "connecting" stage and have any log activity (even without transcript), transition to "connected"
@@ -2028,6 +1968,9 @@ const AgentList = ({ agents, isLoading, onEdit, onDelete, clientId }) => {
                 "Call transitioning from connecting to connected due to recent log activity"
               );
               setCallStage("connected");
+              // Mark activity on any recent log
+              lastActivityTimeRef.current = Date.now();
+              inactiveSinceRef.current = null;
             }
           }
 
@@ -2066,13 +2009,29 @@ const AgentList = ({ agents, isLoading, onEdit, onDelete, clientId }) => {
             }
           }
 
-          // Check if call is inactive - ONLY check isActive status for termination (after grace period)
-          if (active === false && !isInGracePeriod) {
+          // If provider shows active and we are past grace period, move to connected even without transcript
+          if (
+            callStageRef.current === "connecting" &&
+            active === true &&
+            !isInGracePeriod
+          ) {
             console.log(
-              "Call detected as inactive (isActive: false), automatically terminating..."
+              "Provider reports active; transitioning to connected even without transcript"
             );
+            setCallStage("connected");
+          }
+
+          // Immediate termination rule: if active is strictly false after grace period, terminate now
+          if (!isInGracePeriod && active === false) {
+            console.log("isActive is false; terminating call immediately.");
             handleAutomaticCallTermination(log);
-            return; // Stop processing if call is terminated
+            return;
+          }
+
+          // Active or unknown state -> mark activity and clear inactivity window
+          if (active !== false) {
+            lastActivityTimeRef.current = Date.now();
+            inactiveSinceRef.current = null;
           }
 
           // Check if transcript exists and process it
@@ -2113,43 +2072,18 @@ const AgentList = ({ agents, isLoading, onEdit, onDelete, clientId }) => {
                 clearTimeout(callTimeoutRef.current);
                 callTimeoutRef.current = null;
               }
+
+              // Any transcript update counts as activity
+              lastActivityTimeRef.current = Date.now();
+              inactiveSinceRef.current = null;
             }
           }
 
-          // Additional check: if no log found or log is very old, consider call disconnected (only after grace period)
-          if (
-            !log ||
-            (log.createdAt &&
-              Date.now() - new Date(log.createdAt).getTime() > 300000)
-          ) {
-            // 5 minutes
-            console.log(
-              "No recent log activity, considering call disconnected"
-            );
-            if (callStageRef.current === "connected" && !isInGracePeriod) {
-              handleAutomaticCallTermination({
-                ...log,
-                leadStatus: "not_connected",
-                metadata: { ...log?.metadata, isActive: false },
-              });
-            }
-          }
+          // Do not auto-terminate on old/missing logs; only terminate when isActive === false
         }
       } catch (e) {
         console.error("Error in call polling:", e);
-        // If polling fails multiple times, consider call disconnected (only after grace period)
-        const timeSinceInitiation = callInitiatedTimeRef.current
-          ? Date.now() - callInitiatedTimeRef.current
-          : 0;
-        const isInGracePeriod = timeSinceInitiation < 15000; // 15-second grace period
-
-        if (callStageRef.current === "connected" && !isInGracePeriod) {
-          console.log("Polling failed, considering call disconnected");
-          handleAutomaticCallTermination({
-            leadStatus: "not_connected",
-            metadata: { isActive: false },
-          });
-        }
+        // Do not auto-terminate on polling errors; only terminate when isActive === false
       }
     };
 
