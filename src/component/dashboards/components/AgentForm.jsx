@@ -46,6 +46,16 @@ const AgentForm = ({
   const [socialMediaLinks, setSocialMediaLinks] = useState([
     { platform: "", url: "" },
   ]);
+  // Knowledge base and Depositions state
+  const [knowledgeBaseItems, setKnowledgeBaseItems] = useState([]);
+  const [uploadingKb, setUploadingKb] = useState(false);
+  const [depositions, setDepositions] = useState([
+    { title: "Interested", sub: [] },
+    { title: "Not Interested", sub: [] },
+    { title: "Not Contactable", sub: [] },
+    { title: "Existing client", sub: [] },
+    { title: "Meeting", sub: [] },
+  ]);
   const [assignedTemplates, setAssignedTemplates] = useState([]);
   const [requesting, setRequesting] = useState(false);
   const [myRequests, setMyRequests] = useState([]);
@@ -62,6 +72,8 @@ const AgentForm = ({
     // { key: "integration", label: "Telephony Settings" },
     { key: "social", label: "Action" },
     { key: "customization", label: "Customization" },
+    { key: "knowledge", label: "Knowledge Base" },
+    { key: "depositions", label: "Depositions" },
   ];
 
   useEffect(() => {
@@ -92,6 +104,12 @@ const AgentForm = ({
       if (agent.startingMessages && agent.startingMessages.length > 0) {
         setStartingMessages(agent.startingMessages);
         setDefaultStartingMessageIndex(agent.defaultStartingMessageIndex || 0);
+      }
+
+      // Hydrate knowledge base and depositions
+      setKnowledgeBaseItems(Array.isArray(agent.knowledgeBase) ? agent.knowledgeBase : []);
+      if (Array.isArray(agent.depositions) && agent.depositions.length > 0) {
+        setDepositions(agent.depositions);
       }
     }
   }, [agent]);
@@ -358,6 +376,46 @@ const AgentForm = ({
     }
   };
 
+  // Upload KB file using presigned URL and push key into list
+  const uploadKnowledgeFile = async (file) => {
+    try {
+      if (!file) return;
+      setUploadingKb(true);
+      const authToken =
+        clientToken ||
+        sessionStorage.getItem("clienttoken") ||
+        localStorage.getItem("admintoken");
+      const qs = new URLSearchParams({ fileName: file.name, fileType: file.type });
+      const resp = await fetch(
+        `${API_BASE_URL}/client/upload-url-knowledge-base?${qs.toString()}`,
+        { headers: authToken ? { Authorization: `Bearer ${authToken}` } : {} }
+      );
+      const data = await resp.json();
+      if (!resp.ok || !data?.success || !data?.url || !data?.key) {
+        alert("Failed to get KB upload URL");
+        return;
+      }
+      const putResp = await fetch(data.url, {
+        method: "PUT",
+        headers: { "Content-Type": file.type },
+        body: file,
+      });
+      if (!putResp.ok) {
+        alert("Failed to upload KB file");
+        return;
+      }
+      setKnowledgeBaseItems((prev) => [
+        ...prev,
+        { key: data.key, name: file.name, uploadedAt: new Date().toISOString() },
+      ]);
+    } catch (e) {
+      console.error("KB upload failed", e);
+      alert("KB upload failed");
+    } finally {
+      setUploadingKb(false);
+    }
+  };
+
   const renderCustomizationTab = () => (
     <div className="space-y-6">
       <h3 className="text-xl font-semibold text-gray-800 mb-4">
@@ -607,6 +665,8 @@ const AgentForm = ({
           startingMessages[defaultStartingMessageIndex]?.text ||
           formData.firstMessage,
         defaultTemplate,
+        knowledgeBase: knowledgeBaseItems,
+        depositions,
         ...deriveSocials(),
       };
 
@@ -1042,6 +1102,103 @@ const AgentForm = ({
       </div>
     </div>
   );
+
+  const renderKnowledgeBaseTab = () => (
+    <div className="space-y-6">
+      <h3 className="text-xl font-semibold text-gray-800 mb-4">Knowledge Base</h3>
+      <div className="space-y-4">
+        <div>
+          <label className="block mb-2 font-semibold text-gray-700">Upload File</label>
+          <input
+            type="file"
+            onChange={(e) => uploadKnowledgeFile(e.target.files?.[0])}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+          />
+          {uploadingKb && (
+            <div className="text-sm text-gray-500 mt-2">Uploading...</div>
+          )}
+        </div>
+        <div>
+          <label className="block mb-2 font-semibold text-gray-700">Files</label>
+          {knowledgeBaseItems.length === 0 ? (
+            <div className="text-sm text-gray-500">No files uploaded</div>
+          ) : (
+            <ul className="space-y-2">
+              {knowledgeBaseItems.map((item, idx) => (
+                <li key={idx} className="flex items-center justify-between p-2 border rounded bg-white">
+                  <div className="text-sm truncate mr-2">
+                    {item.name || item.key}
+                  </div>
+                  <button
+                    type="button"
+                    className="text-red-600 text-xs"
+                    onClick={() =>
+                      setKnowledgeBaseItems((prev) => prev.filter((_, i) => i !== idx))
+                    }
+                  >
+                    Remove
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderDepositionsTab = () => {
+    // Fixed main depositions from DB; allow only sub items to be dynamic
+    const removeMain = (i) => {
+      // Prevent removing default main depositions
+      alert("Main depositions are fixed and managed by admin");
+    };
+    const addSub = (i) =>
+      setDepositions((prev) => prev.map((d, idx) => (idx === i ? { ...d, sub: [...(d.sub || []), ""] } : d)));
+    const updateSub = (i, j, val) =>
+      setDepositions((prev) => prev.map((d, idx) => (idx === i ? { ...d, sub: d.sub.map((s, jj) => (jj === j ? val : s)) } : d)));
+    const removeSub = (i, j) =>
+      setDepositions((prev) => prev.map((d, idx) => (idx === i ? { ...d, sub: d.sub.filter((_, jj) => jj !== j) } : d)));
+
+    return (
+      <div className="space-y-6">
+        <h3 className="text-xl font-semibold text-gray-800 mb-4">Depositions</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {depositions.map((d, i) => (
+            <div key={i} className="p-4 border rounded-lg bg-white shadow-sm">
+              <div className="flex items-center justify-between mb-3">
+                <div className="font-semibold text-gray-800">{d.title}</div>
+                <span className="text-xs text-gray-500">{(d.sub || []).length} sub</span>
+              </div>
+              <div className="space-y-2">
+                {(d.sub || []).map((s, j) => (
+                  <div key={j} className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={s}
+                      onChange={(e) => updateSub(i, j, e.target.value)}
+                      placeholder="Sub-deposition"
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded"
+                    />
+                    <button type="button" className="text-red-600 text-xs" onClick={() => removeSub(i, j)}>
+                      Remove
+                    </button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => addSub(i)}
+                  className="px-3 py-1 bg-indigo-50 text-indigo-700 rounded text-sm hover:bg-indigo-100"
+                >
+                  + Add sub-deposition
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
 
   // const renderIntegrationSettingsTab = () => (
   //   <div className="space-y-6">
@@ -1631,6 +1788,10 @@ const AgentForm = ({
         return renderSocialMediaTab();
       case "customization":
         return renderCustomizationTab();
+      case "knowledge":
+        return renderKnowledgeBaseTab();
+      case "depositions":
+        return renderDepositionsTab();
       default:
         return renderStartingMessagesTab();
     }
