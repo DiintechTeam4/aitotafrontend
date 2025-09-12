@@ -1938,17 +1938,54 @@ const AgentList = ({ agents, isLoading, onEdit, onDelete, clientId }) => {
           return;
         }
 
-        const params = new URLSearchParams({
-          uniqueid: uniqueIdToTrack,
-          clientId: String(clientId || ""),
-          limit: "1",
-          sortBy: "createdAt",
-          sortOrder: "desc",
-        });
-        const resp = await fetch(`${API_BASE_URL}/logs?${params.toString()}`);
-        if (!resp.ok) return;
-        const data = await resp.json();
-        const log = data?.logs?.[0];
+        // Try multiple lookup strategies to support different providers (CZ vs SANPBX)
+        const attempts = [];
+        // 1) Preferred: uniqueid special param (C-Zentrix flow)
+        attempts.push(
+          `${API_BASE_URL}/logs?${new URLSearchParams({
+            uniqueid: uniqueIdToTrack,
+            clientId: String(clientId || ""),
+            limit: "1",
+            sortBy: "createdAt",
+            sortOrder: "desc",
+          }).toString()}`
+        );
+        // 2) SANPBX may store as metadata.customParams.uniqueId (camelCase)
+        attempts.push(
+          `${API_BASE_URL}/logs?${new URLSearchParams({
+            customField: 'uniqueId',
+            customValue: uniqueIdToTrack,
+            clientId: String(clientId || ""),
+            limit: "1",
+            sortBy: "createdAt",
+            sortOrder: "desc",
+          }).toString()}`
+        );
+        // 3) Fallback: snake_case unique_id just in case
+        attempts.push(
+          `${API_BASE_URL}/logs?${new URLSearchParams({
+            customField: 'unique_id',
+            customValue: uniqueIdToTrack,
+            clientId: String(clientId || ""),
+            limit: "1",
+            sortBy: "createdAt",
+            sortOrder: "desc",
+          }).toString()}`
+        );
+
+        let log = null;
+        for (const url of attempts) {
+          try {
+            const r = await fetch(url);
+            if (!r.ok) continue;
+            const j = await r.json();
+            const candidate = j?.logs?.[0];
+            if (candidate) {
+              log = candidate;
+              break;
+            }
+          } catch {}
+        }
 
         if (log) {
           // Calculate time since call was initiated (do this first)
