@@ -4738,52 +4738,6 @@ function CampaignDetails({ campaignId, onBack }) {
             </div>
           </div>
 
-          {/* State Restoration Notification */}
-          {showRestoreNotification && (
-            <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mx-4 mt-4 rounded-md">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <svg
-                    className="h-5 w-5 text-blue-400"
-                    fill="currentColor"
-                    viewBox="0 0 20 20"
-                  >
-                    <path
-                      fillRule="evenodd"
-                      d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 9a1 1 0 000 2h6a1 1 0 100-2H7zm3 3a1 1 0 000 2H7a1 1 0 100 2h3z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                </div>
-                <div className="ml-3">
-                  <p className="text-sm text-blue-700">
-                    <strong>Calling session restored!</strong> Your previous
-                    calling progress has been loaded. You can continue from
-                    where you left off or reset to start fresh.
-                  </p>
-                </div>
-                <div className="ml-auto pl-3">
-                  <button
-                    onClick={() => setShowRestoreNotification(false)}
-                    className="inline-flex text-blue-400 hover:text-blue-500"
-                  >
-                    <svg
-                      className="h-5 h-5"
-                      fill="currentColor"
-                      viewBox="0 0 20 20"
-                    >
-                      <path
-                        fillRule="evenodd"
-                        d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
           {/* Small cards for current groups */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
             <div className="flex items-center justify-between mb-3">
