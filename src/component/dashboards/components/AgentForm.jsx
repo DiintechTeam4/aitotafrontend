@@ -1796,6 +1796,7 @@ const AgentForm = ({
         return renderStartingMessagesTab();
     }
   };
+  
 
   const isLastTab = selectedTab === tabs[tabs.length - 1].key;
   const isFirstTab = selectedTab === tabs[0].key;
