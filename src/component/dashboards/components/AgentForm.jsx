@@ -1,5 +1,5 @@
 "use client";
-import { FiMail, FiMessageSquare } from "react-icons/fi";
+import { FiMail, FiMessageSquare, FiTrash2 } from "react-icons/fi";
 import { useState, useEffect } from "react";
 import VoiceSynthesizer from "./VoiceSynthesizer";
 import AudioRecorder from "./AudioRecorder";
@@ -1162,13 +1162,19 @@ const AgentForm = ({
 
     return (
       <div className="space-y-6">
-        <h3 className="text-xl font-semibold text-gray-800 mb-4">Depositions</h3>
+        <h3 className="text-xl font-semibold text-gray-800 mb-4">Dispositions</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {depositions.map((d, i) => (
             <div key={i} className="p-4 border rounded-lg bg-white shadow-sm">
               <div className="flex items-center justify-between mb-3">
                 <div className="font-semibold text-gray-800">{d.title}</div>
-                <span className="text-xs text-gray-500">{(d.sub || []).length} sub</span>
+                <button
+                  type="button"
+                  onClick={() => addSub(i)}
+                  className="px-3 py-1 bg-indigo-50 text-indigo-700 rounded text-sm hover:bg-indigo-100"
+                >
+                  + Add sub-deposition
+                </button>
               </div>
               <div className="space-y-2">
                 {(d.sub || []).map((s, j) => (
@@ -1180,18 +1186,12 @@ const AgentForm = ({
                       placeholder="Sub-deposition"
                       className="flex-1 px-3 py-2 border border-gray-300 rounded"
                     />
-                    <button type="button" className="text-red-600 text-xs" onClick={() => removeSub(i, j)}>
-                      Remove
+                    <button type="button" className="text-gray text-xs" onClick={() => removeSub(i, j)}>
+                      <FiTrash2 />
                     </button>
                   </div>
                 ))}
-                <button
-                  type="button"
-                  onClick={() => addSub(i)}
-                  className="px-3 py-1 bg-indigo-50 text-indigo-700 rounded text-sm hover:bg-indigo-100"
-                >
-                  + Add sub-deposition
-                </button>
+                
               </div>
             </div>
           ))}
@@ -1790,7 +1790,7 @@ const AgentForm = ({
         return renderCustomizationTab();
       case "knowledge":
         return renderKnowledgeBaseTab();
-      case "depositions":
+      case "dispositions":
         return renderDepositionsTab();
       default:
         return renderStartingMessagesTab();
