@@ -2587,30 +2587,112 @@ const AgentDetails = ({
               <div className="space-y-3">
                 <h3 className="text-lg font-semibold text-gray-800">Knowledge Base</h3>
                 {Array.isArray(agent.knowledgeBase) && agent.knowledgeBase.length > 0 ? (
-                  <ul className="space-y-2">
+                  <div className="space-y-3">
                     {agent.knowledgeBase.map((kb, idx) => (
-                      <li key={idx} className="p-3 bg-white border border-gray-200 rounded-lg flex items-center justify-between">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className={`inline-flex items-center px-2 py-0.5 text-[10px] rounded-full ${String(kb?.name || kb?.key).toLowerCase().endsWith('.pdf') ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'}`}>
-                            {String(kb?.name || kb?.key).toLowerCase().endsWith('.pdf') ? 'PDF' : 'FILE'}
-                          </span>
-                          <div className="text-sm truncate">{kb.name || kb.key}</div>
+                      <div key={idx} className="p-4 bg-white border border-gray-200 rounded-lg">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                              kb.type === 'pdf' ? 'bg-red-100 text-red-700' :
+                              kb.type === 'image' ? 'bg-green-100 text-green-700' :
+                              kb.type === 'youtube' ? 'bg-red-100 text-red-700' :
+                              kb.type === 'link' ? 'bg-blue-100 text-blue-700' :
+                              kb.type === 'text' ? 'bg-gray-100 text-gray-700' :
+                              'bg-gray-100 text-gray-700'
+                            }`}>
+                              {kb.type ? kb.type.toUpperCase() : 'FILE'}
+                            </span>
+                            <h4 className="font-medium text-gray-900">{kb.title || kb.name || kb.key}</h4>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <a
-                            href={`${API_BASE_URL}/client/file-url?key=${encodeURIComponent(kb.key)}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="px-3 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700"
-                          >
-                            View
-                          </a>
+                        
+                        {kb.description && (
+                          <p className="text-sm text-gray-600 mb-3">{kb.description}</p>
+                        )}
+
+                        <div className="flex items-center justify-between">
+                          <div className="text-sm text-gray-500">
+                            {kb.type === 'text' && kb.content?.text && (
+                              <div className="max-h-20 overflow-y-auto">
+                                {kb.content.text.substring(0, 200)}
+                                {kb.content.text.length > 200 && '...'}
+                              </div>
+                            )}
+                            {kb.type === 'youtube' && (kb.content?.youtubeUrl || kb.content?.youtubeId) && (
+                              <div className="flex items-center gap-2">
+                                <span>🎥</span>
+                                <span>{kb.content.youtubeUrl || `https://www.youtube.com/watch?v=${kb.content.youtubeId}`}</span>
+                              </div>
+                            )}
+                            {kb.type === 'link' && kb.content?.url && (
+                              <div className="flex items-center gap-2">
+                                <span>🔗</span>
+                                <span>{kb.content.linkText || kb.content.url}</span>
+                              </div>
+                            )}
+                            {(kb.type === 'pdf' || kb.type === 'image') && (
+                              <div className="flex items-center gap-2">
+                                <span>{kb.type === 'pdf' ? '📄' : '🖼️'}</span>
+                                <span>{kb.fileMetadata?.originalName || kb.name || kb.key}</span>
+                              </div>
+                            )}
+                            {!kb.type && (
+                              <div className="flex items-center gap-2">
+                                <span>📄</span>
+                                <span>{kb.name || kb.key}</span>
+                              </div>
+                            )}
+                          </div>
+                          
+                          {(kb.type === 'pdf' || kb.type === 'image') && (kb.content?.s3Key || kb.key) && (
+                            <a
+                              href={`${API_BASE_URL}/client/file-url?key=${encodeURIComponent(kb.content?.s3Key || kb.key)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center px-3 py-1 bg-indigo-600 text-white text-sm rounded hover:bg-indigo-700 transition-colors"
+                            >
+                              View
+                            </a>
+                          )}
+                          
+                          {kb.type === 'youtube' && (kb.content?.youtubeUrl || kb.content?.youtubeId) && (
+                            <a
+                              href={kb.content.youtubeUrl || `https://www.youtube.com/watch?v=${kb.content.youtubeId}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700 transition-colors"
+                            >
+                              Watch
+                            </a>
+                          )}
+                          
+                          {kb.type === 'link' && kb.content?.url && (
+                            <a
+                              href={kb.content.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition-colors"
+                            >
+                              Visit
+                            </a>
+                          )}
+                          
+                          {!kb.type && kb.key && (
+                            <a
+                              href={`${API_BASE_URL}/client/file-url?key=${encodeURIComponent(kb.key)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center px-3 py-1 bg-indigo-600 text-white text-sm rounded hover:bg-indigo-700 transition-colors"
+                            >
+                              View
+                            </a>
+                          )}
                         </div>
-                      </li>
+                      </div>
                     ))}
-                  </ul>
+                  </div>
                 ) : (
-                  <div className="text-sm text-gray-500">No knowledge base files</div>
+                  <div className="text-sm text-gray-500">No knowledge base items added</div>
                 )}
               </div>
             </div>
