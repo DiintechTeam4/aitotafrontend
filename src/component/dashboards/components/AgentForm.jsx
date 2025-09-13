@@ -73,7 +73,7 @@ const AgentForm = ({
     { key: "social", label: "Action" },
     { key: "customization", label: "Customization" },
     { key: "knowledge", label: "Knowledge Base" },
-    { key: "depositions", label: "Depositions" },
+    { key: "dispositions", label: "Dispositions" },
   ];
 
   useEffect(() => {
@@ -107,7 +107,9 @@ const AgentForm = ({
       }
 
       // Hydrate knowledge base and depositions
-      setKnowledgeBaseItems(Array.isArray(agent.knowledgeBase) ? agent.knowledgeBase : []);
+      setKnowledgeBaseItems(
+        Array.isArray(agent.knowledgeBase) ? agent.knowledgeBase : []
+      );
       if (Array.isArray(agent.depositions) && agent.depositions.length > 0) {
         setDepositions(agent.depositions);
       }
@@ -385,7 +387,10 @@ const AgentForm = ({
         clientToken ||
         sessionStorage.getItem("clienttoken") ||
         localStorage.getItem("admintoken");
-      const qs = new URLSearchParams({ fileName: file.name, fileType: file.type });
+      const qs = new URLSearchParams({
+        fileName: file.name,
+        fileType: file.type,
+      });
       const resp = await fetch(
         `${API_BASE_URL}/client/upload-url-knowledge-base?${qs.toString()}`,
         { headers: authToken ? { Authorization: `Bearer ${authToken}` } : {} }
@@ -406,7 +411,11 @@ const AgentForm = ({
       }
       setKnowledgeBaseItems((prev) => [
         ...prev,
-        { key: data.key, name: file.name, uploadedAt: new Date().toISOString() },
+        {
+          key: data.key,
+          name: file.name,
+          uploadedAt: new Date().toISOString(),
+        },
       ]);
     } catch (e) {
       console.error("KB upload failed", e);
@@ -541,7 +550,7 @@ const AgentForm = ({
         return formData.systemPrompt.trim() !== "";
       case "integration":
         return true; // Integration settings are optional
-        case "social":
+      case "social":
         return true; // Social actions are optional
       case "customization":
         return true;
@@ -1105,10 +1114,14 @@ const AgentForm = ({
 
   const renderKnowledgeBaseTab = () => (
     <div className="space-y-6">
-      <h3 className="text-xl font-semibold text-gray-800 mb-4">Knowledge Base</h3>
+      <h3 className="text-xl font-semibold text-gray-800 mb-4">
+        Knowledge Base
+      </h3>
       <div className="space-y-4">
         <div>
-          <label className="block mb-2 font-semibold text-gray-700">Upload File</label>
+          <label className="block mb-2 font-semibold text-gray-700">
+            Upload File
+          </label>
           <input
             type="file"
             onChange={(e) => uploadKnowledgeFile(e.target.files?.[0])}
@@ -1119,13 +1132,18 @@ const AgentForm = ({
           )}
         </div>
         <div>
-          <label className="block mb-2 font-semibold text-gray-700">Files</label>
+          <label className="block mb-2 font-semibold text-gray-700">
+            Files
+          </label>
           {knowledgeBaseItems.length === 0 ? (
             <div className="text-sm text-gray-500">No files uploaded</div>
           ) : (
             <ul className="space-y-2">
               {knowledgeBaseItems.map((item, idx) => (
-                <li key={idx} className="flex items-center justify-between p-2 border rounded bg-white">
+                <li
+                  key={idx}
+                  className="flex items-center justify-between p-2 border rounded bg-white"
+                >
                   <div className="text-sm truncate mr-2">
                     {item.name || item.key}
                   </div>
@@ -1133,7 +1151,9 @@ const AgentForm = ({
                     type="button"
                     className="text-red-600 text-xs"
                     onClick={() =>
-                      setKnowledgeBaseItems((prev) => prev.filter((_, i) => i !== idx))
+                      setKnowledgeBaseItems((prev) =>
+                        prev.filter((_, i) => i !== idx)
+                      )
                     }
                   >
                     Remove
@@ -1154,15 +1174,31 @@ const AgentForm = ({
       alert("Main depositions are fixed and managed by admin");
     };
     const addSub = (i) =>
-      setDepositions((prev) => prev.map((d, idx) => (idx === i ? { ...d, sub: [...(d.sub || []), ""] } : d)));
+      setDepositions((prev) =>
+        prev.map((d, idx) =>
+          idx === i ? { ...d, sub: [...(d.sub || []), ""] } : d
+        )
+      );
     const updateSub = (i, j, val) =>
-      setDepositions((prev) => prev.map((d, idx) => (idx === i ? { ...d, sub: d.sub.map((s, jj) => (jj === j ? val : s)) } : d)));
+      setDepositions((prev) =>
+        prev.map((d, idx) =>
+          idx === i
+            ? { ...d, sub: d.sub.map((s, jj) => (jj === j ? val : s)) }
+            : d
+        )
+      );
     const removeSub = (i, j) =>
-      setDepositions((prev) => prev.map((d, idx) => (idx === i ? { ...d, sub: d.sub.filter((_, jj) => jj !== j) } : d)));
+      setDepositions((prev) =>
+        prev.map((d, idx) =>
+          idx === i ? { ...d, sub: d.sub.filter((_, jj) => jj !== j) } : d
+        )
+      );
 
     return (
       <div className="space-y-6">
-        <h3 className="text-xl font-semibold text-gray-800 mb-4">Dispositions</h3>
+        <h3 className="text-xl font-semibold text-gray-800 mb-4">
+          Dispositions
+        </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {depositions.map((d, i) => (
             <div key={i} className="p-4 border rounded-lg bg-white shadow-sm">
@@ -1186,12 +1222,15 @@ const AgentForm = ({
                       placeholder="Sub-deposition"
                       className="flex-1 px-3 py-2 border border-gray-300 rounded"
                     />
-                    <button type="button" className="text-gray text-xs" onClick={() => removeSub(i, j)}>
+                    <button
+                      type="button"
+                      className="text-gray text-xs"
+                      onClick={() => removeSub(i, j)}
+                    >
                       <FiTrash2 />
                     </button>
                   </div>
                 ))}
-                
               </div>
             </div>
           ))}
@@ -1796,7 +1835,6 @@ const AgentForm = ({
         return renderStartingMessagesTab();
     }
   };
-  
 
   const isLastTab = selectedTab === tabs[tabs.length - 1].key;
   const isFirstTab = selectedTab === tabs[0].key;
