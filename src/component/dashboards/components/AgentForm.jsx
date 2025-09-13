@@ -49,6 +49,13 @@ const AgentForm = ({
   // Knowledge base and Depositions state
   const [knowledgeBaseItems, setKnowledgeBaseItems] = useState([]);
   const [uploadingKb, setUploadingKb] = useState(false);
+  const [selectedKbType, setSelectedKbType] = useState('text');
+  const [kbFormData, setKbFormData] = useState({
+    title: '',
+    description: '',
+    content: {}
+  });
+  const [showKbModal, setShowKbModal] = useState(false);
   const [depositions, setDepositions] = useState([
     { title: "Interested", sub: [] },
     { title: "Not Interested", sub: [] },
@@ -107,9 +114,15 @@ const AgentForm = ({
       }
 
       // Hydrate knowledge base and depositions
-      setKnowledgeBaseItems(
-        Array.isArray(agent.knowledgeBase) ? agent.knowledgeBase : []
-      );
+      // For knowledge base, fetch from the separate KnowledgeBase collection
+      if (agent._id) {
+        fetchKnowledgeBaseItems();
+      } else {
+        setKnowledgeBaseItems(
+          Array.isArray(agent.knowledgeBase) ? agent.knowledgeBase : []
+        );
+      }
+      
       if (Array.isArray(agent.depositions) && agent.depositions.length > 0) {
         setDepositions(agent.depositions);
       }
@@ -425,6 +438,155 @@ const AgentForm = ({
     }
   };
 
+  // Create knowledge base item
+  const createKnowledgeItem = async () => {
+    try {
+      if (!kbFormData.title.trim()) {
+        alert("Title is required");
+        return;
+      }
+
+      const authToken =
+        clientToken ||
+        sessionStorage.getItem("clienttoken") ||
+        localStorage.getItem("admintoken");
+
+      const payload = {
+        agentId: agent?._id,
+        type: selectedKbType,
+        title: kbFormData.title,
+        description: kbFormData.description,
+        content: kbFormData.content,
+        tags: []
+      };
+
+      const resp = await fetch(`${API_BASE_URL}/client/knowledge-base`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${authToken}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await resp.json();
+      if (resp.ok && data.success) {
+        // Fetch updated knowledge base items from backend
+        await fetchKnowledgeBaseItems();
+        setKbFormData({ title: '', description: '', content: {} });
+        setShowKbModal(false);
+        alert("Knowledge item created successfully!");
+      } else {
+        alert(data.message || "Failed to create knowledge item");
+      }
+    } catch (e) {
+      console.error("Create knowledge item failed", e);
+      alert("Failed to create knowledge item");
+    }
+  };
+
+  const fetchKnowledgeBaseItems = async () => {
+    if (!agent?._id) return;
+    
+    try {
+      const authToken =
+        clientToken ||
+        sessionStorage.getItem("clienttoken") ||
+        localStorage.getItem("admintoken");
+
+      const resp = await fetch(`${API_BASE_URL}/client/knowledge-base/${agent._id}`, {
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      });
+      
+      const data = await resp.json();
+      if (resp.ok && data.success) {
+        setKnowledgeBaseItems(data.data || []);
+      }
+    } catch (e) {
+      console.error("Failed to fetch knowledge base items", e);
+    }
+  };
+
+  // Handle file upload for knowledge base
+  const handleKbFileUpload = async (file, type) => {
+    try {
+      setUploadingKb(true);
+      const authToken =
+        clientToken ||
+        sessionStorage.getItem("clienttoken") ||
+        localStorage.getItem("admintoken");
+      
+      const qs = new URLSearchParams({
+        fileName: file.name,
+        fileType: file.type,
+      });
+      
+      const resp = await fetch(
+        `${API_BASE_URL}/client/upload-url-knowledge-base?${qs.toString()}`,
+        { headers: authToken ? { Authorization: `Bearer ${authToken}` } : {} }
+      );
+      
+      const data = await resp.json();
+      if (!resp.ok || !data?.success || !data?.url || !data?.key) {
+        alert("Failed to get upload URL");
+        return;
+      }
+      
+      const putResp = await fetch(data.url, {
+        method: "PUT",
+        headers: { "Content-Type": file.type },
+        body: file,
+      });
+      
+      if (!putResp.ok) {
+        alert("Failed to upload file");
+        return;
+      }
+
+      // Update form data with the S3 key
+      setKbFormData(prev => ({
+        ...prev,
+        content: {
+          ...prev.content,
+          [type === 'pdf' ? 's3Key' : 'imageKey']: data.key,
+          fileMetadata: {
+            originalName: file.name,
+            fileSize: file.size,
+            mimeType: file.type,
+            uploadedAt: new Date().toISOString()
+          }
+        }
+      }));
+    } catch (e) {
+      console.error("File upload failed", e);
+      alert("File upload failed");
+    } finally {
+      setUploadingKb(false);
+    }
+  };
+
+  // Extract YouTube ID from URL
+  const extractYouTubeId = (url) => {
+    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
+    const match = url.match(regExp);
+    return (match && match[2].length === 11) ? match[2] : null;
+  };
+
+  // Handle YouTube URL input
+  const handleYouTubeUrl = (url) => {
+    const youtubeId = extractYouTubeId(url);
+    setKbFormData(prev => ({
+      ...prev,
+      content: {
+        ...prev.content,
+        youtubeUrl: url,
+        youtubeId: youtubeId
+      }
+    }));
+  };
+
   const renderCustomizationTab = () => (
     <div className="space-y-6">
       <h3 className="text-xl font-semibold text-gray-800 mb-4">
@@ -674,7 +836,7 @@ const AgentForm = ({
           startingMessages[defaultStartingMessageIndex]?.text ||
           formData.firstMessage,
         defaultTemplate,
-        knowledgeBase: knowledgeBaseItems,
+        // knowledgeBase is now managed separately via KnowledgeBase model
         depositions,
         ...deriveSocials(),
       };
@@ -1114,57 +1276,376 @@ const AgentForm = ({
 
   const renderKnowledgeBaseTab = () => (
     <div className="space-y-6">
-      <h3 className="text-xl font-semibold text-gray-800 mb-4">
-        Knowledge Base
-      </h3>
-      <div className="space-y-4">
-        <div>
-          <label className="block mb-2 font-semibold text-gray-700">
-            Upload File
-          </label>
-          <input
-            type="file"
-            onChange={(e) => uploadKnowledgeFile(e.target.files?.[0])}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
-          />
-          {uploadingKb && (
-            <div className="text-sm text-gray-500 mt-2">Uploading...</div>
-          )}
-        </div>
-        <div>
-          <label className="block mb-2 font-semibold text-gray-700">
-            Files
-          </label>
-          {knowledgeBaseItems.length === 0 ? (
-            <div className="text-sm text-gray-500">No files uploaded</div>
-          ) : (
-            <ul className="space-y-2">
-              {knowledgeBaseItems.map((item, idx) => (
-                <li
-                  key={idx}
-                  className="flex items-center justify-between p-2 border rounded bg-white"
-                >
-                  <div className="text-sm truncate mr-2">
-                    {item.name || item.key}
+      <div className="flex items-center justify-between">
+        <h3 className="text-xl font-semibold text-gray-800">
+          Knowledge Base
+        </h3>
+        <button
+          type="button"
+          onClick={() => setShowKbModal(true)}
+          className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-2"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+          Add Content
+        </button>
+      </div>
+
+      {/* Existing Knowledge Items */}
+      <div>
+        {knowledgeBaseItems.length === 0 ? (
+          <div className="text-center py-12 text-gray-500">
+            <svg className="w-12 h-12 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            <p className="text-lg font-medium mb-2">No knowledge items added</p>
+            <p className="text-sm">Click "Add Content" to get started</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {knowledgeBaseItems.map((item, idx) => (
+              <div
+                key={idx}
+                className="p-4 border border-gray-200 rounded-lg bg-white shadow-sm hover:shadow-md transition-shadow"
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <span className={`px-2 py-1 text-xs rounded-full ${
+                      item.type === 'pdf' ? 'bg-red-100 text-red-700' :
+                      item.type === 'image' ? 'bg-green-100 text-green-700' :
+                      item.type === 'youtube' ? 'bg-red-100 text-red-700' :
+                      item.type === 'link' ? 'bg-blue-100 text-blue-700' :
+                      item.type === 'text' ? 'bg-gray-100 text-gray-700' :
+                      'bg-gray-100 text-gray-700'
+                    }`}>
+                      {item.type ? item.type.toUpperCase() : 'FILE'}
+                    </span>
                   </div>
                   <button
                     type="button"
-                    className="text-red-600 text-xs"
+                    className="text-red-600 text-sm hover:text-red-800"
                     onClick={() =>
                       setKnowledgeBaseItems((prev) =>
                         prev.filter((_, i) => i !== idx)
                       )
                     }
                   >
-                    Remove
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
                   </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+                </div>
+                <h4 className="font-medium text-gray-900 mb-2 line-clamp-2">{item.title || item.name || item.key}</h4>
+                {item.description && (
+                  <p className="text-sm text-gray-600 mb-3 line-clamp-2">{item.description}</p>
+                )}
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-gray-500">
+                    {item.type === 'text' && '📝 Text Content'}
+                    {item.type === 'pdf' && '📄 PDF Document'}
+                    {item.type === 'image' && '🖼️ Image'}
+                    {item.type === 'youtube' && '🎥 YouTube Video'}
+                    {item.type === 'link' && '🔗 External Link'}
+                    {!item.type && '📄 File'}
+                  </span>
+                  {(item.type === 'pdf' || item.type === 'image' || !item.type) && (item.content?.s3Key || item.key) && (
+                    <a
+                      href={`${API_BASE_URL}/client/file-url?key=${encodeURIComponent(item.content?.s3Key || item.key)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-indigo-600 hover:text-indigo-800 text-sm"
+                    >
+                      View
+                    </a>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
+  );
+
+  const renderKnowledgeBaseModal = () => (
+    showKbModal && (
+      <div className="fixed inset-0 flex items-center justify-center z-50">
+        {/* Dark transparent overlay */}
+        <div 
+          className="absolute inset-0 bg-opacity-50 backdrop-blur-sm" 
+          onClick={() => setShowKbModal(false)}
+        ></div>
+        
+        {/* Modal content */}
+        <div className="relative bg-white rounded-lg shadow-xl w-full max-w-3xl mx-4 z-10">
+          {/* Modal Header */}
+          <div className="flex items-center justify-between p-6 border-b border-gray-200">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center">
+                <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <h2 className="text-xl font-semibold text-gray-900">Add Content</h2>
+            </div>
+            <button
+              onClick={() => setShowKbModal(false)}
+              className="text-gray-400 hover:text-gray-600"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+  
+          {/* Content Type Selection */}
+          <div className="p-6 border-b border-gray-200">
+            <div className="flex gap-2 overflow-x-auto">
+              {[
+                { type: 'text', label: 'Text', icon: '📝' },
+                { type: 'image', label: 'Image', icon: '🖼️' },
+                { type: 'youtube', label: 'YouTube', icon: '📺' },
+                { type: 'link', label: 'Link', icon: '🔗' },
+                { type: 'website', label: 'Website', icon: '🌐' },
+                { type: 'pdf', label: 'PDF', icon: '📄' }
+              ].map((contentType) => (
+                <button
+                  key={contentType.type}
+                  onClick={() => {
+                    setSelectedKbType(contentType.type);
+                    setKbFormData({ title: '', description: '', content: {} });
+                  }}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg border transition-colors whitespace-nowrap ${
+                    selectedKbType === contentType.type
+                      ? 'bg-red-50 border-red-200 text-red-700'
+                      : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  <span className="text-lg">{contentType.icon}</span>
+                  <span className="font-medium">{contentType.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+  
+          {/* Modal Content */}
+          <div className="p-6">
+            {/* Title Field */}
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Title
+              </label>
+              <input
+                type="text"
+                value={kbFormData.title}
+                onChange={(e) => setKbFormData(prev => ({ ...prev, title: e.target.value }))}
+                placeholder="Enter a title"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              />
+            </div>
+  
+            {/* Content based on type */}
+            <div className="mb-6">
+              {selectedKbType === 'text' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Text Content
+                  </label>
+                  <textarea
+                    value={kbFormData.content.text || ''}
+                    onChange={(e) => setKbFormData(prev => ({ 
+                      ...prev, 
+                      content: { ...prev.content, text: e.target.value }
+                    }))}
+                    placeholder="Enter your text content here..."
+                    rows="6"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  />
+                </div>
+              )}
+  
+              {selectedKbType === 'image' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    File
+                  </label>
+                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-gray-400 transition-colors">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => handleKbFileUpload(e.target.files?.[0], 'image')}
+                      className="hidden"
+                      id="image-upload"
+                    />
+                    <label htmlFor="image-upload" className="cursor-pointer">
+                      <svg className="w-12 h-12 mx-auto mb-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                      </svg>
+                      <p className="text-lg font-medium text-gray-700 mb-2">Upload from your device</p>
+                      <p className="text-sm text-gray-500">Click to browse or drag and drop</p>
+                    </label>
+                  </div>
+                  {kbFormData.content.imageKey && (
+                    <div className="mt-3 text-sm text-green-600 flex items-center gap-2">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      Image uploaded successfully
+                    </div>
+                  )}
+                </div>
+              )}
+  
+              {selectedKbType === 'youtube' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    YouTube URL
+                  </label>
+                  <input
+                    type="url"
+                    value={kbFormData.content.youtubeUrl || ''}
+                    onChange={(e) => handleYouTubeUrl(e.target.value)}
+                    placeholder="https://www.youtube.com/watch?v=..."
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  />
+                  {kbFormData.content.youtubeId && (
+                    <div className="mt-3 text-sm text-green-600 flex items-center gap-2">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      YouTube video detected
+                    </div>
+                  )}
+                </div>
+              )}
+  
+              {selectedKbType === 'link' && (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      URL
+                    </label>
+                    <input
+                      type="url"
+                      value={kbFormData.content.url || ''}
+                      onChange={(e) => setKbFormData(prev => ({ 
+                        ...prev, 
+                        content: { ...prev.content, url: e.target.value }
+                      }))}
+                      placeholder="https://example.com"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Link Text
+                    </label>
+                    <input
+                      type="text"
+                      value={kbFormData.content.linkText || ''}
+                      onChange={(e) => setKbFormData(prev => ({ 
+                        ...prev, 
+                        content: { ...prev.content, linkText: e.target.value }
+                      }))}
+                      placeholder="Display text for the link"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    />
+                  </div>
+                </div>
+              )}
+  
+              {selectedKbType === 'website' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Website URL
+                  </label>
+                  <input
+                    type="url"
+                    value={kbFormData.content.url || ''}
+                    onChange={(e) => setKbFormData(prev => ({ 
+                      ...prev, 
+                      content: { ...prev.content, url: e.target.value }
+                    }))}
+                    placeholder="https://example.com"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  />
+                </div>
+              )}
+  
+              {selectedKbType === 'pdf' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    File
+                  </label>
+                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-gray-400 transition-colors">
+                    <input
+                      type="file"
+                      accept=".pdf"
+                      onChange={(e) => handleKbFileUpload(e.target.files?.[0], 'pdf')}
+                      className="hidden"
+                      id="pdf-upload"
+                    />
+                    <label htmlFor="pdf-upload" className="cursor-pointer">
+                      <svg className="w-12 h-12 mx-auto mb-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                      </svg>
+                      <p className="text-lg font-medium text-gray-700 mb-2">Upload from your device</p>
+                      <p className="text-sm text-gray-500">Click to browse or drag and drop</p>
+                    </label>
+                  </div>
+                  {kbFormData.content.s3Key && (
+                    <div className="mt-3 text-sm text-green-600 flex items-center gap-2">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      PDF uploaded successfully
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+  
+            {/* Description Field */}
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Description (Optional)
+              </label>
+              <textarea
+                value={kbFormData.description}
+                onChange={(e) => setKbFormData(prev => ({ ...prev, description: e.target.value }))}
+                placeholder="Enter a description..."
+                rows="3"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              />
+            </div>
+          </div>
+  
+          {/* Modal Footer */}
+          <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200">
+            <button
+              onClick={() => setShowKbModal(false)}
+              className="flex items-center gap-2 px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+              Cancel
+            </button>
+            <button
+              onClick={createKnowledgeItem}
+              disabled={uploadingKb || !kbFormData.title.trim()}
+              className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+              </svg>
+              {uploadingKb ? 'Uploading...' : 'Save Content'}
+            </button>
+          </div>
+        </div>
+      </div>
+    )
   );
 
   const renderDepositionsTab = () => {
@@ -1925,6 +2406,9 @@ const AgentForm = ({
           </div>
         </div>
       </form>
+      
+      {/* Knowledge Base Modal */}
+      {renderKnowledgeBaseModal()}
     </div>
   );
 };
