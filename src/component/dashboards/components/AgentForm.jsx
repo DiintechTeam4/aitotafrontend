@@ -451,12 +451,59 @@ const AgentForm = ({
         sessionStorage.getItem("clienttoken") ||
         localStorage.getItem("admintoken");
 
+      // If text type, auto-upload textarea to S3 as .txt and set s3Key
+      if (selectedKbType === 'text') {
+        const hasKey = !!kbFormData?.content?.s3Key;
+        const textValue = (kbFormData?.content?.text || '').trim();
+        if (!hasKey) {
+          if (!textValue) {
+            alert('Please enter some text to upload');
+            return;
+          }
+          try {
+            const fileName = `${(kbFormData.title || 'text').replace(/\s+/g,'_')}.txt`;
+            const fileType = 'text/plain';
+            const qs = new URLSearchParams({ fileName, fileType });
+            const resp = await fetch(`${API_BASE_URL}/client/upload-url-knowledge-base?${qs.toString()}`, { headers: authToken ? { Authorization: `Bearer ${authToken}` } : {} });
+            const up = await resp.json();
+            if (!resp.ok || !up?.success || !up?.url || !up?.key) {
+              alert('Failed to get upload URL');
+              return;
+            }
+            const blob = new Blob([textValue], { type: fileType });
+            const putResp = await fetch(up.url, { method: 'PUT', headers: { 'Content-Type': fileType }, body: blob });
+            if (!putResp.ok) {
+              alert('Failed to upload text');
+              return;
+            }
+            // Persist s3Key into form data for payload
+            kbFormData.content = {
+              ...kbFormData.content,
+              s3Key: up.key,
+              fileMetadata: {
+                originalName: fileName,
+                fileSize: blob.size,
+                mimeType: fileType,
+                uploadedAt: new Date().toISOString(),
+              },
+            };
+          } catch (e) {
+            console.error('Auto text upload failed', e);
+            alert('Text upload failed');
+            return;
+          }
+        }
+      }
+
       const payload = {
         agentId: agent?._id,
         type: selectedKbType,
         title: kbFormData.title,
         description: kbFormData.description,
-        content: kbFormData.content,
+        // Ensure backend gets s3Key for text type
+        content: selectedKbType === 'text'
+          ? { s3Key: kbFormData?.content?.s3Key }
+          : kbFormData.content,
         tags: []
       };
 
@@ -506,6 +553,32 @@ const AgentForm = ({
       }
     } catch (e) {
       console.error("Failed to fetch knowledge base items", e);
+    }
+  };
+
+  // Trigger embedding for a knowledge base item
+  const embedKnowledgeItemReq = async (itemId) => {
+    try {
+      const authToken =
+        clientToken ||
+        sessionStorage.getItem("clienttoken") ||
+        localStorage.getItem("admintoken");
+      const resp = await fetch(`${API_BASE_URL}/client/knowledge-base/${itemId}/embed`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      });
+      const data = await resp.json();
+      if (resp.ok && data.success) {
+        await fetchKnowledgeBaseItems();
+        alert("Embedding started/completed successfully.");
+      } else {
+        alert(data.message || "Failed to embed item");
+      }
+    } catch (e) {
+      console.error("Embedding failed", e);
+      alert("Embedding failed");
     }
   };
 
@@ -1321,6 +1394,9 @@ const AgentForm = ({
                     }`}>
                       {item.type ? item.type.toUpperCase() : 'FILE'}
                     </span>
+                    {item.isEmbedded && (
+                      <span className="px-2 py-1 text-xs rounded-full bg-green-100 text-green-700">Embedded</span>
+                    )}
                   </div>
                   <button
                     type="button"
@@ -1349,16 +1425,27 @@ const AgentForm = ({
                     {item.type === 'link' && '🔗 External Link'}
                     {!item.type && '📄 File'}
                   </span>
-                  {(item.type === 'pdf' || item.type === 'image' || !item.type) && (item.content?.s3Key || item.key) && (
-                    <a
-                      href={`${API_BASE_URL}/client/file-url?key=${encodeURIComponent(item.content?.s3Key || item.key)}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-indigo-600 hover:text-indigo-800 text-sm"
-                    >
-                      View
-                    </a>
-                  )}
+                  <div className="flex items-center gap-3">
+                    {(item.type === 'pdf' || item.type === 'image' || item.type === 'text' || !item.type) && (item.content?.s3Key || item.key) && (
+                      <a
+                        href={`${API_BASE_URL}/client/file-url?key=${encodeURIComponent(item.content?.s3Key || item.key)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-indigo-600 hover:text-indigo-800 text-sm"
+                      >
+                        View
+                      </a>
+                    )}
+                    {(item.type === 'pdf' || item.type === 'image' || item.type === 'text' || item.type === 'link' || item.type === 'website' || item.type === 'youtube') && !item.isEmbedded && (
+                      <button
+                        type="button"
+                        onClick={() => embedKnowledgeItemReq(item._id)}
+                        className="px-3 py-1 text-xs border rounded hover:bg-gray-50"
+                      >
+                        Embed
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { useAsyncError, useNavigate } from "react-router-dom";
+import { useAsyncError, useNavigate, useLocation } from "react-router-dom";
 import { API_BASE_URL } from "../../config";
 import {
   FaChartBar,
@@ -27,6 +27,7 @@ import ApprovalFormDetails from "./components/ApprovalFormDetails";
 import HumanAgentManagement from "./components/HumanAgentManagement";
 import AdminAgents from "./components/AdminAgents";
 import AllAgents from "./components/AllAgents";
+import SystemPrompts from "./components/SystemPrompts";
 import PlanManagement from "./components/PlanManagement";
 import CreditManagement from "./components/CreditManagement";
 import CouponManagement from "./components/CouponManagement";
@@ -35,6 +36,7 @@ import ToolsManagement from "./components/ToolsManagement";
 const AdminDashboard = ({ user, onLogout }) => {
   const navigate = useNavigate();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const location = useLocation();
   const [activeTab, setActiveTab] = useState(() => {
     try {
       return localStorage.getItem("admin_active_tab") || "Overview";
@@ -128,10 +130,37 @@ const AdminDashboard = ({ user, onLogout }) => {
     ensureAdminAuthValid();
   }, []);
 
+  // Sync tab with URL query param
+  useEffect(() => {
+    try {
+      const sp = new URLSearchParams(window.location.search);
+      const urlTab = sp.get('tab');
+      if (urlTab) {
+        setActiveTab(urlTab);
+      }
+    } catch {}
+  }, []);
+
+  // React to location.search changes (without remount)
+  useEffect(() => {
+    try {
+      const sp = new URLSearchParams(location.search || window.location.search);
+      const urlTab = sp.get('tab');
+      if (urlTab && urlTab !== activeTab) {
+        setActiveTab(urlTab);
+      }
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search]);
+
   // Persist active tab across refreshes
   useEffect(() => {
     try {
       localStorage.setItem("admin_active_tab", activeTab);
+      const sp = new URLSearchParams(window.location.search);
+      sp.set('tab', activeTab);
+      const newUrl = `${window.location.pathname}?${sp.toString()}`;
+      window.history.replaceState({}, '', newUrl);
     } catch {}
   }, [activeTab]);
 
@@ -1436,6 +1465,7 @@ const AdminDashboard = ({ user, onLogout }) => {
             {activeTab === "Agents" && <AdminAgents />}
 
             {activeTab === "AI Agent" && <AllAgents />}
+            {activeTab === "System Prompts" && <SystemPrompts />}
 
             {activeTab === "Plans" && <PlanManagement />}
 
