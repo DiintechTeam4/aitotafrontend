@@ -149,7 +149,7 @@ const AgentMobileTalkUI = ({ agent, clientId, onClose }) => {
     addDebugLog("Attempting WebSocket connection...", "info");
     
     // Connect to our local WebSocket server
-    const wsUrl = `wss://aitota.com`;
+    const wsUrl = `wss://app.aitota.com`;
     addDebugLog(`Connecting to: ${wsUrl}`, "info");
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
