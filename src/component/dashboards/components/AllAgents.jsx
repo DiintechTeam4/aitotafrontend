@@ -14,8 +14,11 @@ import {
   FaEdit,
   FaTrash,
 } from "react-icons/fa";
+import { FiSettings } from 'react-icons/fi';
+import { useNavigate } from 'react-router-dom';
 
 const AllAgents = () => {
+  const navigate = useNavigate();
   const [agents, setAgents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -623,11 +626,18 @@ const AllAgents = () => {
     <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
       {/* Header */}
       <div className="p-6 border-b border-gray-100">
-        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900">AI Agents</h2>
-          </div>
+        <div className="flex items-center justify-between">
+          <h2 className="text-2xl font-bold text-gray-900">AI Agents</h2>
+          <button
+            onClick={() => navigate('/admin/dashboard?tab=System%20Prompts')}
+            className="group relative inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition-all hover:border-red-200 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+            title="Manage System Prompts"
+          >
+            <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-red-400 opacity-70 group-hover:opacity-100"></span>
+            <FiSettings className="h-4 w-4 transition-transform duration-200 group-hover:rotate-45 text-red-600" />
+          </button>
         </div>
+      </div>
 
         {/* Stats Section */}
         <div className="mt-6 grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -695,7 +705,6 @@ const AllAgents = () => {
             </div>
           </div>
         </div>
-      </div>
 
       {/* Filters */}
       <div className="p-6 border-b border-white-100 bg-white-50">

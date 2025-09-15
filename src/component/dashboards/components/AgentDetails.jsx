@@ -2612,10 +2612,10 @@ const AgentDetails = ({
 
                         <div className="flex items-center justify-between">
                           <div className="text-sm text-gray-500">
-                            {kb.type === 'text' && kb.content?.text && (
-                              <div className="max-h-20 overflow-y-auto">
-                                {kb.content.text.substring(0, 200)}
-                                {kb.content.text.length > 200 && '...'}
+                            {kb.type === 'text' && (
+                              <div className="flex items-center gap-2">
+                                <span>📝</span>
+                                <span>{kb.fileMetadata?.originalName || kb.title || 'Text Document'}</span>
                               </div>
                             )}
                             {kb.type === 'youtube' && (kb.content?.youtubeUrl || kb.content?.youtubeId) && (
@@ -2644,7 +2644,7 @@ const AgentDetails = ({
                             )}
                           </div>
                           
-                          {(kb.type === 'pdf' || kb.type === 'image') && (kb.content?.s3Key || kb.key) && (
+                          {(kb.type === 'pdf' || kb.type === 'image' || kb.type === 'text') && (kb.content?.s3Key || kb.key) && (
                             <a
                               href={`${API_BASE_URL}/client/file-url?key=${encodeURIComponent(kb.content?.s3Key || kb.key)}`}
                               target="_blank"
