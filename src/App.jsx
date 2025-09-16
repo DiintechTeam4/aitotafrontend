@@ -11,6 +11,8 @@ import "./App.css";
 import Superadmin from "./Superadmin";
 import Home from "./pages/Home";
 import Login from "./pages/Login";
+import MakecallLogin from "./pages/MakecallLogin";
+import MakecallDashboard from "./pages/MakecallDashboard";
 import AgentMobileTalk from "./component/dashboards/components/AgentMobileTalk";
 import PublicBusinessDetails from "./component/dashboards/components/PublicBusinessDetails";
 import Testing from "./component/dashboards/components/Testing";
@@ -68,6 +70,8 @@ const App = () => {
         {/* <Route path="/" element={<Home />} /> */}
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
+        <Route path="/makecall/login" element={<MakecallLogin />} />
+        <Route path="/makecall/dashboard" element={<MakecallDashboard />} />
         <Route path="/auth/*" element={<User />} />
         <Route path="/admin/*" element={<Admin />} />
         <Route path="/superadmin/*" element={<Superadmin />} />
