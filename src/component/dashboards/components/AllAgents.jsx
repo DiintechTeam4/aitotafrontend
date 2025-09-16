@@ -37,6 +37,8 @@ const AllAgents = () => {
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [selectedAgentForAssign, setSelectedAgentForAssign] = useState(null);
   const [assignProvider, setAssignProvider] = useState("snapbx");
+  const [sanpbxDids, setSanpbxDids] = useState(["01246745649", "01246745655"]);
+  const [newSanpbxDid, setNewSanpbxDid] = useState("");
   const [assignFormData, setAssignFormData] = useState({
     serviceProvider: "snapbx",
     didNumber: "",
@@ -75,6 +77,26 @@ const AllAgents = () => {
     fetchAllAgents();
     fetchClients();
   }, []);
+
+  // Fetch SANPBX DIDs from backend
+  const fetchDidNumbers = async () => {
+    try {
+      const token =
+        localStorage.getItem("admintoken") ||
+        sessionStorage.getItem("admintoken");
+      const resp = await fetch(`${API_BASE_URL}/admin/did-numbers?provider=snapbx`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!resp.ok) return;
+      const data = await resp.json();
+      if (data?.success && Array.isArray(data.data)) {
+        const list = data.data.map((d) => String(d.did)).filter(Boolean);
+        if (list.length) setSanpbxDids(Array.from(new Set(list)));
+      }
+    } catch (e) {
+      // silent
+    }
+  };
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -376,9 +398,34 @@ const AllAgents = () => {
     const prov = (agent.serviceProvider || "snapbx").toLowerCase();
     setAssignProvider(prov);
     const temp = getTempCredentials(prov);
+    // Initialize SANPBX DIDs list and select agent's current DID if available
+    if (prov === "snapbx" || prov === "sanpbx") {
+      fetchDidNumbers();
+      const seed = sanpbxDids.length ? sanpbxDids : ["01246745649", "01246745655"]; // existing DIDs
+      const currentDid = agent.didNumber ? String(agent.didNumber) : "";
+      const merged = Array.from(new Set([...
+        seed,
+        currentDid ? [currentDid] : []
+      ].flat().filter(Boolean)));
+      setSanpbxDids(merged);
+      setNewSanpbxDid("");
+    }
+    // Determine safe default selection: only preselect if unassigned or assigned to this agent
+    const candidateDid = String(agent.didNumber || temp?.didNumber || "");
+    let safePreselect = "";
+    if (candidateDid) {
+      const assignedAgent = (agents || []).find(
+        (a) =>
+          String(a?.serviceProvider || '').toLowerCase().includes('snapbx') &&
+          String(a?.didNumber || '') === candidateDid
+      );
+      if (!assignedAgent || String(assignedAgent._id) === String(agent._id)) {
+        safePreselect = candidateDid;
+      }
+    }
     setAssignFormData({
       serviceProvider: prov,
-      didNumber: temp?.didNumber || agent.didNumber || "",
+      didNumber: safePreselect,
       accessToken: temp?.accessToken || agent.accessToken || "",
       accessKey: temp?.accessKey || agent.accessKey || "",
       callerId: temp?.callerId || agent.callerId || "",
@@ -387,6 +434,8 @@ const AllAgents = () => {
     });
     setShowAssignModal(true);
     setOpenDropdown(null);
+
+    // No summary prefill required
   };
 
   const closeAssignModal = () => {
@@ -418,13 +467,35 @@ const AllAgents = () => {
 
       let payload = {};
       if (assignProvider === "snapbx") {
+        // Auto-derive callerId from DID (last 7 digits), keep access creds in code
+        const did = String(assignFormData.didNumber || "").replace(/\D/g, "");
+        const callerId = did ? did.slice(-7) : "";
         payload = {
           serviceProvider: "snapbx",
           didNumber: assignFormData.didNumber,
           accessToken: assignFormData.accessToken,
           accessKey: assignFormData.accessKey,
-          callerId: assignFormData.callerId,
+          callerId: callerId,
         };
+
+        // Also persist in DID registry and assign
+        try {
+          const token =
+            localStorage.getItem("admintoken") ||
+            sessionStorage.getItem("admintoken");
+          // Ensure DID exists
+          await fetch(`${API_BASE_URL}/admin/did-numbers`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ did: assignFormData.didNumber, provider: 'snapbx' }),
+          });
+          // Assign DID to agent
+          await fetch(`${API_BASE_URL}/admin/did-numbers/${encodeURIComponent(assignFormData.didNumber)}/assign`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ agentId: selectedAgentForAssign?._id }),
+          });
+        } catch (_) {}
       } else if (
         assignProvider === "c-zentrix" ||
         assignProvider === "c-zentrax"
@@ -1645,65 +1716,90 @@ const AllAgents = () => {
               </div>
 
               {assignProvider === "snapbx" && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="space-y-3">
                   <div>
                     <label className="block text-xs font-medium text-gray-700 mb-1">
-                      DID Number
+                      SANPBX DIDs
                     </label>
-                    <input
-                      type="text"
-                      value={assignFormData.didNumber}
-                      onChange={(e) =>
-                        handleAssignChange("didNumber", e.target.value)
-                      }
-                      className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                      placeholder="e.g., 9123456789"
-                      required
-                    />
+                    <div className="overflow-x-auto border border-gray-200 rounded-md">
+                      <table className="min-w-full text-sm">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-3 py-2 text-left text-gray-600 font-medium">Select</th>
+                            <th className="px-3 py-2 text-left text-gray-600 font-medium">DID</th>
+                            <th className="px-3 py-2 text-left text-gray-600 font-medium">Status</th>
+                            <th className="px-3 py-2 text-left text-gray-600 font-medium">Agent</th>
+                            <th className="px-3 py-2 text-left text-gray-600 font-medium">Client</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200">
+                          {([...sanpbxDids]
+                            .map((did) => {
+                              const assignedAgent = (agents || []).find(
+                                (a) =>
+                                  String(a?.serviceProvider || '').toLowerCase().includes('snapbx') &&
+                                  String(a?.didNumber || '') === String(did)
+                              );
+                              let status = assignedAgent ? 'Assigned' : 'Available';
+                              const isAssignedToThisAgent = assignedAgent && String(assignedAgent._id) === String(selectedAgentForAssign?._id);
+                              let statusLabel = isAssignedToThisAgent ? 'Already Assigned' : status;
+                              let agentName = assignedAgent?.agentName || '-';
+                              let clientName = assignedAgent ? getClientName(assignedAgent.clientId) : '-';
+
+                              // Temporary frontend override: if current agent switches selection,
+                              // show the agent's previous DID as available with no agent/client
+                              const selectedDid = String(assignFormData.didNumber || '');
+                              const previousDid = String(selectedAgentForAssign?.didNumber || '');
+                              if (selectedDid && previousDid && did === previousDid && selectedDid !== previousDid) {
+                                status = 'Available';
+                                statusLabel = 'Available';
+                                agentName = '-';
+                                clientName = '-';
+                              }
+
+                              return { did, assignedAgent, status, statusLabel, agentName, clientName };
+                            })
+                            // Unassigned first only (do not shift based on current selection)
+                            .sort((a, b) => {
+                              const av = a.assignedAgent ? 1 : 0;
+                              const bv = b.assignedAgent ? 1 : 0;
+                              if (av !== bv) return av - bv;
+                              return 0;
+                            })
+                          ).map(({ did, assignedAgent, status, statusLabel, agentName, clientName }) => {
+                            const isSelected = assignFormData.didNumber === did;
+                            return (
+                              <tr key={did} className={`${isSelected ? 'bg-indigo-50' : 'bg-white'}`}>
+                                <td className="px-3 py-2">
+                                  <input
+                                    type="radio"
+                                    name="sanpbxDid"
+                                    checked={isSelected}
+                                    onChange={() => {
+                                      handleAssignChange('didNumber', did);
+                                    }}
+                                  />
+                                </td>
+                                <td className="px-3 py-2 text-gray-800">{did}</td>
+                                <td className="px-3 py-2">
+                                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${status === 'Assigned' ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'}`}>
+                                    {statusLabel}
+                                  </span>
+                                </td>
+                                <td className="px-3 py-2 text-gray-700">{isSelected ? (selectedAgentForAssign?.agentName || '-') : agentName}</td>
+                                <td className="px-3 py-2 text-gray-700">{isSelected ? (getClientName(selectedAgentForAssign?.clientId) || '-') : clientName}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                      Access Token
-                    </label>
-                    <input
-                      type="text"
-                      value={assignFormData.accessToken}
-                      onChange={(e) =>
-                        handleAssignChange("accessToken", e.target.value)
-                      }
-                      className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                      Access Key
-                    </label>
-                    <input
-                      type="text"
-                      value={assignFormData.accessKey}
-                      onChange={(e) =>
-                        handleAssignChange("accessKey", e.target.value)
-                      }
-                      className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                      Caller ID
-                    </label>
-                    <input
-                      type="text"
-                      value={assignFormData.callerId}
-                      onChange={(e) =>
-                        handleAssignChange("callerId", e.target.value)
-                      }
-                      className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                      placeholder="e.g., 01123456789"
-                      required
-                    />
-                  </div>
+
+
+                  {/* Hidden fields (kept in code, not displayed) */}
+                  <input type="hidden" value={assignFormData.accessToken} readOnly />
+                  <input type="hidden" value={assignFormData.accessKey} readOnly />
                 </div>
               )}
 

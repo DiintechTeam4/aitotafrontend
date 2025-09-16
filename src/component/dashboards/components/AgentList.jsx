@@ -1688,9 +1688,11 @@ const AgentList = ({ agents, isLoading, onEdit, onDelete, clientId }) => {
             contact: phoneDigits,
             caller_id: agent?.callerId,
             agentId: agent?._id,
+            uniqueid: uniqueId,
             custom_field: {
               name: contactName || "",
               uniqueId: uniqueId,
+              uniqueid: uniqueId,
             },
           }),
         });
