@@ -158,18 +158,23 @@ function GroupDetails({ groupId, onBack }) {
       setLoading(true);
       const token = sessionStorage.getItem("clienttoken");
 
-      // Delete contacts one by one
-      const deletePromises = selectedContacts.map((contactId) =>
-        fetch(`${API_BASE}/groups/${groupId}/contacts/${contactId}`, {
-          method: "DELETE",
+      // Use bulk delete endpoint to avoid many parallel requests
+      const resp = await fetch(
+        `${API_BASE}/groups/${groupId}/contacts/bulk-delete`,
+        {
+          method: "POST",
           headers: {
             Authorization: `Bearer ${token}`,
             "Content-Type": "application/json",
           },
-        })
+          body: JSON.stringify({ contactIds: selectedContacts }),
+        }
       );
 
-      await Promise.all(deletePromises);
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.error || "Bulk delete failed");
+      }
 
       // Refresh the contacts list
       await fetchGroupDetails();
@@ -445,16 +450,8 @@ function GroupDetails({ groupId, onBack }) {
 
       const result = await response.json();
       if (result.success) {
-        // Add the new contact to the local state
-        const newContact = {
-          _id: result.data._id || Date.now().toString(),
-          name: contactForm.name,
-          phone: contactForm.phone,
-          email: contactForm.email,
-          createdAt: new Date(),
-        };
-
-        setContacts([...contacts, newContact]);
+        // Always refresh from server to capture real Mongo _id
+        await fetchGroupDetails();
         setContactForm({ name: "", phone: "", email: "" });
         setShowAddContactForm(false);
       } else {
@@ -463,18 +460,7 @@ function GroupDetails({ groupId, onBack }) {
       }
     } catch (error) {
       console.error("Error adding contact:", error);
-      // For demo purposes, add contact locally if API fails
-      const newContact = {
-        _id: Date.now().toString(),
-        name: contactForm.name,
-        phone: contactForm.phone,
-        email: contactForm.email,
-        createdAt: new Date(),
-      };
-
-      setContacts([...contacts, newContact]);
-      setContactForm({ name: "", phone: "", email: "" });
-      setShowAddContactForm(false);
+      toast.error("Failed to add contact");
     } finally {
       setAddingContact(false);
     }
@@ -693,52 +679,31 @@ function GroupDetails({ groupId, onBack }) {
     }
 
     setImportingContacts(true);
-    let successCount = 0;
-    let errorCount = 0;
-
     try {
-      for (const contact of importData.parsedData) {
-        try {
-          const token = sessionStorage.getItem("clienttoken");
-          const response = await fetch(
-            `${API_BASE}/groups/${groupId}/contacts`,
-            {
-              method: "POST",
-              headers: {
-                Authorization: `Bearer ${token}`,
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify(contact),
-            }
-          );
-
-          const result = await response.json();
-          if (result.success) {
-            const newContact = {
-              _id: result.data._id || Date.now().toString(),
-              name: contact.name,
-              phone: contact.phone,
-              email: contact.email,
-              createdAt: new Date(),
-            };
-            setContacts((prev) => [...prev, newContact]);
-            successCount++;
-          } else {
-            errorCount++;
-            console.error(
-              `Failed to import contact ${contact.name}:`,
-              result.error
-            );
-          }
-        } catch (error) {
-          errorCount++;
-          console.error(`Error importing contact ${contact.name}:`, error);
+      const token = sessionStorage.getItem("clienttoken");
+      const response = await fetch(
+        `${API_BASE}/groups/${groupId}/contacts/bulk-add`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ contacts: importData.parsedData }),
         }
+      );
+
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || "Bulk import failed");
       }
 
       toast.success(
-        `Import completed! Imported: ${successCount}, Failed: ${errorCount}`
+        `Imported ${result.added} of ${result.requested} contact(s)`
       );
+
+      // Refresh from server to ensure real Mongo _id and fresh state
+      await fetchGroupDetails();
 
       // Reset import data
       setImportData({
@@ -752,60 +717,9 @@ function GroupDetails({ groupId, onBack }) {
       setShowImportModal(false);
     } catch (error) {
       console.error("Error during import:", error);
-      toast.error("Error during import. Please try again.");
+      toast.error(error.message || "Error during import. Please try again.");
     } finally {
       setImportingContacts(false);
-    }
-  };
-
-  const handleAddDummyContact = async (dummyContact) => {
-    try {
-      setLoading(true);
-      const token = sessionStorage.getItem("clienttoken");
-
-      const response = await fetch(`${API_BASE}/groups/${groupId}/contacts`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          name: dummyContact.name,
-          phone: dummyContact.phone,
-          email: dummyContact.email,
-        }),
-      });
-
-      const result = await response.json();
-      if (result.success) {
-        // Add the new contact to the local state
-        const newContact = {
-          _id: result.data._id || Date.now().toString(),
-          name: dummyContact.name,
-          phone: dummyContact.phone,
-          email: dummyContact.email,
-          createdAt: new Date(),
-        };
-
-        setContacts([...contacts, newContact]);
-      } else {
-        console.error("Failed to add dummy contact:", result.error);
-        toast.error("Failed to add contact: " + result.error);
-      }
-    } catch (error) {
-      console.error("Error adding dummy contact:", error);
-      // For demo purposes, add contact locally if API fails
-      const newContact = {
-        _id: Date.now().toString(),
-        name: dummyContact.name,
-        phone: dummyContact.phone,
-        email: dummyContact.email,
-        createdAt: new Date(),
-      };
-
-      setContacts([...contacts, newContact]);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -911,7 +825,9 @@ function GroupDetails({ groupId, onBack }) {
         {/* Current Contacts */}
         <div>
           <div className="flex items-center justify-between mb-4">
-            <h4 className="text-lg font-medium text-gray-700">Current Contacts</h4>
+            <h4 className="text-lg font-medium text-gray-700">
+              Current Contacts
+            </h4>
 
             {/* Controls */}
             {contacts.length > 0 && (
@@ -1036,7 +952,8 @@ function GroupDetails({ groupId, onBack }) {
                           {contact.email}
                         </div>
                         <div className="text-xs text-gray-400">
-                          Added: {new Date(contact.createdAt).toLocaleDateString()}
+                          Added:{" "}
+                          {new Date(contact.createdAt).toLocaleDateString()}
                         </div>
                       </div>
                     </div>
@@ -1048,7 +965,9 @@ function GroupDetails({ groupId, onBack }) {
                     <div
                       key={contact._id}
                       className={`flex items-center justify-between p-4 ${
-                        selectedContacts.includes(contact._id) ? "bg-blue-50" : ""
+                        selectedContacts.includes(contact._id)
+                          ? "bg-blue-50"
+                          : ""
                       }`}
                     >
                       <div className="flex items-center gap-3">
@@ -1059,16 +978,26 @@ function GroupDetails({ groupId, onBack }) {
                           className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
                         />
                         <div>
-                          <div className="text-sm font-semibold text-gray-900">{contact.name}</div>
+                          <div className="text-sm font-semibold text-gray-900">
+                            {contact.name}
+                          </div>
                           <div className="text-sm text-gray-600 flex gap-4">
-                            <span className="inline-flex items-center gap-1"><FiPhone className="text-xs" />{contact.phone}</span>
-                            <span className="inline-flex items-center gap-1"><FiMail className="text-xs" />{contact.email}</span>
+                            <span className="inline-flex items-center gap-1">
+                              <FiPhone className="text-xs" />
+                              {contact.phone}
+                            </span>
+                            <span className="inline-flex items-center gap-1">
+                              <FiMail className="text-xs" />
+                              {contact.email}
+                            </span>
                           </div>
                         </div>
                       </div>
                       <div className="hidden md:block w-48 text-xs text-gray-400">
                         <div>Added</div>
-                        <div>{new Date(contact.createdAt).toLocaleDateString()}</div>
+                        <div>
+                          {new Date(contact.createdAt).toLocaleDateString()}
+                        </div>
                       </div>
                       <div className="ml-2">
                         <button

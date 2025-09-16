@@ -117,7 +117,11 @@ function OutboundSection({ tenantId }) {
   // Derived stats
   const totalGroups = contactGroups.length;
   const totalContacts = contactGroups.reduce(
-    (sum, g) => sum + (g.contacts?.length || 0),
+    (sum, g) =>
+      sum +
+      (typeof g.contactsCount === "number"
+        ? g.contactsCount
+        : g.contacts?.length || 0),
     0
   );
 
@@ -714,7 +718,10 @@ function OutboundSection({ tenantId }) {
                     )}
                     <div className="mt-auto flex items-center justify-between">
                       <div className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
-                        {group.contacts?.length || 0} contacts
+                        {typeof group.contactsCount === "number"
+                          ? group.contactsCount
+                          : group.contacts?.length || 0}{" "}
+                        contacts
                       </div>
                       <div className="text-xs text-gray-400">
                         <div>Created</div>
@@ -750,7 +757,10 @@ function OutboundSection({ tenantId }) {
                       )}
                     </div>
                     <div className="hidden sm:block w-32 text-sm text-gray-600">
-                      {group.contacts?.length || 0} contacts
+                      {typeof group.contactsCount === "number"
+                        ? group.contactsCount
+                        : group.contacts?.length || 0}{" "}
+                      contacts
                     </div>
                     <div className="hidden md:block w-40 text-xs text-gray-400">
                       <div>Created</div>

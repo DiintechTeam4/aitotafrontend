@@ -629,6 +629,13 @@ function CampaignDetails({ campaignId, onBack }) {
   const [isStartingCall, setIsStartingCall] = useState(false); // Prevent multiple simultaneous start calls
   const [campaignGroups, setCampaignGroups] = useState([]);
   const [loadingCampaignGroups, setLoadingCampaignGroups] = useState(false);
+  const [showGroupRangeModal, setShowGroupRangeModal] = useState(false);
+  const [rangeModalLoading, setRangeModalLoading] = useState(false);
+  const [rangeModalGroup, setRangeModalGroup] = useState(null);
+  const [rangeStartIndex, setRangeStartIndex] = useState(0);
+  const [rangeEndIndex, setRangeEndIndex] = useState(0);
+  const [selectedContactIndices, setSelectedContactIndices] = useState([]);
+  const [groupModalTab, setGroupModalTab] = useState("range"); // 'range' | 'select'
   const [lastUpdated, setLastUpdated] = useState(null);
   const [showAddGroupsModal, setShowAddGroupsModal] = useState(false);
   // Add Agent modal
@@ -784,7 +791,6 @@ function CampaignDetails({ campaignId, onBack }) {
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
   }, [campaign?.isActive, campaignStartTime]);
-
   // Helper function to safely get contact name
   const getContactName = (contact) => {
     if (!contact) return "";
@@ -1571,7 +1577,6 @@ function CampaignDetails({ campaignId, onBack }) {
     setCallingStatus("paused");
     console.log("Calling paused - state will persist across page reloads");
   };
-
   const resumeCalling = async () => {
     // Check if campaign has groups
     if (!campaignGroups || campaignGroups.length === 0) {
@@ -1917,6 +1922,85 @@ function CampaignDetails({ campaignId, onBack }) {
       setCampaignGroups([]);
     } finally {
       setLoadingCampaignGroups(false);
+    }
+  };
+
+  const openGroupRangeModal = async (groupId) => {
+    try {
+      setRangeModalLoading(true);
+      const token = sessionStorage.getItem("clienttoken");
+      const resp = await fetch(`${API_BASE}/groups/${groupId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+      const result = await resp.json();
+      if (result.success && result.data) {
+        const grp = result.data;
+        setRangeModalGroup(grp);
+        const total = Array.isArray(grp.contacts) ? grp.contacts.length : 0;
+        setRangeStartIndex(0);
+        setRangeEndIndex(total);
+        setSelectedContactIndices(Array.from({ length: total }, (_, i) => i));
+        setShowGroupRangeModal(true);
+      } else {
+        toast.warn(`Failed to load group: ${result.error || "Unknown error"}`);
+      }
+    } catch (e) {
+      console.error("Failed to load group:", e);
+      toast.error("Error loading group");
+    } finally {
+      setRangeModalLoading(false);
+    }
+  };
+
+  const saveGroupRangeToCampaign = async () => {
+    try {
+      if (!campaign?._id || !rangeModalGroup?._id) return;
+      const token = sessionStorage.getItem("clienttoken");
+      // Build payload based on active tab
+      let body = { replace: true };
+      if (groupModalTab === "select") {
+        if (
+          !Array.isArray(selectedContactIndices) ||
+          selectedContactIndices.length === 0
+        ) {
+          toast.warn("Select at least one contact to save.");
+          return;
+        }
+        body.selectedIndices = selectedContactIndices;
+      } else {
+        body.startIndex = Math.max(0, Number(rangeStartIndex) || 0);
+        body.endIndex = Math.max(0, Number(rangeEndIndex) || 0);
+      }
+      const resp = await fetch(
+        `${API_BASE}/campaigns/${campaign._id}/groups/${rangeModalGroup._id}/contacts-range`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(body),
+        }
+      );
+      const result = await resp.json();
+      if (result.success) {
+        toast.success(
+          `Added ${result.data.added} of ${result.data.totalSelected} contacts from range ${result.data.range.startIndex}-${result.data.range.endIndex}`
+        );
+        setShowGroupRangeModal(false);
+        setRangeModalGroup(null);
+        await fetchCampaignContacts();
+      } else {
+        toast.warn(
+          `Failed to add contacts: ${result.error || "Unknown error"}`
+        );
+      }
+    } catch (e) {
+      console.error("Failed to add contacts by range:", e);
+      toast.error("Error adding contacts by range");
     }
   };
 
@@ -2286,7 +2370,6 @@ function CampaignDetails({ campaignId, onBack }) {
     });
     return count;
   };
-
   // Open transcript intelligently: if call is ongoing and we have uniqueId, show live logs; else load saved transcript
   const openTranscriptSmart = async (lead) => {
     try {
@@ -3053,7 +3136,6 @@ function CampaignDetails({ campaignId, onBack }) {
       setLoadingContacts(false);
     }
   };
-
   const syncContactsFromGroups = async (silent = false) => {
     try {
       if (!campaign?._id) return;
@@ -3605,47 +3687,51 @@ function CampaignDetails({ campaignId, onBack }) {
   const handleToggleCampaignCalling = async () => {
     if (campaign?.isActive) {
       // Stopping campaign - save history
-      const endTime = new Date();
-      const startTime = campaignStartTime || endTime;
-      const runTime = calculateRunTime(startTime, endTime);
-
-      // Get call logs for current run
-      const callLogs = await fetchCurrentRunCallLogs(currentRunId);
-
-      // Save campaign run history
-      await saveCampaignRun(
-        campaignId,
-        formatTime(startTime),
-        formatTime(endTime),
-        runTime,
-        callLogs
+      const confirmStop = window.confirm(
+        "Are you sure you want to stop this campaign?"
       );
+      if (!confirmStop) return;
+
+      // Save run history before stopping
+      const now = new Date();
+      const startTime = runStartTime || now;
+      const endTime = now;
+      const runTime = calculateRunTime(startTime, endTime);
+      const runId = currentRunId;
+
+      if (currentRunCallLogs.length > 0) {
+        await saveCampaignRun(
+          campaign._id,
+          startTime,
+          endTime,
+          runTime,
+          currentRunCallLogs,
+          runId
+        );
+      }
 
       // Stop campaign
       await stopCampaignCallingBackend();
 
       // Reset run tracking
       setCurrentRunId(null);
-      setCampaignStartTime(null);
+      setRunStartTime(null);
+      setCurrentRunCallLogs([]);
+      setIsLiveCallActive(false);
 
-      // Clear dashboards so section is fresh for next run
-      resetSectionForNextRun();
+      toast.success("Campaign stopped");
     } else {
-      // Starting campaign - generate new runId and start time
-      const newRunId = `run_${Date.now()}_${Math.random()
-        .toString(36)
-        .substr(2, 9)}`;
-      setCurrentRunId(newRunId);
-      setCampaignStartTime(new Date());
+      const confirmStart = window.confirm("Start the campaign now?");
+      if (!confirmStart) return;
 
       // Start campaign
       await startCampaignCallingBackend();
 
       // When a new run begins, ensure we show live data again
-      setReadyFlag(false);
+      setIsLiveCallActive(true);
+      toast.success("Campaign started");
     }
   };
-
   // CampaignHistoryCard component
   const CampaignHistoryCard = ({ run, index }) => {
     const runKey = `run-${run._id || run.instanceNumber || index}`;
@@ -4322,7 +4408,6 @@ function CampaignDetails({ campaignId, onBack }) {
       </div>
     );
   };
-
   // Live call logs functions
   const startLiveCallPolling = async (uniqueId) => {
     if (isPolling) {
@@ -4654,7 +4739,6 @@ function CampaignDetails({ campaignId, onBack }) {
           </div>
         </div>
       </div>
-
       {/* Scrollable Content Area */}
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -4756,16 +4840,21 @@ function CampaignDetails({ campaignId, onBack }) {
                 {campaignGroups.map((group) => (
                   <div
                     key={`status-chip-${group._id}`}
-                    className="inline-flex items-start justify-between gap-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2"
+                    className="cursor-pointer inline-flex items-start justify-between gap-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2"
                   >
-                    <div>
-                      <div className="text-sm font-semibold text-gray-800 leading-5">
+                    <button
+                      type="button"
+                      onClick={() => openGroupRangeModal(group._id)}
+                      className="text-left cursor-pointer"
+                      title="View contacts and select range"
+                    >
+                      <div className="cursor-pointer text-sm font-semibold text-gray-800 leading-5">
                         {group.name}
                       </div>
-                      <div className="text-xs text-gray-500 leading-4">
+                      <div className=" cursor-pointer text-xs text-gray-500 leading-4">
                         {group.contacts?.length || 0} contacts
                       </div>
-                    </div>
+                    </button>
                     <button
                       type="button"
                       title="Remove group"
@@ -5053,6 +5142,199 @@ function CampaignDetails({ campaignId, onBack }) {
                 </div>
               )}
           </div>
+
+          {/* Group Range Modal */}
+          {showGroupRangeModal && rangeModalGroup && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center">
+              <div
+                className="absolute inset-0 bg-black/40"
+                onClick={() => setShowGroupRangeModal(false)}
+              ></div>
+              <div className="relative bg-white rounded-lg shadow-xl border border-gray-200 w-full max-w-2xl mx-4 p-5">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    {rangeModalGroup.name} —{" "}
+                    {rangeModalGroup.contacts?.length || 0} contacts
+                  </h3>
+                  <button
+                    className="text-gray-500 hover:text-gray-700"
+                    onClick={() => setShowGroupRangeModal(false)}
+                    title="Close"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 border-b border-gray-200">
+                    <button
+                      className={`px-3 py-2 text-sm ${
+                        groupModalTab === "range"
+                          ? "border-b-2 border-blue-600 text-blue-700"
+                          : "text-gray-600"
+                      }`}
+                      onClick={() => setGroupModalTab("range")}
+                    >
+                      Range
+                    </button>
+                    <button
+                      className={`px-3 py-2 text-sm ${
+                        groupModalTab === "select"
+                          ? "border-b-2 border-blue-600 text-blue-700"
+                          : "text-gray-600"
+                      }`}
+                      onClick={() => setGroupModalTab("select")}
+                    >
+                      Select & Call
+                    </button>
+                  </div>
+                  {groupModalTab === "range" && (
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm text-gray-700 mb-1">
+                          Start from
+                        </label>
+                        <input
+                          type="number"
+                          min={0}
+                          max={Math.max(
+                            0,
+                            rangeModalGroup.contacts?.length || 0
+                          )}
+                          value={rangeStartIndex}
+                          onChange={(e) =>
+                            setRangeStartIndex(parseInt(e.target.value || 0))
+                          }
+                          className="w-full border border-gray-300 rounded-md px-2 py-1"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm text-gray-700 mb-1">
+                          End at (exclusive)
+                        </label>
+                        <input
+                          type="number"
+                          min={0}
+                          max={Math.max(
+                            0,
+                            rangeModalGroup.contacts?.length || 0
+                          )}
+                          value={rangeEndIndex}
+                          onChange={(e) =>
+                            setRangeEndIndex(parseInt(e.target.value || 0))
+                          }
+                          className="w-full border border-gray-300 rounded-md px-2 py-1"
+                        />
+                      </div>
+                    </div>
+                  )}
+                  {groupModalTab === "select" && (
+                    <div className="max-h-60 overflow-auto border rounded-md">
+                      <table className="min-w-full text-sm">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="text-left px-3 py-2 font-medium text-gray-700">
+                              <input
+                                type="checkbox"
+                                className="w-4 h-4"
+                                checked={
+                                  Array.isArray(selectedContactIndices) &&
+                                  rangeModalGroup.contacts &&
+                                  selectedContactIndices.length ===
+                                    rangeModalGroup.contacts.length
+                                }
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    const total =
+                                      rangeModalGroup.contacts?.length || 0;
+                                    setSelectedContactIndices(
+                                      Array.from({ length: total }, (_, i) => i)
+                                    );
+                                    if (groupModalTab === "range") {
+                                      setRangeStartIndex(0);
+                                      setRangeEndIndex(total);
+                                    }
+                                  } else {
+                                    setSelectedContactIndices([]);
+                                  }
+                                }}
+                                title="Select All"
+                              />
+                            </th>
+                            <th className="text-left px-3 py-2 font-medium text-gray-700">
+                              #
+                            </th>
+                            <th className="text-left px-3 py-2 font-medium text-gray-700">
+                              Name
+                            </th>
+                            <th className="text-left px-3 py-2 font-medium text-gray-700">
+                              Phone
+                            </th>
+                            <th className="text-left px-3 py-2 font-medium text-gray-700">
+                              Email
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(rangeModalGroup.contacts || []).map((c, idx) => (
+                            <tr
+                              key={idx}
+                              className={`${
+                                groupModalTab === "range" &&
+                                idx >= rangeStartIndex &&
+                                idx < rangeEndIndex
+                                  ? "bg-green-50"
+                                  : ""
+                              }`}
+                            >
+                              <td className="px-3 py-1">
+                                <input
+                                  type="checkbox"
+                                  className="w-4 h-4"
+                                  checked={selectedContactIndices.includes(idx)}
+                                  onChange={(e) => {
+                                    setSelectedContactIndices((prev) => {
+                                      const set = new Set(prev);
+                                      if (e.target.checked) set.add(idx);
+                                      else set.delete(idx);
+                                      return Array.from(set);
+                                    });
+                                  }}
+                                  title="Select contact"
+                                />
+                              </td>
+                              <td className="px-3 py-1 text-gray-600">{idx}</td>
+                              <td className="px-3 py-1">{c.name || ""}</td>
+                              <td className="px-3 py-1">{c.phone}</td>
+                              <td className="px-3 py-1">{c.email || ""}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+                <div className="mt-4 flex items-center justify-end gap-2">
+                  <button
+                    className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-white hover:bg-gray-50"
+                    onClick={() => setShowGroupRangeModal(false)}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="px-3 py-1.5 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+                    disabled={rangeModalLoading}
+                    onClick={saveGroupRangeToCampaign}
+                  >
+                    {rangeModalLoading
+                      ? "Saving..."
+                      : groupModalTab === "select"
+                      ? "Add to Campaign"
+                      : "Add to Campaign"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Minimal Leads + Transcript Section */}
           <div
@@ -5721,7 +6003,6 @@ function CampaignDetails({ campaignId, onBack }) {
           {/* Missed Calls list removed; use filter + Call Again button in header */}
         </div>
       </div>
-
       {/* Transcript Modal */}
       {showTranscriptModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
@@ -6064,7 +6345,6 @@ function CampaignDetails({ campaignId, onBack }) {
                   )}
                 </div>
               )}
-
               {/* Calling Interface */}
               {selectedAgent && (
                 <div>
@@ -6688,7 +6968,6 @@ function CampaignDetails({ campaignId, onBack }) {
           </div>
         </div>
       )}
-
       {/* Campaign Contacts Management Modal */}
       {showContactsModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -7237,7 +7516,6 @@ function CampaignDetails({ campaignId, onBack }) {
           </div>
         </div>
       )}
-
       {/* Live Call Modal */}
       {showLiveCallModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
