@@ -1559,7 +1559,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                       { key: "new", label: "New" },
                       { key: "prime", label: "Prime" },
                       { key: "demo", label: "Demo" },
-                      { key: "owned", label: "Owned" },
+                      { key: "owned", label: "In-house" },
                       { key: "testing", label: "Testing" },
                       { key: "rejected", label: "Rejected" },
                     ].map((btn) => (
