@@ -876,6 +876,9 @@ const AllAgents = () => {
                       <div className="text-xs text-gray-400">
                         Personality: {agent.personality || "Formal"}
                       </div>
+                      <div className="text-xs text-gray-400">
+                        DID: {agent.didNumber || "-"}
+                      </div>
                     </div>
                   </td>
 
