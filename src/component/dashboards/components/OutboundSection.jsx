@@ -23,7 +23,11 @@ function OutboundSection({ tenantId }) {
   const [showAddCampaignForm, setShowAddCampaignForm] = useState(false);
 
   // Form states
-  const [groupForm, setGroupForm] = useState({ name: "", description: "" });
+  const [groupForm, setGroupForm] = useState({
+    name: "",
+    description: "",
+    category: "",
+  });
   const [campaignForm, setCampaignForm] = useState({
     name: "",
     description: "",
@@ -89,6 +93,12 @@ function OutboundSection({ tenantId }) {
   const [selectedCampaignId, setSelectedCampaignId] = useState(null);
   const [viewMode, setViewMode] = useState("grid");
   const [campaignViewMode, setCampaignViewMode] = useState("grid");
+  const [selectedCategory, setSelectedCategory] = useState("all");
+
+  // Reset category filter when switching tabs
+  useEffect(() => {
+    setSelectedCategory("all");
+  }, [activeTab]);
 
   // Group editing UI state
   const [openMenuGroupId, setOpenMenuGroupId] = useState(null);
@@ -124,6 +134,44 @@ function OutboundSection({ tenantId }) {
         : g.contacts?.length || 0),
     0
   );
+
+  // Categories and filtered data (case-insensitive unique keys with display labels)
+  const buildCategories = (items) => {
+    const map = new Map();
+    for (const item of items || []) {
+      const label = item?.category;
+      if (!label) continue;
+      const key = String(label).trim().toLowerCase();
+      if (!key) continue;
+      if (!map.has(key)) map.set(key, label);
+    }
+    return Array.from(map.entries()).map(([key, label]) => ({ key, label }));
+  };
+
+  const groupCategories = buildCategories(contactGroups);
+  const campaignCategories = buildCategories(campaigns);
+  const categories =
+    activeTab === "groups" ? groupCategories : campaignCategories;
+
+  const filteredGroups =
+    selectedCategory === "all"
+      ? contactGroups
+      : (contactGroups || []).filter(
+          (g) =>
+            String(g?.category || "")
+              .trim()
+              .toLowerCase() === selectedCategory
+        );
+
+  const filteredCampaigns =
+    selectedCategory === "all"
+      ? campaigns
+      : (campaigns || []).filter(
+          (c) =>
+            String(c?.category || "")
+              .trim()
+              .toLowerCase() === selectedCategory
+        );
 
   useEffect(() => {
     fetchGroups();
@@ -198,12 +246,13 @@ function OutboundSection({ tenantId }) {
         body: JSON.stringify({
           name: groupForm.name,
           description: groupForm.description,
+          category: groupForm.category,
         }),
       });
 
       const result = await response.json();
       if (result.success) {
-        setGroupForm({ name: "", description: "" });
+        setGroupForm({ name: "", description: "", category: "" });
         setShowAddGroupForm(false);
         fetchGroups(); // Refresh the list
       } else {
@@ -275,6 +324,7 @@ function OutboundSection({ tenantId }) {
         body: JSON.stringify({
           name: `${group.name}_copy`,
           description: group.description || "",
+          category: group.category || "",
         }),
       });
 
@@ -392,6 +442,7 @@ function OutboundSection({ tenantId }) {
     setGroupEditForm({
       name: group.name || "",
       description: group.description || "",
+      category: group.category || "",
     });
     setShowEditGroupForm(true);
     setOpenMenuGroupId(null);
@@ -591,6 +642,33 @@ function OutboundSection({ tenantId }) {
             )}
           </div>
         </div>
+        {categories.length > 0 && (
+          <div className="mb-4 flex flex-wrap gap-2">
+            <button
+              className={`px-3 py-1 rounded-full border text-sm ${
+                selectedCategory === "all"
+                  ? "bg-black text-white border-black"
+                  : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+              }`}
+              onClick={() => setSelectedCategory("all")}
+            >
+              All
+            </button>
+            {categories.map((cat) => (
+              <button
+                key={cat.key}
+                className={`px-3 py-1 rounded-full border text-sm ${
+                  selectedCategory === cat.key
+                    ? "bg-black text-white border-black"
+                    : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                }`}
+                onClick={() => setSelectedCategory(cat.key)}
+              >
+                {cat.label}
+              </button>
+            ))}
+          </div>
+        )}
 
         {activeTab === "groups" && (
           <div>
@@ -653,7 +731,7 @@ function OutboundSection({ tenantId }) {
               </div>
             ) : viewMode === "grid" ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-                {contactGroups.map((group) => (
+                {filteredGroups.map((group) => (
                   <div
                     key={group._id}
                     className="group bg-white border border-gray-200 rounded-2xl p-5 hover:shadow-lg hover:border-blue-300 transition-all duration-200 h-48 flex flex-col cursor-pointer relative hover:-translate-y-0.5"
@@ -738,7 +816,7 @@ function OutboundSection({ tenantId }) {
               </div>
             ) : (
               <div className="divide-y divide-gray-200 border border-gray-200 rounded-xl bg-white">
-                {contactGroups.map((group) => (
+                {filteredGroups.map((group) => (
                   <div
                     key={group._id}
                     className="flex items-center justify-between p-4 hover:bg-gray-50"
@@ -847,7 +925,7 @@ function OutboundSection({ tenantId }) {
                     : "divide-y divide-gray-200 border border-gray-200 rounded-xl bg-white"
                 }
               >
-                {campaigns.map((campaign) =>
+                {filteredCampaigns.map((campaign) =>
                   campaignViewMode === "grid" ? (
                     <div
                       key={campaign._id}
@@ -1118,6 +1196,20 @@ function OutboundSection({ tenantId }) {
                     value={groupForm.name}
                     onChange={(e) =>
                       setGroupForm({ ...groupForm, name: e.target.value })
+                    }
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors"
+                  />
+                </div>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Category
+                  </label>
+                  <input
+                    type="text"
+                    value={groupForm.category}
+                    onChange={(e) =>
+                      setGroupForm({ ...groupForm, category: e.target.value })
                     }
                     required
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors"
