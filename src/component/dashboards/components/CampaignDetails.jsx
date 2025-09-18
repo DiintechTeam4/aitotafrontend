@@ -7265,7 +7265,7 @@ function CampaignDetails({ campaignId, onBack }) {
 
       {/* Add Groups Modal */}
       {showAddGroupsModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl w-11/12 max-w-4xl max-h-[90vh] overflow-y-auto shadow-2xl add-groups-modal">
             <div className="flex justify-between items-center p-6 border-b border-gray-200">
               <h3 className="text-2xl font-bold text-gray-800">
@@ -7302,7 +7302,7 @@ function CampaignDetails({ campaignId, onBack }) {
                               {group.name}
                             </div>
                             <div className="text-xs text-gray-500">
-                              {group.contacts?.length || 0} contacts
+                              {group.contactsCount || 0} contacts
                             </div>
                           </div>
                           <button
