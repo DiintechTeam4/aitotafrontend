@@ -799,7 +799,6 @@ function CampaignDetails({ campaignId, onBack }) {
     }
     return "";
   };
-
   // Helper function to safely get contact display name
   const getContactDisplayName = (contact) => {
     const name = getContactName(contact);
@@ -4852,7 +4851,10 @@ function CampaignDetails({ campaignId, onBack }) {
                         {group.name}
                       </div>
                       <div className=" cursor-pointer text-xs text-gray-500 leading-4">
-                        {group.contacts?.length || 0} contacts
+                        {typeof group.contactsCount === "number"
+                          ? group.contactsCount
+                          : group.contacts?.length || 0}{" "}
+                        contacts
                       </div>
                     </button>
                     <button
@@ -5154,7 +5156,10 @@ function CampaignDetails({ campaignId, onBack }) {
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-lg font-semibold text-gray-900">
                     {rangeModalGroup.name} —{" "}
-                    {rangeModalGroup.contacts?.length || 0} contacts
+                    {typeof rangeModalGroup.contactsCount === "number"
+                      ? rangeModalGroup.contactsCount
+                      : rangeModalGroup.contacts?.length || 0}{" "}
+                    contacts
                   </h3>
                   <button
                     className="text-gray-500 hover:text-gray-700"
@@ -7302,7 +7307,10 @@ function CampaignDetails({ campaignId, onBack }) {
                               {group.name}
                             </div>
                             <div className="text-xs text-gray-500">
-                              {group.contactsCount || 0} contacts
+                              {typeof group.contactsCount === "number"
+                                ? group.contactsCount
+                                : group.contacts?.length || 0}{" "}
+                              contacts
                             </div>
                           </div>
                           <button
@@ -7391,7 +7399,10 @@ function CampaignDetails({ campaignId, onBack }) {
                           {group.description}
                         </p>
                         <div className="text-xs text-gray-500">
-                          {group.contacts?.length || 0} contacts
+                          {typeof group.contactsCount === "number"
+                            ? group.contactsCount
+                            : group.contacts?.length || 0}{" "}
+                          contacts
                         </div>
                       </div>
                     ))}
