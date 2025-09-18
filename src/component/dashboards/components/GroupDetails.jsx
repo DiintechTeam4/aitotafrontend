@@ -38,7 +38,10 @@ function GroupDetails({ groupId, onBack }) {
     isValid: false,
     totalRows: 0,
     validRows: 0,
+    uniqueContacts: [],
+    duplicateCount: 0,
   });
+  const [importResult, setImportResult] = useState(null);
   const [agents, setAgents] = useState([]);
   const [showAgentDropdown, setShowAgentDropdown] = useState(false);
   const [loadingAgents, setLoadingAgents] = useState(false);
@@ -501,6 +504,13 @@ function GroupDetails({ groupId, onBack }) {
   };
 
   // CSV/Excel Import Functions
+  const normalizePhoneLocal = (value) => {
+    if (!value) return "";
+    const raw = String(value).trim();
+    const kept = raw.replace(/[^\d+]/g, "");
+    const cleaned = kept.replace(/\+(?=.+\+)/g, "");
+    return cleaned.startsWith("+") ? cleaned : cleaned;
+  };
   const parseCSV = (csvText) => {
     const lines = csvText.split(/\r?\n/);
     const data = [];
@@ -654,13 +664,39 @@ function GroupDetails({ groupId, onBack }) {
         result = await parseExcel(file);
       }
 
+      // Build duplicate stats on frontend using phone only
+      const existingSet = new Set(
+        (contacts || [])
+          .map((c) => normalizePhoneLocal(c.normalizedPhone || c.phone))
+          .filter(Boolean)
+      );
+      const seenInFile = new Set();
+      const uniqueContacts = [];
+      for (const c of result.data) {
+        const normalized = normalizePhoneLocal(c.phone);
+        if (!normalized) continue;
+        if (seenInFile.has(normalized)) continue; // duplicate within file
+        if (existingSet.has(normalized)) {
+          seenInFile.add(normalized);
+          continue; // already in group
+        }
+        seenInFile.add(normalized);
+        uniqueContacts.push(c);
+      }
+      const duplicateCount = Math.max(
+        0,
+        result.data.length - uniqueContacts.length
+      );
+
       setImportData((prev) => ({
         ...prev,
         parsedData: result.data,
         errors: result.errors,
-        isValid: result.errors.length === 0 && result.data.length > 0,
+        isValid: result.errors.length === 0 && uniqueContacts.length > 0,
         totalRows: result.data.length + result.errors.length,
         validRows: result.data.length,
+        uniqueContacts,
+        duplicateCount,
       }));
     } catch (error) {
       console.error("Error processing file:", error);
@@ -673,7 +709,7 @@ function GroupDetails({ groupId, onBack }) {
   };
 
   const handleImportContacts = async () => {
-    if (!importData.isValid || importData.parsedData.length === 0) {
+    if (!importData.isValid || (importData.uniqueContacts || []).length === 0) {
       toast.warn("No valid contacts to import");
       return;
     }
@@ -689,7 +725,7 @@ function GroupDetails({ groupId, onBack }) {
             Authorization: `Bearer ${token}`,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ contacts: importData.parsedData }),
+          body: JSON.stringify({ contacts: importData.uniqueContacts }),
         }
       );
 
@@ -698,23 +734,20 @@ function GroupDetails({ groupId, onBack }) {
         throw new Error(result.error || "Bulk import failed");
       }
 
+      // Use frontend counts to avoid relying on backend
+      const requested = (importData.uniqueContacts || []).length;
+      const duplicates = importData.duplicateCount || 0;
+      const added = requested; // we only send unique contacts
+
       toast.success(
-        `Imported ${result.added} of ${result.requested} contact(s)`
+        `Imported ${added} of ${requested} contact(s). Duplicates (skipped): ${duplicates}.`
       );
 
       // Refresh from server to ensure real Mongo _id and fresh state
       await fetchGroupDetails();
 
-      // Reset import data
-      setImportData({
-        file: null,
-        parsedData: [],
-        errors: [],
-        isValid: false,
-        totalRows: 0,
-        validRows: 0,
-      });
-      setShowImportModal(false);
+      // Store summary to show in UI and keep modal open for clarity
+      setImportResult({ requested, added, duplicates });
     } catch (error) {
       console.error("Error during import:", error);
       toast.error(error.message || "Error during import. Please try again.");
@@ -1329,27 +1362,8 @@ function GroupDetails({ groupId, onBack }) {
                 <h4 className="text-lg font-semibold text-gray-800 mb-4">
                   Upload File
                 </h4>
-                {/* Action Buttons */}
-                <div className="flex gap-4 justify-end pt-4">
-                  <button
-                    type="button"
-                    className="px-4 py-2 bg-gray-100 text-gray-700 border border-gray-300 rounded hover:bg-gray-200 transition-colors"
-                    onClick={() => setShowImportModal(false)}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
-                    onClick={handleImportContacts}
-                    disabled={!importData.isValid || importingContacts}
-                  >
-                    {importingContacts
-                      ? "Importing..."
-                      : `Import ${importData.validRows} Contacts`}
-                  </button>
-                </div>
-                <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+                {/* Upload Area */}
+                <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-blue-400 transition-colors">
                   <input
                     type="file"
                     accept=".csv,.xlsx,.xls"
@@ -1359,7 +1373,7 @@ function GroupDetails({ groupId, onBack }) {
                   />
                   <label
                     htmlFor="file-upload"
-                    className="cursor-pointer inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                    className="cursor-pointer inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors shadow-sm"
                   >
                     <svg
                       className="w-4 h-4 mr-2"
@@ -1380,6 +1394,59 @@ function GroupDetails({ groupId, onBack }) {
                     Supported formats: CSV, XLSX, XLS
                   </p>
                 </div>
+                {/* Summary stats (pre-import) */}
+                {importData.file && !importResult && (
+                  <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="rounded-lg border border-gray-200 bg-white p-3">
+                      <div className="text-xs text-gray-500">Total Rows</div>
+                      <div className="text-lg font-semibold text-gray-800">
+                        {importData.totalRows}
+                      </div>
+                    </div>
+                    <div className="rounded-lg border border-green-200 bg-green-50 p-3">
+                      <div className="text-xs text-green-700">Valid</div>
+                      <div className="text-lg font-semibold text-green-800">
+                        {importData.validRows}
+                      </div>
+                    </div>
+                    <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-3">
+                      <div className="text-xs text-yellow-700">
+                        Duplicates
+                      </div>
+                      <div className="text-lg font-semibold text-yellow-800">
+                        {importData.duplicateCount}
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {/* Action Buttons */}
+                {!importResult && (
+                  <div className="flex gap-4 justify-end pt-4">
+                    <button
+                      type="button"
+                      className="px-4 py-2 bg-gray-100 text-gray-700 border border-gray-300 rounded hover:bg-gray-200 transition-colors"
+                      onClick={() => setShowImportModal(false)}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+                      onClick={handleImportContacts}
+                      disabled={
+                        !importData.isValid ||
+                        importingContacts ||
+                        (importData.uniqueContacts || []).length === 0
+                      }
+                    >
+                      {importingContacts
+                        ? "Importing..."
+                        : `Import ${
+                            importData.uniqueContacts?.length || 0
+                          } Unique Contacts`}
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* File Preview */}
@@ -1453,6 +1520,55 @@ function GroupDetails({ groupId, onBack }) {
                         </div>
                       </div>
                     )}
+                  </div>
+                </div>
+              )}
+
+              {/* Import Result Summary */}
+              {importResult && (
+                <div className="mb-6">
+                  <h4 className="text-lg font-semibold text-gray-800 mb-4">
+                    Import Summary
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="rounded-lg border border-gray-200 bg-white p-4">
+                      <div className="text-xs text-gray-500">Requested</div>
+                      <div className="text-2xl font-bold text-gray-900">
+                        {importResult.requested}
+                      </div>
+                    </div>
+                    <div className="rounded-lg border border-green-200 bg-green-50 p-4">
+                      <div className="text-xs text-green-700">Imported</div>
+                      <div className="text-2xl font-bold text-green-900">
+                        {importResult.added}
+                      </div>
+                    </div>
+                    <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4">
+                      <div className="text-xs text-yellow-700">Duplicates</div>
+                      <div className="text-2xl font-bold text-yellow-900">
+                        {importResult.duplicates}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex justify-end mt-4">
+                    <button
+                      type="button"
+                      className="px-4 py-2 bg-black text-white rounded hover:bg-gray-800 transition-colors"
+                      onClick={() => {
+                        setImportData({
+                          file: null,
+                          parsedData: [],
+                          errors: [],
+                          isValid: false,
+                          totalRows: 0,
+                          validRows: 0,
+                        });
+                        setImportResult(null);
+                        setShowImportModal(false);
+                      }}
+                    >
+                      Done
+                    </button>
                   </div>
                 </div>
               )}
