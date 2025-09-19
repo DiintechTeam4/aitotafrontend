@@ -1059,16 +1059,21 @@ function CampaignDetails({ campaignId, onBack }) {
     fetchCampaignCallingStatus();
   }, [campaignId]);
 
-  // Defer heavy data fetching until the campaign is actually running
+  // Defer heavy data fetching until the campaign is actually running (with debouncing)
   useEffect(() => {
     const isRunning =
       (campaign && campaign.isActive) || callingStatus === "calling";
     if (!campaignId || !isRunning) return;
 
-    // Load merged calls from new API
-    fetchApiMergedCalls(1);
-    // Load viewed transcripts
-    loadViewedTranscripts();
+    // Debounce rapid state changes to prevent multiple API calls
+    const timeoutId = setTimeout(() => {
+      // Load merged calls from new API
+      fetchApiMergedCalls(1);
+      // Load viewed transcripts
+      loadViewedTranscripts();
+    }, 500); // 500ms debounce delay
+
+    return () => clearTimeout(timeoutId);
   }, [campaign?.isActive, callingStatus, campaignId]);
 
   // Refresh history when calling stops or completes so the last run appears
@@ -1100,7 +1105,7 @@ function CampaignDetails({ campaignId, onBack }) {
     if (campaign?._id) {
       fetchCampaignContacts();
     }
-  }, [campaign]);
+  }, [campaign?._id]); // Only fetch when campaign ID changes, not when campaign object updates
 
   // Load calling state when campaign contacts are available
   useEffect(() => {
@@ -2509,15 +2514,21 @@ function CampaignDetails({ campaignId, onBack }) {
     }
   };
 
-  // Poll calling status while on page so button state and auto-save react live
+  // Poll calling status only when campaign is active/running and page is visible (every 5 seconds)
   useEffect(() => {
-    if (!campaignId) return;
+    if (!campaignId || !campaign?.isActive) return;
+
     let intervalId = null;
-    const poll = () => fetchCampaignCallingStatus();
-    poll();
-    intervalId = setInterval(poll, 3000);
+    const poll = () => {
+      // Only fetch if page is visible to user
+      if (document.visibilityState === "visible") {
+        fetchCampaignCallingStatus();
+      }
+    };
+    poll(); // Initial call
+    intervalId = setInterval(poll, 5000); // Changed from 3000ms to 5000ms
     return () => intervalId && clearInterval(intervalId);
-  }, [campaignId]);
+  }, [campaignId, campaign?.isActive]); // Added campaign?.isActive dependency
 
   // Universal calling function that handles all calling scenarios
   const universalCalling = async (options = {}) => {
