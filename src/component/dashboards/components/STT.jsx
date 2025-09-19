@@ -820,4 +820,3 @@ const STT = ({ onBack }) => {
 
 export default STT;
 
-
