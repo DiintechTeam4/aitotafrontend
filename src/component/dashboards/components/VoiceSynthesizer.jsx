@@ -8,6 +8,7 @@ const VoiceSynthesizer = ({
   text,
   language = "en",
   speaker,
+  serviceProvider = "sarvam",
   onAudioGenerated,
   clientId,
 }) => {
@@ -66,6 +67,7 @@ const VoiceSynthesizer = ({
             text,
             language,
             speaker: sanitizeSpeaker(language, speaker),
+            serviceProvider,
           }),
         }
       );
@@ -163,7 +165,7 @@ const VoiceSynthesizer = ({
       {isGenerating && (
         <div className="flex items-center justify-center gap-2 text-indigo-500 font-bold mb-4">
           <div className="w-10 h-10 border-4 border-gray-200 border-t-indigo-500 rounded-full animate-spin mb-4"></div>
-          <span>Generating audio using Sarvam AI...</span>
+          <span>Generating audio using {serviceProvider === "elevenlabs" ? "ElevenLabs" : "Sarvam AI"}...</span>
         </div>
       )}
 
