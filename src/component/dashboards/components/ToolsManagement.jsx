@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { API_BASE_URL } from "../../../config";
+import STT from "./STT";
 
 const ToolsManagement = () => {
   // Tools/Templates state
@@ -962,16 +963,21 @@ const ToolsManagement = () => {
   const renderRegularToolsPage = () => (
     <div className="space-y-6">
       <h3 className="text-xl font-semibold text-gray-800 mb-4">Tools</h3>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
         {[
           { id: "whatsapp", label: "WhatsApp", color: "bg-green-600" },
           { id: "telegram", label: "Telegram", color: "bg-blue-500" },
           { id: "email", label: "Email", color: "bg-red-500" },
           { id: "sms", label: "SMS", color: "bg-purple-600" },
+          { id: "stt", label: "STT", color: "bg-indigo-600" },
         ].map((t) => (
           <button
             key={t.id}
-            onClick={() => setActiveTool(t.id)}
+            onClick={() => {
+              if (t.id === 'stt') return setActivePage('stt');
+              if (t.id === 'telegram' || t.id === 'email' || t.id === 'sms') return setActivePage(t.id);
+              setActiveTool(t.id);
+            }}
             className={`h-28 rounded-xl text-white text-2xl font-semibold shadow transition transform hover:-translate-y-0.5 ${t.color}`}
           >
             {t.label}
@@ -1136,9 +1142,31 @@ const ToolsManagement = () => {
     </div>
   );
 
+  const [activePage, setActivePage] = useState('tools'); // tools | whatsapp | telegram | email | sms | stt
+
+  useEffect(() => {
+    if (activeTool === 'whatsapp') setActivePage('whatsapp');
+  }, [activeTool]);
+
+  const renderSimplePage = (label) => (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <button onClick={() => setActivePage('tools')} className="px-3 py-2 text-sm bg-gray-100 border rounded hover:bg-gray-200">← Back</button>
+        <div className="text-lg font-semibold">{label}</div>
+        <div></div>
+      </div>
+      <div className="text-sm text-gray-600">This page is under construction.</div>
+    </div>
+  );
+
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
-      {whatsappPage ? renderWhatsappPage() : renderRegularToolsPage()}
+      {activePage === 'tools' && renderRegularToolsPage()}
+      {activePage === 'whatsapp' && renderWhatsappPage()}
+      {activePage === 'stt' && <STT onBack={() => setActivePage('tools')} />}
+      {activePage === 'telegram' && renderSimplePage('Telegram Templates')}
+      {activePage === 'email' && renderSimplePage('Email Templates')}
+      {activePage === 'sms' && renderSimplePage('SMS Templates')}
     </div>
   );
 };
