@@ -28,6 +28,8 @@ function CampaignDetails({ campaignId, onBack }) {
   const [selectedGroups, setSelectedGroups] = useState([]);
   const [loading, setLoading] = useState(false);
   const [addingGroups, setAddingGroups] = useState(false);
+  // Auto-refresh toggle for Recent call logs
+  const [autoRefreshCalls, setAutoRefreshCalls] = useState(false);
 
   // New states for calling functionality
   const [agents, setAgents] = useState([]);
@@ -712,24 +714,26 @@ function CampaignDetails({ campaignId, onBack }) {
   // Collapsible Campaign Runs section
   const [campaignRunsCollapsed, setCampaignRunsCollapsed] = useState(false);
 
-  // Auto-refresh recent call logs every 2 seconds (only when expanded and campaign is active)
+  // Auto-refresh recent call logs (toggleable). When enabled, refresh every 2 seconds
   useEffect(() => {
-    if (statusLogsCollapsed || !campaign?.isActive || readyForNextRun) return;
+    if (!autoRefreshCalls) return;
+    // Immediate fetch on enabling
+    try {
+      if (document.visibilityState === "visible") {
+        fetchCampaignCallLogs(1);
+        fetchApiMergedCalls(apiMergedCallsPage, true, true);
+      }
+    } catch (err) {}
     const intervalId = setInterval(() => {
       try {
-        fetchCampaignCallLogs(1);
-        fetchApiMergedCalls(apiMergedCallsPage, true, true); // Auto-refresh with append to preserve accumulated list
-      } catch (err) {
-        // no-op
-      }
+        if (document.visibilityState === "visible") {
+          fetchCampaignCallLogs(1);
+          fetchApiMergedCalls(apiMergedCallsPage, true, true);
+        }
+      } catch (err) {}
     }, 2000);
     return () => clearInterval(intervalId);
-  }, [
-    statusLogsCollapsed,
-    apiMergedCallsPage,
-    campaign?.isActive,
-    readyForNextRun,
-  ]);
+  }, [autoRefreshCalls, apiMergedCallsPage]);
   const connectionTimeoutRef = useRef(null);
 
   // When campaign transitions from active -> inactive, refresh status once to update UI
@@ -5670,6 +5674,16 @@ function CampaignDetails({ campaignId, onBack }) {
                 Recent call logs
               </h2>
               <div className="flex items-center gap-3">
+                {/* Auto refresh toggle */}
+                <label className="flex items-center gap-2 text-sm select-none">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4"
+                    checked={autoRefreshCalls}
+                    onChange={(e) => setAutoRefreshCalls(e.target.checked)}
+                  />
+                  {autoRefreshCalls ? "Auto-refresh: On" : "Auto-refresh: Off"}
+                </label>
                 <button
                   onClick={() => fetchApiMergedCalls(1, false, false)}
                   className="text-sm px-2 py-1 bg-gray-50 text-black rounded-md hover:bg-gray-100 transition-colors border border-gray-200 flex items-center justify-between"
