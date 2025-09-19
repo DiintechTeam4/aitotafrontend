@@ -847,7 +847,19 @@ export default function CreditsOverview() {
 
   // Get credits used history with call details
   const getCreditsUsedHistory = () => {
-    const filteredHistory = history.filter((item) => item.amount < 0);
+    const filteredHistory = history.filter((item) => {
+      if (!(item.amount < 0)) return false;
+      const rawDuration =
+        item.duration !== undefined && item.duration !== null
+          ? Number(item.duration)
+          : item.metadata && item.metadata.duration !== undefined
+          ? Number(item.metadata.duration)
+          : 0;
+      const hasDurationFormatted =
+        typeof item?.metadata?.durationFormatted === "string" &&
+        item.metadata.durationFormatted.trim() !== "";
+      return rawDuration > 0 && hasDurationFormatted; // Exclude rows with null/0 duration or missing mins string
+    });
 
     // Calculate pagination
     const indexOfLastItem = currentPage * itemsPerPage;
@@ -885,14 +897,46 @@ export default function CreditsOverview() {
       callDirection: item.metadata?.callDirection || "unknown",
       duration: item.duration || 0,
       uniqueId: item.metadata?.uniqueid || null,
-      campaignName: (item.metadata?.uniqueid && uniqueIdToCampaign[item.metadata.uniqueid]) || "-",
+      campaignName:
+        (item.metadata?.uniqueid &&
+          uniqueIdToCampaign[item.metadata.uniqueid]) ||
+        "-",
     }));
   };
 
   // Get total pages for pagination
   const getTotalPages = () => {
-    const filteredHistory = history.filter((item) => item.amount < 0);
+    const filteredHistory = history.filter((item) => {
+      if (!(item.amount < 0)) return false;
+      const rawDuration =
+        item.duration !== undefined && item.duration !== null
+          ? Number(item.duration)
+          : item.metadata && item.metadata.duration !== undefined
+          ? Number(item.metadata.duration)
+          : 0;
+      const hasDurationFormatted =
+        typeof item?.metadata?.durationFormatted === "string" &&
+        item.metadata.durationFormatted.trim() !== "";
+      return rawDuration > 0 && hasDurationFormatted; // Keep only rows with duration > 0 and visible mins
+    });
     return Math.ceil(filteredHistory.length / itemsPerPage);
+  };
+
+  // Helper to get count used for pagination summary
+  const getFilteredUsedCount = () => {
+    return history.filter((item) => {
+      if (!(item.amount < 0)) return false;
+      const rawDuration =
+        item.duration !== undefined && item.duration !== null
+          ? Number(item.duration)
+          : item.metadata && item.metadata.duration !== undefined
+          ? Number(item.metadata.duration)
+          : 0;
+      const hasDurationFormatted =
+        typeof item?.metadata?.durationFormatted === "string" &&
+        item.metadata.durationFormatted.trim() !== "";
+      return rawDuration > 0 && hasDurationFormatted;
+    }).length;
   };
 
   if (loading) {
@@ -1175,7 +1219,9 @@ export default function CreditsOverview() {
                     <div className="text-xs text-gray-500">credits</div>
                   </td>
                   <td className="py-4 px-4">
-                    <div className="text-sm text-gray-900 font-medium">{usage.campaignName}</div>
+                    <div className="text-sm text-gray-900 font-medium">
+                      {usage.campaignName}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -1216,16 +1262,13 @@ export default function CreditsOverview() {
         </div>
 
         {/* Pagination for Credit Usage Table */}
-        {history.filter((item) => item.amount < 0).length > itemsPerPage && (
+        {getFilteredUsedCount() > itemsPerPage && (
           <div className="flex items-center justify-between px-4 py-3 bg-white border-t border-gray-200">
             <div className="flex items-center text-sm text-gray-700">
               <span>
                 Showing {(currentPage - 1) * itemsPerPage + 1} to{" "}
-                {Math.min(
-                  currentPage * itemsPerPage,
-                  history.filter((item) => item.amount < 0).length
-                )}{" "}
-                of {history.filter((item) => item.amount < 0).length} results
+                {Math.min(currentPage * itemsPerPage, getFilteredUsedCount())}{" "}
+                of {getFilteredUsedCount()} results
               </span>
             </div>
             <div className="flex items-center space-x-2">
