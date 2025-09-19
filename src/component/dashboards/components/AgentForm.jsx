@@ -1240,8 +1240,8 @@ const AgentForm = ({
             onChange={handleVoiceServiceProviderChange}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
           >
-            <option value="sarvam">Sarvam AI</option>
-            <option value="elevenlabs">ElevenLabs</option>
+            <option value="sarvam">Basic</option>
+            <option value="elevenlabs">Premium</option>
           </select>
         </div>
       </div>
@@ -1262,26 +1262,34 @@ const AgentForm = ({
         >
           {formData.voiceServiceProvider === "sarvam" ? (
             <>
-              <option value="anushka">Anushka</option>
-              <option value="meera">Meera</option>
-              <option value="pavithra">Pavithra</option>
-              <option value="maitreyi">Maitreyi</option>
-              <option value="arvind">Arvind</option>
-              <option value="amol">Amol</option>
-              <option value="amartya">Amartya</option>
-              <option value="diya">Diya</option>
-              <option value="neel">Neel</option>
-              <option value="misha">Misha</option>
-              <option value="vian">Vian</option>
-              <option value="arjun">Arjun</option>
-              <option value="maya">Maya</option>
+              <optgroup label="Female">
+                <option value="anushka">Anushka</option>
+                <option value="meera">Meera</option>
+                <option value="pavithra">Pavithra</option>
+                <option value="maitreyi">Maitreyi</option>
+                <option value="diya">Diya</option>
+                <option value="misha">Misha</option>
+                <option value="maya">Maya</option>
+              </optgroup>
+              <optgroup label="Male">
+                <option value="arvind">Arvind</option>
+                <option value="amol">Amol</option>
+                <option value="amartya">Amartya</option>
+                <option value="neel">Neel</option>
+                <option value="vian">Vian</option>
+                <option value="arjun">Arjun</option>
+              </optgroup>
             </>
           ) : (
             <>
-              <option value="kumaran">Kumaran</option>
-              <option value="monika">Monika</option>
-              <option value="aahir">Aahir</option>
-              <option value="kanika">Kanika</option>
+              <optgroup label="Female">
+                <option value="monika">Monika</option>
+                <option value="kanika">Kanika</option>
+              </optgroup>
+              <optgroup label="Male">
+                <option value="kumaran">Kumaran</option>
+                <option value="aahir">Aahir</option>
+              </optgroup>
             </>
           )}
         </select>

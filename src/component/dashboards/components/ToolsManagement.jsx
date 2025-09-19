@@ -963,182 +963,43 @@ const ToolsManagement = () => {
   const renderRegularToolsPage = () => (
     <div className="space-y-6">
       <h3 className="text-xl font-semibold text-gray-800 mb-4">Tools</h3>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
-        {[
-          { id: "whatsapp", label: "WhatsApp", color: "bg-green-600" },
-          { id: "telegram", label: "Telegram", color: "bg-blue-500" },
-          { id: "email", label: "Email", color: "bg-red-500" },
-          { id: "sms", label: "SMS", color: "bg-purple-600" },
-          { id: "stt", label: "STT", color: "bg-indigo-600" },
-        ].map((t) => (
-          <button
-            key={t.id}
-            onClick={() => {
-              if (t.id === 'stt') return setActivePage('stt');
-              if (t.id === 'telegram' || t.id === 'email' || t.id === 'sms') return setActivePage(t.id);
-              setActiveTool(t.id);
-            }}
-            className={`h-28 rounded-xl text-white text-2xl font-semibold shadow transition transform hover:-translate-y-0.5 ${t.color}`}
-          >
-            {t.label}
-          </button>
-        ))}
+
+      {/* Social Media Tools */}
+      <div>
+        <div className="text-sm font-semibold text-gray-600 mb-2">Social Media</div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          {[
+            { id: "whatsapp", label: "WhatsApp", color: "bg-green-600" },
+            { id: "telegram", label: "Telegram", color: "bg-blue-500" },
+            { id: "email", label: "Email", color: "bg-red-500" },
+            { id: "sms", label: "SMS", color: "bg-purple-600" },
+          ].map((t) => (
+            <button
+              key={t.id}
+              onClick={() => {
+                if (t.id === 'telegram' || t.id === 'email' || t.id === 'sms') return setActivePage(t.id);
+                setActiveTool(t.id);
+              }}
+              className={`h-28 rounded-xl text-white text-2xl font-semibold shadow transition transform hover:-translate-y-0.5 ${t.color}`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {activeTool && activeTool !== 'whatsapp' && (
-        <div>
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
-            <h4 className="text-lg font-semibold capitalize">{activeTool} Templates</h4>
-            {!externalTemplates && (
-              <div className="flex gap-2 items-center">
-                <input
-                  value={assignAgentId}
-                  onChange={(e) => setAssignAgentId(e.target.value)}
-                  placeholder="Agent ID to assign"
-                  className="px-3 py-2 border rounded w-72"
-                />
-                <button onClick={assignTemplates} className="px-4 py-2 bg-black text-white rounded">
-                  Assign Selected
-                </button>
-              </div>
-            )}
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {templates.map((t) => (
-              <div
-                key={t._id}
-                onClick={() => !externalTemplates && toggleSelectTemplate(t._id)}
-                className={`cursor-pointer border rounded-lg p-5 bg-white shadow-sm hover:shadow-md transition ${
-                  !externalTemplates && selectedTemplateIds.includes(t._id) ? "ring-2 ring-black" : ""
-                }`}
-              >
-                <div className="flex items-start justify-between gap-3 mb-2">
-                  <div className="font-semibold text-gray-900 text-lg truncate">{t.name}</div>
-                  {t.status && (
-                    <span className={`text-xs px-2 py-1 rounded-full ${t.status === 'APPROVED' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}>{t.status}</span>
-                  )}
-                  <div className="relative">
-                    <button
-                      type="button"
-                      className="w-8 h-8 flex items-center justify-center rounded hover:bg-gray-100"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setOpenMenuTemplateId(openMenuTemplateId === t._id ? null : t._id);
-                      }}
-                      title="Requests"
-                    >
-                      <span className="text-xl leading-none">⋯</span>
-                    </button>
-                    {openMenuTemplateId === t._id && (
-                      <div className="absolute right-0 mt-2 w-80 bg-white border border-gray-200 rounded shadow-lg z-10" onClick={(e) => e.stopPropagation()}>
-                        <div className="px-3 py-2 text-sm font-semibold text-gray-700 border-b">Pending Requests</div>
-                        <div className="max-h-72 overflow-y-auto">
-                          {loadingRequests ? (
-                            <div className="p-3 text-sm text-gray-500">Loading...</div>
-                          ) : (
-                            (accessRequests || []).filter(r => r.platform === activeTool).length === 0 ? (
-                              <div className="p-3 text-sm text-gray-500">No pending requests</div>
-                            ) : (
-                                                             (accessRequests || []).filter(r => r.platform === activeTool).map((r) => {
-                                 // For non-WhatsApp platforms, we don't have the client/agent data loaded
-                                 // So we'll show the IDs with a fallback format
-                                 return (
-                                   <div key={r._id} className="px-3 py-2 text-sm flex items-center justify-between hover:bg-gray-50">
-                                     <div className="pr-2 min-w-0">
-                                       <div className="text-gray-800 truncate">
-                                         Agent: <span className="font-medium break-all">{typeof r.agentId === 'object' ? r.agentId?._id || r.agentId : r.agentId}</span>
-                                       </div>
-                                       <div className="text-gray-500 truncate">
-                                         Client: <span className="break-all">{typeof r.clientId === 'object' ? r.clientId?._id || r.clientId : r.clientId}</span>
-                                       </div>
-                                     </div>
-                                     <button
-                                       className="flex-shrink-0 px-2 py-1 bg-green-600 text-white rounded text-xs hover:bg-green-700"
-                                       onClick={(e) => {
-                                         e.stopPropagation();
-                                         approveAccessRequest(r._id, t.name, t);
-                                       }}
-                                     >
-                                       Approve
-                                     </button>
-                                   </div>
-                                 );
-                               })
-                            )
-                          )}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-                <div className="text-xs text-gray-500 mb-2">
-                  {(t.language || t.category) && (
-                    <span>{t.language}{t.language && t.category ? ' • ' : ''}{t.category}</span>
-                  )}
-                </div>
-                {t.imageUrl && (
-                  <img src={t.imageUrl} alt={t.name} className="w-full h-40 object-cover rounded mb-3" />
-                )}
-                {t.description && (
-                  <div className="text-sm text-gray-700 mt-2 whitespace-pre-wrap line-clamp-5">{t.description}</div>
-                )}
-                {t.url && (
-                  <a href={t.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center text-sm text-blue-600 hover:underline mt-3">
-                    Open Link
-                  </a>
-                )}
-              </div>
-            ))}
-            {templates.length === 0 && (
-              <div className="text-gray-500">No templates found for this platform.</div>
-            )}
-          </div>
+      {/* Audio to Q&A */}
+      <div>
+        <div className="text-sm font-semibold text-gray-600 mb-2">Audio Intelligence</div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <button
+            onClick={() => setActivePage('stt')}
+            className={`h-28 rounded-xl text-white text-2xl font-semibold shadow transition transform hover:-translate-y-0.5 bg-indigo-600`}
+          >
+            Audio to Q&A
+          </button>
         </div>
-      )}
-
-      {activeTool === 'requests' && (
-        <div>
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
-            <h4 className="text-lg font-semibold">Pending Access Requests</h4>
-            <div className="flex gap-2 items-center">
-              <button onClick={() => fetchAccessRequests({ status: 'pending' })} className="px-4 py-2 bg-black text-white rounded">Refresh</button>
-            </div>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Client ID</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Agent ID</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Platform</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Requested At</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Action</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {loadingRequests ? (
-                  <tr><td className="px-4 py-6 text-center text-gray-500" colSpan={5}>Loading...</td></tr>
-                ) : accessRequests.length === 0 ? (
-                  <tr><td className="px-4 py-6 text-center text-gray-500" colSpan={5}>No pending requests</td></tr>
-                ) : (
-                  accessRequests.map((r) => (
-                    <tr key={r._id}>
-                      <td className="px-4 py-2 text-sm text-gray-700 break-all">{r.clientId}</td>
-                      <td className="px-4 py-2 text-sm text-gray-700 break-all">{r.agentId}</td>
-                      <td className="px-4 py-2 text-sm text-gray-700 capitalize">{r.platform}</td>
-                      <td className="px-4 py-2 text-sm text-gray-500">{new Date(r.createdAt).toLocaleString()}</td>
-                      <td className="px-4 py-2 text-sm">
-                        <button onClick={() => approveAccessRequest(r._id)} className="px-3 py-1.5 bg-green-600 text-white rounded hover:bg-green-700">Approve</button>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+      </div>
     </div>
   );
 
