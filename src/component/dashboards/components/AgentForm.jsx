@@ -1294,7 +1294,6 @@ const AgentForm = ({
           )}
         </select>
       </div>
-
       <div>
         <label className="block mb-2 font-semibold text-gray-700">
           First Message Audio
