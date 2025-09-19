@@ -26,7 +26,9 @@ const AgentForm = ({
     systemPrompt: "",
     sttSelection: "google",
     ttsSelection: "sarvam",
+    voiceServiceProvider: "sarvam",
     voiceSelection: "anushka",
+    voiceId: "",
     accountSid: "",
     serviceProvider: "",
     callingType: "both",
@@ -71,6 +73,31 @@ const AgentForm = ({
   const [uiImagePreview, setUiImagePreview] = useState("");
   const [backgroundImagePreview, setBackgroundImagePreview] = useState("");
 
+  // Voice mapping for different services
+  const voiceMappings = {
+    sarvam: {
+      anushka: { name: "Anushka", id: "anushka" },
+      meera: { name: "Meera", id: "meera" },
+      pavithra: { name: "Pavithra", id: "pavithra" },
+      maitreyi: { name: "Maitreyi", id: "maitreyi" },
+      arvind: { name: "Arvind", id: "arvind" },
+      amol: { name: "Amol", id: "amol" },
+      amartya: { name: "Amartya", id: "amartya" },
+      diya: { name: "Diya", id: "diya" },
+      neel: { name: "Neel", id: "neel" },
+      misha: { name: "Misha", id: "misha" },
+      vian: { name: "Vian", id: "vian" },
+      arjun: { name: "Arjun", id: "arjun" },
+      maya: { name: "Maya", id: "maya" },
+    },
+    elevenlabs: {
+      kumaran: { name: "Kumaran", id: "rgltZvTfiMmgWweZhh7n" },
+      monika: { name: "Monika", id: "NaKPQmdr7mMxXuXrNeFC" },
+      aahir: { name: "Aahir", id: "RKshBIkZ7DwU6YNPq5Jd" },
+      kanika: { name: "Kanika", id: "xccfcojYYGnqTTxwZEDU" },
+    }
+  };
+
   const tabs = [
     { key: "starting", label: "Starting Messages" },
     { key: "personal", label: "Personal Information" },
@@ -95,9 +122,11 @@ const AgentForm = ({
         systemPrompt: agent.systemPrompt || "",
         sttSelection: agent.sttSelection || "google",
         ttsSelection: agent.ttsSelection || "sarvam",
+        voiceServiceProvider: agent.voiceServiceProvider || "sarvam",
         callingNumber: agent.callingNumber || "",
         callingType: agent.callingType || "both",
         voiceSelection: agent.voiceSelection || "anushka",
+        voiceId: agent.voiceId || "",
         accountSid: agent.accountSid || "",
         serviceProvider: agent.serviceProvider || "",
         callerId: agent.callerId || "",
@@ -323,6 +352,30 @@ const AgentForm = ({
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleVoiceServiceProviderChange = (e) => {
+    const { value } = e.target;
+    const availableVoices = Object.keys(voiceMappings[value] || {});
+    const firstVoice = availableVoices[0] || "";
+    
+    setFormData((prev) => ({
+      ...prev,
+      voiceServiceProvider: value,
+      voiceSelection: firstVoice,
+      voiceId: firstVoice ? voiceMappings[value][firstVoice]?.id || "" : ""
+    }));
+  };
+
+  const handleVoiceSelectionChange = (e) => {
+    const { value } = e.target;
+    const selectedVoice = voiceMappings[formData.voiceServiceProvider]?.[value];
+    
+    setFormData((prev) => ({
+      ...prev,
+      voiceSelection: value,
+      voiceId: selectedVoice?.id || ""
+    }));
   };
 
   const handleAudioRecorded = (audioBlob) => {
@@ -911,6 +964,9 @@ const AgentForm = ({
         defaultTemplate,
         // knowledgeBase is now managed separately via KnowledgeBase model
         depositions,
+        // Include voice service provider and voice ID
+        voiceServiceProvider: formData.voiceServiceProvider,
+        voiceId: formData.voiceId,
         ...deriveSocials(),
       };
 
@@ -1026,6 +1082,7 @@ const AgentForm = ({
               text={msg.text}
               language={formData.language || "en"}
               speaker={formData.voiceSelection}
+              serviceProvider={formData.voiceServiceProvider}
               onAudioGenerated={(audioBlob, audioUrl, audioBase64) =>
                 handleAudioGeneratedForMessage(
                   idx,
@@ -1171,38 +1228,63 @@ const AgentForm = ({
 
         <div>
           <label
-            htmlFor="voiceSelection"
+            htmlFor="voiceServiceProvider"
             className="block mb-2 font-semibold text-gray-700"
           >
-            Voice
+            Voice Service Provider
           </label>
           <select
-            id="voiceSelection"
-            name="voiceSelection"
-            value={formData.voiceSelection}
-            onChange={handleInputChange}
+            id="voiceServiceProvider"
+            name="voiceServiceProvider"
+            value={formData.voiceServiceProvider}
+            onChange={handleVoiceServiceProviderChange}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
           >
-            <option value="anushka">Anushka</option>
-            <option value="meera">Meera</option>
-            <option value="pavithra">Pavithra</option>
-            <option value="maitreyi">Maitreyi</option>
-            <option value="arvind">Arvind</option>
-            <option value="amol">Amol</option>
-            <option value="amartya">Amartya</option>
-            <option value="diya">Diya</option>
-            <option value="neel">Neel</option>
-            <option value="misha">Misha</option>
-            <option value="vian">Vian</option>
-            <option value="arjun">Arjun</option>
-            <option value="maya">Maya</option>
-            <option value="male-professional">Male Professional</option>
-            <option value="female-professional">Female Professional</option>
-            <option value="male-friendly">Male Friendly</option>
-            <option value="female-friendly">Female Friendly</option>
-            <option value="neutral">Neutral</option>
+            <option value="sarvam">Sarvam AI</option>
+            <option value="elevenlabs">ElevenLabs</option>
           </select>
         </div>
+      </div>
+
+      <div>
+        <label
+          htmlFor="voiceSelection"
+          className="block mb-2 font-semibold text-gray-700"
+        >
+          Voice
+        </label>
+        <select
+          id="voiceSelection"
+          name="voiceSelection"
+          value={formData.voiceSelection}
+          onChange={handleVoiceSelectionChange}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+        >
+          {formData.voiceServiceProvider === "sarvam" ? (
+            <>
+              <option value="anushka">Anushka</option>
+              <option value="meera">Meera</option>
+              <option value="pavithra">Pavithra</option>
+              <option value="maitreyi">Maitreyi</option>
+              <option value="arvind">Arvind</option>
+              <option value="amol">Amol</option>
+              <option value="amartya">Amartya</option>
+              <option value="diya">Diya</option>
+              <option value="neel">Neel</option>
+              <option value="misha">Misha</option>
+              <option value="vian">Vian</option>
+              <option value="arjun">Arjun</option>
+              <option value="maya">Maya</option>
+            </>
+          ) : (
+            <>
+              <option value="kumaran">Kumaran</option>
+              <option value="monika">Monika</option>
+              <option value="aahir">Aahir</option>
+              <option value="kanika">Kanika</option>
+            </>
+          )}
+        </select>
       </div>
 
       <div>
@@ -1214,6 +1296,7 @@ const AgentForm = ({
             text={formData.firstMessage}
             language={formData.language}
             speaker={formData.voiceSelection}
+            serviceProvider={formData.voiceServiceProvider}
             onAudioGenerated={handleAudioGenerated}
             clientId={clientId}
           />
