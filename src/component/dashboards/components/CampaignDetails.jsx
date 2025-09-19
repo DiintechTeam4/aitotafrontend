@@ -16,6 +16,8 @@ import {
   FiBarChart2,
   FiUserPlus,
   FiFolder,
+  FiDownload,
+  FiLoader,
 } from "react-icons/fi";
 import { FaWhatsapp } from "react-icons/fa";
 import { API_BASE_URL } from "../../../config";
@@ -38,6 +40,8 @@ function CampaignDetails({ campaignId, onBack }) {
   const [waChatInput, setWaChatInput] = useState("");
   const [waTyping, setWaTyping] = useState(false);
   const [waChatContact, setWaChatContact] = useState({ name: "", number: "" });
+  // UI: PDF download loading state
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
   const [waTemplatesOpen, setWaTemplatesOpen] = useState(false);
   const [waTemplates, setWaTemplates] = useState([]);
   const [waTemplatesLoading, setWaTemplatesLoading] = useState(false);
@@ -2336,6 +2340,309 @@ function CampaignDetails({ campaignId, onBack }) {
     }
 
     return messages;
+  };
+
+  // Ensure jsPDF is available via CDN (lightweight, no build dependency)
+  const ensureJsPDFLoaded = async () => {
+    if (window.jspdf && window.jspdf.jsPDF) return window.jspdf.jsPDF;
+    await new Promise((resolve, reject) => {
+      const existing = document.querySelector("script[data-jspdf]");
+      if (existing) {
+        existing.addEventListener("load", () => resolve());
+        existing.addEventListener("error", reject);
+        return;
+      }
+      const s = document.createElement("script");
+      s.src = "https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js";
+      s.async = true;
+      s.setAttribute("data-jspdf", "1");
+      s.onload = () => resolve();
+      s.onerror = (e) => reject(e);
+      document.body.appendChild(s);
+    });
+    return window.jspdf.jsPDF;
+  };
+
+  // Ensure html2canvas is available via CDN for Unicode-friendly rendering
+  const ensureHtml2CanvasLoaded = async () => {
+    if (window.html2canvas) return window.html2canvas;
+    await new Promise((resolve, reject) => {
+      const existing = document.querySelector("script[data-html2canvas]");
+      if (existing) {
+        existing.addEventListener("load", () => resolve());
+        existing.addEventListener("error", reject);
+        return;
+      }
+      const s = document.createElement("script");
+      s.src =
+        "https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js";
+      s.async = true;
+      s.setAttribute("data-html2canvas", "1");
+      s.onload = () => resolve();
+      s.onerror = (e) => reject(e);
+      document.body.appendChild(s);
+    });
+    return window.html2canvas;
+  };
+
+  // Utility to load an image and return DataURL
+  const loadImageAsDataURL = (src) =>
+    new Promise((resolve, reject) => {
+      try {
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(img, 0, 0);
+          resolve(canvas.toDataURL("image/png"));
+        };
+        img.onerror = reject;
+        img.src = src;
+      } catch (e) {
+        reject(e);
+      }
+    });
+
+  const handleDownloadTranscriptPDF = async () => {
+    try {
+      setIsDownloadingPdf(true);
+      if (!selectedCall) return;
+      const [jsPDFCtor, html2canvas] = await Promise.all([
+        ensureJsPDFLoaded(),
+        ensureHtml2CanvasLoaded(),
+      ]);
+      const doc = new jsPDFCtor({ unit: "pt", format: "a4" });
+
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const marginX = 40;
+      const lineHeight = 16;
+      let cursorY = 60;
+
+      // Header branding
+      try {
+        const logoUrl = "/AitotaLogo.png";
+        const dataUrl = await loadImageAsDataURL(logoUrl);
+        const logoW = 60;
+        const logoH = 60;
+        doc.addImage(
+          dataUrl,
+          "PNG",
+          pageWidth - marginX - logoW,
+          30,
+          logoW,
+          logoH
+        );
+      } catch (_) {
+        // ignore logo load failure
+      }
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(18);
+      doc.text("Call Transcript", marginX, cursorY);
+      cursorY += 26;
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(11);
+
+      const contactName = getContactDisplayNameBlank(selectedCall) || "-";
+      const phone = selectedCall.number || selectedCall.phone || "-";
+      const dateStr = selectedCall.time
+        ? new Date(selectedCall.time).toLocaleString()
+        : (selectedCall.timestamp &&
+            new Date(selectedCall.timestamp).toLocaleString()) ||
+          "-";
+      const durationStr = formatDuration(selectedCall.duration || 0);
+
+      const metaLines = [
+        `Name: ${contactName}`,
+        `Mobile: ${phone}`,
+        `Date & Time: ${dateStr}`,
+        `Duration: ${durationStr}`,
+      ];
+      metaLines.forEach((l) => {
+        doc.text(l, marginX, cursorY);
+        cursorY += 16;
+      });
+
+      cursorY += 8;
+      doc.setDrawColor(220);
+      doc.line(marginX, cursorY, pageWidth - marginX, cursorY);
+      cursorY += 20;
+
+      // Chat content header
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(13);
+      doc.text("Conversation", marginX, cursorY);
+      cursorY += 12;
+
+      // Render conversation as HTML to preserve Unicode, then rasterize via html2canvas
+      const chatMessages = transcriptContent
+        ? parseTranscriptToChat(transcriptContent)
+        : [];
+
+      const container = document.createElement("div");
+      container.style.position = "fixed";
+      container.style.left = "-10000px";
+      container.style.top = "0";
+      container.style.width = "560px"; // narrower to reduce raster size
+      container.style.padding = "6px"; // tighter padding
+      container.style.background = "#ffffff";
+      container.style.color = "#111827";
+      container.style.fontFamily =
+        'system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Noto Sans", "Noto Sans Devanagari", sans-serif';
+      container.style.fontSize = "12px";
+      container.style.lineHeight = "1.4";
+      document.body.appendChild(container);
+
+      // Build bubbles into page-sized chunks and render per page (fast and avoids mid-bubble cut)
+      const createBubbleNode = (msg) => {
+        const wrapper = document.createElement("div");
+        wrapper.style.display = "flex";
+        wrapper.style.marginBottom = "6px";
+        wrapper.style.width = "100%";
+        wrapper.style.boxSizing = "border-box";
+        if (msg.isAI) {
+          wrapper.style.justifyContent = "flex-start";
+        } else if (msg.isUser) {
+          wrapper.style.justifyContent = "flex-end";
+        } else {
+          wrapper.style.justifyContent = "center";
+        }
+
+        const bubble = document.createElement("div");
+        bubble.style.maxWidth = "72%";
+        bubble.style.borderRadius = "10px";
+        bubble.style.padding = "8px 10px";
+        bubble.style.boxSizing = "border-box";
+        bubble.style.whiteSpace = "pre-wrap";
+        bubble.style.wordBreak = "break-word";
+        bubble.style.border = msg.isAI
+          ? "1px solid #93c5fd"
+          : msg.isUser
+          ? "1px solid #d1d5db"
+          : "1px solid #e5e7eb";
+        bubble.style.background = msg.isAI
+          ? "#e0f2fe"
+          : msg.isUser
+          ? "#f3f4f6"
+          : "#f9fafb";
+        bubble.style.color = "#111827";
+
+        const header = document.createElement("div");
+        header.style.display = "flex";
+        header.style.alignItems = "baseline";
+        header.style.gap = "6px";
+        header.style.marginBottom = "4px";
+
+        const who = document.createElement("strong");
+        who.textContent = msg.isAI ? "AI" : msg.isUser ? "User" : "System";
+        who.style.fontSize = "11px";
+
+        const tsSpan = document.createElement("span");
+        tsSpan.style.fontSize = "10px";
+        tsSpan.style.color = "#6B7280";
+        tsSpan.textContent = msg.timestamp ? msg.timestamp : "";
+
+        header.appendChild(who);
+        if (msg.timestamp) header.appendChild(tsSpan);
+
+        const text = document.createElement("div");
+        text.style.fontSize = "12px";
+        text.textContent = msg.text || "";
+
+        bubble.appendChild(header);
+        bubble.appendChild(text);
+        wrapper.appendChild(bubble);
+        return wrapper;
+      };
+
+      const scale = 1.25;
+      const imgWidth = pageWidth - marginX * 2;
+      const containerWidthPx = parseInt(container.style.width, 10) || 560;
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const bottomMargin = 40;
+      const calcMaxContentPx = (availablePt) =>
+        Math.floor((availablePt * containerWidthPx) / imgWidth);
+
+      let pageDiv = document.createElement("div");
+      pageDiv.style.width = "100%";
+      pageDiv.style.boxSizing = "border-box";
+      container.appendChild(pageDiv);
+
+      const renderCurrentPage = async (cursorYForPage) => {
+        const canvas = await html2canvas(pageDiv, {
+          scale,
+          backgroundColor: "#ffffff",
+        });
+        const drawHeight = (canvas.height / canvas.width) * imgWidth;
+        const imgData = canvas.toDataURL("image/jpeg", 0.72);
+        doc.addImage(
+          imgData,
+          "JPEG",
+          marginX,
+          cursorYForPage,
+          imgWidth,
+          drawHeight
+        );
+      };
+
+      const firstPageMaxPx = calcMaxContentPx(
+        pageHeight - cursorY - bottomMargin
+      );
+      const nextPagesMaxPx = calcMaxContentPx(pageHeight - 60 - bottomMargin);
+      let isFirstPage = true;
+
+      for (let i = 0; i < chatMessages.length; i++) {
+        const node = createBubbleNode(chatMessages[i]);
+        pageDiv.appendChild(node);
+        const maxPx = isFirstPage ? firstPageMaxPx : nextPagesMaxPx;
+        if (pageDiv.scrollHeight > maxPx && pageDiv.childElementCount > 1) {
+          // Move last node to next page
+          pageDiv.removeChild(node);
+          await renderCurrentPage(isFirstPage ? cursorY : 60);
+          doc.addPage();
+          isFirstPage = false;
+          pageDiv = document.createElement("div");
+          pageDiv.style.width = "100%";
+          pageDiv.style.boxSizing = "border-box";
+          container.innerHTML = "";
+          container.appendChild(pageDiv);
+          pageDiv.appendChild(node);
+        }
+      }
+      // Render remaining items in the last page
+      if (pageDiv.childElementCount > 0) {
+        await renderCurrentPage(isFirstPage ? cursorY : 60);
+      }
+      // remove offscreen container after rendering
+      if (container && container.parentNode) {
+        container.parentNode.removeChild(container);
+      }
+
+      // Footer branding
+      const footer = "Powered by AItota";
+      doc.setFont("helvetica", "italic");
+      doc.setFontSize(10);
+      const footerY = doc.internal.pageSize.getHeight() - 30;
+      doc.text(footer, pageWidth - marginX - doc.getTextWidth(footer), footerY);
+
+      const safeName = (contactName || "transcript")
+        .toString()
+        .replace(/[^a-z0-9_-]+/gi, "_");
+      const fileName = `AItota_Transcript_${safeName}_${(phone || "").replace(
+        /\D/g,
+        ""
+      )}.pdf`;
+      doc.save(fileName);
+    } catch (e) {
+      console.error("Failed to generate transcript PDF", e);
+      alert("Unable to download PDF right now. Please try again.");
+    } finally {
+      setIsDownloadingPdf(false);
+    }
   };
 
   // Count grouped conversation messages (user+AI) in a transcript
@@ -6072,6 +6379,25 @@ function CampaignDetails({ campaignId, onBack }) {
                   </div>
                 )}
               </div>
+              {/* Download PDF button */}
+              <button
+                className="ml-3 bg-black text-white text-sm px-4 py-2 rounded-lg hover:bg-gray-800 transition-colors flex items-center gap-2 disabled:opacity-60"
+                onClick={handleDownloadTranscriptPDF}
+                title="Download PDF"
+                disabled={isDownloadingPdf}
+              >
+                {isDownloadingPdf ? (
+                  <>
+                    <FiLoader className="animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <FiDownload />
+                    Download PDF
+                  </>
+                )}
+              </button>
               <button
                 className="bg-none border-none text-2xl cursor-pointer text-gray-500 hover:text-gray-700 p-2 w-10 h-10 flex items-center justify-center rounded-lg hover:bg-gray-200 transition-colors duration-200 ml-4"
                 onClick={() => setShowTranscriptModal(false)}
