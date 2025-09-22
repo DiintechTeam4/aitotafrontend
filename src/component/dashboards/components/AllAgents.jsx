@@ -457,6 +457,54 @@ const AllAgents = () => {
     setAssignFormData((prev) => ({ ...prev, [field]: value }));
   };
 
+  // Add new DID number function
+  const addNewDidNumber = async () => {
+    if (!newSanpbxDid.trim()) return;
+
+    try {
+      const token =
+        localStorage.getItem("admintoken") ||
+        sessionStorage.getItem("admintoken");
+
+      const response = await fetch(`${API_BASE_URL}/admin/did-numbers/add`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          did: newSanpbxDid.trim(),
+          provider: "snapbx",
+          callerId: assignFormData.callerId || "", // Use provided caller ID or empty for auto-generation
+          notes: `Added via admin panel for agent assignment`
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          // Add the new DID to the local list
+          setSanpbxDids(prev => [...prev, newSanpbxDid.trim()]);
+          // Select the newly added DID
+          handleAssignChange('didNumber', newSanpbxDid.trim());
+          // Clear the input
+          setNewSanpbxDid("");
+          // Clear caller ID input
+          handleAssignChange('callerId', '');
+          alert("DID number added successfully!");
+        } else {
+          alert("Failed to add DID number: " + data.message);
+        }
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to add DID number");
+      }
+    } catch (error) {
+      console.error("Error adding DID number:", error);
+      alert("Error adding DID number: " + error.message);
+    }
+  };
+
   const handleAssignSubmit = async (e) => {
     e.preventDefault();
     if (!selectedAgentForAssign) return;
@@ -469,7 +517,9 @@ const AllAgents = () => {
       if (assignProvider === "snapbx") {
         // Auto-derive callerId from DID (last 7 digits), keep access creds in code
         const did = String(assignFormData.didNumber || "").replace(/\D/g, "");
-        const callerId = did ? did.slice(-7) : "";
+        const callerId = assignFormData.callerId && assignFormData.callerId.trim() !== '' 
+          ? assignFormData.callerId 
+          : (did ? did.slice(-7) : "");
         payload = {
           serviceProvider: "snapbx",
           didNumber: assignFormData.didNumber,
@@ -489,13 +539,24 @@ const AllAgents = () => {
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
             body: JSON.stringify({ did: assignFormData.didNumber, provider: 'snapbx' }),
           });
-          // Assign DID to agent
+          // Assign DID to agent - this will use the saved caller ID from database
           await fetch(`${API_BASE_URL}/admin/did-numbers/${encodeURIComponent(assignFormData.didNumber)}/assign`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
             body: JSON.stringify({ agentId: selectedAgentForAssign?._id }),
           });
-        } catch (_) {}
+          
+          // For snapbx, the assignDidToAgent function already updates the agent with correct caller ID
+          // So we don't need to update the agent again with our payload
+          alert("Agent assigned successfully!");
+          setShowAssignModal(false);
+          fetchAllAgents();
+          return; // Exit early to avoid the agent update below
+        } catch (error) {
+          console.error("Error assigning DID:", error);
+          alert("Error assigning DID: " + error.message);
+          return;
+        }
       } else if (
         assignProvider === "c-zentrix" ||
         assignProvider === "c-zentrax"
@@ -557,7 +618,7 @@ const AllAgents = () => {
         didNumber: "01246745649",
         accessToken: "265b2d7e5d1a5d9c33fc22b01e5d0f19",
         accessKey: "mob",
-        callerId: "6745649",
+        callerId: "6745649", // Last 7 digits
       };
     }
     return null;
