@@ -54,7 +54,9 @@ function CampaignDetails({ campaignId, onBack }) {
   // Campaign history state
   const [campaignHistory, setCampaignHistory] = useState([]);
   const [currentRunId, setCurrentRunId] = useState(null);
+  const [runStartTime, setRunStartTime] = useState(null);
   const [campaignStartTime, setCampaignStartTime] = useState(null);
+  const [currentRunCallLogs, setCurrentRunCallLogs] = useState([]);
   // Guard refs to avoid duplicate autosaves
   const autoSavingRef = useRef(false);
   const lastSavedRunIdRef = useRef(null);
@@ -628,6 +630,7 @@ function CampaignDetails({ campaignId, onBack }) {
 
   const [showCallModal, setShowCallModal] = useState(false);
   const [callingStatus, setCallingStatus] = useState("idle"); // idle, calling, paused, completed
+  const [isLiveCallActive, setIsLiveCallActive] = useState(false);
   const [currentContactIndex, setCurrentContactIndex] = useState(0);
   const [callResults, setCallResults] = useState([]);
   const [clientData, setClientData] = useState(null);
@@ -677,6 +680,8 @@ function CampaignDetails({ campaignId, onBack }) {
     totalConnected: 0,
     totalMissed: 0,
     totalDuration: 0,
+    totalOngoing: 0,
+    totalRinging: 0,
   });
   const [apiMergedCallsLoadingMore, setApiMergedCallsLoadingMore] =
     useState(false);
@@ -737,14 +742,14 @@ function CampaignDetails({ campaignId, onBack }) {
   const connectionTimeoutRef = useRef(null);
 
   // When campaign transitions from active -> inactive, refresh status once to update UI
-  const prevIsActiveRef = useRef(campaign?.isActive);
+  const prevIsRunningRef = useRef(campaign?.isRunning);
   useEffect(() => {
-    const prev = prevIsActiveRef.current;
-    if (prev === true && campaign?.isActive === false) {
+    const prev = prevIsRunningRef.current;
+    if (prev === true && campaign?.isRunning === false) {
       fetchCampaignCallingStatus();
     }
-    prevIsActiveRef.current = campaign?.isActive;
-  }, [campaign?.isActive]);
+    prevIsRunningRef.current = campaign?.isRunning;
+  }, [campaign?.isRunning]);
 
   // Campaign contacts management states
   const [campaignContacts, setCampaignContacts] = useState([]);
@@ -782,7 +787,7 @@ function CampaignDetails({ campaignId, onBack }) {
   // Live run timer derived from campaignStartTime
   const [runSeconds, setRunSeconds] = useState(0);
   useEffect(() => {
-    if (!campaign?.isActive || !campaignStartTime) {
+    if (!campaign?.isRunning || !campaignStartTime) {
       setRunSeconds(0);
       return;
     }
@@ -798,7 +803,7 @@ function CampaignDetails({ campaignId, onBack }) {
     tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
-  }, [campaign?.isActive, campaignStartTime]);
+  }, [campaign?.isRunning, campaignStartTime]);
   // Helper function to safely get contact name
   const getContactName = (contact) => {
     if (!contact) return "";
@@ -919,11 +924,11 @@ function CampaignDetails({ campaignId, onBack }) {
   useEffect(() => {
     try {
       const v = localStorage.getItem(getStorageKey("readyNextRun"));
-      if (v === "1" && !campaign?.isActive) {
+      if (v === "1" && !campaign?.isRunning) {
         setReadyForNextRun(true);
       }
     } catch (_) {}
-  }, [campaignId, campaign?.isActive]);
+  }, [campaignId, campaign?.isRunning]);
 
   // Utility function to safely format timestamps
   const safeFormatTimestamp = (timestamp) => {
@@ -1011,11 +1016,11 @@ function CampaignDetails({ campaignId, onBack }) {
     if (campaignId) {
       saveCallingState();
       try {
-        // Persist isActive and currentRunId explicitly to survive navigation/back
-        if (typeof campaign?.isActive === "boolean") {
+        // Persist isRunning and currentRunId explicitly to survive navigation/back
+        if (typeof campaign?.isRunning === "boolean") {
           localStorage.setItem(
-            getStorageKey("isActive"),
-            campaign.isActive ? "1" : "0"
+            getStorageKey("isRunning"),
+            campaign.isRunning ? "1" : "0"
           );
         }
         if (currentRunId) {
@@ -1033,7 +1038,7 @@ function CampaignDetails({ campaignId, onBack }) {
     selectedAgent,
     callResultsConnectionStatus,
     campaignId,
-    campaign?.isActive,
+    campaign?.isRunning,
     currentRunId,
   ]);
 
@@ -1048,11 +1053,11 @@ function CampaignDetails({ campaignId, onBack }) {
     // Restore persisted state FIRST to avoid UI flicker
     try {
       const savedRunId = localStorage.getItem(getStorageKey("currentRunId"));
-      const savedIsActive = localStorage.getItem(getStorageKey("isActive"));
+      const savedIsRunning = localStorage.getItem(getStorageKey("isRunning"));
       if (savedRunId) setCurrentRunId(savedRunId);
-      if (savedIsActive !== null) {
+      if (savedIsRunning !== null) {
         setCampaign((prev) =>
-          prev ? { ...prev, isActive: savedIsActive === "1" } : prev
+          prev ? { ...prev, isRunning: savedIsRunning === "1" } : prev
         );
       }
     } catch (_) {}
@@ -1070,7 +1075,7 @@ function CampaignDetails({ campaignId, onBack }) {
   // Defer heavy data fetching until the campaign is actually running (with debouncing)
   useEffect(() => {
     const isRunning =
-      (campaign && campaign.isActive) || callingStatus === "calling";
+      (campaign && campaign.isRunning) || callingStatus === "calling";
     if (!campaignId || !isRunning) return;
 
     // Debounce rapid state changes to prevent multiple API calls
@@ -1082,7 +1087,7 @@ function CampaignDetails({ campaignId, onBack }) {
     }, 500); // 500ms debounce delay
 
     return () => clearTimeout(timeoutId);
-  }, [campaign?.isActive, callingStatus, campaignId]);
+  }, [campaign?.isRunning, callingStatus, campaignId]);
 
   // Refresh history when calling stops or completes so the last run appears
   useEffect(() => {
@@ -1785,11 +1790,13 @@ function CampaignDetails({ campaignId, onBack }) {
       const result = await response.json();
       if (result.success) {
         const next = result.data;
-        // Merge with any persisted isActive to avoid immediate flip on mount
+        // Merge with any persisted isRunning to avoid immediate flip on mount
         try {
-          const savedIsActive = localStorage.getItem(getStorageKey("isActive"));
-          if (savedIsActive !== null && typeof next?.isActive !== "boolean") {
-            next.isActive = savedIsActive === "1";
+          const savedIsRunning = localStorage.getItem(
+            getStorageKey("isRunning")
+          );
+          if (savedIsRunning !== null && typeof next?.isRunning !== "boolean") {
+            next.isRunning = savedIsRunning === "1";
           }
         } catch (_) {}
         setCampaign(next);
@@ -1797,16 +1804,18 @@ function CampaignDetails({ campaignId, onBack }) {
           const savedRunId = localStorage.getItem(
             getStorageKey("currentRunId")
           );
-          const savedIsActive = localStorage.getItem(getStorageKey("isActive"));
+          const savedIsRunning = localStorage.getItem(
+            getStorageKey("isRunning")
+          );
           if (savedRunId && !currentRunId) setCurrentRunId(savedRunId);
-          if (typeof next?.isActive === "boolean") {
+          if (typeof next?.isRunning === "boolean") {
             localStorage.setItem(
-              getStorageKey("isActive"),
-              next.isActive ? "1" : "0"
+              getStorageKey("isRunning"),
+              next.isRunning ? "1" : "0"
             );
-          } else if (savedIsActive !== null) {
+          } else if (savedIsRunning !== null) {
             setCampaign((prev) =>
-              prev ? { ...prev, isActive: savedIsActive === "1" } : prev
+              prev ? { ...prev, isRunning: savedIsRunning === "1" } : prev
             );
           }
         } catch (_) {}
@@ -1856,6 +1865,8 @@ function CampaignDetails({ campaignId, onBack }) {
       totalConnected: 0,
       totalMissed: 0,
       totalDuration: 0,
+      totalOngoing: 0,
+      totalRinging: 0,
     });
     setApiMergedCallsPage(1);
     setApiMergedCallsTotalPages(0);
@@ -2020,9 +2031,9 @@ function CampaignDetails({ campaignId, onBack }) {
   const fetchCampaignCallLogs = async (page = 1) => {
     try {
       if (!campaign?._id) return;
-      // Only fetch when campaign is running/active
+      // Only fetch when campaign is running
       const running =
-        (campaign && campaign.isActive) || callingStatus === "calling";
+        (campaign && campaign.isRunning) || callingStatus === "calling";
       if (!running) {
         return;
       }
@@ -2114,9 +2125,9 @@ function CampaignDetails({ campaignId, onBack }) {
   ) => {
     try {
       if (!campaignId) return;
-      // Only fetch when campaign is running/active
+      // Only fetch when campaign is running
       const running =
-        (campaign && campaign.isActive) || callingStatus === "calling";
+        (campaign && campaign.isRunning) || callingStatus === "calling";
       if (!running) {
         return;
       }
@@ -2232,6 +2243,8 @@ function CampaignDetails({ campaignId, onBack }) {
         totalConnected: 0,
         totalMissed: 0,
         totalDuration: 0,
+        totalOngoing: 0,
+        totalRinging: 0,
       });
       setApiMergedCallsInitialLoad(false);
     } finally {
@@ -2736,18 +2749,15 @@ function CampaignDetails({ campaignId, onBack }) {
       if (response.ok) {
         const result = await response.json();
         if (result.success && result.data) {
-          // Update campaign active status from backend
-          const nextIsActive =
-            typeof result.data.isActive === "boolean"
-              ? result.data.isActive
-              : result.data.isRunning;
+          // Update campaign running status from backend
+          const nextIsRunning = result.data.isRunning;
           // Auto-save history when backend indicates calling has become inactive
           try {
-            const wasActive = campaign?.isActive;
+            const wasRunning = campaign?.isRunning;
             const backendAllFinalized = !!result?.data?.allCallsFinalized;
             const effectiveRunId = currentRunId || result?.data?.latestRunId;
             if (
-              ((wasActive && !nextIsActive) || backendAllFinalized) &&
+              ((wasRunning && !nextIsRunning) || backendAllFinalized) &&
               effectiveRunId &&
               !autoSavingRef.current &&
               lastSavedRunIdRef.current !== effectiveRunId
@@ -2787,9 +2797,9 @@ function CampaignDetails({ campaignId, onBack }) {
           } finally {
             autoSavingRef.current = false;
           }
-          if (nextIsActive !== campaign?.isActive) {
+          if (nextIsRunning !== campaign?.isRunning) {
             setCampaign((prev) =>
-              prev ? { ...prev, isActive: nextIsActive } : null
+              prev ? { ...prev, isRunning: nextIsRunning } : null
             );
           }
 
@@ -2803,7 +2813,7 @@ function CampaignDetails({ campaignId, onBack }) {
 
               if (completedPercentage === 100) {
                 setCallingStatus("completed");
-              } else if (progress.isActive || progress.isRunning) {
+              } else if (progress.isRunning) {
                 setCallingStatus("calling");
               } else if (progress.isPaused) {
                 setCallingStatus("paused");
@@ -2825,9 +2835,9 @@ function CampaignDetails({ campaignId, onBack }) {
     }
   };
 
-  // Poll calling status only when campaign is active/running and page is visible (every 5 seconds)
+  // Poll calling status only when campaign is running and page is visible (every 5 seconds)
   useEffect(() => {
-    if (!campaignId || !campaign?.isActive) return;
+    if (!campaignId || !campaign?.isRunning) return;
 
     let intervalId = null;
     const poll = () => {
@@ -2839,9 +2849,37 @@ function CampaignDetails({ campaignId, onBack }) {
     poll(); // Initial call
     intervalId = setInterval(poll, 5000); // Changed from 3000ms to 5000ms
     return () => intervalId && clearInterval(intervalId);
-  }, [campaignId, campaign?.isActive]); // Added campaign?.isActive dependency
+  }, [campaignId, campaign?.isRunning]); // Added campaign?.isRunning dependency
 
   // Universal calling function that handles all calling scenarios
+  // Helper function to generate consistent runIds
+  const generateRunId = (context = "fallback") => {
+    const runId = `run_${Date.now()}_${Math.random()
+      .toString(36)
+      .substr(2, 9)}`;
+    console.warn(`⚠️ Generated fallback runId for ${context}: ${runId}`);
+    return runId;
+  };
+
+  // Helper function to validate and ensure runId is present
+  const ensureRunId = (providedRunId, context = "call") => {
+    if (
+      providedRunId &&
+      providedRunId !== undefined &&
+      providedRunId !== null
+    ) {
+      return providedRunId;
+    }
+
+    // Try to use current runId
+    if (currentRunId && currentRunId !== undefined && currentRunId !== null) {
+      return currentRunId;
+    }
+
+    // Generate fallback runId
+    return generateRunId(context);
+  };
+
   const universalCalling = async (options = {}) => {
     const {
       type = "single", // 'single', 'missed', 'selected', 'campaign'
@@ -2906,9 +2944,52 @@ function CampaignDetails({ campaignId, onBack }) {
       }
 
       const token = sessionStorage.getItem("clienttoken");
+
+      // CRITICAL: Validate and ensure runId is always present before making calls
+      let effectiveRunId = runId;
+
+      // For single/missed/selected calls, ensure we have a valid runId
+      if (type === "single" || type === "missed" || type === "selected") {
+        // If no runId provided and newInstance is true, create a new run
+        if (
+          (!effectiveRunId ||
+            effectiveRunId === undefined ||
+            effectiveRunId === null) &&
+          newInstance
+        ) {
+          // Create a new run instance first - will be handled below
+        } else if (
+          !effectiveRunId ||
+          effectiveRunId === undefined ||
+          effectiveRunId === null
+        ) {
+          // Use helper function to ensure we have a valid runId
+          effectiveRunId = ensureRunId(effectiveRunId, `${type} call`);
+        }
+      }
+
+      // For campaign calls, runId should come from the start-calling response
+      if (type === "campaign") {
+        // Campaign calls will get runId from backend response
+        effectiveRunId = null; // Will be set after start-calling response
+      }
+
+      // Final validation: ensure we have a valid runId for all call types except campaign
+      if (
+        type !== "campaign" &&
+        (!effectiveRunId ||
+          effectiveRunId === undefined ||
+          effectiveRunId === null)
+      ) {
+        const errorMsg = `Cannot make ${type} calls: No valid runId available. Please ensure campaign is properly initialized.`;
+        console.error(errorMsg);
+        if (showToast) toast.error(errorMsg);
+        if (onError) onError(new Error(errorMsg));
+        return { success: false, error: errorMsg };
+      }
+
       // Decide effective run id. For single/missed/selected, we FIRST ask backend to start a run
       // so that a campaign details document is created and subsequent merge/logs can attach.
-      let effectiveRunId = runId;
       if (
         (type === "single" || type === "missed" || type === "selected") &&
         newInstance
@@ -2943,7 +3024,7 @@ function CampaignDetails({ campaignId, onBack }) {
             `run_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
           setCurrentRunId(effectiveRunId);
           setCampaignStartTime(new Date());
-          setCampaign((prev) => (prev ? { ...prev, isActive: true } : prev));
+          setCampaign((prev) => (prev ? { ...prev, isRunning: true } : prev));
           setReadyFlag(false);
           // Proactive short burst refresh to ensure new run logs appear quickly
           const refreshBurst = () => {
@@ -3010,7 +3091,7 @@ function CampaignDetails({ campaignId, onBack }) {
               custom_field: {
                 name: getContactName(lead) || "",
                 uniqueId: uniqueId,
-                runId: effectiveRunId || currentRunId || undefined,
+                runId: ensureRunId(effectiveRunId, "single call"),
               },
             }),
           });
@@ -3045,7 +3126,10 @@ function CampaignDetails({ campaignId, onBack }) {
                 body: JSON.stringify({
                   uniqueId: uid,
                   contactId: lead._id || null,
-                  runId: effectiveRunId || currentRunId || undefined,
+                  runId: ensureRunId(
+                    effectiveRunId,
+                    "single call uniqueId registration"
+                  ),
                 }),
               });
             }
@@ -3141,7 +3225,7 @@ function CampaignDetails({ campaignId, onBack }) {
                   custom_field: {
                     name: getContactName(contact) || "",
                     uniqueId: uniqueId,
-                    runId: effectiveRunId || currentRunId || undefined,
+                    runId: ensureRunId(effectiveRunId, "missed call"),
                   },
                 }),
               });
@@ -3167,7 +3251,10 @@ function CampaignDetails({ campaignId, onBack }) {
                       body: JSON.stringify({
                         uniqueId: uid,
                         contactId: contact._id || null,
-                        runId: effectiveRunId || currentRunId || undefined,
+                        runId: ensureRunId(
+                          effectiveRunId,
+                          "missed call uniqueId registration"
+                        ),
                       }),
                     }
                   );
@@ -3235,7 +3322,7 @@ function CampaignDetails({ campaignId, onBack }) {
             }
           } catch (_) {}
 
-          setCampaign((prev) => (prev ? { ...prev, isActive: true } : prev));
+          setCampaign((prev) => (prev ? { ...prev, isRunning: true } : prev));
           setLastUpdated(new Date());
 
           if (showToast) toast.success("Campaign calling started successfully");
@@ -3847,7 +3934,7 @@ function CampaignDetails({ campaignId, onBack }) {
               setCampaignStartTime(new Date());
             }
           } catch (_) {}
-          setCampaign((prev) => (prev ? { ...prev, isActive: true } : prev));
+          setCampaign((prev) => (prev ? { ...prev, isRunning: true } : prev));
           setLastUpdated(new Date());
         },
         onError: (error) => {
@@ -3869,9 +3956,14 @@ function CampaignDetails({ campaignId, onBack }) {
 
   const stopCampaignCallingBackend = async () => {
     try {
-      if (!campaign?._id) return;
+      console.log("🛑 FRONTEND: stopCampaignCallingBackend started");
+      if (!campaign?._id) {
+        console.log("❌ FRONTEND: No campaign ID");
+        return;
+      }
       setIsTogglingCampaign(true);
       const token = sessionStorage.getItem("clienttoken");
+      console.log("🛑 FRONTEND: Making API call to stop campaign");
       const resp = await fetch(
         `${API_BASE}/campaigns/${campaign._id}/stop-calling`,
         {
@@ -3882,12 +3974,15 @@ function CampaignDetails({ campaignId, onBack }) {
           },
         }
       );
+      console.log("🛑 FRONTEND: API response status:", resp.status);
       const result = await resp.json();
+      console.log("🛑 FRONTEND: API response result:", result);
       if (!resp.ok || result.success === false) {
+        console.log("❌ FRONTEND: API call failed:", result.error);
         toast.error(result.error || "Failed to stop campaign calling");
         return;
       }
-      setCampaign((prev) => (prev ? { ...prev, isActive: false } : prev));
+      setCampaign((prev) => (prev ? { ...prev, isRunning: false } : prev));
       // Mark UI as ready for next run and stop any live polling
       setReadyFlag(true);
       stopLiveCallPolling();
@@ -3910,6 +4005,15 @@ function CampaignDetails({ campaignId, onBack }) {
     runId
   ) => {
     try {
+      console.log("💾 FRONTEND: saveCampaignRun called with:", {
+        campaignId,
+        startTime,
+        endTime,
+        runTime,
+        callLogsCount: callLogs?.length || 0,
+        runId,
+      });
+
       const response = await fetch(
         `${API_BASE}/campaigns/${campaignId}/save-run`,
         {
@@ -3923,12 +4027,15 @@ function CampaignDetails({ campaignId, onBack }) {
             endTime,
             runTime,
             callLogs,
-            runId: runId || currentRunId || undefined,
+            runId: ensureRunId(runId, "save-run"),
           }),
         }
       );
 
+      console.log("💾 FRONTEND: Save response status:", response.status);
       const data = await response.json();
+      console.log("💾 FRONTEND: Save response data:", data);
+
       if (data.success) {
         // Refresh campaign history
         fetchCampaignHistory(campaignId);
@@ -4006,32 +4113,18 @@ function CampaignDetails({ campaignId, onBack }) {
   };
 
   const handleToggleCampaignCalling = async () => {
-    if (campaign?.isActive) {
-      // Stopping campaign - save history
+    if (campaign?.isRunning) {
+      // Stopping campaign - DON'T save immediately, let backend handle it
       const confirmStop = window.confirm(
-        "Are you sure you want to stop this campaign?"
+        "Are you sure you want to stop this campaign? Ongoing calls will complete naturally."
       );
       if (!confirmStop) return;
 
-      // Save run history before stopping
-      const now = new Date();
-      const startTime = runStartTime || now;
-      const endTime = now;
-      const runTime = calculateRunTime(startTime, endTime);
-      const runId = currentRunId;
+      console.log(
+        "🛑 FRONTEND: Stopping campaign, waiting for calls to complete..."
+      );
 
-      if (currentRunCallLogs.length > 0) {
-        await saveCampaignRun(
-          campaign._id,
-          startTime,
-          endTime,
-          runTime,
-          currentRunCallLogs,
-          runId
-        );
-      }
-
-      // Stop campaign
+      // Stop campaign (this will wait for ongoing calls to complete)
       await stopCampaignCallingBackend();
 
       // Reset run tracking
@@ -4040,7 +4133,10 @@ function CampaignDetails({ campaignId, onBack }) {
       setCurrentRunCallLogs([]);
       setIsLiveCallActive(false);
 
-      toast.success("Campaign stopped");
+      // Refresh call logs to show the final state
+      await fetchApiMergedCalls(1, false, false);
+
+      toast.success("Campaign stopped - ongoing calls will complete naturally");
     } else {
       const confirmStart = window.confirm("Start the campaign now?");
       if (!confirmStart) return;
@@ -5083,7 +5179,7 @@ function CampaignDetails({ campaignId, onBack }) {
                       : !Array.isArray(campaign?.agent) ||
                         campaign.agent.length === 0
                       ? "Cannot start: No agent assigned"
-                      : campaign?.isActive
+                      : campaign?.isRunning
                       ? "Stop campaign"
                       : "Start campaign"
                   }
@@ -5094,18 +5190,18 @@ function CampaignDetails({ campaignId, onBack }) {
                     !Array.isArray(campaign?.agent) ||
                     campaign.agent.length === 0
                       ? "bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed"
-                      : campaign?.isActive
+                      : campaign?.isRunning
                       ? "bg-red-100 border-red-600 text-red-800 hover:bg-red-100"
                       : "bg-green-100 border-green-600 text-green-800 hover:bg-green-100"
                   }`}
                 >
-                  {campaign?.isActive ? (
+                  {campaign?.isRunning ? (
                     <FiPause className="w-4 h-4" />
                   ) : (
                     <FiPlay className="w-4 h-4" />
                   )}
                   <span className="mx-2 text-lg text-gray-600">
-                    {campaign?.isActive ? "Stop" : "Run"}
+                    {campaign?.isRunning ? "Stop" : "Run"}
                   </span>
                 </button>
               </div>
@@ -5177,6 +5273,22 @@ function CampaignDetails({ campaignId, onBack }) {
                           ? group.contactsCount
                           : group.contacts?.length || 0}{" "}
                         contacts
+                        {campaignContacts.length > 0 &&
+                          (() => {
+                            const totalFromGroups = campaignGroups.reduce(
+                              (sum, g) =>
+                                sum +
+                                (g.contactsCount || g.contacts?.length || 0),
+                              0
+                            );
+                            const duplicates =
+                              totalFromGroups - campaignContacts.length;
+                            return duplicates > 0 ? (
+                              <span className="ml-1 text-orange-600">
+                                ({duplicates} duplicates removed)
+                              </span>
+                            ) : null;
+                          })()}
                       </div>
                     </button>
                     <button
@@ -5194,60 +5306,6 @@ function CampaignDetails({ campaignId, onBack }) {
           </div>
 
           {/* Campaign Progress Section - Always Visible */}
-          {/* Campaign History Section (moved here after groups, before summary) */}
-          {Array.isArray(campaignHistory) && campaignHistory.length > 0 && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center space-x-3">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                  <h3 className="text-base font-medium text-gray-900">
-                    Campaign Runs History
-                  </h3>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="text-sm text-gray-500">
-                    {campaignHistory.length} saved run
-                    {campaignHistory.length > 1 ? "s" : ""}
-                  </div>
-                  <button
-                    onClick={() => setCampaignRunsCollapsed((v) => !v)}
-                    className="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-md border border-gray-200"
-                    title={campaignRunsCollapsed ? "Expand" : "Collapse"}
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className={`h-4 w-4 transition-transform ${
-                        campaignRunsCollapsed ? "transform rotate-180" : ""
-                      }`}
-                      viewBox="0 0 20 20"
-                      fill="currentColor"
-                    >
-                      <path
-                        fillRule="evenodd"
-                        d="M5.23 7.21a.75.75 0 011.06.02L10 11.094l3.71-3.864a.75.75 0 011.08 1.04l-4.24 4.41a.75.75 0 01-1.08 0l-4.24-4.41a.75.75 0 01.02-1.06z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-              <div className={`${campaignRunsCollapsed ? "hidden" : ""}`}>
-                {[...campaignHistory]
-                  .sort(
-                    (a, b) => (b.instanceNumber || 0) - (a.instanceNumber || 0)
-                  )
-                  .map((run, idx) => (
-                    <CampaignHistoryCard
-                      key={`${run._id || idx}`}
-                      run={run}
-                      index={idx}
-                    />
-                  ))}
-              </div>
-            </div>
-          )}
-
-          {/* Campaign Progress Section - Always Visible */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-6">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center space-x-3">
@@ -5257,14 +5315,14 @@ function CampaignDetails({ campaignId, onBack }) {
                 </h3>
                 <span
                   className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                    campaign?.isActive
+                    campaign?.isRunning
                       ? "bg-green-50 text-green-700 border border-green-200"
                       : "bg-gray-50 text-gray-600 border border-gray-200"
                   }`}
                 >
-                  {campaign?.isActive ? "🟢 Running" : "⚪ Not Running"}
+                  {campaign?.isRunning ? "🟢 Running" : "⚪ Not Running"}
                 </span>
-                {campaign?.isActive && campaignStartTime && (
+                {campaign?.isRunning && campaignStartTime && (
                   <div className="ml-3 flex items-center space-x-3 text-xs text-gray-600">
                     <span>
                       <strong>Start:</strong>{" "}
@@ -5306,7 +5364,7 @@ function CampaignDetails({ campaignId, onBack }) {
 
             {/* Metrics Grid */}
             <div
-              className={`grid grid-cols-4 gap-4 mb-4 ${
+              className={`grid grid-cols-6 gap-4 mb-4 ${
                 statusLogsCollapsed ? "hidden" : ""
               }`}
             >
@@ -5332,6 +5390,30 @@ function CampaignDetails({ campaignId, onBack }) {
                 <div className="text-xs text-gray-500">Progress</div>
               </div>
               <div className="text-center">
+                <div className="text-lg font-semibold text-amber-600">
+                  {apiMergedCallsLoading && apiMergedCallsInitialLoad ? (
+                    <div className="flex justify-center">
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-amber-600"></div>
+                    </div>
+                  ) : (
+                    apiMergedCallsTotals.totalRinging || 0
+                  )}
+                </div>
+                <div className="text-xs text-gray-500">Ringing</div>
+              </div>
+              <div className="text-center">
+                <div className="text-lg font-semibold text-green-600">
+                  {apiMergedCallsLoading && apiMergedCallsInitialLoad ? (
+                    <div className="flex justify-center">
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-green-600"></div>
+                    </div>
+                  ) : (
+                    apiMergedCallsTotals.totalOngoing || 0
+                  )}
+                </div>
+                <div className="text-xs text-gray-500">Ongoing</div>
+              </div>
+              <div className="text-center">
                 <div className="text-lg font-semibold text-blue-600">
                   {apiMergedCallsLoading && apiMergedCallsInitialLoad ? (
                     <div className="flex justify-center">
@@ -5355,6 +5437,8 @@ function CampaignDetails({ campaignId, onBack }) {
                 </div>
                 <div className="text-xs text-gray-500">Missed</div>
               </div>
+              
+              
               <div className="text-center">
                 <div className="text-lg font-semibold text-purple-600">
                   {apiMergedCallsLoading && apiMergedCallsInitialLoad ? (
@@ -5466,6 +5550,8 @@ function CampaignDetails({ campaignId, onBack }) {
                 </div>
               )}
           </div>
+
+          {/* Campaign Progress Section - Always Visible */}
 
           {/* Group Range Modal */}
           {showGroupRangeModal && rangeModalGroup && (
@@ -6336,6 +6422,59 @@ function CampaignDetails({ campaignId, onBack }) {
               </div>
             )}
           </div>
+
+          {/* Campaign History Section (moved here after groups, before summary) */}
+          {Array.isArray(campaignHistory) && campaignHistory.length > 0 && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center space-x-3">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                  <h3 className="text-base font-medium text-gray-900">
+                    Campaign Runs History
+                  </h3>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="text-sm text-gray-500">
+                    {campaignHistory.length} saved run
+                    {campaignHistory.length > 1 ? "s" : ""}
+                  </div>
+                  <button
+                    onClick={() => setCampaignRunsCollapsed((v) => !v)}
+                    className="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-md border border-gray-200"
+                    title={campaignRunsCollapsed ? "Expand" : "Collapse"}
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className={`h-4 w-4 transition-transform ${
+                        campaignRunsCollapsed ? "transform rotate-180" : ""
+                      }`}
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M5.23 7.21a.75.75 0 011.06.02L10 11.094l3.71-3.864a.75.75 0 011.08 1.04l-4.24 4.41a.75.75 0 01-1.08 0l-4.24-4.41a.75.75 0 01.02-1.06z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+              <div className={`${campaignRunsCollapsed ? "hidden" : ""}`}>
+                {[...campaignHistory]
+                  .sort(
+                    (a, b) => (b.instanceNumber || 0) - (a.instanceNumber || 0)
+                  )
+                  .map((run, idx) => (
+                    <CampaignHistoryCard
+                      key={`${run._id || idx}`}
+                      run={run}
+                      index={idx}
+                    />
+                  ))}
+              </div>
+            </div>
+          )}
 
           {/* Missed Calls list removed; use filter + Call Again button in header */}
         </div>
