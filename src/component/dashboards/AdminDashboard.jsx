@@ -21,7 +21,7 @@ import {
   FaFileInvoiceDollar,
   FaClipboardList,
   FaUserTie,
-  FaDollarSign,
+  FaRupeeSign
 } from "react-icons/fa";
 import ApprovalFormDetails from "./components/ApprovalFormDetails";
 import HumanAgentManagement from "./components/HumanAgentManagement";
@@ -603,7 +603,7 @@ const AdminDashboard = ({ user, onLogout }) => {
     { name: "Agents", icon: <FaUserTie /> },
     {
       name: "Accounts",
-      icon: <FaDollarSign />,
+      icon: <FaRupeeSign />,
       subItems: ["Plans", "Credits", "Coupons", "Payments"],
     },
     { name: "Tools", icon: <FaCog /> },
