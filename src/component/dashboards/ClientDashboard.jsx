@@ -931,7 +931,7 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
             </div>
           </div>
 
-          <nav className="flex-1 py-4">
+          <nav className="flex-1 py-4 overflow-y-auto scrollbar-hide">
             <button
               className={`flex items-center w-full px-6 py-4 text-left transition-all duration-200 gap-3 ${
                 activeSection === "performance"

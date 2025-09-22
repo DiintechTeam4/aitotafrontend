@@ -61,6 +61,109 @@ function CampaignDetails({ campaignId, onBack }) {
   const autoSavingRef = useRef(false);
   const lastSavedRunIdRef = useRef(null);
 
+  // Report modal state and helpers
+  const [isReportOpen, setIsReportOpen] = useState(false);
+  const [reportRuns, setReportRuns] = useState([]);
+  const [reportSelectedIds, setReportSelectedIds] = useState(new Set());
+  const isContactCompleted = (c) => {
+    const status = String(c?.status || "").toLowerCase();
+    const lead = String(c?.leadStatus || "").toLowerCase();
+    return status === "completed" || lead === "connected";
+  };
+  const openReport = () => {
+    try {
+      console.log("Report button clicked");
+      try {
+        toast.info("Preparing report...");
+      } catch {}
+      const runs = (campaignHistory || [])
+        .map((run) => {
+          const contacts = Array.isArray(run?.contacts)
+            ? run.contacts.filter(isContactCompleted)
+            : [];
+          return {
+            runId: run?.runId,
+            instanceNumber: run?.instanceNumber,
+            startTime: run?.startTime,
+            endTime: run?.endTime,
+            totalCompleted: contacts.length,
+            contacts,
+          };
+        })
+        .filter((r) => r.totalCompleted > 0);
+      setReportRuns(runs);
+      setIsReportOpen(true);
+    } catch (e) {
+      console.error("Failed to prepare report:", e);
+      toast.error("Failed to open report");
+    }
+  };
+  const closeReport = () => setIsReportOpen(false);
+
+  // Download merged PDF for selected rows in report using existing transcript PDF format
+  const handleDownloadSelectedReportPDF = async () => {
+    try {
+      if (!reportSelectedIds || reportSelectedIds.size === 0) {
+        toast.warn("Select at least one row");
+        return;
+      }
+
+      const [JsPDF] = await Promise.all([
+        ensureJsPDFLoaded(),
+        ensurePdfLibLoaded(),
+        ensureHtml2CanvasLoaded(),
+      ]);
+
+      // Prepare flat rows from reportRuns
+      const rows = (reportRuns || [])
+        .flatMap((run) =>
+          (run.contacts || []).map((c) => ({ ...c, __run: run }))
+        )
+        .filter((c) => reportSelectedIds.has(c.documentId));
+
+      if (rows.length === 0) {
+        toast.warn("Nothing selected");
+        return;
+      }
+
+      // Generate individual PDFs in the same format as single transcript download
+      const pdfBuffers = [];
+      for (const r of rows) {
+        const buf = await generateTranscriptPdfForDocument(r);
+        if (buf) pdfBuffers.push(buf);
+      }
+
+      if (pdfBuffers.length === 0) {
+        toast.error("Failed to build PDFs for selection");
+        return;
+      }
+
+      // Merge using pdf-lib
+      const { PDFDocument } = window.PDFLib || {};
+      if (!PDFDocument) throw new Error("PDF library not available");
+      const merged = await PDFDocument.create();
+      for (const ab of pdfBuffers) {
+        const src = await PDFDocument.load(ab);
+        const copiedPages = await merged.copyPages(src, src.getPageIndices());
+        copiedPages.forEach((p) => merged.addPage(p));
+      }
+      const mergedBytes = await merged.save();
+
+      const blob = new Blob([mergedBytes], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `campaign_${campaignId}_report.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error("Download report failed:", e);
+      toast.error("Failed to download report");
+    }
+  };
+
   // Initialize lastSavedRunId from sessionStorage to avoid multiple saves after remount
   useEffect(() => {
     const key = `campaign_${campaignId}_lastSavedRunId`;
@@ -783,7 +886,6 @@ function CampaignDetails({ campaignId, onBack }) {
       ? `${two(hours)}:${two(minutes)}:${two(secs)}sec`
       : `${two(minutes)}:${two(secs)}sec`;
   };
-
   // Live run timer derived from campaignStartTime
   const [runSeconds, setRunSeconds] = useState(0);
   useEffect(() => {
@@ -1430,7 +1532,6 @@ function CampaignDetails({ campaignId, onBack }) {
       };
     }
   };
-
   const startCalling = async () => {
     // Prevent multiple simultaneous calls
     if (callingStatus === "calling" || isStartingCall) {
@@ -2117,7 +2218,6 @@ function CampaignDetails({ campaignId, onBack }) {
     lead?.documentId ||
     lead?.contactId ||
     `${lead?.number || ""}-${lead?.time || ""}`;
-
   const fetchApiMergedCalls = async (
     page = 1,
     isAutoRefresh = false,
@@ -2422,6 +2522,211 @@ function CampaignDetails({ campaignId, onBack }) {
         reject(e);
       }
     });
+
+  // Ensure pdf-lib is available for client-side PDF merging
+  const ensurePdfLibLoaded = async () => {
+    if (window.PDFLib && window.PDFLib.PDFDocument) return window.PDFLib;
+    await new Promise((resolve, reject) => {
+      const existing = document.querySelector("script[data-pdflib]");
+      if (existing) {
+        existing.addEventListener("load", () => resolve());
+        existing.addEventListener("error", reject);
+        return;
+      }
+      const s = document.createElement("script");
+      s.src = "https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js";
+      s.async = true;
+      s.setAttribute("data-pdflib", "1");
+      s.onload = () => resolve();
+      s.onerror = (e) => reject(e);
+      document.body.appendChild(s);
+    });
+    return window.PDFLib;
+  };
+
+  // Build a single transcript PDF for a given contact row and return ArrayBuffer
+  const generateTranscriptPdfForDocument = async (row) => {
+    const JsPDF = await ensureJsPDFLoaded();
+    await ensureHtml2CanvasLoaded();
+
+    const doc = new JsPDF({ unit: "pt", format: "a4" });
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const marginX = 40;
+    const marginTop = 60;
+    const lineGap = 18;
+
+    // Header/logo
+    try {
+      const logoDataUrl = await loadImageAsDataURL("/AitotaLogo.png");
+      const logoW = 50;
+      const logoH = 50;
+      doc.addImage(
+        logoDataUrl,
+        "PNG",
+        pageWidth - marginX - logoW,
+        30,
+        logoW,
+        logoH
+      );
+    } catch {}
+
+    // Title (match single transcript style)
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(18);
+    doc.setTextColor(33, 37, 41);
+    doc.text("Call Transcript", marginX, marginTop - 20);
+
+    // Contact details
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(11);
+    const y0 = marginTop;
+    const contactName = row.name || "-";
+    const phone = row.number || row.phone || "-";
+    const dateStr = row.time
+      ? new Date(row.time).toLocaleString()
+      : (row.timestamp && new Date(row.timestamp).toLocaleString()) || "-";
+    const durationStr =
+      typeof row.duration === "number"
+        ? formatDuration(row.duration)
+        : row.duration || "0:00";
+    const details = [
+      `Name: ${contactName}`,
+      `Mobile: ${phone}`,
+      `Date & Time: ${dateStr}`,
+      `Duration: ${durationStr}`,
+    ];
+    let yy = y0;
+    for (const d of details) {
+      doc.text(d, marginX, yy);
+      yy += lineGap;
+    }
+
+    // Divider and section heading
+    yy += 8;
+    doc.setDrawColor(220);
+    doc.line(marginX, yy, pageWidth - marginX, yy);
+    yy += 20;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(13);
+    doc.text("Conversation", marginX, yy);
+    yy += 12;
+
+    // Fetch transcript text
+    let transcriptText = "";
+    try {
+      const token = sessionStorage.getItem("clienttoken");
+      const resp = await fetch(
+        `${API_BASE}/campaigns/${campaignId}/logs/${row.documentId}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      const result = await resp.json();
+      transcriptText = result?.transcript || result?.transcriptText || "";
+    } catch {}
+
+    // Render transcript as chat bubbles and snapshot with html2canvas
+    try {
+      const container = document.createElement("div");
+      container.style.position = "fixed";
+      container.style.left = "-99999px";
+      container.style.top = "0";
+      container.style.width = `${Math.floor(pageWidth - marginX * 2)}px`;
+      container.style.padding = "8px";
+      container.style.boxSizing = "border-box";
+      container.style.background = "#ffffff";
+
+      const heading = document.createElement("div");
+      heading.style.fontSize = "12px";
+      heading.style.margin = "8px 0 12px 0";
+      heading.textContent = "Transcript";
+      container.appendChild(heading);
+
+      const messages = parseTranscriptToChat(transcriptText || "");
+      for (const m of messages) {
+        const rowEl = document.createElement("div");
+        rowEl.style.display = "flex";
+        rowEl.style.margin = "6px 0";
+        rowEl.style.justifyContent = m.isAI
+          ? "flex-start"
+          : m.isUser
+          ? "flex-end"
+          : "flex-start";
+        const bubble = document.createElement("div");
+        bubble.style.maxWidth = "70%";
+        bubble.style.borderRadius = "10px";
+        bubble.style.padding = "8px 10px";
+        bubble.style.fontSize = "11px";
+        bubble.style.lineHeight = "1.4";
+        bubble.style.background = m.isAI
+          ? "#2563EB"
+          : m.isUser
+          ? "#E5E7EB"
+          : "#F3F4F6";
+        bubble.style.color = m.isAI ? "#ffffff" : "#111827";
+        bubble.textContent = m.text || "";
+        rowEl.appendChild(bubble);
+        container.appendChild(rowEl);
+      }
+
+      document.body.appendChild(container);
+      const canvas = await window.html2canvas(container, {
+        scale: 2,
+        backgroundColor: "#ffffff",
+      });
+      document.body.removeChild(container);
+
+      const imgW = pageWidth - marginX * 2;
+      const imgH = (canvas.height * imgW) / canvas.width;
+      let y = yy + 10;
+      let remaining = imgH;
+      let srcY = 0;
+      const scale = imgW / canvas.width;
+      while (remaining > 0) {
+        const take = Math.min(
+          remaining,
+          doc.internal.pageSize.getHeight() - marginTop - y
+        );
+        const sliceCanvas = document.createElement("canvas");
+        sliceCanvas.width = canvas.width;
+        sliceCanvas.height = Math.floor(take / scale);
+        const sctx = sliceCanvas.getContext("2d");
+        sctx.drawImage(
+          canvas,
+          0,
+          srcY,
+          canvas.width,
+          sliceCanvas.height,
+          0,
+          0,
+          sliceCanvas.width,
+          sliceCanvas.height
+        );
+        const dataUrl = sliceCanvas.toDataURL("image/png");
+        doc.addImage(dataUrl, "PNG", marginX, y, imgW, take);
+        remaining -= take;
+        srcY += sliceCanvas.height;
+        if (remaining > 0) {
+          doc.addPage();
+          y = marginTop;
+        }
+      }
+    } catch {}
+
+    // Footer branding
+    try {
+      const footer = "Powered by AItota";
+      doc.setFont("helvetica", "italic");
+      doc.setFontSize(10);
+      const footerY = doc.internal.pageSize.getHeight() - 30;
+      doc.text(footer, pageWidth - marginX - doc.getTextWidth(footer), footerY);
+    } catch {}
+
+    // Return as ArrayBuffer for merging
+    const arrayBuffer = doc.output("arraybuffer");
+    return arrayBuffer;
+  };
 
   const handleDownloadTranscriptPDF = async () => {
     try {
@@ -2879,7 +3184,6 @@ function CampaignDetails({ campaignId, onBack }) {
     // Generate fallback runId
     return generateRunId(context);
   };
-
   const universalCalling = async (options = {}) => {
     const {
       type = "single", // 'single', 'missed', 'selected', 'campaign'
@@ -3677,7 +3981,6 @@ function CampaignDetails({ campaignId, onBack }) {
       setLoadingContacts(false);
     }
   };
-
   const handleCloseAddGroupsModal = () => {
     setShowAddGroupsModal(false);
     // Clear selected groups that are not in the campaign
@@ -4156,6 +4459,39 @@ function CampaignDetails({ campaignId, onBack }) {
     const setIsExpanded = (val) =>
       setHistoryExpanded((prev) => ({ ...prev, [runKey]: val }));
 
+    const handleForceSaveHistory = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        if (!token) {
+          toast.error("Not authenticated");
+          return;
+        }
+        const resp = await fetch(
+          `${
+            import.meta.env.VITE_BACKEND_URL || ""
+          }/api/v1/client/campaigns/${campaignId}/force-save-history`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ runId: run.runId }),
+          }
+        );
+        const data = await resp.json();
+        if (!resp.ok || !data?.success) {
+          throw new Error(data?.error || "Force save failed");
+        }
+        toast.success("History saved");
+        // Refresh campaign history list
+        await fetchCampaignHistory(campaignId);
+      } catch (e) {
+        console.error("Force save history failed:", e);
+        toast.error(e.message || "Failed to save history");
+      }
+    };
+
     return (
       <div className="bg-white rounded-lg shadow-md border border-gray-200 mb-4">
         <div className="p-4 hover:bg-gray-50">
@@ -4189,6 +4525,14 @@ function CampaignDetails({ campaignId, onBack }) {
               </div>
             </div>
             <div className="flex items-center space-x-4">
+              {/* <button
+                type="button"
+                onClick={handleForceSaveHistory}
+                className="px-3 py-1.5 text-xs font-medium bg-indigo-600 text-white rounded hover:bg-indigo-700"
+                title="Force save this run to history"
+              >
+                Force Save History
+              </button> */}
               {!isExpanded && (
                 <div className="text-right">
                   <div className="text-sm font-medium text-gray-900">
@@ -4340,10 +4684,10 @@ function CampaignDetails({ campaignId, onBack }) {
                 </div>
               </div>
               <div className="overflow-x-auto">
-                <table className="min-w-full text-sm">
-                  <thead>
-                    <tr className="text-left text-gray-600">
-                      <th className="py-2 pr-4 w-12">
+                <table className="min-w-full text-sm border border-gray-200 rounded-lg overflow-hidden">
+                  <thead className="bg-gray-50 sticky top-0 z-10">
+                    <tr className="text-left text-gray-700">
+                      <th className="py-2 px-3">
                         <input
                           type="checkbox"
                           checked={(() => {
@@ -4469,20 +4813,20 @@ function CampaignDetails({ campaignId, onBack }) {
                           className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
                         />
                       </th>
-                      <th className="py-2 pr-4">S. No.</th>
-                      <th className="py-2 pr-4">Date & Time</th>
-                      <th className="py-2 pr-4">Name</th>
-                      <th className="py-2 pr-4">Number</th>
-                      <th className="py-2 pr-4">Status</th>
-                      <th className="py-2 pr-4">⏱</th>
-                      <th className="py-2 pr-4">Conversation</th>
-                      <th className="py-2 pr-4">Flag</th>
-                      <th className="py-2 pr-4">Disposition</th>
-                      <th className="py-2 pr-4">Action</th>
-                      <th className="py-2 pr-4">Redial</th>
+                      <th className="py-2 px-3">S. No.</th>
+                      <th className="py-2 px-3">Date & Time</th>
+                      <th className="py-2 px-3">Name</th>
+                      <th className="py-2 px-3">Number</th>
+                      <th className="py-2 px-3">Status</th>
+                      <th className="py-2 px-3">⏱</th>
+                      <th className="py-2 px-3">Conversation</th>
+                      <th className="py-2 px-3">Flag</th>
+                      <th className="py-2 px-3">Disposition</th>
+                      <th className="py-2 px-3">Action</th>
+                      <th className="py-2 px-3">Redial</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="divide-y divide-gray-100">
                     {(run.contacts || [])
                       .filter((lead) => {
                         const name = (lead.name || "").toString().trim();
@@ -4538,13 +4882,13 @@ function CampaignDetails({ campaignId, onBack }) {
                           key={`${
                             lead.documentId || lead.contactId || "hrow"
                           }-${idx}`}
-                          className={`border-t border-gray-100 ${
+                          className={`hover:bg-gray-50 ${
                             isCallLogSelected(lead)
                               ? "bg-blue-50 border-blue-200"
                               : ""
                           }`}
                         >
-                          <td className="py-2 pr-4 w-12">
+                          <td className="py-2 px-3">
                             <input
                               type="checkbox"
                               checked={isCallLogSelected(lead)}
@@ -4552,8 +4896,8 @@ function CampaignDetails({ campaignId, onBack }) {
                               className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
                             />
                           </td>
-                          <td className="py-2 pr-4 text-gray-700">{idx + 1}</td>
-                          <td className="py-2 pr-4 text-gray-700 flex flex-col items-center gap-2">
+                          <td className="py-2 px-3 text-gray-700">{idx + 1}</td>
+                          <td className="py-2 px-3 text-gray-700 flex flex-col items-center gap-2">
                             <span>
                               {lead.time
                                 ? new Date(lead.time).toLocaleDateString()
@@ -4568,13 +4912,13 @@ function CampaignDetails({ campaignId, onBack }) {
                                 : "-"}
                             </span>
                           </td>
-                          <td className="py-2 pr-4 text-gray-900">
+                          <td className="py-2 px-3 text-gray-900">
                             {getContactDisplayNameBlank(lead)}
                           </td>
-                          <td className="py-2 pr-4 text-gray-900">
+                          <td className="py-2 px-3 text-gray-900">
                             {lead.number || lead.phone || "-"}
                           </td>
-                          <td className="py-2 pr-4 capitalize">
+                          <td className="py-2 px-3 capitalize">
                             <span
                               className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
                                 lead.status === "ringing"
@@ -4591,10 +4935,10 @@ function CampaignDetails({ campaignId, onBack }) {
                               {lead.status}
                             </span>
                           </td>
-                          <td className="py-2 pr-4">
+                          <td className="py-2 px-3">
                             {formatDuration(lead.duration)}
                           </td>
-                          <td className="py-2 pr-4">
+                          <td className="py-2 px-3">
                             {lead.status === "missed" ? (
                               <span className="text-gray-400 text-xs text-center"></span>
                             ) : (
@@ -4644,7 +4988,7 @@ function CampaignDetails({ campaignId, onBack }) {
                               </button>
                             )}
                           </td>
-                          <td className="py-2 pr-4">
+                          <td className="py-2 px-3">
                             {/* Reuse same flag dropdown logic via rowDisposition */}
                             {(() => {
                               const uniquePrefix = `history-${
@@ -4781,8 +5125,8 @@ function CampaignDetails({ campaignId, onBack }) {
                               );
                             })()}
                           </td>
-                          <td className="py-2 pr-4">{lead.leadStatus}</td>
-                          <td className="py-2 pr-4 text-gray-700">
+                          <td className="py-2 px-3">{lead.leadStatus}</td>
+                          <td className="py-2 px-3 text-gray-700">
                             {lead.whatsappRequested &&
                             lead.whatsappMessageSent ? (
                               <button
@@ -4797,7 +5141,7 @@ function CampaignDetails({ campaignId, onBack }) {
                               ""
                             )}
                           </td>
-                          <td className="py-2 pr-4">
+                          <td className="py-2 px-3">
                             <button
                               className="inline-flex items-center px-3 py-1 text-xs bg-green-50 text-green-700 border border-green-200 rounded hover:bg-green-100 disabled:opacity-50"
                               title={
@@ -5143,6 +5487,7 @@ function CampaignDetails({ campaignId, onBack }) {
                 <p className="text-gray-600 mt-1">{campaign.description}</p>
               </div>
             </div>
+            <button></button>
             <div className="text-right">
               <div className="text-sm text-gray-500 mb-1">
                 Created{" "}
@@ -5285,7 +5630,7 @@ function CampaignDetails({ campaignId, onBack }) {
                               totalFromGroups - campaignContacts.length;
                             return duplicates > 0 ? (
                               <span className="ml-1 text-orange-600">
-                                ({duplicates} duplicates removed)
+                                ({duplicates} removed)
                               </span>
                             ) : null;
                           })()}
@@ -5437,8 +5782,7 @@ function CampaignDetails({ campaignId, onBack }) {
                 </div>
                 <div className="text-xs text-gray-500">Missed</div>
               </div>
-              
-              
+
               <div className="text-center">
                 <div className="text-lg font-semibold text-purple-600">
                   {apiMergedCallsLoading && apiMergedCallsInitialLoad ? (
@@ -5893,10 +6237,10 @@ function CampaignDetails({ campaignId, onBack }) {
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="min-w-full text-sm">
-                  <thead>
-                    <tr className="text-left text-gray-600">
-                      <th className="py-2 pr-4 w-12">
+                <table className="min-w-full text-sm border border-gray-200 rounded-lg overflow-hidden">
+                  <thead className="bg-gray-50 sticky top-0 z-10">
+                    <tr className="text-left text-gray-700">
+                      <th className="py-2 px-3">
                         <input
                           type="checkbox"
                           checked={selectAllCallLogs}
@@ -5904,22 +6248,22 @@ function CampaignDetails({ campaignId, onBack }) {
                           className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
                         />
                       </th>
-                      <th className="py-2 pr-4">S. No.</th>
-                      <th className="py-2 pr-4">Date & Time</th>
-                      <th className="py-2 pr-4">Name</th>
-                      <th className="py-2 pr-4">Number</th>
-                      <th className="py-2 pr-4">Status</th>
-                      <th className="py-2 pr-4">
+                      <th className="py-2 px-3">S. No.</th>
+                      <th className="py-2 px-3">Date & Time</th>
+                      <th className="py-2 px-3">Name</th>
+                      <th className="py-2 px-3">Number</th>
+                      <th className="py-2 px-3">Status</th>
+                      <th className="py-2 px-3">
                         <FiClock />
                       </th>
-                      <th className="py-2 pr-4">Conversation</th>
-                      <th className="py-2 pr-4">Flag</th>
-                      <th className="py-2 pr-4">Disposition</th>
-                      <th className="py-2 pr-4">Action</th>
-                      <th className="py-2 pr-4">Redial</th>
+                      <th className="py-2 px-3">Conversation</th>
+                      <th className="py-2 px-3">Flag</th>
+                      <th className="py-2 px-3">Disposition</th>
+                      <th className="py-2 px-3">Action</th>
+                      <th className="py-2 px-3">Redial</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="divide-y divide-gray-100">
                     {apiMergedCalls
                       .filter((lead) => {
                         const name = (lead.name || "").toString().trim();
@@ -5995,22 +6339,13 @@ function CampaignDetails({ campaignId, onBack }) {
                           key={`${
                             lead.documentId || lead.contactId || "row"
                           }-${idx}`}
-                          className={`border-t border-gray-100 ${(() => {
-                            const rowId =
-                              lead.documentId || lead.contactId || `${idx}`;
-                            const status = rowDisposition[rowId];
-                            if (status === "interested") return "bg-green-200";
-                            if (status === "not interested")
-                              return "bg-red-200";
-                            if (status === "maybe") return "bg-yellow-200";
-                            return "";
-                          })()} ${
+                          className={`hover:bg-gray-50 ${
                             isCallLogSelected(lead)
                               ? "bg-blue-50 border-blue-200"
                               : ""
                           }`}
                         >
-                          <td className="py-2 pr-4 w-12">
+                          <td className="py-2 px-3">
                             <input
                               type="checkbox"
                               checked={isCallLogSelected(lead)}
@@ -6018,8 +6353,8 @@ function CampaignDetails({ campaignId, onBack }) {
                               className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
                             />
                           </td>
-                          <td className="py-2 pr-4 text-gray-700">{idx + 1}</td>
-                          <td className="py-2 pr-4 text-gray-700 flex flex-col items-center gap-2">
+                          <td className="py-2 px-3 text-gray-700">{idx + 1}</td>
+                          <td className="py-2 px-3 text-gray-700 flex flex-col items-center gap-2">
                             <span>
                               {lead.time
                                 ? new Date(lead.time).toLocaleDateString()
@@ -6035,10 +6370,10 @@ function CampaignDetails({ campaignId, onBack }) {
                             </span>
                           </td>
 
-                          <td className="py-2 pr-4 text-gray-900">
+                          <td className="py-2 px-3 text-gray-900">
                             {getContactDisplayNameBlank(lead)}
                           </td>
-                          <td className="py-2 pr-4 text-gray-900">
+                          <td className="py-2 px-3 text-gray-900">
                             <span className="inline-flex items-center">
                               {redialingCalls.has(
                                 lead.documentId || lead.contactId
@@ -6069,7 +6404,7 @@ function CampaignDetails({ campaignId, onBack }) {
                               )}
                             </span>
                           </td>
-                          <td className="py-2 pr-4 capitalize">
+                          <td className="py-2 px-3 capitalize">
                             <span
                               className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
                                 lead.status === "ringing"
@@ -6086,10 +6421,10 @@ function CampaignDetails({ campaignId, onBack }) {
                               {lead.status}
                             </span>
                           </td>
-                          <td className="py-2 pr-4">
+                          <td className="py-2 px-3">
                             {formatDuration(lead.duration)}
                           </td>
-                          <td className="py-2 pr-4">
+                          <td className="py-2 px-3">
                             {lead.status === "missed" ? (
                               <span className="text-gray-400 text-xs text-center"></span>
                             ) : (
@@ -6139,7 +6474,7 @@ function CampaignDetails({ campaignId, onBack }) {
                               </button>
                             )}
                           </td>
-                          <td className="py-2 pr-4">
+                          <td className="py-2 px-3">
                             {(() => {
                               const rowId =
                                 lead.documentId || lead.contactId || `${idx}`;
@@ -6346,8 +6681,8 @@ function CampaignDetails({ campaignId, onBack }) {
                               );
                             })()}
                           </td>
-                          <td className="py-2 pr-4">{lead.leadStatus}</td>
-                          <td className="py-2 pr-4 text-gray-700">
+                          <td className="py-2 px-3">{lead.leadStatus}</td>
+                          <td className="py-2 px-3 text-gray-700">
                             {lead.whatsappRequested &&
                             lead.whatsappMessageSent ? (
                               <button
@@ -6362,7 +6697,7 @@ function CampaignDetails({ campaignId, onBack }) {
                               ""
                             )}
                           </td>
-                          <td className="py-2 pr-4">
+                          <td className="py-2 px-3">
                             <button
                               className="inline-flex items-center px-3 py-1 text-xs bg-green-50 text-green-700 border border-green-200 rounded hover:bg-green-100 disabled:opacity-50"
                               title={
@@ -6434,6 +6769,13 @@ function CampaignDetails({ campaignId, onBack }) {
                   </h3>
                 </div>
                 <div className="flex items-center gap-2">
+                  <button
+                    onClick={openReport}
+                    className="px-3 py-1.5 text-xs font-medium bg-purple-600 text-white rounded hover:bg-purple-700"
+                    title="Show completed contacts report"
+                  >
+                    Report
+                  </button>
                   <div className="text-sm text-gray-500">
                     {campaignHistory.length} saved run
                     {campaignHistory.length > 1 ? "s" : ""}
@@ -6479,9 +6821,206 @@ function CampaignDetails({ campaignId, onBack }) {
           {/* Missed Calls list removed; use filter + Call Again button in header */}
         </div>
       </div>
+      {/* Report Modal: Completed Contacts by Run */}
+      {isReportOpen && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/40">
+          <div className="bg-white w-full max-w-5xl max-h-[80vh] overflow-auto rounded-lg shadow-lg">
+            <div className="p-4 border-b flex justify-between items-center">
+              <h3 className="font-semibold text-gray-900">
+                Completed Contacts Report
+              </h3>
+              <button
+                type="button"
+                onClick={closeReport}
+                className="text-gray-600 hover:text-gray-900"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="px-4 pb-2 pt-3 flex items-center justify-between">
+              <div className="text-sm text-gray-600">
+                Selected: {reportSelectedIds.size}
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={handleDownloadSelectedReportPDF}
+                  className="px-3 py-1.5 text-xs font-medium bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-50"
+                  disabled={reportSelectedIds.size === 0}
+                >
+                  Download Report (PDF)
+                </button>
+              </div>
+            </div>
+            <div className="p-4 pt-0 space-y-4">
+              {reportRuns.length === 0 ? (
+                <div className="text-sm text-gray-500">
+                  No completed contacts found.
+                </div>
+              ) : (
+                (() => {
+                  const flatRows = reportRuns
+                    .sort(
+                      (a, b) =>
+                        (b.instanceNumber || 0) - (a.instanceNumber || 0)
+                    )
+                    .flatMap((run) =>
+                      (run.contacts || []).map((c) => ({ ...c, __run: run }))
+                    );
+                  const two = (n) => String(n).padStart(2, "0");
+                  const fmtDur = (sec) => {
+                    const s = Math.max(0, Number(sec) || 0);
+                    const m = Math.floor(s / 60);
+                    const rs = s % 60;
+                    return `${m}:${two(rs)}`;
+                  };
+                  const fmtDate = (t) => {
+                    try {
+                      const d = new Date(t);
+                      return {
+                        date: d.toLocaleDateString(),
+                        time: d.toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        }),
+                      };
+                    } catch {
+                      return { date: "-", time: "-" };
+                    }
+                  };
+                  return (
+                    <div className="overflow-auto">
+                      <table className="min-w-full text-sm border border-gray-200 rounded-lg overflow-hidden">
+                        <thead className="bg-gray-50 sticky top-0 z-10">
+                          <tr className="text-left text-gray-700">
+                            <th className="py-2 px-3">
+                              <input
+                                type="checkbox"
+                                onChange={(e) => {
+                                  const checked = e.target.checked;
+                                  const next = new Set(reportSelectedIds);
+                                  if (checked) {
+                                    flatRows.forEach((c) =>
+                                      next.add(c.documentId)
+                                    );
+                                  } else {
+                                    flatRows.forEach((c) =>
+                                      next.delete(c.documentId)
+                                    );
+                                  }
+                                  setReportSelectedIds(next);
+                                }}
+                                checked={
+                                  flatRows.every((c) =>
+                                    reportSelectedIds.has(c.documentId)
+                                  ) && flatRows.length > 0
+                                }
+                              />
+                            </th>
+                            <th className="py-2 px-3">#</th>
+                            <th className="py-2 px-3">Date</th>
+                            <th className="py-2 px-3">Time</th>
+                            <th className="py-2 px-3">Name</th>
+                            <th className="py-2 px-3">Number</th>
+                            <th className="py-2 px-3">Status</th>
+                            <th className="py-2 px-3">Duration</th>
+                            <th className="py-2 px-3">Lead</th>
+                            <th className="py-2 px-3">Run</th>
+                            <th className="py-2 px-3">Transcript</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {flatRows.map((c, idx) => {
+                            const dt = fmtDate(c.time);
+                            const status = String(c.status || "").toLowerCase();
+                            // Color solely by status: completed = green, others = red
+                            const isMissed = status !== "completed";
+                            const badgeClass = isMissed
+                              ? "bg-red-100 text-red-700"
+                              : "bg-green-100 text-green-700";
+                            const badgeText = status
+                              ? status.charAt(0).toUpperCase() + status.slice(1)
+                              : "-";
+                            return (
+                              <tr
+                                key={`${c.documentId}-${idx}`}
+                                className="hover:bg-gray-50"
+                              >
+                                <td className="py-2 px-3">
+                                  <input
+                                    type="checkbox"
+                                    checked={reportSelectedIds.has(
+                                      c.documentId
+                                    )}
+                                    onChange={(e) => {
+                                      const next = new Set(reportSelectedIds);
+                                      if (e.target.checked)
+                                        next.add(c.documentId);
+                                      else next.delete(c.documentId);
+                                      setReportSelectedIds(next);
+                                    }}
+                                  />
+                                </td>
+                                <td className="py-2 px-3 text-gray-600">
+                                  {idx + 1}
+                                </td>
+                                <td className="py-2 px-3">{dt.date}</td>
+                                <td className="py-2 px-3">{dt.time}</td>
+                                <td className="py-2 px-3">{c.name || "-"}</td>
+                                <td className="py-2 px-3">{c.number || "-"}</td>
+                                <td className="py-2 px-3">
+                                  <span
+                                    className={`inline-block text-xs px-2 py-0.5 rounded-full ${badgeClass}`}
+                                  >
+                                    {badgeText}
+                                  </span>
+                                </td>
+                                <td className="py-2 px-3">
+                                  {fmtDur(c.duration)}
+                                </td>
+                                <td className="py-2 px-3">
+                                  {c.leadStatus || "-"}
+                                </td>
+                                <td className="py-2 px-3">
+                                  #{c.__run?.instanceNumber || "-"}
+                                </td>
+                                <td className="py-2 px-3">
+                                  <button
+                                    type="button"
+                                    className="px-2 py-1 text-xs rounded-md border border-gray-300 text-gray-700 hover:bg-gray-100 disabled:opacity-40"
+                                    onClick={() =>
+                                      openTranscriptSmart({
+                                        documentId: c.documentId,
+                                        number: c.number,
+                                        time: c.time,
+                                        name: c.name,
+                                        duration: c.duration,
+                                        status: "completed",
+                                      })
+                                    }
+                                    disabled={!c.documentId}
+                                    title="View transcript"
+                                  >
+                                    View
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  );
+                })()
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Transcript Modal */}
       {showTranscriptModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[90]">
           <div className="bg-white rounded-2xl w-11/12 max-w-4xl max-h-[90vh] overflow-y-auto shadow-2xl">
             <div className="flex justify-between items-center p-3 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-blue-100">
               <div className="flex-1">
@@ -6664,7 +7203,7 @@ function CampaignDetails({ campaignId, onBack }) {
 
       {/* Insufficient Credits Modal */}
       {showCreditsModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl w-11/12 max-w-md shadow-2xl">
             <div className="flex justify-between items-center p-5 border-b border-gray-200">
               <h3 className="text-lg font-semibold text-gray-900">
@@ -6703,10 +7242,9 @@ function CampaignDetails({ campaignId, onBack }) {
           </div>
         </div>
       )}
-
       {/* Make Calls Modal */}
       {showCallModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 call-modal">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 call-modal">
           <div className="bg-white rounded-2xl w-11/12 max-w-5xl max-h-[90vh] overflow-y-auto shadow-2xl">
             <div className="flex justify-between items-center p-6 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-gray-100">
               <div>
@@ -7044,7 +7582,7 @@ function CampaignDetails({ campaignId, onBack }) {
                               strokeLinecap="round"
                               strokeLinejoin="round"
                               strokeWidth={2}
-                              d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"
+                              d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
                             />
                           </svg>
                           Save Progress
@@ -7340,7 +7878,7 @@ function CampaignDetails({ campaignId, onBack }) {
 
       {/* Call Details Modal */}
       {showCallDetailsModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl w-11/12 max-w-5xl max-h-[90vh] overflow-y-auto shadow-2xl">
             <div className="flex justify-between items-center p-6 border-b border-gray-200">
               <h3 className="text-2xl font-bold text-gray-800">Call Details</h3>
@@ -7465,7 +8003,7 @@ function CampaignDetails({ campaignId, onBack }) {
       )}
       {/* Campaign Contacts Management Modal */}
       {showContactsModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl w-11/12 max-w-6xl max-h-[90vh] overflow-y-auto shadow-2xl">
             <div className="flex justify-between items-center p-6 border-b border-gray-200">
               <h3 className="text-2xl font-bold text-gray-800">
@@ -7674,7 +8212,7 @@ function CampaignDetails({ campaignId, onBack }) {
 
       {/* Add Contact Modal */}
       {showAddContactModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl w-11/12 max-w-md shadow-2xl">
             <div className="flex justify-between items-center p-6 border-b border-gray-200">
               <h3 className="text-2xl font-bold text-gray-800">
@@ -7939,7 +8477,7 @@ function CampaignDetails({ campaignId, onBack }) {
 
       {/* Add Agent Modal */}
       {showAddAgentModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl w-11/12 max-w-md shadow-2xl">
             <div className="flex justify-between items-center p-6 border-b border-gray-200">
               <h3 className="text-2xl font-bold text-gray-800">Select Agent</h3>
@@ -8019,7 +8557,7 @@ function CampaignDetails({ campaignId, onBack }) {
       )}
       {/* Live Call Modal */}
       {showLiveCallModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl w-11/12 max-w-4xl max-h-[90vh] overflow-y-auto shadow-2xl">
             <div className="flex justify-between items-center p-6 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-blue-100">
               <div>
