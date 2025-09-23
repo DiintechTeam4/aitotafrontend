@@ -1,5 +1,5 @@
 "use client";
-import { FiMail, FiMessageSquare, FiTrash2 } from "react-icons/fi";
+import { FiMail, FiMessageSquare, FiTrash2, FiEdit } from "react-icons/fi";
 import { useState, useEffect } from "react";
 import VoiceSynthesizer from "./VoiceSynthesizer";
 import AudioRecorder from "./AudioRecorder";
@@ -72,6 +72,15 @@ const AgentForm = ({
   const [defaultTemplate, setDefaultTemplate] = useState(null);
   const [uiImagePreview, setUiImagePreview] = useState("");
   const [backgroundImagePreview, setBackgroundImagePreview] = useState("");
+
+  // System Configuration subtabs and Q&A state
+  const [systemSubTab, setSystemSubTab] = useState('prompt'); // 'prompt' | 'qa'
+  const [qaItems, setQaItems] = useState([]);
+  const [isSavingQa, setIsSavingQa] = useState(false);
+  const [showAddQa, setShowAddQa] = useState(false);
+  const [newQa, setNewQa] = useState({ question: '', answer: '' });
+  const [editingQaIndex, setEditingQaIndex] = useState(null);
+  const [editingQaDraft, setEditingQaDraft] = useState({ question: '', answer: '' });
 
   // Voice mapping for different services
   const voiceMappings = {
@@ -155,6 +164,15 @@ const AgentForm = ({
       if (Array.isArray(agent.depositions) && agent.depositions.length > 0) {
         setDepositions(agent.depositions);
       }
+    }
+  }, [agent]);
+
+  // Initialize Q&A from agent
+  useEffect(() => {
+    if (agent && Array.isArray(agent.qa)) {
+      setQaItems(agent.qa.map(q => ({ question: q.question || '', answer: q.answer || '' })));
+    } else {
+      setQaItems([]);
     }
   }, [agent]);
 
@@ -1040,6 +1058,38 @@ const AgentForm = ({
     }
   };
 
+  // Save Q&A helper (updates only qa via update-agent admin endpoint when available, else via client agent update)
+  const saveAgentQa = async (qaArray) => {
+    try {
+      // Prefer admin token if present (from either storage)
+      const adminToken = localStorage.getItem('admintoken') || sessionStorage.getItem('admintoken');
+      const authToken =
+        adminToken ||
+        clientToken ||
+        sessionStorage.getItem("clienttoken");
+      if (!agent || !agent._id) return false;
+      // Prefer admin update endpoint if admin token exists (either storage)
+      const isAdmin = !!adminToken;
+      const url = isAdmin
+        ? `${API_BASE_URL}/admin/update-agent/${agent._id}`
+        : `${API_BASE_URL}/client/agents/${agent._id}${clientId ? `?clientId=${clientId}` : ''}`;
+      const resp = await fetch(url, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` },
+        body: JSON.stringify({ qa: qaArray })
+      });
+      const json = await resp.json();
+      if (!resp.ok || !json?.success) {
+        alert(json?.message || json?.error || 'Failed to save Q&A');
+        return false;
+      }
+      return true;
+    } catch (e) {
+      alert(e.message || 'Failed to save Q&A');
+      return false;
+    }
+  };
+
   const renderStartingMessagesTab = () => (
     <div className="space-y-6">
       <h3 className="text-xl font-semibold text-gray-800 mb-4">
@@ -1325,117 +1375,482 @@ const AgentForm = ({
     </div>
   );
 
-  const renderSystemConfigTab = () => (
-    <div className="space-y-6">
-      <h3 className="text-xl font-semibold text-gray-800 mb-4">
-        System Configuration
-      </h3>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* <div>
-          <label
-            htmlFor="sttSelection"
-            className="block mb-2 font-semibold text-gray-700"
-          >
-            Speech-to-Text
-          </label>
-          <select
-            id="sttSelection"
-            name="sttSelection"
-            value={formData.sttSelection}
-            onChange={handleInputChange}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors"
-          >
-            <option value="google">Google Speech-to-Text</option>
-            <option value="azure">Azure Speech Services</option>
-            <option value="aws">AWS Transcribe</option>
-          </select>
+  const renderSystemConfigTab = () => {
+    // Define system configuration sub-tabs with their properties
+    const systemSubTabs = [
+      {
+        id: "prompt",
+        name: "System Prompt",
+        icon: "🤖",
+        color: "bg-blue-500",
+        hoverColor: "hover:bg-blue-600",
+        description: "Configure agent behavior and instructions"
+      },
+      {
+        id: "qa",
+        name: "Q&A",
+        icon: "💬", 
+        color: "bg-green-500",
+        hoverColor: "hover:bg-green-600",
+        description: "Manage predefined questions and answers"
+      }
+    ];
+  
+    const renderSubTabContent = (subTab) => {
+      switch (subTab.id) {
+        case "prompt":
+          return (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Uncomment these if needed
+                <div>
+                  <label
+                    htmlFor="sttSelection"
+                    className="block mb-2 font-semibold text-gray-700"
+                  >
+                    Speech-to-Text
+                  </label>
+                  <select
+                    id="sttSelection"
+                    name="sttSelection"
+                    value={formData.sttSelection}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors"
+                  >
+                    <option value="google">Google Speech-to-Text</option>
+                    <option value="azure">Azure Speech Services</option>
+                    <option value="aws">AWS Transcribe</option>
+                  </select>
+                </div>
+  
+                <div>
+                  <label
+                    htmlFor="ttsSelection"
+                    className="block mb-2 font-semibold text-gray-700"
+                  >
+                    Text-to-Speech
+                  </label>
+                  <select
+                    id="ttsSelection"
+                    name="ttsSelection"
+                    value={formData.ttsSelection}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors"
+                  >
+                    <option value="sarvam">Sarvam AI</option>
+                    <option value="elevenlabs">ElevenLabs</option>
+                    <option value="azure">Azure Speech Services</option>
+                  </select>
+                </div>
+                */}
+              </div>
+              
+              <div>
+                <label
+                  htmlFor="systemPrompt"
+                  className="block mb-2 font-semibold text-gray-700"
+                >
+                  System Prompt *
+                </label>
+                <textarea
+                  id="systemPrompt"
+                  name="systemPrompt"
+                  value={formData.systemPrompt}
+                  onChange={handleInputChange}
+                  rows="15"
+                  required
+                  placeholder="Define the agent's behavior, knowledge, and capabilities..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors resize-vertical"
+                />
+                <small className="block mt-1 text-gray-600 text-sm">
+                  This prompt defines how the AI agent should behave and respond to users.
+                </small>
+              </div>
+            </div>
+          );
+  
+        case "qa":
+          return (
+            <div className="space-y-4">
+              {/* Add Q&A Button */}
+              {showAddQa && (
+                <div className="border rounded-lg p-4 bg-white shadow-sm">
+                  <div className="grid grid-cols-1 gap-3">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Question</label>
+                      <input
+                        type="text"
+                        value={newQa.question}
+                        onChange={(e) => setNewQa(prev => ({ ...prev, question: e.target.value }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                        placeholder="Enter the question"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Answer</label>
+                      <textarea
+                        value={newQa.answer}
+                        onChange={(e) => setNewQa(prev => ({ ...prev, answer: e.target.value }))}
+                        rows="4"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                        placeholder="Enter the answer"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex justify-end gap-2 mt-3">
+                    <button 
+                      type="button" 
+                      onClick={() => { setShowAddQa(false); setNewQa({ question: '', answer: '' }); }} 
+                      className="px-3 py-1.5 text-sm border rounded-md"
+                    >
+                      Cancel
+                    </button>
+                    <button 
+                      type="button" 
+                      disabled={isSavingQa || !newQa.question.trim() || !newQa.answer.trim()} 
+                      onClick={async () => {
+                        try {
+                          setIsSavingQa(true);
+                          const updated = [...qaItems, { question: newQa.question.trim(), answer: newQa.answer.trim() }];
+                          const ok = await saveAgentQa(updated);
+                          if (ok) {
+                            setQaItems(updated);
+                            setNewQa({ question: '', answer: '' });
+                          }
+                        } finally {
+                          setIsSavingQa(false);
+                        }
+                      }} 
+                      className="px-3 py-1.5 text-sm rounded-md bg-indigo-600 text-white disabled:opacity-50"
+                    >
+                      {isSavingQa ? 'Saving...' : 'Save'}
+                    </button>
+                  </div>
+                </div>
+              )}
+  
+              {/* Empty State */}
+              {qaItems.length === 0 && !showAddQa && (
+                <div className="p-6 text-center text-gray-500 border border-dashed rounded-lg">
+                  No Q&A added yet. Click Add to create one.
+                </div>
+              )}
+  
+              {/* Q&A List */}
+              <div className="grid grid-cols-1 gap-3">
+                {[...qaItems].slice().reverse().map((qa, revIndex, arr) => {
+                  const idx = qaItems.length - 1 - revIndex; // map back to original index for edit/delete
+                  return (
+                  <div key={idx} className="border rounded-lg bg-white p-4 shadow-sm">
+                    {editingQaIndex === idx ? (
+                      <div className="space-y-3">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Question</label>
+                          <input
+                            type="text"
+                            value={editingQaDraft.question}
+                            onChange={(e) => setEditingQaDraft(prev => ({ ...prev, question: e.target.value }))}
+                            className="w-full px-3 py-2 border border-gray-300 rounded"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Answer</label>
+                          <textarea
+                            rows="3"
+                            value={editingQaDraft.answer}
+                            onChange={(e) => setEditingQaDraft(prev => ({ ...prev, answer: e.target.value }))}
+                            className="w-full px-3 py-2 border border-gray-300 rounded"
+                          />
+                        </div>
+                        <div className="flex justify-end gap-2">
+                          <button 
+                            type="button" 
+                            className="px-3 py-1.5 text-sm border rounded" 
+                            onClick={() => { setEditingQaIndex(null); }}
+                          >
+                            Cancel
+                          </button>
+                          <button 
+                            type="button" 
+                            className="px-3 py-1.5 text-sm bg-green-600 text-white rounded" 
+                            onClick={async () => {
+                              const draftQ = (editingQaDraft.question || '').trim();
+                              const draftA = (editingQaDraft.answer || '').trim();
+                              if (!draftQ || !draftA) return;
+                              const updated = qaItems.map((q, i) => i === idx ? { question: draftQ, answer: draftA } : q);
+                              if (await saveAgentQa(updated)) {
+                                setQaItems(updated);
+                                setEditingQaIndex(null);
+                              }
+                            }}
+                          >
+                            Save
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-start gap-4">
+                        <div className="flex-1">
+                          <div className="text-sm font-semibold text-gray-800 mb-1">
+                            Q: <span className="font-normal">{qa.question}</span>
+                          </div>
+                          <div className="text-sm text-gray-800">
+                            A: <span className="font-normal whitespace-pre-wrap">{qa.answer}</span>
+                          </div>
+                        </div>
+                        <div className="flex gap-1.5">
+                          <button
+                            type="button"
+                            title="Edit"
+                            className="p-1.5 rounded border hover:bg-gray-50"
+                            onClick={() => { setEditingQaIndex(idx); setEditingQaDraft({ question: qa.question, answer: qa.answer }); }}
+                          >
+                            <FiEdit className="w-3 h-3 text-gray-700" />
+                          </button>
+                          <button
+                            type="button"
+                            title="Delete"
+                            className="p-1.5 rounded border border-red-300 hover:bg-red-50"
+                            onClick={async () => {
+                              if (!window.confirm('Delete this Q&A?')) return;
+                              const updated = qaItems.filter((_, i) => i !== idx);
+                              if (await saveAgentQa(updated)) {
+                                setQaItems(updated);
+                              }
+                            }}
+                          >
+                            <FiTrash2 className="w-3 h-3 text-red-600" />
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )})}
+              </div>
+            </div>
+          );
+  
+        case "settings":
+          return (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label
+                    htmlFor="callingType"
+                    className="block mb-2 font-semibold text-gray-700"
+                  >
+                    Calling Type
+                  </label>
+                  <select
+                    id="callingType"
+                    name="callingType"
+                    value={formData.callingType}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors"
+                  >
+                    <option value="inbound">Inbound</option>
+                    <option value="outbound">Outbound</option>
+                    <option value="both">Both</option>
+                  </select>
+                </div>
+  
+                <div>
+                  <label
+                    htmlFor="callingNumber"
+                    className="block mb-2 font-semibold text-gray-700"
+                  >
+                    Calling Number
+                  </label>
+                  <input
+                    type="text"
+                    id="callingNumber"
+                    name="callingNumber"
+                    value={formData.callingNumber}
+                    onChange={handleInputChange}
+                    placeholder="Enter your Calling Number"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors"
+                  />
+                </div>
+  
+                <div>
+                  <label
+                    htmlFor="sttSelection"
+                    className="block mb-2 font-semibold text-gray-700"
+                  >
+                    Speech-to-Text
+                  </label>
+                  <select
+                    id="sttSelection"
+                    name="sttSelection"
+                    value={formData.sttSelection}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors"
+                  >
+                    <option value="google">Google Speech-to-Text</option>
+                    <option value="azure">Azure Speech Services</option>
+                    <option value="aws">AWS Transcribe</option>
+                  </select>
+                </div>
+  
+                <div>
+                  <label
+                    htmlFor="ttsSelection"
+                    className="block mb-2 font-semibold text-gray-700"
+                  >
+                    Text-to-Speech
+                  </label>
+                  <select
+                    id="ttsSelection"
+                    name="ttsSelection"
+                    value={formData.ttsSelection}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors"
+                  >
+                    <option value="sarvam">Sarvam AI</option>
+                    <option value="elevenlabs">ElevenLabs</option>
+                    <option value="azure">Azure Speech Services</option>
+                  </select>
+                </div>
+              </div>
+  
+              {/* Integration Settings */}
+              <div className="border-t pt-6">
+                <h4 className="text-lg font-semibold text-gray-800 mb-4">Integration Settings</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label
+                      htmlFor="X_API_KEY"
+                      className="block mb-2 font-semibold text-gray-700"
+                    >
+                      X API Key
+                    </label>
+                    <input
+                      type="password"
+                      id="X_API_KEY"
+                      name="X_API_KEY"
+                      value={formData.X_API_KEY}
+                      onChange={handleInputChange}
+                      placeholder="Enter X API Key"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors"
+                    />
+                  </div>
+  
+                  {(!formData.serviceProvider || formData.serviceProvider !== "tata") && (
+                    <>
+                      <div>
+                        <label
+                          htmlFor="accountSid"
+                          className="block mb-2 font-semibold text-gray-700"
+                        >
+                          Account SID
+                        </label>
+                        <input
+                          type="text"
+                          id="accountSid"
+                          name="accountSid"
+                          value={formData.accountSid}
+                          onChange={handleInputChange}
+                          placeholder="Enter your account SID"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors"
+                        />
+                      </div>
+  
+                      <div>
+                        <label
+                          htmlFor="callerId"
+                          className="block mb-2 font-semibold text-gray-700"
+                        >
+                          Caller ID
+                        </label>
+                        <input
+                          type="text"
+                          id="callerId"
+                          name="callerId"
+                          value={formData.callerId}
+                          onChange={handleInputChange}
+                          placeholder="Enter caller ID (phone number)"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors"
+                        />
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+  
+        default:
+          return <div>Invalid sub-tab</div>;
+      }
+    };
+  
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between mb-6">
+          <h3 className="text-xl font-semibold text-gray-800">
+            System Configuration
+          </h3>
+          <div className="text-sm text-gray-500">
+            Configure system behavior, Q&A, and integration settings
+          </div>
         </div>
-
-        <div>
-          <label
-            htmlFor="ttsSelection"
-            className="block mb-2 font-semibold text-gray-700"
-          >
-            Text-to-Speech
-          </label>
-          <select
-            id="ttsSelection"
-            name="ttsSelection"
-            value={formData.ttsSelection}
-            onChange={handleInputChange}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors"
-          >
-            <option value="sarvam">Sarvam AI</option>
-            <option value="elevenlabs">ElevenLabs</option>
-            <option value="azure">Azure Speech Services</option>
-          </select>
-        </div> */}
-
-        {/* <div>
-          <label
-            htmlFor="callingType"
-            className="block mb-2 font-semibold text-gray-700"
-          >
-            Calling Type
-          </label>
-          <select
-            id="callingType"
-            name="callingType"
-            value={formData.callingType}
-            onChange={handleInputChange}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors"
-          >
-            <option value="inbound">Inbound</option>
-            <option value="outbound">Outbound</option>
-            <option value="both">Both</option>
-          </select>
+  
+        {/* Sub-tab Navigation */}
+        <div className="flex gap-1 mb-6">
+          {systemSubTabs.map((subTab) => (
+            <button
+              key={subTab.id}
+              type="button"
+              onClick={() => {
+                setSystemSubTab(subTab.id);
+                // Reset add Q&A form when switching tabs
+                if (subTab.id !== 'qa') {
+                  setShowAddQa(false);
+                  setNewQa({ question: '', answer: '' });
+                }
+              }}
+              className={`flex-1 py-3 px-4 rounded-t-lg font-medium transition-all duration-200 ${
+                systemSubTab === subTab.id
+                  ? `${subTab.color} text-white shadow-sm`
+                  : "bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-800"
+              }`}
+            >
+              <div className="flex items-center justify-center gap-2">
+                <span className="text-lg">{subTab.icon}</span>
+                <span className="text-sm">{subTab.name}</span>
+              </div>
+            </button>
+          ))}
+          
+          {/* Add button for Q&A tab */}
+          {systemSubTab === 'qa' && (
+            <button
+              type="button"
+              onClick={() => { setShowAddQa(true); setNewQa({ question: '', answer: '' }); }}
+              className="ml-2 inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-md bg-gradient-to-r from-indigo-600 to-indigo-700 text-white shadow-sm hover:from-indigo-700 hover:to-indigo-800"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+                <path d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z"/>
+              </svg>
+              Add
+            </button>
+          )}
         </div>
-
-        <div>
-          <label
-            htmlFor="callingNumber"
-            className="block mb-2 font-semibold text-gray-700"
-          >
-            Calling Number
-          </label>
-          <input
-            type="text"
-            id="callingNumber"
-            name="callingNumber"
-            value={formData.callingNumber}
-            onChange={handleInputChange}
-            placeholder="Enter your Calling Number"
-            required
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors"
-          />
-        </div> */}
-      </div>
-
-      <div>
-        <label
-          htmlFor="systemPrompt"
-          className="block mb-2 font-semibold text-gray-700"
+  
+        {/* Tab Content */}
+        <div 
+          className="border border-gray-200 rounded-b-lg bg-white"
+          style={{ maxHeight: "600px", overflowY: "auto" }}
         >
-          System Prompt
-        </label>
-        <textarea
-          id="systemPrompt"
-          name="systemPrompt"
-          value={formData.systemPrompt}
-          onChange={handleInputChange}
-          rows="15"
-          required
-          placeholder="Define the agent's behavior, knowledge, and capabilities..."
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors resize-vertical"
-        />
-        <small className="block mt-1 text-gray-600 text-sm">
-          This prompt defines how the AI agent should behave and respond to
-          users.
-        </small>
+          <div className="p-6">
+            {renderSubTabContent(
+              systemSubTabs.find((st) => st.id === systemSubTab)
+            )}
+          </div>
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   const renderKnowledgeBaseTab = () => (
     <div className="space-y-6">
