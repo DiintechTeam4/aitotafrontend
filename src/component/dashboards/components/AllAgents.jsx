@@ -1800,9 +1800,11 @@ const AllAgents = () => {
                           {([...sanpbxDids]
                             .map((did) => {
                               const assignedAgent = (agents || []).find(
-                                (a) =>
-                                  String(a?.serviceProvider || '').toLowerCase().includes('snapbx') &&
-                                  String(a?.didNumber || '') === String(did)
+                                (a) => {
+                                  const prov = String(a?.serviceProvider || '').toLowerCase();
+                                  const isSnapbx = prov.includes('snapbx') || prov.includes('sanpbx');
+                                  return isSnapbx && String(a?.didNumber || '') === String(did);
+                                }
                               );
                               let status = assignedAgent ? 'Assigned' : 'Available';
                               const isAssignedToThisAgent = assignedAgent && String(assignedAgent._id) === String(selectedAgentForAssign?._id);
