@@ -39,6 +39,7 @@ const AllAgents = () => {
   const [assignProvider, setAssignProvider] = useState("snapbx");
   const [sanpbxDids, setSanpbxDids] = useState(["01246745649", "01246745655"]);
   const [newSanpbxDid, setNewSanpbxDid] = useState("");
+  const [campaignLocks, setCampaignLocks] = useState({ lockedAgentIds: [], lockedAgents: [] });
   const [assignFormData, setAssignFormData] = useState({
     serviceProvider: "snapbx",
     didNumber: "",
@@ -77,7 +78,24 @@ const AllAgents = () => {
   useEffect(() => {
     fetchAllAgents();
     fetchClients();
+    fetchCampaignLocks();
   }, []);
+
+  const fetchCampaignLocks = async () => {
+    try {
+      const token =
+        localStorage.getItem("admintoken") ||
+        sessionStorage.getItem("admintoken");
+      const resp = await fetch(`${API_BASE_URL}/admin/campaign-locks`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!resp.ok) return;
+      const data = await resp.json();
+      if (data?.success) setCampaignLocks(data.data || { lockedAgentIds: [], lockedAgents: [] });
+    } catch (e) {
+      // silent
+    }
+  };
 
   // Fetch SANPBX DIDs from backend
   const fetchDidNumbers = async () => {
@@ -396,6 +414,7 @@ const AllAgents = () => {
 
   const openAssign = (agent) => {
     setSelectedAgentForAssign(agent);
+    fetchCampaignLocks();
     const prov = (agent.serviceProvider || "snapbx").toLowerCase();
     setAssignProvider(prov);
     const temp = getTempCredentials(prov);
@@ -1818,6 +1837,9 @@ const AllAgents = () => {
                               let agentName = assignedAgent?.agentName || '-';
                               let clientName = assignedAgent ? getClientName(assignedAgent.clientId) : '-';
 
+                              // Determine if assigned agent is locked by running campaign
+                              const lockedByCampaign = assignedAgent ? (campaignLocks.lockedAgentIds || []).includes(String(assignedAgent._id)) : false;
+
                               // Temporary frontend override: if current agent switches selection,
                               // show the agent's previous DID as available with no agent/client
                               const selectedDid = String(assignFormData.didNumber || '');
@@ -1829,7 +1851,7 @@ const AllAgents = () => {
                                 clientName = '-';
                               }
 
-                              return { did, assignedAgent, status, statusLabel, agentName, clientName };
+                              return { did, assignedAgent, status, statusLabel, agentName, clientName, lockedByCampaign };
                             })
                             // Unassigned first only (do not shift based on current selection)
                             .sort((a, b) => {
@@ -1838,8 +1860,10 @@ const AllAgents = () => {
                               if (av !== bv) return av - bv;
                               return 0;
                             })
-                          ).map(({ did, assignedAgent, status, statusLabel, agentName, clientName }) => {
+                          ).map(({ did, assignedAgent, status, statusLabel, agentName, clientName, lockedByCampaign }) => {
                             const isSelected = assignFormData.didNumber === did;
+                            const isLocked = !!assignedAgent && lockedByCampaign; // locked by running campaign
+                            const isCurrentAgentLocked = (campaignLocks.lockedAgentIds || []).includes(String(selectedAgentForAssign?._id));
                             return (
                               <tr key={did} className={`${isSelected ? 'bg-indigo-50' : 'bg-white'}`}>
                                 <td className="px-3 py-2">
@@ -1847,16 +1871,19 @@ const AllAgents = () => {
                                     type="radio"
                                     name="sanpbxDid"
                                     checked={isSelected}
+                                    disabled={isLocked || (isCurrentAgentLocked && did !== String(selectedAgentForAssign?.didNumber || ''))}
                                     onChange={() => {
+                                      if (isLocked) return;
+                                      if (isCurrentAgentLocked && did !== String(selectedAgentForAssign?.didNumber || '')) return;
                                       handleAssignChange('didNumber', did);
                                     }}
                                   />
                                   
                                 </td>
-                                <td className="px-3 py-2 text-gray-800">{did}</td>
+                                <td className={`px-3 py-2 ${isLocked ? 'text-red-600 font-semibold' : 'text-gray-800'}`}>{did}</td>
                                 <td className="px-3 py-2">
-                                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${status === 'Assigned' ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'}`}>
-                                    {statusLabel}
+                                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${isLocked ? 'bg-red-100 text-red-800' : (status === 'Assigned' ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800')}`}>
+                                    {isLocked ? '(Campaign Running)' : statusLabel}
                                   </span>
                                 </td>
                                 <td className="px-3 py-2 text-gray-700">{isSelected ? (selectedAgentForAssign?.agentName || '-') : agentName}</td>
