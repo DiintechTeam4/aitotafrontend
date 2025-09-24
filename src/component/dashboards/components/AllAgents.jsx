@@ -44,6 +44,7 @@ const AllAgents = () => {
     didNumber: "",
     accessToken: "",
     accessKey: "",
+    appId: "",
     callerId: "",
     xApiKey: "",
     accountSid: "",
@@ -428,6 +429,7 @@ const AllAgents = () => {
       didNumber: safePreselect,
       accessToken: temp?.accessToken || agent.accessToken || "",
       accessKey: temp?.accessKey || agent.accessKey || "",
+      appId: temp?.appId || agent.appId || "",
       callerId: temp?.callerId || agent.callerId || "",
       xApiKey: (temp && (temp.X_API_KEY || temp.xApiKey)) || agent.X_API_KEY || "",
       accountSid: temp?.accountSid || agent.accountSid || "",
@@ -447,6 +449,7 @@ const AllAgents = () => {
       didNumber: "",
       accessToken: "",
       accessKey: "",
+      appId: "",
       callerId: "",
       xApiKey: "",
       accountSid: "",
@@ -525,6 +528,7 @@ const AllAgents = () => {
           didNumber: assignFormData.didNumber,
           accessToken: assignFormData.accessToken,
           accessKey: assignFormData.accessKey,
+          appId: assignFormData.appId,
           callerId: callerId,
         };
 
@@ -618,6 +622,7 @@ const AllAgents = () => {
         didNumber: "01246745649",
         accessToken: "265b2d7e5d1a5d9c33fc22b01e5d0f19",
         accessKey: "mob",
+        appId: "3",
         callerId: "6745649", // Last 7 digits
       };
     }
@@ -1762,6 +1767,7 @@ const AllAgents = () => {
                           didNumber: temp?.didNumber || "",
                           accessToken: temp?.accessToken || "",
                           accessKey: temp?.accessKey || "",
+                          appId: temp?.appId || "",
                           callerId: temp?.callerId || "",
                           xApiKey: (temp && (temp.X_API_KEY || temp.xApiKey)) || "",
                           accountSid: temp?.accountSid || "",
@@ -1867,6 +1873,7 @@ const AllAgents = () => {
                   {/* Hidden fields (kept in code, not displayed) */}
                   <input type="hidden" value={assignFormData.accessToken} readOnly />
                   <input type="hidden" value={assignFormData.accessKey} readOnly />
+                  <input type="hidden" value={assignFormData.appId} readOnly />
                 </div>
               )}
 
