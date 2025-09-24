@@ -24,6 +24,7 @@ const AgentForm = ({
     language: "en",
     firstMessage: "",
     systemPrompt: "",
+    details: "",
     sttSelection: "google",
     ttsSelection: "sarvam",
     voiceServiceProvider: "sarvam",
@@ -74,7 +75,7 @@ const AgentForm = ({
   const [backgroundImagePreview, setBackgroundImagePreview] = useState("");
 
   // System Configuration subtabs and Q&A state
-  const [systemSubTab, setSystemSubTab] = useState('prompt'); // 'prompt' | 'qa'
+  const [systemSubTab, setSystemSubTab] = useState('basic'); // 'basic' | 'dynamic' | 'qa'
   const [qaItems, setQaItems] = useState([]);
   const [isSavingQa, setIsSavingQa] = useState(false);
   const [showAddQa, setShowAddQa] = useState(false);
@@ -129,6 +130,7 @@ const AgentForm = ({
         language: agent.language || "en",
         firstMessage: agent.firstMessage || "",
         systemPrompt: agent.systemPrompt || "",
+        details: agent.details || "",
         sttSelection: agent.sttSelection || "google",
         ttsSelection: agent.ttsSelection || "sarvam",
         voiceServiceProvider: agent.voiceServiceProvider || "sarvam",
@@ -985,6 +987,10 @@ const AgentForm = ({
         // Include voice service provider and voice ID
         voiceServiceProvider: formData.voiceServiceProvider,
         voiceId: formData.voiceId,
+        // Persist dynamic details separately
+        details: formData.details,
+        // Save all Q&A in one go on Update
+        qa: qaItems,
         ...deriveSocials(),
       };
 
@@ -1379,12 +1385,20 @@ const AgentForm = ({
     // Define system configuration sub-tabs with their properties
     const systemSubTabs = [
       {
-        id: "prompt",
-        name: "System Prompt",
-        icon: "🤖",
+        id: "basic",
+        name: "Basic Info",
+        icon: "⚙️",
         color: "bg-blue-500",
         hoverColor: "hover:bg-blue-600",
-        description: "Configure agent behavior and instructions"
+        description: "Configure required basics"
+      },
+      {
+        id: "dynamic",
+        name: "Dynamic Info",
+        icon: "🧩",
+        color: "bg-purple-500",
+        hoverColor: "hover:bg-purple-600",
+        description: "Add details for dynamic behavior"
       },
       {
         id: "qa",
@@ -1395,56 +1409,12 @@ const AgentForm = ({
         description: "Manage predefined questions and answers"
       }
     ];
-  
+
     const renderSubTabContent = (subTab) => {
       switch (subTab.id) {
-        case "prompt":
+        case "basic":
           return (
             <div className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Uncomment these if needed
-                <div>
-                  <label
-                    htmlFor="sttSelection"
-                    className="block mb-2 font-semibold text-gray-700"
-                  >
-                    Speech-to-Text
-                  </label>
-                  <select
-                    id="sttSelection"
-                    name="sttSelection"
-                    value={formData.sttSelection}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors"
-                  >
-                    <option value="google">Google Speech-to-Text</option>
-                    <option value="azure">Azure Speech Services</option>
-                    <option value="aws">AWS Transcribe</option>
-                  </select>
-                </div>
-  
-                <div>
-                  <label
-                    htmlFor="ttsSelection"
-                    className="block mb-2 font-semibold text-gray-700"
-                  >
-                    Text-to-Speech
-                  </label>
-                  <select
-                    id="ttsSelection"
-                    name="ttsSelection"
-                    value={formData.ttsSelection}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors"
-                  >
-                    <option value="sarvam">Sarvam AI</option>
-                    <option value="elevenlabs">ElevenLabs</option>
-                    <option value="azure">Azure Speech Services</option>
-                  </select>
-                </div>
-                */}
-              </div>
-              
               <div>
                 <label
                   htmlFor="systemPrompt"
@@ -1457,22 +1427,52 @@ const AgentForm = ({
                   name="systemPrompt"
                   value={formData.systemPrompt}
                   onChange={handleInputChange}
-                  rows="15"
+                  rows="12"
                   required
                   placeholder="Define the agent's behavior, knowledge, and capabilities..."
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors resize-vertical"
                 />
-                <small className="block mt-1 text-gray-600 text-sm">
-                  This prompt defines how the AI agent should behave and respond to users.
-                </small>
               </div>
             </div>
           );
-  
+
+        case "dynamic":
+          return (
+            <div className="space-y-6">
+              <div>
+                <label className="block mb-2 font-semibold text-gray-700">
+                  Details
+                </label>
+                <textarea
+                  name="details"
+                  value={formData.details || ""}
+                  onChange={handleInputChange}
+                  rows="10"
+                  placeholder="Add dynamic details for the agent (used at runtime)"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors"
+                />
+              </div>
+            </div>
+          );
+
         case "qa":
           return (
             <div className="space-y-4">
-              {/* Add Q&A Button */}
+              {/* Add button below tabs, at top of Q&A content */}
+              <div className="mb-3 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => { setShowAddQa(true); setNewQa({ question: '', answer: '' }); }}
+                  className="inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-md bg-gradient-to-r from-indigo-600 to-indigo-700 text-white shadow-sm hover:from-indigo-700 hover:to-indigo-800"
+                >
+                  <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z"/>
+                  </svg>
+                  Add Q&A
+                </button>
+              </div>
+
+              {/* Add Q&A inline editor */}
               {showAddQa && (
                 <div className="border rounded-lg p-4 bg-white shadow-sm">
                   <div className="grid grid-cols-1 gap-3">
@@ -1507,23 +1507,16 @@ const AgentForm = ({
                     </button>
                     <button 
                       type="button" 
-                      disabled={isSavingQa || !newQa.question.trim() || !newQa.answer.trim()} 
-                      onClick={async () => {
-                        try {
-                          setIsSavingQa(true);
-                          const updated = [...qaItems, { question: newQa.question.trim(), answer: newQa.answer.trim() }];
-                          const ok = await saveAgentQa(updated);
-                          if (ok) {
-                            setQaItems(updated);
-                            setNewQa({ question: '', answer: '' });
-                          }
-                        } finally {
-                          setIsSavingQa(false);
-                        }
+                      disabled={!newQa.question.trim() || !newQa.answer.trim()} 
+                      onClick={() => {
+                        const updated = [...qaItems, { question: newQa.question.trim(), answer: newQa.answer.trim() }];
+                        setQaItems(updated);
+                        setNewQa({ question: '', answer: '' });
+                        setShowAddQa(false);
                       }} 
                       className="px-3 py-1.5 text-sm rounded-md bg-indigo-600 text-white disabled:opacity-50"
                     >
-                      {isSavingQa ? 'Saving...' : 'Save'}
+                      Add
                     </button>
                   </div>
                 </div>
@@ -1573,15 +1566,13 @@ const AgentForm = ({
                           <button 
                             type="button" 
                             className="px-3 py-1.5 text-sm bg-green-600 text-white rounded" 
-                            onClick={async () => {
+                            onClick={() => {
                               const draftQ = (editingQaDraft.question || '').trim();
                               const draftA = (editingQaDraft.answer || '').trim();
                               if (!draftQ || !draftA) return;
                               const updated = qaItems.map((q, i) => i === idx ? { question: draftQ, answer: draftA } : q);
-                              if (await saveAgentQa(updated)) {
-                                setQaItems(updated);
-                                setEditingQaIndex(null);
-                              }
+                              setQaItems(updated);
+                              setEditingQaIndex(null);
                             }}
                           >
                             Save
@@ -1611,12 +1602,10 @@ const AgentForm = ({
                             type="button"
                             title="Delete"
                             className="p-1.5 rounded border border-red-300 hover:bg-red-50"
-                            onClick={async () => {
+                            onClick={() => {
                               if (!window.confirm('Delete this Q&A?')) return;
                               const updated = qaItems.filter((_, i) => i !== idx);
-                              if (await saveAgentQa(updated)) {
-                                setQaItems(updated);
-                              }
+                              setQaItems(updated);
                             }}
                           >
                             <FiTrash2 className="w-3 h-3 text-red-600" />
@@ -1823,18 +1812,7 @@ const AgentForm = ({
           ))}
           
           {/* Add button for Q&A tab */}
-          {systemSubTab === 'qa' && (
-            <button
-              type="button"
-              onClick={() => { setShowAddQa(true); setNewQa({ question: '', answer: '' }); }}
-              className="ml-2 inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-md bg-gradient-to-r from-indigo-600 to-indigo-700 text-white shadow-sm hover:from-indigo-700 hover:to-indigo-800"
-            >
-              <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
-                <path d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z"/>
-              </svg>
-              Add
-            </button>
-          )}
+          {/* Move Add button into Q&A content section */}
         </div>
   
         {/* Tab Content */}
