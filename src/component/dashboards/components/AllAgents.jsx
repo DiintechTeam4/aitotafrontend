@@ -1819,6 +1819,7 @@ const AllAgents = () => {
                             <th className="px-3 py-2 text-left text-gray-600 font-medium">Status</th>
                             <th className="px-3 py-2 text-left text-gray-600 font-medium">Agent</th>
                             <th className="px-3 py-2 text-left text-gray-600 font-medium">Client</th>
+                            <th className="px-3 py-2 text-left text-gray-600 font-medium">Active</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200">
@@ -1888,6 +1889,36 @@ const AllAgents = () => {
                                 </td>
                                 <td className="px-3 py-2 text-gray-700">{isSelected ? (selectedAgentForAssign?.agentName || '-') : agentName}</td>
                                 <td className="px-3 py-2 text-gray-700">{isSelected ? (getClientName(selectedAgentForAssign?.clientId) || '-') : clientName}</td>
+                                <td className="px-3 py-2">
+                                  {assignedAgent ? (
+                                    <div className="flex items-center space-x-2">
+                                      <button
+                                        onClick={() => toggleAgentStatus(assignedAgent._id, assignedAgent.isActive)}
+                                        disabled={updatingStatus[assignedAgent._id] || isLocked}
+                                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 ${
+                                          assignedAgent.isActive ? "bg-green-600" : "bg-gray-200"
+                                        } ${isLocked ? "opacity-50 cursor-not-allowed" : ""}`}
+                                      >
+                                        <span
+                                          className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
+                                            assignedAgent.isActive ? "translate-x-5" : "translate-x-1"
+                                          }`}
+                                        />
+                                      </button>
+                                      <span className="text-xs text-gray-600">
+                                        {updatingStatus[assignedAgent._id] ? (
+                                          <span className="text-gray-400">Updating...</span>
+                                        ) : assignedAgent.isActive ? (
+                                          "Active"
+                                        ) : (
+                                          "Inactive"
+                                        )}
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    <span className="text-gray-400 text-xs">-</span>
+                                  )}
+                                </td>
                               </tr>
                             );
                           })}
