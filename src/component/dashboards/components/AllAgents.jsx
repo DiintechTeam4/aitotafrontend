@@ -14,8 +14,8 @@ import {
   FaEdit,
   FaTrash,
 } from "react-icons/fa";
-import { FiSettings } from "react-icons/fi";
-import { useNavigate } from "react-router-dom";
+import { FiSettings } from 'react-icons/fi';
+import { useNavigate } from 'react-router-dom';
 
 const AllAgents = () => {
   const navigate = useNavigate();
@@ -39,10 +39,7 @@ const AllAgents = () => {
   const [assignProvider, setAssignProvider] = useState("snapbx");
   const [sanpbxDids, setSanpbxDids] = useState(["01246745649", "01246745655"]);
   const [newSanpbxDid, setNewSanpbxDid] = useState("");
-  const [campaignLocks, setCampaignLocks] = useState({
-    lockedAgentIds: [],
-    lockedAgents: [],
-  });
+  const [campaignLocks, setCampaignLocks] = useState({ lockedAgentIds: [], lockedAgents: [] });
   const [assignFormData, setAssignFormData] = useState({
     serviceProvider: "snapbx",
     didNumber: "",
@@ -94,8 +91,7 @@ const AllAgents = () => {
       });
       if (!resp.ok) return;
       const data = await resp.json();
-      if (data?.success)
-        setCampaignLocks(data.data || { lockedAgentIds: [], lockedAgents: [] });
+      if (data?.success) setCampaignLocks(data.data || { lockedAgentIds: [], lockedAgents: [] });
     } catch (e) {
       // silent
     }
@@ -107,12 +103,9 @@ const AllAgents = () => {
       const token =
         localStorage.getItem("admintoken") ||
         sessionStorage.getItem("admintoken");
-      const resp = await fetch(
-        `${API_BASE_URL}/admin/did-numbers?provider=snapbx`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
+      const resp = await fetch(`${API_BASE_URL}/admin/did-numbers?provider=snapbx`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       if (!resp.ok) return;
       const data = await resp.json();
       if (data?.success && Array.isArray(data.data)) {
@@ -188,23 +181,37 @@ const AllAgents = () => {
     }
   };
 
-  // Client helper lookups using minimal clients payload
-  const getClientById = (id) => (clients || []).find((c) => c?._id === id);
-  const getClientName = (id) => getClientById(id)?.name || "Admin";
-  const getClientBusinessName = (id) => getClientById(id)?.businessName || "";
-  const getClientWebsiteUrl = (id) => getClientById(id)?.websiteUrl || null;
-  const getClientBusinessLogoUrl = (id) =>
-    getClientById(id)?.businessLogoUrl || null;
+  const getClientName = (clientId) => {
+    const client = clients.find((c) => c._id === clientId);
+    return client ? client.name : "Admin";
+  };
+
+  const getClientBusinessName = (clientId) => {
+    const client = clients.find((c) => c._id === clientId);
+    return client ? client.businessName : "";
+  };
+
+  const getClientWebsiteUrl = (clientId) => {
+    const client = clients.find((c) => c._id === clientId);
+    return client ? client.websiteUrl : null;
+  };
+
+  const getClientBusinessLogoUrl = (clientId) => {
+    const client = clients.find((c) => c._id === clientId);
+    return client ? client.businessLogoUrl : null;
+  };
 
   const filteredAgents = agents
     .filter((agent) => {
-      const term = searchTerm.toLowerCase();
       const matchesSearch =
-        agent.agentName?.toLowerCase().includes(term) ||
-        agent.category?.toLowerCase().includes(term) ||
-        agent.service?.toLowerCase().includes(term) ||
-        agent.personality?.toLowerCase().includes(term) ||
-        agent.didNumber?.toLowerCase().includes(term);
+        agent.agentName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        agent.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        getClientName(agent.clientId)
+          ?.toLowerCase()
+          .includes(searchTerm.toLowerCase()) ||
+        getClientBusinessName(agent.clientId)
+          ?.toLowerCase()
+          .includes(searchTerm.toLowerCase());
 
       const matchesStatus =
         statusFilter === "all" ||
@@ -212,10 +219,16 @@ const AllAgents = () => {
         (statusFilter === "pending" && !agent.isActive);
 
       const matchesClient =
-        clientFilter === "all" ||
-        String(agent.clientId || "") === String(clientFilter);
+        clientFilter === "all" || agent.clientId === clientFilter;
 
-      return matchesSearch && matchesStatus && matchesClient;
+      // Only show agents from approved clients
+      const isFromApprovedClient = clients.find(
+        (client) => client._id === agent.clientId && client.isApproved
+      );
+
+      return (
+        matchesSearch && matchesStatus && matchesClient && isFromApprovedClient
+      );
     })
     .sort((a, b) => {
       // Sort active agents first
@@ -402,21 +415,18 @@ const AllAgents = () => {
   const openAssign = (agent) => {
     setSelectedAgentForAssign(agent);
     fetchCampaignLocks();
-    const prov = (agent.service || "snapbx").toLowerCase();
+    const prov = (agent.serviceProvider || "snapbx").toLowerCase();
     setAssignProvider(prov);
     const temp = getTempCredentials(prov);
     // Initialize SANPBX DIDs list and select agent's current DID if available
     if (prov === "snapbx" || prov === "sanpbx") {
       fetchDidNumbers();
-      const seed = sanpbxDids.length
-        ? sanpbxDids
-        : ["01246745649", "01246745655"]; // existing DIDs
+      const seed = sanpbxDids.length ? sanpbxDids : ["01246745649", "01246745655"]; // existing DIDs
       const currentDid = agent.didNumber ? String(agent.didNumber) : "";
-      const merged = Array.from(
-        new Set(
-          [...seed, currentDid ? [currentDid] : []].flat().filter(Boolean)
-        )
-      );
+      const merged = Array.from(new Set([...
+        seed,
+        currentDid ? [currentDid] : []
+      ].flat().filter(Boolean)));
       setSanpbxDids(merged);
       setNewSanpbxDid("");
     }
@@ -426,9 +436,8 @@ const AllAgents = () => {
     if (candidateDid) {
       const assignedAgent = (agents || []).find(
         (a) =>
-          String(a?.service || "")
-            .toLowerCase()
-            .includes("snapbx") && String(a?.didNumber || "") === candidateDid
+          String(a?.serviceProvider || '').toLowerCase().includes('snapbx') &&
+          String(a?.didNumber || '') === candidateDid
       );
       if (!assignedAgent || String(assignedAgent._id) === String(agent._id)) {
         safePreselect = candidateDid;
@@ -441,8 +450,7 @@ const AllAgents = () => {
       accessKey: temp?.accessKey || agent.accessKey || "",
       appId: temp?.appId || agent.appId || "",
       callerId: temp?.callerId || agent.callerId || "",
-      xApiKey:
-        (temp && (temp.X_API_KEY || temp.xApiKey)) || agent.X_API_KEY || "",
+      xApiKey: (temp && (temp.X_API_KEY || temp.xApiKey)) || agent.X_API_KEY || "",
       accountSid: temp?.accountSid || agent.accountSid || "",
     });
     setShowAssignModal(true);
@@ -490,7 +498,7 @@ const AllAgents = () => {
           did: newSanpbxDid.trim(),
           provider: "snapbx",
           callerId: assignFormData.callerId || "", // Use provided caller ID or empty for auto-generation
-          notes: `Added via admin panel for agent assignment`,
+          notes: `Added via admin panel for agent assignment`
         }),
       });
 
@@ -498,13 +506,13 @@ const AllAgents = () => {
         const data = await response.json();
         if (data.success) {
           // Add the new DID to the local list
-          setSanpbxDids((prev) => [...prev, newSanpbxDid.trim()]);
+          setSanpbxDids(prev => [...prev, newSanpbxDid.trim()]);
           // Select the newly added DID
-          handleAssignChange("didNumber", newSanpbxDid.trim());
+          handleAssignChange('didNumber', newSanpbxDid.trim());
           // Clear the input
           setNewSanpbxDid("");
           // Clear caller ID input
-          handleAssignChange("callerId", "");
+          handleAssignChange('callerId', '');
           alert("DID number added successfully!");
         } else {
           alert("Failed to add DID number: " + data.message);
@@ -531,12 +539,9 @@ const AllAgents = () => {
       if (assignProvider === "snapbx") {
         // Auto-derive callerId from DID (last 7 digits), keep access creds in code
         const did = String(assignFormData.didNumber || "").replace(/\D/g, "");
-        const callerId =
-          assignFormData.callerId && assignFormData.callerId.trim() !== ""
-            ? assignFormData.callerId
-            : did
-            ? did.slice(-7)
-            : "";
+        const callerId = assignFormData.callerId && assignFormData.callerId.trim() !== '' 
+          ? assignFormData.callerId 
+          : (did ? did.slice(-7) : "");
         payload = {
           serviceProvider: "snapbx",
           didNumber: assignFormData.didNumber,
@@ -553,31 +558,17 @@ const AllAgents = () => {
             sessionStorage.getItem("admintoken");
           // Ensure DID exists
           await fetch(`${API_BASE_URL}/admin/did-numbers`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify({
-              did: assignFormData.didNumber,
-              provider: "snapbx",
-            }),
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ did: assignFormData.didNumber, provider: 'snapbx' }),
           });
           // Assign DID to agent - this will use the saved caller ID from database
-          await fetch(
-            `${API_BASE_URL}/admin/did-numbers/${encodeURIComponent(
-              assignFormData.didNumber
-            )}/assign`,
-            {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${token}`,
-              },
-              body: JSON.stringify({ agentId: selectedAgentForAssign?._id }),
-            }
-          );
-
+          await fetch(`${API_BASE_URL}/admin/did-numbers/${encodeURIComponent(assignFormData.didNumber)}/assign`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ agentId: selectedAgentForAssign?._id }),
+          });
+          
           // For snapbx, the assignDidToAgent function already updates the agent with correct caller ID
           // So we don't need to update the agent again with our payload
           alert("Agent assigned successfully!");
@@ -794,7 +785,7 @@ const AllAgents = () => {
         <div className="flex items-center justify-between">
           <h2 className="text-2xl font-bold text-gray-900">AI Agents</h2>
           <button
-            onClick={() => navigate("/admin/dashboard?tab=System%20Prompts")}
+            onClick={() => navigate('/admin/dashboard?tab=System%20Prompts')}
             className="group relative inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition-all hover:border-red-200 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
             title="Manage System Prompts"
           >
@@ -804,70 +795,72 @@ const AllAgents = () => {
         </div>
       </div>
 
-      {/* Stats Section */}
-      <div className="mt-6 grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-          <div className="flex items-center">
-            <div className="p-2 bg-blue-100 rounded-lg">
-              <FaUserTie className="h-6 w-6 text-blue-600" />
-            </div>
-            <div className="ml-3">
-              <p className="text-sm font-medium text-blue-600">Total Agents</p>
-              <p className="text-2xl font-bold text-blue-900">
-                {agents.length}
-              </p>
+        {/* Stats Section */}
+        <div className="mt-6 grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+            <div className="flex items-center">
+              <div className="p-2 bg-blue-100 rounded-lg">
+                <FaUserTie className="h-6 w-6 text-blue-600" />
+              </div>
+              <div className="ml-3">
+                <p className="text-sm font-medium text-blue-600">
+                  Total Agents
+                </p>
+                <p className="text-2xl font-bold text-blue-900">
+                  {agents.length}
+                </p>
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="bg-green-50 p-4 rounded-lg border border-green-200">
-          <div className="flex items-center">
-            <div className="p-2 bg-green-100 rounded-lg">
-              <FaCheckCircle className="h-6 w-6 text-green-600" />
-            </div>
-            <div className="ml-3">
-              <p className="text-sm font-medium text-green-600">
-                Active Agents
-              </p>
-              <p className="text-2xl font-bold text-green-900">
-                {agents.filter((agent) => agent.isActive).length}
-              </p>
+          <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+            <div className="flex items-center">
+              <div className="p-2 bg-green-100 rounded-lg">
+                <FaCheckCircle className="h-6 w-6 text-green-600" />
+              </div>
+              <div className="ml-3">
+                <p className="text-sm font-medium text-green-600">
+                  Active Agents
+                </p>
+                <p className="text-2xl font-bold text-green-900">
+                  {agents.filter((agent) => agent.isActive).length}
+                </p>
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
-          <div className="flex items-center">
-            <div className="p-2 bg-yellow-100 rounded-lg">
-              <FaTimesCircle className="h-6 w-6 text-yellow-600" />
-            </div>
-            <div className="ml-3">
-              <p className="text-sm font-medium text-yellow-600">
-                Inactive Agents
-              </p>
-              <p className="text-2xl font-bold text-yellow-900">
-                {agents.filter((agent) => !agent.isActive).length}
-              </p>
+          <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+            <div className="flex items-center">
+              <div className="p-2 bg-yellow-100 rounded-lg">
+                <FaTimesCircle className="h-6 w-6 text-yellow-600" />
+              </div>
+              <div className="ml-3">
+                <p className="text-sm font-medium text-yellow-600">
+                  Inactive Agents
+                </p>
+                <p className="text-2xl font-bold text-yellow-900">
+                  {agents.filter((agent) => !agent.isActive).length}
+                </p>
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
-          <div className="flex items-center">
-            <div className="p-2 bg-purple-100 rounded-lg">
-              <FaBuilding className="h-6 w-6 text-purple-600" />
-            </div>
-            <div className="ml-3">
-              <p className="text-sm font-medium text-purple-600">
-                Total Clients
-              </p>
-              <p className="text-2xl font-bold text-purple-900">
-                {clients.length}
-              </p>
+          <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
+            <div className="flex items-center">
+              <div className="p-2 bg-purple-100 rounded-lg">
+                <FaBuilding className="h-6 w-6 text-purple-600" />
+              </div>
+              <div className="ml-3">
+                <p className="text-sm font-medium text-purple-600">
+                  Total Clients
+                </p>
+                <p className="text-2xl font-bold text-purple-900">
+                  {clients.length}
+                </p>
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
       {/* Filters */}
       <div className="p-6 border-b border-white-100 bg-white-50">
@@ -891,12 +884,14 @@ const AllAgents = () => {
             className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
           >
             <option value="all">All Clients</option>
-            {clients.map((client) => (
-              <option key={client._id} value={client._id}>
-                {client.name}
-                {client.businessName ? ` (${client.businessName})` : ""}
-              </option>
-            ))}
+            {clients
+              .filter((client) => client.isApproved)
+              .map((client) => (
+                <option key={client._id} value={client._id}>
+                  {client.name}
+                  {client.businessName ? ` (${client.businessName})` : ""}
+                </option>
+              ))}
           </select>
         </div>
       </div>
@@ -961,7 +956,7 @@ const AllAgents = () => {
                         Category: {agent.category || "General"}
                       </div>
                       <div className="text-xs text-gray-400">
-                        Service: {agent.service || "-"}
+                        Service: {agent.serviceProvider || "-"}
                       </div>
                       <div className="text-xs text-gray-400">
                         Personality: {agent.personality || "Formal"}
@@ -1793,8 +1788,7 @@ const AllAgents = () => {
                           accessKey: temp?.accessKey || "",
                           appId: temp?.appId || "",
                           callerId: temp?.callerId || "",
-                          xApiKey:
-                            (temp && (temp.X_API_KEY || temp.xApiKey)) || "",
+                          xApiKey: (temp && (temp.X_API_KEY || temp.xApiKey)) || "",
                           accountSid: temp?.accountSid || "",
                         }));
                       }}
@@ -1820,92 +1814,45 @@ const AllAgents = () => {
                       <table className="min-w-full text-sm">
                         <thead className="bg-gray-50">
                           <tr>
-                            <th className="px-3 py-2 text-left text-gray-600 font-medium">
-                              Select
-                            </th>
-                            <th className="px-3 py-2 text-left text-gray-600 font-medium">
-                              DID
-                            </th>
-                            <th className="px-3 py-2 text-left text-gray-600 font-medium">
-                              Status
-                            </th>
-                            <th className="px-3 py-2 text-left text-gray-600 font-medium">
-                              Agent
-                            </th>
-                            <th className="px-3 py-2 text-left text-gray-600 font-medium">
-                              Client
-                            </th>
-                            <th className="px-3 py-2 text-left text-gray-600 font-medium">
-                              Active
-                            </th>
+                            <th className="px-3 py-2 text-left text-gray-600 font-medium">Select</th>
+                            <th className="px-3 py-2 text-left text-gray-600 font-medium">DID</th>
+                            <th className="px-3 py-2 text-left text-gray-600 font-medium">Status</th>
+                            <th className="px-3 py-2 text-left text-gray-600 font-medium">Agent</th>
+                            <th className="px-3 py-2 text-left text-gray-600 font-medium">Client</th>
+                            <th className="px-3 py-2 text-left text-gray-600 font-medium">Active</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200">
-                          {[...sanpbxDids]
+                          {([...sanpbxDids]
                             .map((did) => {
-                              const assignedAgent = (agents || []).find((a) => {
-                                const prov = String(
-                                  a?.service || ""
-                                ).toLowerCase();
-                                const isSnapbx =
-                                  prov.includes("snapbx") ||
-                                  prov.includes("sanpbx");
-                                return (
-                                  isSnapbx &&
-                                  String(a?.didNumber || "") === String(did)
-                                );
-                              });
-                              let status = assignedAgent
-                                ? "Assigned"
-                                : "Available";
-                              const isAssignedToThisAgent =
-                                assignedAgent &&
-                                String(assignedAgent._id) ===
-                                  String(selectedAgentForAssign?._id);
-                              let statusLabel = isAssignedToThisAgent
-                                ? "Already Assigned"
-                                : status;
-                              let agentName = assignedAgent?.agentName || "-";
-                              let clientName = assignedAgent
-                                ? getClientName(assignedAgent.clientId)
-                                : "-";
+                              const assignedAgent = (agents || []).find(
+                                (a) => {
+                                  const prov = String(a?.serviceProvider || '').toLowerCase();
+                                  const isSnapbx = prov.includes('snapbx') || prov.includes('sanpbx');
+                                  return isSnapbx && String(a?.didNumber || '') === String(did);
+                                }
+                              );
+                              let status = assignedAgent ? 'Assigned' : 'Available';
+                              const isAssignedToThisAgent = assignedAgent && String(assignedAgent._id) === String(selectedAgentForAssign?._id);
+                              let statusLabel = isAssignedToThisAgent ? 'Already Assigned' : status;
+                              let agentName = assignedAgent?.agentName || '-';
+                              let clientName = assignedAgent ? getClientName(assignedAgent.clientId) : '-';
 
                               // Determine if assigned agent is locked by running campaign
-                              const lockedByCampaign = assignedAgent
-                                ? (campaignLocks.lockedAgentIds || []).includes(
-                                    String(assignedAgent._id)
-                                  )
-                                : false;
+                              const lockedByCampaign = assignedAgent ? (campaignLocks.lockedAgentIds || []).includes(String(assignedAgent._id)) : false;
 
                               // Temporary frontend override: if current agent switches selection,
                               // show the agent's previous DID as available with no agent/client
-                              const selectedDid = String(
-                                assignFormData.didNumber || ""
-                              );
-                              const previousDid = String(
-                                selectedAgentForAssign?.didNumber || ""
-                              );
-                              if (
-                                selectedDid &&
-                                previousDid &&
-                                did === previousDid &&
-                                selectedDid !== previousDid
-                              ) {
-                                status = "Available";
-                                statusLabel = "Available";
-                                agentName = "-";
-                                clientName = "-";
+                              const selectedDid = String(assignFormData.didNumber || '');
+                              const previousDid = String(selectedAgentForAssign?.didNumber || '');
+                              if (selectedDid && previousDid && did === previousDid && selectedDid !== previousDid) {
+                                status = 'Available';
+                                statusLabel = 'Available';
+                                agentName = '-';
+                                clientName = '-';
                               }
 
-                              return {
-                                did,
-                                assignedAgent,
-                                status,
-                                statusLabel,
-                                agentName,
-                                clientName,
-                                lockedByCampaign,
-                              };
+                              return { did, assignedAgent, status, statusLabel, agentName, clientName, lockedByCampaign };
                             })
                             // Unassigned first only (do not shift based on current selection)
                             .sort((a, b) => {
@@ -1914,169 +1861,76 @@ const AllAgents = () => {
                               if (av !== bv) return av - bv;
                               return 0;
                             })
-                            .map(
-                              ({
-                                did,
-                                assignedAgent,
-                                status,
-                                statusLabel,
-                                agentName,
-                                clientName,
-                                lockedByCampaign,
-                              }) => {
-                                const isSelected =
-                                  assignFormData.didNumber === did;
-                                const isLocked =
-                                  !!assignedAgent && lockedByCampaign; // locked by running campaign
-                                const isCurrentAgentLocked = (
-                                  campaignLocks.lockedAgentIds || []
-                                ).includes(String(selectedAgentForAssign?._id));
-                                return (
-                                  <tr
-                                    key={did}
-                                    className={`${
-                                      isSelected ? "bg-indigo-50" : "bg-white"
-                                    }`}
-                                  >
-                                    <td className="px-3 py-2">
-                                      <input
-                                        type="radio"
-                                        name="sanpbxDid"
-                                        checked={isSelected}
-                                        disabled={
-                                          isLocked ||
-                                          (isCurrentAgentLocked &&
-                                            did !==
-                                              String(
-                                                selectedAgentForAssign?.didNumber ||
-                                                  ""
-                                              ))
-                                        }
-                                        onChange={() => {
-                                          if (isLocked) return;
-                                          if (
-                                            isCurrentAgentLocked &&
-                                            did !==
-                                              String(
-                                                selectedAgentForAssign?.didNumber ||
-                                                  ""
-                                              )
-                                          )
-                                            return;
-                                          handleAssignChange("didNumber", did);
-                                        }}
-                                      />
-                                    </td>
-                                    <td
-                                      className={`px-3 py-2 ${
-                                        isLocked
-                                          ? "text-red-600 font-semibold"
-                                          : "text-gray-800"
-                                      }`}
-                                    >
-                                      {did}
-                                    </td>
-                                    <td className="px-3 py-2">
-                                      <span
-                                        className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-                                          isLocked
-                                            ? "bg-red-100 text-red-800"
-                                            : status === "Assigned"
-                                            ? "bg-yellow-100 text-yellow-800"
-                                            : "bg-green-100 text-green-800"
-                                        }`}
+                          ).map(({ did, assignedAgent, status, statusLabel, agentName, clientName, lockedByCampaign }) => {
+                            const isSelected = assignFormData.didNumber === did;
+                            const isLocked = !!assignedAgent && lockedByCampaign; // locked by running campaign
+                            const isCurrentAgentLocked = (campaignLocks.lockedAgentIds || []).includes(String(selectedAgentForAssign?._id));
+                            return (
+                              <tr key={did} className={`${isSelected ? 'bg-indigo-50' : 'bg-white'}`}>
+                                <td className="px-3 py-2">
+                                  <input
+                                    type="radio"
+                                    name="sanpbxDid"
+                                    checked={isSelected}
+                                    disabled={isLocked || (isCurrentAgentLocked && did !== String(selectedAgentForAssign?.didNumber || ''))}
+                                    onChange={() => {
+                                      if (isLocked) return;
+                                      if (isCurrentAgentLocked && did !== String(selectedAgentForAssign?.didNumber || '')) return;
+                                      handleAssignChange('didNumber', did);
+                                    }}
+                                  />
+                                  
+                                </td>
+                                <td className={`px-3 py-2 ${isLocked ? 'text-red-600 font-semibold' : 'text-gray-800'}`}>{did}</td>
+                                <td className="px-3 py-2">
+                                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${isLocked ? 'bg-red-100 text-red-800' : (status === 'Assigned' ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800')}`}>
+                                    {isLocked ? '(Campaign Running)' : statusLabel}
+                                  </span>
+                                </td>
+                                <td className="px-3 py-2 text-gray-700">{isSelected ? (selectedAgentForAssign?.agentName || '-') : agentName}</td>
+                                <td className="px-3 py-2 text-gray-700">{isSelected ? (getClientName(selectedAgentForAssign?.clientId) || '-') : clientName}</td>
+                                <td className="px-3 py-2">
+                                  {assignedAgent ? (
+                                    <div className="flex items-center space-x-2">
+                                      <button
+                                        onClick={() => toggleAgentStatus(assignedAgent._id, assignedAgent.isActive)}
+                                        disabled={updatingStatus[assignedAgent._id] || isLocked}
+                                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 ${
+                                          assignedAgent.isActive ? "bg-green-600" : "bg-gray-200"
+                                        } ${isLocked ? "opacity-50 cursor-not-allowed" : ""}`}
                                       >
-                                        {isLocked
-                                          ? "(Campaign Running)"
-                                          : statusLabel}
+                                        <span
+                                          className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
+                                            assignedAgent.isActive ? "translate-x-5" : "translate-x-1"
+                                          }`}
+                                        />
+                                      </button>
+                                      <span className="text-xs text-gray-600">
+                                        {updatingStatus[assignedAgent._id] ? (
+                                          <span className="text-gray-400">Updating...</span>
+                                        ) : assignedAgent.isActive ? (
+                                          "Active"
+                                        ) : (
+                                          "Inactive"
+                                        )}
                                       </span>
-                                    </td>
-                                    <td className="px-3 py-2 text-gray-700">
-                                      {isSelected
-                                        ? selectedAgentForAssign?.agentName ||
-                                          "-"
-                                        : agentName}
-                                    </td>
-                                    <td className="px-3 py-2 text-gray-700">
-                                      {isSelected
-                                        ? getClientName(
-                                            selectedAgentForAssign?.clientId
-                                          ) || "-"
-                                        : clientName}
-                                    </td>
-                                    <td className="px-3 py-2">
-                                      {assignedAgent ? (
-                                        <div className="flex items-center space-x-2">
-                                          <button
-                                            onClick={() =>
-                                              toggleAgentStatus(
-                                                assignedAgent._id,
-                                                assignedAgent.isActive
-                                              )
-                                            }
-                                            disabled={
-                                              updatingStatus[
-                                                assignedAgent._id
-                                              ] || isLocked
-                                            }
-                                            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 ${
-                                              assignedAgent.isActive
-                                                ? "bg-green-600"
-                                                : "bg-gray-200"
-                                            } ${
-                                              isLocked
-                                                ? "opacity-50 cursor-not-allowed"
-                                                : ""
-                                            }`}
-                                          >
-                                            <span
-                                              className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
-                                                assignedAgent.isActive
-                                                  ? "translate-x-5"
-                                                  : "translate-x-1"
-                                              }`}
-                                            />
-                                          </button>
-                                          <span className="text-xs text-gray-600">
-                                            {updatingStatus[
-                                              assignedAgent._id
-                                            ] ? (
-                                              <span className="text-gray-400">
-                                                Updating...
-                                              </span>
-                                            ) : assignedAgent.isActive ? (
-                                              "Active"
-                                            ) : (
-                                              "Inactive"
-                                            )}
-                                          </span>
-                                        </div>
-                                      ) : (
-                                        <span className="text-gray-400 text-xs">
-                                          -
-                                        </span>
-                                      )}
-                                    </td>
-                                  </tr>
-                                );
-                              }
-                            )}
+                                    </div>
+                                  ) : (
+                                    <span className="text-gray-400 text-xs">-</span>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>
                   </div>
 
+
                   {/* Hidden fields (kept in code, not displayed) */}
-                  <input
-                    type="hidden"
-                    value={assignFormData.accessToken}
-                    readOnly
-                  />
-                  <input
-                    type="hidden"
-                    value={assignFormData.accessKey}
-                    readOnly
-                  />
+                  <input type="hidden" value={assignFormData.accessToken} readOnly />
+                  <input type="hidden" value={assignFormData.accessKey} readOnly />
                   <input type="hidden" value={assignFormData.appId} readOnly />
                 </div>
               )}
