@@ -1696,8 +1696,7 @@ const AgentList = ({ agents, isLoading, onEdit, onDelete, clientId }) => {
             },
           }),
         });
-        console.log(resp);
-
+        
         const data = await resp.json();
         if (!resp.ok || data?.success !== true) {
           throw new Error(data?.error || "Failed to initiate SANPBX call");
