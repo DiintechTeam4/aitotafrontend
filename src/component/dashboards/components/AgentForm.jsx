@@ -28,7 +28,7 @@ const AgentForm = ({
     sttSelection: "google",
     ttsSelection: "sarvam",
     voiceServiceProvider: "sarvam",
-    voiceSelection: "anushka",
+    voiceSelection: "meera",
     voiceId: "",
     accountSid: "",
     serviceProvider: "",
@@ -86,7 +86,6 @@ const AgentForm = ({
   // Voice mapping for different services
   const voiceMappings = {
     sarvam: {
-      anushka: { name: "Anushka", id: "anushka" },
       meera: { name: "Meera", id: "meera" },
       pavithra: { name: "Pavithra", id: "pavithra" },
       maitreyi: { name: "Maitreyi", id: "maitreyi" },
@@ -136,7 +135,7 @@ const AgentForm = ({
         voiceServiceProvider: agent.voiceServiceProvider || "sarvam",
         callingNumber: agent.callingNumber || "",
         callingType: agent.callingType || "both",
-        voiceSelection: agent.voiceSelection || "anushka",
+        voiceSelection: agent.voiceSelection || "meera",
         voiceId: agent.voiceId || "",
         accountSid: agent.accountSid || "",
         serviceProvider: agent.serviceProvider || "",
@@ -862,6 +861,10 @@ const AgentForm = ({
         return true; // Social actions are optional
       case "customization":
         return true;
+      case "knowledge":
+        return true;
+      case "dispositions":
+        return true;
       default:
         return false;
     }
@@ -1319,7 +1322,6 @@ const AgentForm = ({
           {formData.voiceServiceProvider === "sarvam" ? (
             <>
               <optgroup label="Female">
-                <option value="anushka">Anushka</option>
                 <option value="meera">Meera</option>
                 <option value="pavithra">Pavithra</option>
                 <option value="maitreyi">Maitreyi</option>
