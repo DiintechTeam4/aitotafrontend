@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { API_BASE_URL } from "../../../config";
 import {
   FaPlus,
@@ -41,9 +41,27 @@ const CreditManagement = () => {
     description: ""
   });
 
+  // Fetch stats only once on mount
   useEffect(() => {
-    fetchCreditRecords();
     fetchStats();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Debounce + cancel in-flight requests for credit records
+  const abortRef = useRef(null);
+  const debounceRef = useRef(null);
+
+  useEffect(() => {
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+    }
+    debounceRef.current = setTimeout(() => {
+      fetchCreditRecords();
+    }, 300);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPage, searchTerm, sortBy, sortOrder]);
 
   const fetchCreditRecords = async () => {
@@ -58,10 +76,17 @@ const CreditManagement = () => {
         ...(searchTerm && { search: searchTerm })
       });
 
+      // cancel previous request if any
+      if (abortRef.current) {
+        try { abortRef.current.abort(); } catch {}
+      }
+      abortRef.current = new AbortController();
+
       const response = await fetch(`${API_BASE_URL}/admin/credits?${params}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
+        signal: abortRef.current.signal
       });
 
       const data = await response.json();
@@ -70,7 +95,9 @@ const CreditManagement = () => {
         setTotalPages(data.pagination.pages);
       }
     } catch (error) {
-      console.error("Error fetching credit records:", error);
+      if (error?.name !== 'AbortError') {
+        console.error("Error fetching credit records:", error);
+      }
     } finally {
       setLoading(false);
     }
@@ -122,34 +149,6 @@ const CreditManagement = () => {
     }
   };
 
-  const handlePurchasePlan = async (clientId, planId, billingCycle) => {
-    try {
-      const token = localStorage.getItem("admintoken");
-      const response = await fetch(`${API_BASE_URL}/admin/credits/purchase`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          clientId,
-          planId,
-          billingCycle
-        }),
-      });
-
-      const data = await response.json();
-      if (data.success) {
-        fetchCreditRecords();
-        alert("Plan purchased successfully!");
-      } else {
-        alert(data.message || "Error purchasing plan");
-      }
-    } catch (error) {
-      console.error("Error purchasing plan:", error);
-      alert("Error purchasing plan");
-    }
-  };
 
   const openHistoryModal = async (clientId) => {
     try {
@@ -187,12 +186,6 @@ const CreditManagement = () => {
     setShowModal(true);
   };
 
-  const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD'
-    }).format(amount);
-  };
 
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString('en-US', {
