@@ -37,7 +37,7 @@ const AllAgents = () => {
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [selectedAgentForAssign, setSelectedAgentForAssign] = useState(null);
   const [assignProvider, setAssignProvider] = useState("snapbx");
-  const [sanpbxDids, setSanpbxDids] = useState(["01246745649", "01246745655"]);
+  const [sanpbxDids, setSanpbxDids] = useState([]);
   const [newSanpbxDid, setNewSanpbxDid] = useState("");
   const [campaignLocks, setCampaignLocks] = useState({ lockedAgentIds: [], lockedAgents: [] });
   const [assignFormData, setAssignFormData] = useState({
@@ -420,18 +420,16 @@ const AllAgents = () => {
     const temp = getTempCredentials(prov);
     // Initialize SANPBX DIDs list and select agent's current DID if available
     if (prov === "snapbx" || prov === "sanpbx") {
+      setSanpbxDids([]);
       fetchDidNumbers();
-      const seed = sanpbxDids.length ? sanpbxDids : ["01246745649", "01246745655"]; // existing DIDs
       const currentDid = agent.didNumber ? String(agent.didNumber) : "";
-      const merged = Array.from(new Set([...
-        seed,
-        currentDid ? [currentDid] : []
-      ].flat().filter(Boolean)));
-      setSanpbxDids(merged);
+      if (currentDid) {
+        setSanpbxDids((prev) => Array.from(new Set([...(prev || []), currentDid])));
+      }
       setNewSanpbxDid("");
     }
     // Determine safe default selection: only preselect if unassigned or assigned to this agent
-    const candidateDid = String(agent.didNumber || temp?.didNumber || "");
+    const candidateDid = String(agent.didNumber || "");
     let safePreselect = "";
     if (candidateDid) {
       const assignedAgent = (agents || []).find(
@@ -445,7 +443,7 @@ const AllAgents = () => {
     }
     setAssignFormData({
       serviceProvider: prov,
-      didNumber: safePreselect,
+      didNumber: (prov.includes('snapbx') ? safePreselect : (agent.didNumber || temp?.didNumber || '')),
       accessToken: temp?.accessToken || agent.accessToken || "",
       accessKey: temp?.accessKey || agent.accessKey || "",
       appId: temp?.appId || agent.appId || "",
@@ -537,6 +535,10 @@ const AllAgents = () => {
 
       let payload = {};
       if (assignProvider === "snapbx") {
+        if (!assignFormData.didNumber || String(assignFormData.didNumber).trim() === '') {
+          alert('Please select a SANPBX DID before saving.');
+          return;
+        }
         // Auto-derive callerId from DID (last 7 digits), keep access creds in code
         const did = String(assignFormData.didNumber || "").replace(/\D/g, "");
         const callerId = assignFormData.callerId && assignFormData.callerId.trim() !== '' 
@@ -584,13 +586,30 @@ const AllAgents = () => {
         assignProvider === "c-zentrix" ||
         assignProvider === "c-zentrax"
       ) {
-        payload = {
-          serviceProvider: "c-zentrix",
-          didNumber: assignFormData.didNumber,
-          callerId: assignFormData.callerId,
-          accountSid: assignFormData.accountSid,
-          X_API_KEY: assignFormData.xApiKey,
-        };
+        // Use backend assignment endpoint for C-Zentrix
+        if (!assignFormData.accountSid || !assignFormData.callerId || !assignFormData.xApiKey) {
+          alert('Please fill Account SID, Caller ID and X API Key');
+          return;
+        }
+        const resp = await fetch(`${API_BASE_URL}/admin/assign-czentrix`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            agentId: selectedAgentForAssign?._id,
+            accountSid: assignFormData.accountSid,
+            callerId: assignFormData.callerId,
+            xApiKey: assignFormData.xApiKey,
+            didNumber: assignFormData.didNumber,
+          }),
+        });
+        const json = await resp.json();
+        if (!resp.ok || !json?.success) {
+          throw new Error(json?.message || 'Failed to assign C-Zentrix');
+        }
+        alert('Assigned successfully');
+        closeAssignModal();
+        fetchAllAgents();
+        return;
       } else {
         payload = {
           serviceProvider: assignProvider,
@@ -1783,7 +1802,7 @@ const AllAgents = () => {
                         setAssignFormData((prev) => ({
                           ...prev,
                           serviceProvider: p.key,
-                          didNumber: temp?.didNumber || "",
+                          didNumber: (p.key === 'c-zentrax' || p.key === 'c-zentrix') ? (temp?.didNumber || '') : '',
                           accessToken: temp?.accessToken || "",
                           accessKey: temp?.accessKey || "",
                           appId: temp?.appId || "",
@@ -1791,6 +1810,10 @@ const AllAgents = () => {
                           xApiKey: (temp && (temp.X_API_KEY || temp.xApiKey)) || "",
                           accountSid: temp?.accountSid || "",
                         }));
+                        if (p.key === 'snapbx' || p.key === 'sanpbx') {
+                          setSanpbxDids([]);
+                          fetchDidNumbers();
+                        }
                       }}
                       className={`${
                         assignProvider === p.key
