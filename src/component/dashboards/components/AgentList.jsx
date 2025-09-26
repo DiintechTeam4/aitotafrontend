@@ -1656,7 +1656,7 @@ const AgentList = ({ agents, isLoading, onEdit, onDelete, clientId }) => {
     }
   };
 
-  // New: Unified outbound dial that routes SANPBX vs existing flow
+  // New: Unified outbound dial - always delegate to backend to fetch agent telephony from DB
   const makeUnifiedOutboundCall = async (
     targetPhoneNumber,
     agent,
@@ -1668,50 +1668,30 @@ const AgentList = ({ agents, isLoading, onEdit, onDelete, clientId }) => {
       if (!token) throw new Error("Client token not found. Please log in.");
 
       const phoneDigits = String(targetPhoneNumber || "").replace(/[^\d]/g, "");
-      console.log(phoneDigits);
       const uniqueId =
         providedUniqueId ||
         `aidial-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-      const provider = String(agent?.serviceProvider || "").toLowerCase();
+      // Always call backend; backend will read all agent telephony fields (provider, callerId, X_API_KEY, etc.) from DB
+      const resp = await fetch(`${API_BASE_URL}/client/calls/single`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          contact: { phone: phoneDigits, name: contactName || "" },
+          agentId: agent?._id,
+          uniqueid: uniqueId,
+          custom_field: { name: contactName || "" },
+        }),
+      });
 
-      if (provider === "snapbx" || provider === "sanpbx") {
-        // Use backend single-call which handles SANPBX token + dial
-        const resp = await fetch(`${API_BASE_URL}/client/calls/single`, {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            appid: 2,
-            contact: phoneDigits,
-            caller_id: agent?.callerId,
-            agentId: agent?._id,
-            uniqueid: uniqueId,
-            custom_field: {
-              name: contactName || "",
-              uniqueId: uniqueId,
-              uniqueid: uniqueId,
-            },
-          }),
-        });
-        
-        const data = await resp.json();
-        if (!resp.ok || data?.success !== true) {
-          throw new Error(data?.error || "Failed to initiate SANPBX call");
-        }
-        return { success: true, data };
+      const data = await resp.json();
+      if (!resp.ok || data?.success !== true) {
+        throw new Error(data?.error || "Failed to initiate call");
       }
-
-      // Default: existing C-Zentrax click-to-bot route
-      return await makeAIDialCall(
-        phoneDigits,
-        agent?.callerId,
-        agent?.X_API_KEY,
-        clientUuid,
-        uniqueId
-      );
+      return { success: true, data };
     } catch (error) {
       console.error("Unified outbound call error:", error);
       return { success: false, error: error.message };
