@@ -1571,7 +1571,7 @@ export default function CreditsOverview() {
     });
 
     return (
-      <div className="space-y-6">
+    <div className="space-y-6">
         {/* Debug Controls */}
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
           <div className="flex items-center gap-4">
@@ -1590,19 +1590,19 @@ export default function CreditsOverview() {
           </div>
         </div>
         
-        {/* Filters */}
-        <div className="flex flex-col sm:flex-row gap-3">
-          <select
-            value={dateFilter}
-            onChange={(e) => setDateFilter(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm font-medium focus:ring-2 focus:ring-black focus:border-black"
-          >
-            <option value="all">All Time</option>
-            <option value="7days">Last 7 Days</option>
-            <option value="30days">Last 30 Days</option>
-            <option value="90days">Last 90 Days</option>
-          </select>
-        </div>
+      {/* Filters */}
+      <div className="flex flex-col sm:flex-row gap-3">
+        <select
+          value={dateFilter}
+          onChange={(e) => setDateFilter(e.target.value)}
+          className="px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm font-medium focus:ring-2 focus:ring-black focus:border-black"
+        >
+          <option value="all">All Time</option>
+          <option value="7days">Last 7 Days</option>
+          <option value="30days">Last 30 Days</option>
+          <option value="90days">Last 90 Days</option>
+        </select>
+      </div>
 
       {/* Transaction History Table */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -1839,7 +1839,7 @@ export default function CreditsOverview() {
         </div>
       )}
     </div>
-    );
+  );
   };
 
   // Inline purchase section (replaces modal)
