@@ -1696,7 +1696,7 @@ const AgentList = ({ agents, isLoading, onEdit, onDelete, clientId }) => {
             },
           }),
         });
-        
+
         const data = await resp.json();
         if (!resp.ok || data?.success !== true) {
           throw new Error(data?.error || "Failed to initiate SANPBX call");
@@ -2308,8 +2308,14 @@ const AgentList = ({ agents, isLoading, onEdit, onDelete, clientId }) => {
     if (log.metadata?.isActive === false) {
       reason = "Call disconnected";
       detailedReason = "The call was automatically detected as inactive";
+    } else if (log.metadata?.isActive === true) {
+      // If isActive is true, don't terminate regardless of leadStatus
+      console.log(
+        "Call is active (isActive: true), keeping call active regardless of leadStatus"
+      );
+      return; // Exit without terminating
     } else if (log.leadStatus) {
-      // Only check leadStatus if isActive is not false
+      // Only check leadStatus if isActive is not explicitly set
       switch (log.leadStatus) {
         case "not_connected":
           reason = "Call disconnected";
@@ -2365,12 +2371,129 @@ const AgentList = ({ agents, isLoading, onEdit, onDelete, clientId }) => {
     try {
       setIsTerminatingCall(true);
 
+      // Get agent provider to determine termination method
+      const provider = String(
+        selectedAgentForCall?.serviceProvider || ""
+      ).toLowerCase();
+      console.log("Terminating call for provider:", provider);
+
+      if (provider === "snapbx" || provider === "sanpbx") {
+        // SANPBX termination flow
+        await terminateSANPBXCall();
+      } else {
+        // C-Zentrix termination flow (existing)
+        await terminateCzentrixCall();
+      }
+
+      // Set termination state immediately for user-initiated termination
+      setCallStage("terminated");
+      setCallTerminationReason("Call terminated by user");
+      setIsCallConnected(false);
+
+      // Stop all call-related processes
+      stopLogsPolling();
+      stopCallTimer();
+    } catch (error) {
+      console.error("Error terminating call:", error);
+      alert(`Error terminating call: ${error.message}`);
+
+      // Even if API call fails, mark call as terminated locally
+      setCallStage("terminated");
+      setCallTerminationReason(
+        "Call termination failed - marked as terminated"
+      );
+      setIsCallConnected(false);
+      stopLogsPolling();
+      stopCallTimer();
+    } finally {
+      setIsTerminatingCall(false);
+    }
+  };
+
+  // SANPBX call termination
+  const terminateSANPBXCall = async () => {
+    try {
+      // First get the callSid from the latest call log
+      const result = await fetchCallTerminationData();
+      if (!result.success || !result.data) {
+        throw new Error("Unable to get call termination data");
+      }
+
+      const callSid = result.data.callSid;
+      if (!callSid) {
+        throw new Error("No callSid found in call log");
+      }
+
+      console.log("Terminating SANPBX call with callSid:", callSid);
+
+      // Step 1: Get SANPBX API token
+      const tokenResponse = await fetch(
+        "https://clouduat28.sansoftwares.com/pbxadmin/sanpbxapi/gentoken",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accesstoken: "265b2d7e5d1a5d9c33fc22b01e5d0f19",
+          },
+          body: JSON.stringify({
+            access_key: "mob",
+          }),
+        }
+      );
+
+      if (!tokenResponse.ok) {
+        throw new Error(`Failed to get SANPBX token: ${tokenResponse.status}`);
+      }
+
+      const tokenData = await tokenResponse.json();
+      console.log("SANPBX token response:", tokenData);
+
+      if (!tokenData.Apitoken) {
+        throw new Error("No API token received from SANPBX");
+      }
+
+      // Step 2: Disconnect the call
+      const disconnectResponse = await fetch(
+        "https://clouduat28.sansoftwares.com/pbxadmin/sanpbxapi/calldisconnect",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Apitoken: tokenData.Apitoken,
+          },
+          body: JSON.stringify({
+            callid: callSid,
+          }),
+        }
+      );
+
+      if (!disconnectResponse.ok) {
+        throw new Error(
+          `Failed to disconnect call: ${disconnectResponse.status}`
+        );
+      }
+
+      const disconnectData = await disconnectResponse.json();
+      console.log("SANPBX disconnect response:", disconnectData);
+
+      if (disconnectData.error === 0) {
+        console.log("SANPBX call terminated successfully");
+      } else {
+        console.warn("SANPBX call termination warning:", disconnectData.msg);
+      }
+    } catch (error) {
+      console.error("Error terminating SANPBX call:", error);
+      throw error;
+    }
+  };
+
+  // C-Zentrix call termination (existing logic)
+  const terminateCzentrixCall = async () => {
+    try {
       // First fetch the latest call termination data
       const result = await fetchCallTerminationData();
       if (!result.success || !result.data) {
-        alert("Unable to get call termination data. Please try again.");
-        setIsTerminatingCall(false);
-        return;
+        throw new Error("Unable to get call termination data");
       }
 
       // Use the fresh data returned from the API call
@@ -2387,9 +2510,10 @@ const AgentList = ({ agents, isLoading, onEdit, onDelete, clientId }) => {
         streamSid: terminationData.streamSid,
       };
 
-      console.log("Terminating call with payload:", terminationPayload);
-      console.log("Fresh termination data used:", terminationData);
-      console.log("Current callTerminationData state:", callTerminationData);
+      console.log(
+        "Terminating C-Zentrix call with payload:",
+        terminationPayload
+      );
 
       // Send termination request
       const response = await fetch(
@@ -2406,42 +2530,17 @@ const AgentList = ({ agents, isLoading, onEdit, onDelete, clientId }) => {
       const terminationResult = await response.json();
 
       if (terminationResult.success) {
-        console.log("Call terminated successfully:", terminationResult);
-
-        // Set termination state immediately for user-initiated termination
-        setCallStage("terminated");
-        setCallTerminationReason("Call terminated by user");
-        setIsCallConnected(false);
-
-        // Stop all call-related processes
-        stopLogsPolling();
-        stopCallTimer();
-
-        // Don't show alert - the compact "Call Ended" header will be displayed
-      } else {
-        console.error("Call termination failed:", terminationResult);
-        alert(
-          `Call termination failed: ${
-            terminationResult.message || "Unknown error"
-          }`
+        console.log(
+          "C-Zentrix call terminated successfully:",
+          terminationResult
         );
+      } else {
+        console.error("C-Zentrix call termination failed:", terminationResult);
+        throw new Error(terminationResult.message || "Call termination failed");
       }
     } catch (error) {
-      console.error("Error terminating call:", error);
-      alert(`Error terminating call: ${error.message}`);
-
-      // Even if API call fails, mark call as terminated locally
-      setCallStage("terminated");
-      setCallTerminationReason(
-        "Call termination failed - marked as terminated"
-      );
-      setIsCallConnected(false);
-      stopLogsPolling();
-      stopCallTimer();
-
-      // Don't show alert - the compact "Call Ended" header will be displayed
-    } finally {
-      setIsTerminatingCall(false);
+      console.error("Error terminating C-Zentrix call:", error);
+      throw error;
     }
   };
 
@@ -3723,13 +3822,14 @@ const AgentList = ({ agents, isLoading, onEdit, onDelete, clientId }) => {
                     </div>
                   )}
 
-                  {/* Live Transcript - Show for all stages except input */}
-                  {callStage !== "input" && (
+                  {/* Live Transcript - Show when there's an active call log */}
+                  {(callStage === "connected" ||
+                    (callStage === "connecting" &&
+                      (liveTranscriptLines.length > 0 ||
+                        liveTranscript.trim() !== ""))) && (
                     <div className="space-y-2">
                       <div className="text-sm font-semibold text-gray-700">
-                        {callStage === "terminated"
-                          ? "Call History"
-                          : "Live Transcript"}
+                        Live Transcript
                       </div>
                       <div className="h-64 overflow-y-auto border border-gray-200 rounded-lg p-4 bg-white">
                         {liveTranscriptLines.length === 0 ? (
