@@ -21,7 +21,7 @@ import {
   FaFileInvoiceDollar,
   FaClipboardList,
   FaUserTie,
-  FaRupeeSign
+  FaRupeeSign,
 } from "react-icons/fa";
 import ApprovalFormDetails from "./components/ApprovalFormDetails";
 import HumanAgentManagement from "./components/HumanAgentManagement";
@@ -108,9 +108,9 @@ const AdminDashboard = ({ user, onLogout }) => {
 
   const redirectToAdminLogin = () => {
     try {
-      navigate("/auth/admin/login");
+      navigate("/admin/login");
     } catch {
-      window.location.href = "/auth/admin/login";
+      window.location.href = "/admin/login";
     }
   };
 
@@ -134,7 +134,7 @@ const AdminDashboard = ({ user, onLogout }) => {
   useEffect(() => {
     try {
       const sp = new URLSearchParams(window.location.search);
-      const urlTab = sp.get('tab');
+      const urlTab = sp.get("tab");
       if (urlTab) {
         setActiveTab(urlTab);
       }
@@ -145,7 +145,7 @@ const AdminDashboard = ({ user, onLogout }) => {
   useEffect(() => {
     try {
       const sp = new URLSearchParams(location.search || window.location.search);
-      const urlTab = sp.get('tab');
+      const urlTab = sp.get("tab");
       if (urlTab && urlTab !== activeTab) {
         setActiveTab(urlTab);
       }
@@ -158,9 +158,9 @@ const AdminDashboard = ({ user, onLogout }) => {
     try {
       localStorage.setItem("admin_active_tab", activeTab);
       const sp = new URLSearchParams(window.location.search);
-      sp.set('tab', activeTab);
+      sp.set("tab", activeTab);
       const newUrl = `${window.location.pathname}?${sp.toString()}`;
-      window.history.replaceState({}, '', newUrl);
+      window.history.replaceState({}, "", newUrl);
     } catch {}
   }, [activeTab]);
 
@@ -600,7 +600,7 @@ const AdminDashboard = ({ user, onLogout }) => {
   const navItems = [
     { name: "Overview", icon: <FaChartBar /> },
     { name: "Client", icon: <FaUsers /> },
-    { name: "Agents", icon: <FaUserTie /> },
+    // { name: "Agents", icon: <FaUserTie /> },
     {
       name: "Accounts",
       icon: <FaRupeeSign />,
