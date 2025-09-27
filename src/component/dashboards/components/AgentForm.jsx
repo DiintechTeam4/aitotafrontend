@@ -2895,9 +2895,26 @@ const AgentForm = ({
   return (
     <div className="bg-white rounded-lg shadow-lg w-[90%] mx-auto">
       <div className="border-b border-gray-200 p-6">
-        <h2 className="text-2xl font-bold text-gray-800">
-          {agent ? "Edit Agent" : "Create New Agent"}
-        </h2>
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-800">
+              {agent ? `Edit Agent - ${agent.agentName || "Unnamed Agent"}` : "Create New Agent"}
+            </h2>
+          </div>
+          {agent && (
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={isLoading}
+              className="px-6 py-3 bg-black text-white rounded-lg hover:bg-gray-800 disabled:bg-gray-400 disabled:cursor-not-allowed transition-all hover:-translate-y-1 flex items-center gap-2"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+              {isLoading ? "Updating..." : "Update Agent"}
+            </button>
+          )}
+        </div>
       </div>
 
       <form>

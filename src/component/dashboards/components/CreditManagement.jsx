@@ -56,7 +56,7 @@ const CreditManagement = () => {
       clearTimeout(debounceRef.current);
     }
     debounceRef.current = setTimeout(() => {
-      fetchCreditRecords();
+    fetchCreditRecords();
     }, 300);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -96,7 +96,7 @@ const CreditManagement = () => {
       }
     } catch (error) {
       if (error?.name !== 'AbortError') {
-        console.error("Error fetching credit records:", error);
+      console.error("Error fetching credit records:", error);
       }
     } finally {
       setLoading(false);
