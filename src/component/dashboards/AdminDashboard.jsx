@@ -614,7 +614,7 @@ const AdminDashboard = ({ user, onLogout }) => {
     },
     { name: "AI Agent", icon: <FaRobot /> },
     // { name: "Tickets", icon: <FaClipboardList /> },
-    { name: "Users", icon: <FaUsers /> },
+    // { name: "Users", icon: <FaUsers /> },
   ];
 
   const bottomNavItems = [
