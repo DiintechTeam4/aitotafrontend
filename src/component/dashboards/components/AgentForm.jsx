@@ -2897,9 +2897,9 @@ const AgentForm = ({
       <div className="border-b border-gray-200 p-6">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-2xl font-bold text-gray-800">
+        <h2 className="text-2xl font-bold text-gray-800">
               {agent ? `Edit Agent - ${agent.agentName || "Unnamed Agent"}` : "Create New Agent"}
-            </h2>
+        </h2>
           </div>
           {agent && (
             <button

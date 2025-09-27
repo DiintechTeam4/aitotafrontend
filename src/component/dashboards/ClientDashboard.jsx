@@ -100,10 +100,10 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
             console.log("Fresh business logo URL:", data.data.businessLogoUrl);
             
             // Set approval status
-            const isApproved = data.data?.isApproved;
-            const isProfileCompleted = data.data?.isprofileCompleted;
-            setIsApproved(isApproved);
-            setIsProfileCompleted(isProfileCompleted);
+          const isApproved = data.data?.isApproved;
+          const isProfileCompleted = data.data?.isprofileCompleted;
+          setIsApproved(isApproved);
+          setIsProfileCompleted(isProfileCompleted);
             
             // Set client info with fresh business logo URL
             setClientInfo({
@@ -884,8 +884,8 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
                     <div 
                       className={`h-10 w-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-sm font-bold shadow-md ${clientInfo.businessLogoUrl ? 'hidden' : 'flex'}`}
                     >
-                      {(clientInfo.businessName || "C")[0]?.toUpperCase()}
-                    </div>
+                        {(clientInfo.businessName || "C")[0]?.toUpperCase()}
+                      </div>
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
                         <div
