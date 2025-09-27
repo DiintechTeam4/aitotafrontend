@@ -107,6 +107,7 @@ function OutboundSection({ tenantId }) {
   const [editingGroup, setEditingGroup] = useState(null);
   const [groupEditForm, setGroupEditForm] = useState({
     name: "",
+    categories: "",
     description: "",
   });
   const [savingGroupEdit, setSavingGroupEdit] = useState(false);
@@ -1254,7 +1255,7 @@ function OutboundSection({ tenantId }) {
 
         {/* Edit Group Modal */}
         {showEditGroupForm && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
             <div className="bg-white rounded-lg w-11/12 max-w-md max-h-[90vh] overflow-y-auto shadow-2xl">
               <div className="flex justify-between items-center p-6 border-b border-gray-200">
                 <h3 className="m-0 text-gray-800">Edit Group</h3>
@@ -1280,6 +1281,22 @@ function OutboundSection({ tenantId }) {
                       })
                     }
                     required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors"
+                  />
+                </div>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Category
+                  </label>
+                  <input
+                    type="text"
+                    value={groupEditForm.category}
+                    onChange={(e) =>
+                      setGroupEditForm({
+                        ...groupEditForm,
+                        category: e.target.value,
+                      })
+                    }
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors"
                   />
                 </div>

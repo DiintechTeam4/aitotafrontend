@@ -35,11 +35,6 @@ const InBoundSection = ({ clientId }) => {
       icon: <FiMessageSquare className="w-4 h-4" />,
     },
     { id: "leads", label: "Leads", icon: <FiUsers className="w-4 h-4" /> },
-    {
-      id: "settings",
-      label: "AI Agent Settings",
-      icon: <FiSettings className="w-4 h-4" />,
-    },
   ];
 
   return (
