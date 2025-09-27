@@ -23,6 +23,8 @@ export default function CreditsOverview() {
   const [loading, setLoading] = useState(true);
   const [campaigns, setCampaigns] = useState([]);
   const [uniqueIdToCampaign, setUniqueIdToCampaign] = useState({});
+  const [paymentHistory, setPaymentHistory] = useState([]);
+  const [paymentHistoryLoading, setPaymentHistoryLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("overview");
   const [selectedFilter, setSelectedFilter] = useState("credit");
   const [dateFilter, setDateFilter] = useState("all");
@@ -38,6 +40,18 @@ export default function CreditsOverview() {
   });
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(5);
+  const [historyPagination, setHistoryPagination] = useState({
+    page: 1,
+    limit: 50,
+    total: 0,
+    pages: 0
+  });
+  const [cache, setCache] = useState({
+    balance: null,
+    campaigns: null,
+    fullHistory: null,
+    lastFetch: null
+  });
   const [invoiceModal, setInvoiceModal] = useState({
     isOpen: false,
     transaction: null,
@@ -263,33 +277,74 @@ export default function CreditsOverview() {
   const fetchAll = async () => {
     try {
       setLoading(true);
-      console.log(token);
+      
+      // Check cache validity (5 minutes)
+      const now = Date.now();
+      const cacheValid = cache.lastFetch && (now - cache.lastFetch) < 5 * 60 * 1000;
+      
+      if (cacheValid && cache.balance && cache.campaigns && cache.fullHistory) {
+        // Use cached data
+        setBalance(cache.balance);
+        setCampaigns(cache.campaigns);
+        setHistory(cache.fullHistory);
+        setFilteredHistory(cache.fullHistory.filter((item) => item.amount > 0));
+        
+        // Build uniqueId -> campaignName map from cache
+        const mapping = {};
+        cache.campaigns.forEach((c) => {
+          if (Array.isArray(c.details)) {
+            c.details.forEach((d) => {
+              if (d && d.uniqueId) {
+                mapping[d.uniqueId] = c.name;
+              }
+            });
+          }
+        });
+        setUniqueIdToCampaign(mapping);
+        
+        // Still fetch fresh paginated history for table
+        await fetchHistoryPage(1);
+        setLoading(false);
+        return;
+      }
+      
+      // Fetch data with optimized limits
       const [balRes, histRes, campRes] = await Promise.all([
-        fetch(`${API_BASE_URL}/client/credits/balance`, {
+        fetch(`${API_BASE_URL}/client/credits/balance?includeHistory=false`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
-        fetch(`${API_BASE_URL}/client/credits/history`, {
+        fetch(`${API_BASE_URL}/client/credits/history?page=1&limit=500`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
         fetch(`${API_BASE_URL}/client/campaigns`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
       ]);
+      
       const bal = await balRes.json();
       const hist = await histRes.json();
       const camp = await campRes.json();
-      if (bal.success) setBalance(bal.data);
+      
+      if (bal.success) {
+        setBalance(bal.data);
+        setCache(prev => ({ ...prev, balance: bal.data, lastFetch: now }));
+      }
+      
       if (hist.success) {
-        const rows = Array.isArray(hist.data?.history)
-          ? hist.data.history
-          : Array.isArray(hist.data)
-          ? hist.data
-          : [];
+        const rows = Array.isArray(hist.data?.history) ? hist.data.history : [];
+        console.log("🔍 [FRONTEND DEBUG] History received:", rows.length, "items");
+        console.log("🔍 [FRONTEND DEBUG] First few items:", rows.slice(0, 2));
         setHistory(rows);
         setFilteredHistory(rows.filter((item) => item.amount > 0));
+        setCache(prev => ({ ...prev, fullHistory: rows, lastFetch: now }));
+      } else {
+        console.error("🔍 [FRONTEND DEBUG] History fetch failed:", hist);
       }
+      
       if (camp.success && Array.isArray(camp.data)) {
         setCampaigns(camp.data);
+        setCache(prev => ({ ...prev, campaigns: camp.data, lastFetch: now }));
+        
         // Build uniqueId -> campaignName map
         const mapping = {};
         camp.data.forEach((c) => {
@@ -303,10 +358,37 @@ export default function CreditsOverview() {
         });
         setUniqueIdToCampaign(mapping);
       }
+      
     } catch (e) {
       console.error("Failed to load credits:", e);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // New function to fetch paginated history
+  const fetchHistoryPage = async (page = 1, limit = 50) => {
+    try {
+      const histRes = await fetch(
+        `${API_BASE_URL}/client/credits/history?page=${page}&limit=${limit}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      const hist = await histRes.json();
+      
+      if (hist.success) {
+        const rows = Array.isArray(hist.data?.history) ? hist.data.history : [];
+        setHistory(rows);
+        setFilteredHistory(rows.filter((item) => item.amount > 0));
+        
+        // Update pagination state
+        if (hist.data?.pagination) {
+          setHistoryPagination(hist.data.pagination);
+        }
+      }
+    } catch (e) {
+      console.error("Failed to load credit history:", e);
     }
   };
 
@@ -341,6 +423,43 @@ export default function CreditsOverview() {
     setFilteredHistory(filtered);
   };
 
+  // New function to fetch payment history independently
+  const fetchPaymentHistory = async (page = 1, limit = 5, type = null) => {
+    try {
+      console.log("🔍 [PAYMENT HISTORY] Function called with:", { page, limit, type });
+      setPaymentHistoryLoading(true);
+      console.log("🔍 [PAYMENT HISTORY] Fetching payment history...");
+      
+      let url = `${API_BASE_URL}/client/credits/payment-history?page=${page}&limit=${limit}`;
+      if (type) {
+        url += `&type=${type}`;
+      }
+      
+      console.log("🔍 [PAYMENT HISTORY] API URL:", url);
+      console.log("🔍 [PAYMENT HISTORY] Token present:", !!token);
+      
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      
+      console.log("🔍 [PAYMENT HISTORY] Response status:", res.status);
+      const data = await res.json();
+      console.log("🔍 [PAYMENT HISTORY] Response:", data);
+      
+      if (data.success) {
+        setPaymentHistory(data.data.history);
+        console.log("🔍 [PAYMENT HISTORY] Set payment history:", data.data.history.length, "items");
+      } else {
+        console.error("🔍 [PAYMENT HISTORY] Failed:", data);
+      }
+    } catch (e) {
+      console.error("🔍 [PAYMENT HISTORY] Error:", e);
+    } finally {
+      setPaymentHistoryLoading(false);
+      console.log("🔍 [PAYMENT HISTORY] Loading completed");
+    }
+  };
+
   useEffect(() => {
     if (token) fetchAll();
   }, []);
@@ -348,6 +467,20 @@ export default function CreditsOverview() {
   useEffect(() => {
     filterHistory();
   }, [selectedFilter, dateFilter, history]);
+
+  // Trigger re-render when dateFilter changes for Payment History tab
+  useEffect(() => {
+    // This will cause the PaymentHistoryTab to re-render with filtered data
+  }, [dateFilter, history]);
+
+  // Load payment history when Payment History tab is active
+  useEffect(() => {
+    console.log("🔍 [TAB DEBUG] activeTab changed to:", activeTab);
+    if (activeTab === "history" && token) {
+      console.log("🔍 [TAB DEBUG] Triggering fetchPaymentHistory...");
+      fetchPaymentHistory(1, 5); // Load last 5 items for fast loading
+    }
+  }, [activeTab, token]);
 
   let cashfreeInstanceRef = null;
   const ensureCashfreeInstance = async () => {
@@ -1430,21 +1563,46 @@ export default function CreditsOverview() {
     </div>
   );
 
-  const PaymentHistoryTab = () => (
-    <div className="space-y-6">
-      {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <select
-          value={dateFilter}
-          onChange={(e) => setDateFilter(e.target.value)}
-          className="px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm font-medium focus:ring-2 focus:ring-black focus:border-black"
-        >
-          <option value="all">All Time</option>
-          <option value="7days">Last 7 Days</option>
-          <option value="30days">Last 30 Days</option>
-          <option value="90days">Last 90 Days</option>
-        </select>
-      </div>
+  const PaymentHistoryTab = () => {
+    console.log("🔍 [PAYMENT DEBUG] PaymentHistoryTab rendering with:", {
+      paymentHistory: paymentHistory.length,
+      loading: paymentHistoryLoading,
+      activeTab
+    });
+
+    return (
+      <div className="space-y-6">
+        {/* Debug Controls */}
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+          <div className="flex items-center gap-4">
+            <div>
+              <p className="text-sm font-medium text-yellow-800">Debug Info:</p>
+              <p className="text-xs text-yellow-600">
+                Payment History: {paymentHistory.length} items | Loading: {paymentHistoryLoading ? 'Yes' : 'No'}
+              </p>
+            </div>
+            <button
+              onClick={() => fetchPaymentHistory(1, 5)}
+              className="px-3 py-1 bg-yellow-600 text-white text-xs rounded hover:bg-yellow-700"
+            >
+              Test API Call
+            </button>
+          </div>
+        </div>
+        
+        {/* Filters */}
+        <div className="flex flex-col sm:flex-row gap-3">
+          <select
+            value={dateFilter}
+            onChange={(e) => setDateFilter(e.target.value)}
+            className="px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm font-medium focus:ring-2 focus:ring-black focus:border-black"
+          >
+            <option value="all">All Time</option>
+            <option value="7days">Last 7 Days</option>
+            <option value="30days">Last 30 Days</option>
+            <option value="90days">Last 90 Days</option>
+          </select>
+        </div>
 
       {/* Transaction History Table */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -1475,7 +1633,16 @@ export default function CreditsOverview() {
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-100">
-            {filteredHistory.map((h, idx) => (
+            {paymentHistoryLoading ? (
+              <tr>
+                <td colSpan={7} className="px-6 py-12 text-center">
+                  <div className="flex items-center justify-center">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+                    <span className="ml-2 text-gray-600">Loading payment history...</span>
+                  </div>
+                </td>
+              </tr>
+            ) : paymentHistory.map((h, idx) => (
               <tr
                 key={idx}
                 className="hover:bg-gray-50 transition-colors duration-200"
@@ -1552,7 +1719,7 @@ export default function CreditsOverview() {
                 </td>
               </tr>
             ))}
-            {filteredHistory.length === 0 && (
+            {!paymentHistoryLoading && paymentHistory.length === 0 && (
               <tr>
                 <td
                   className="px-6 py-12 text-center text-gray-500"
@@ -1575,10 +1742,13 @@ export default function CreditsOverview() {
                       </svg>
                     </div>
                     <h4 className="text-base font-medium text-gray-700 mb-2">
-                      No transactions found
+                      No payment history found
                     </h4>
-                    <p className="text-gray-500 text-sm">
-                      Adjust filters or purchase credits to see activity
+                    <p className="text-gray-500 text-sm mb-2">
+                      No credit purchases found in your history.
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      Debug: Payment history items: {paymentHistory.length}
                     </p>
                   </div>
                 </td>
@@ -1587,8 +1757,90 @@ export default function CreditsOverview() {
           </tbody>
         </table>
       </div>
+
+      {/* Pagination Controls */}
+      {historyPagination.pages > 1 && (
+        <div className="flex items-center justify-between px-4 py-3 bg-white border-t border-gray-200">
+          <div className="flex items-center text-sm text-gray-700">
+            <span>
+              Showing {((historyPagination.page - 1) * historyPagination.limit) + 1} to{" "}
+              {Math.min(historyPagination.page * historyPagination.limit, historyPagination.total)}{" "}
+              of {historyPagination.total} results
+            </span>
+          </div>
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={() => {
+                const newPage = Math.max(historyPagination.page - 1, 1);
+                setHistoryPagination(prev => ({ ...prev, page: newPage }));
+                fetchHistoryPage(newPage, historyPagination.limit);
+              }}
+              disabled={historyPagination.page === 1}
+              className={`px-3 py-1 text-sm rounded-md ${
+                historyPagination.page === 1
+                  ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                  : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
+              }`}
+            >
+              Previous
+            </button>
+            <div className="flex items-center space-x-1">
+              {(() => {
+                const totalPages = historyPagination.pages;
+                const current = historyPagination.page;
+                let pages = [];
+
+                if (totalPages <= 3) {
+                  pages = Array.from({ length: totalPages }, (_, i) => i + 1);
+                } else {
+                  if (current <= 2) {
+                    pages = [1, 2, 3];
+                  } else if (current >= totalPages - 1) {
+                    pages = [totalPages - 2, totalPages - 1, totalPages];
+                  } else {
+                    pages = [current - 1, current, current + 1];
+                  }
+                }
+
+                return pages.map((page) => (
+                  <button
+                    key={page}
+                    onClick={() => {
+                      setHistoryPagination(prev => ({ ...prev, page }));
+                      fetchHistoryPage(page, historyPagination.limit);
+                    }}
+                    className={`px-3 py-1 text-sm rounded-md ${
+                      historyPagination.page === page
+                        ? "bg-black text-white"
+                        : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
+                    }`}
+                  >
+                    {page}
+                  </button>
+                ));
+              })()}
+            </div>
+            <button
+              onClick={() => {
+                const newPage = Math.min(historyPagination.page + 1, historyPagination.pages);
+                setHistoryPagination(prev => ({ ...prev, page: newPage }));
+                fetchHistoryPage(newPage, historyPagination.limit);
+              }}
+              disabled={historyPagination.page === historyPagination.pages}
+              className={`px-3 py-1 text-sm rounded-md ${
+                historyPagination.page === historyPagination.pages
+                  ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                  : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
+              }`}
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
     </div>
-  );
+    );
+  };
 
   // Inline purchase section (replaces modal)
   const PurchaseCreditsInline = () => (
