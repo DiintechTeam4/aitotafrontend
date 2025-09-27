@@ -27,6 +27,12 @@ const InboundLogs = ({ clientId, filter, startDate, endDate }) => {
         setLoading(true);
         setError(null);
 
+        // If filter is null (custom selected but no dates), don't make API call
+        if (filter === null) {
+          setLoading(false);
+          return;
+        }
+
         const token =
           sessionStorage.getItem("clienttoken") ||
           sessionStorage.getItem("usertoken") ||
@@ -72,6 +78,19 @@ const InboundLogs = ({ clientId, filter, startDate, endDate }) => {
       <div className="flex items-center justify-center py-12">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-black"></div>
         <span className="ml-3 text-gray-600">Loading...</span>
+      </div>
+    );
+  }
+
+  if (filter === null) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="text-gray-600 text-center">
+          <p className="font-medium">Please select start and end dates</p>
+          <p className="text-sm">
+            Choose your custom date range to view the logs
+          </p>
+        </div>
       </div>
     );
   }

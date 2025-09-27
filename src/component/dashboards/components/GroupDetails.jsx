@@ -539,6 +539,15 @@ function GroupDetails({ groupId, onBack }) {
       const nameRaw = values[1] || "";
       const emailRaw = values[2] || "";
 
+      // More robust email handling - check for various empty states
+      const isEmailEmpty =
+        !emailRaw ||
+        emailRaw === "" ||
+        emailRaw === "undefined" ||
+        emailRaw === "null" ||
+        emailRaw === "NA" ||
+        emailRaw.replace(/\s/g, "") === "";
+
       const cleanPhone = phoneRaw.replace(/[^\d+]/g, "");
       const phoneRegex = /^[\+]?[0-9]{6,16}$/;
       if (!cleanPhone) {
@@ -550,7 +559,8 @@ function GroupDetails({ groupId, onBack }) {
         continue;
       }
 
-      if (emailRaw && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailRaw)) {
+      // Only validate email if it's not empty and contains actual content
+      if (!isEmailEmpty && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailRaw)) {
         errors.push(`Row ${i + 1}: Invalid email format`);
         continue;
       }
@@ -558,7 +568,7 @@ function GroupDetails({ groupId, onBack }) {
       data.push({
         name: nameRaw || "",
         phone: cleanPhone,
-        email: emailRaw || "",
+        email: isEmailEmpty ? "" : emailRaw,
       });
     }
 
@@ -601,7 +611,19 @@ function GroupDetails({ groupId, onBack }) {
 
         const phoneRaw = String(row[0] ?? "").trim();
         const nameRaw = String(row[1] ?? "").trim();
-        const emailRaw = String(row[2] ?? "").trim();
+        const emailRaw =
+          row[2] === undefined || row[2] === null ? "" : String(row[2]).trim();
+
+        // More robust email handling - check for various empty states
+        const isEmailEmpty =
+          !emailRaw ||
+          emailRaw === "" ||
+          emailRaw === "undefined" ||
+          emailRaw === "null" ||
+          emailRaw === "NaN" ||
+          emailRaw === "NA" ||
+          emailRaw.replace(/\s/g, "") === "" ||
+          emailRaw.length === 0;
 
         const cleanPhone = phoneRaw.replace(/[^\d+]/g, "");
         const phoneRegex = /^[\+]?[0-9]{6,16}$/;
@@ -614,7 +636,8 @@ function GroupDetails({ groupId, onBack }) {
           continue;
         }
 
-        if (emailRaw && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailRaw)) {
+        // Only validate email if it's not empty and contains actual content
+        if (!isEmailEmpty && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailRaw)) {
           errors.push(`Row ${i + 1}: Invalid email format`);
           continue;
         }
@@ -622,7 +645,7 @@ function GroupDetails({ groupId, onBack }) {
         dataOut.push({
           name: nameRaw || "",
           phone: cleanPhone,
-          email: emailRaw || "",
+          email: isEmailEmpty ? "" : emailRaw,
         });
       }
 
@@ -1410,9 +1433,7 @@ function GroupDetails({ groupId, onBack }) {
                       </div>
                     </div>
                     <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-3">
-                      <div className="text-xs text-yellow-700">
-                        Duplicates
-                      </div>
+                      <div className="text-xs text-yellow-700">Duplicates</div>
                       <div className="text-lg font-semibold text-yellow-800">
                         {importData.duplicateCount}
                       </div>
