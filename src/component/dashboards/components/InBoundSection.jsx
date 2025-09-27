@@ -17,8 +17,13 @@ const InBoundSection = ({ clientId }) => {
   const [endDate, setEndDate] = useState("");
 
   const effectiveParams = useMemo(() => {
-    if (filter === "custom" && startDate && endDate) {
-      return { filter: undefined, startDate, endDate };
+    if (filter === "custom") {
+      // Only return custom params if both dates are selected
+      if (startDate && endDate) {
+        return { filter: undefined, startDate, endDate };
+      }
+      // If custom is selected but dates aren't ready, return null to prevent API call
+      return null;
     }
     return { filter, startDate: undefined, endDate: undefined };
   }, [filter, startDate, endDate]);
@@ -99,25 +104,25 @@ const InBoundSection = ({ clientId }) => {
         {activeTab === "report" && (
           <InboundReport
             clientId={clientId}
-            filter={effectiveParams.filter}
-            startDate={effectiveParams.startDate}
-            endDate={effectiveParams.endDate}
+            filter={effectiveParams?.filter}
+            startDate={effectiveParams?.startDate}
+            endDate={effectiveParams?.endDate}
           />
         )}
         {activeTab === "logs" && (
           <InboundLogs
             clientId={clientId}
-            filter={effectiveParams.filter}
-            startDate={effectiveParams.startDate}
-            endDate={effectiveParams.endDate}
+            filter={effectiveParams?.filter}
+            startDate={effectiveParams?.startDate}
+            endDate={effectiveParams?.endDate}
           />
         )}
         {activeTab === "leads" && (
           <InboundLeads
             clientId={clientId}
-            filter={effectiveParams.filter}
-            startDate={effectiveParams.startDate}
-            endDate={effectiveParams.endDate}
+            filter={effectiveParams?.filter}
+            startDate={effectiveParams?.startDate}
+            endDate={effectiveParams?.endDate}
           />
         )}
         {activeTab === "settings" && <InboundSettings clientId={clientId} />}
