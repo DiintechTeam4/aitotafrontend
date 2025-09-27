@@ -21,6 +21,35 @@ const Admin = () => {
 
       if (adminToken && adminData) {
         try {
+          // Check if token is expired
+          const isTokenExpired = (token) => {
+            if (!token) return true;
+            try {
+              const base64Url = token.split(".")[1];
+              const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+              const jsonPayload = decodeURIComponent(
+                atob(base64)
+                  .split("")
+                  .map(
+                    (c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2)
+                  )
+                  .join("")
+              );
+              const payload = JSON.parse(jsonPayload);
+              if (!payload || !payload.exp) return true;
+              const nowInSeconds = Math.floor(Date.now() / 1000);
+              return payload.exp <= nowInSeconds;
+            } catch (e) {
+              return true;
+            }
+          };
+
+          if (isTokenExpired(adminToken)) {
+            console.log("Admin token expired, clearing auth");
+            clearAuth();
+            return;
+          }
+
           const parsedAdminData = JSON.parse(adminData);
           if (parsedAdminData.role === "admin") {
             setIsAuthenticated(true);
