@@ -689,46 +689,14 @@ function CampaignDetails({ campaignId, onBack }) {
     }
   };
 
-  // Utility: robustly extract assigned agent id and optional name from various shapes
-  const getPrimaryAgentIdentity = () => {
-    // Case 1: campaign.agent is an array [id | object]
+  // Get agent ID from campaign data
+  const getPrimaryAgentId = () => {
     if (Array.isArray(campaign?.agent) && campaign.agent.length > 0) {
-      const raw = campaign.agent[0];
-      if (typeof raw === "string") return { id: raw, immediateName: "" };
-      const id = raw?._id || raw?.id || raw?.agentId || null;
-      const immediateName =
-        raw?.name || raw?.fullName || raw?.agentName || raw?.email || "";
-      return { id, immediateName };
+      return campaign.agent[0];
     }
-
-    // Case 2: campaign.agent is a single id string or object
-    if (campaign?.agent && !Array.isArray(campaign.agent)) {
-      if (typeof campaign.agent === "string") {
-        return { id: campaign.agent, immediateName: "" };
-      }
-      const id = campaign.agent?._id || campaign.agent?.id || null;
-      const immediateName =
-        campaign.agent?.name ||
-        campaign.agent?.fullName ||
-        campaign.agent?.agentName ||
-        campaign.agent?.email ||
-        "";
-      return { id, immediateName };
-    }
-
-    // Case 3: alternative fields commonly used
-    const alt =
-      campaign?.agentId || campaign?.assignedAgent || campaign?.agent_id;
-    if (alt) {
-      if (typeof alt === "string") return { id: alt, immediateName: "" };
-      const id = alt?._id || alt?.id || alt?.agentId || null;
-      const immediateName =
-        alt?.name || alt?.fullName || alt?.agentName || alt?.email || "";
-      return { id, immediateName };
-    }
-
-    return { id: null, immediateName: "" };
+    return campaign?.agent || campaign?.agentId || null;
   };
+
   const [selectedAgent, setSelectedAgent] = useState(null);
 
   const [showCallModal, setShowCallModal] = useState(false);
@@ -1199,20 +1167,24 @@ function CampaignDetails({ campaignId, onBack }) {
     }
   }, [callingStatus, campaignId]);
 
-  // Ensure agent name is resolved when campaign agent changes
+  // Fetch agent name when campaign loads
   useEffect(() => {
-    const resolve = async () => {
-      const { id, immediateName } = getPrimaryAgentIdentity();
-      if (!id) return;
-      if (immediateName && !agentMap[id]) {
-        setAgentMap((m) => ({ ...m, [id]: immediateName }));
-      }
-      if (!agentMap[id]) {
-        const name = await getAgentNameById(id);
-        setAgentMap((m) => ({ ...m, [id]: name }));
+    const fetchAgentName = async () => {
+      const agentId = getPrimaryAgentId();
+      if (!agentId) return;
+
+      const response = await fetch(
+        `${API_BASE_URL}/client/agents/${agentId}/name`
+      );
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          setAgentMap({ [agentId]: data.data.name });
+        }
       }
     };
-    resolve();
+
+    fetchAgentName();
   }, [campaign?.agent]);
 
   // Fetch campaign contacts when campaign data is available
@@ -3211,7 +3183,7 @@ function CampaignDetails({ campaignId, onBack }) {
       // Resolve agent ID
       let resolvedAgentId = agentId;
       if (!resolvedAgentId) {
-        const { id: primaryAgentId } = getPrimaryAgentIdentity();
+        const primaryAgentId = getPrimaryAgentId();
         resolvedAgentId =
           (selectedAgent && (selectedAgent._id || selectedAgent)) ||
           primaryAgentId ||
@@ -5560,9 +5532,10 @@ function CampaignDetails({ campaignId, onBack }) {
                       <span className="items-center gap-1">
                         <span className="font-medium">
                           {(() => {
-                            const { id, immediateName } =
-                              getPrimaryAgentIdentity();
-                            return immediateName || (id ? agentMap[id] : "");
+                            const agentId = getPrimaryAgentId();
+                            return agentId
+                              ? agentMap[agentId] || "Loading..."
+                              : "";
                           })()}
                         </span>
                       </span>
