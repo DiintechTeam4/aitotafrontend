@@ -89,30 +89,23 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
   useEffect(() => {
     const token = sessionStorage.getItem("clienttoken");
     if (token && currentClient) {
-      // First get client profile for approval status
+      // Get client profile with fresh business logo URL
       fetch(`${API_BASE_URL}/client/profile`, {
         headers: { Authorization: `Bearer ${token}` },
       })
         .then((res) => res.json())
         .then((data) => {
-          // The backend returns data wrapped in a 'data' property
-          const isApproved = data.data?.isApproved;
-          const isProfileCompleted = data.data?.isprofileCompleted;
-          setIsApproved(isApproved);
-          setIsProfileCompleted(isProfileCompleted);
-        })
-        .catch((error) => {
-          console.error("Error fetching profile:", error);
-          setIsApproved(false);
-        });
-
-      // Then get full client data for name and email
-      fetch(`${API_BASE_URL}/client/`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-        .then((res) => res.json())
-        .then((data) => {
+          console.log("Client profile data received:", data);
           if (data.success && data.data) {
+            console.log("Fresh business logo URL:", data.data.businessLogoUrl);
+            
+            // Set approval status
+            const isApproved = data.data?.isApproved;
+            const isProfileCompleted = data.data?.isprofileCompleted;
+            setIsApproved(isApproved);
+            setIsProfileCompleted(isProfileCompleted);
+            
+            // Set client info with fresh business logo URL
             setClientInfo({
               name: data.data.name || "Unknown",
               email: data.data.email || "No email",
@@ -123,7 +116,8 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
           }
         })
         .catch((error) => {
-          console.error("Error fetching client data:", error);
+          console.error("Error fetching profile:", error);
+          setIsApproved(false);
           // Set fallback info
           setClientInfo({
             name: "Unknown",
@@ -877,12 +871,21 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
                         alt={clientInfo.businessName}
                         className="h-10 w-10 rounded-full object-cover bg-gray-800 ring-1 ring-gray-700 shadow-md"
                         referrerPolicy="no-referrer"
+                        onError={(e) => {
+                          console.log("Business logo failed to load:", e.target.src);
+                          e.target.style.display = 'none';
+                          e.target.nextSibling.style.display = 'flex';
+                        }}
+                        onLoad={() => {
+                          console.log("Business logo loaded successfully:", clientInfo.businessLogoUrl);
+                        }}
                       />
-                    ) : (
-                      <div className="h-10 w-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-sm font-bold shadow-md">
-                        {(clientInfo.businessName || "C")[0]?.toUpperCase()}
-                      </div>
-                    )}
+                    ) : null}
+                    <div 
+                      className={`h-10 w-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-sm font-bold shadow-md ${clientInfo.businessLogoUrl ? 'hidden' : 'flex'}`}
+                    >
+                      {(clientInfo.businessName || "C")[0]?.toUpperCase()}
+                    </div>
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
                         <div
