@@ -1797,35 +1797,7 @@ const AgentList = ({ agents, isLoading, onEdit, onDelete, clientId }) => {
 
     try {
       // First validate configuration with backend
-      const validationResponse = await fetch(`${API_BASE_URL}/client/calls/validate`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${sessionStorage.getItem("clienttoken")}`,
-        },
-        body: JSON.stringify({
-          agentId: selectedAgentForCall._id,
-          phoneNumber: phoneNumber
-        }),
-      });
-
-      if (!validationResponse.ok) {
-        setCallStage("input");
-        setIsCallConnected(false);
-        alert(`Validation failed: ${validationResponse.status} ${validationResponse.statusText}`);
-        return;
-      }
-
-      const validationResult = await validationResponse.json();
       
-      if (!validationResult.success) {
-        setCallStage("input");
-        setIsCallConnected(false);
-        // Show clear error message from backend
-        alert(`❌ Call Configuration Error\n\n${validationResult.error}\n\nPlease check your agent settings and try again.`);
-        return;
-      }
-
       // If validation passed, proceed with call
       const result = await makeUnifiedOutboundCall(
         phoneNumber,
