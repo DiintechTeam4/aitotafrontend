@@ -1796,8 +1796,6 @@ const AgentList = ({ agents, isLoading, onEdit, onDelete, clientId }) => {
     setDialUniqueId(generatedUniqueId);
 
     try {
-      // First validate configuration with backend
-      
       // If validation passed, proceed with call
       const result = await makeUnifiedOutboundCall(
         phoneNumber,
