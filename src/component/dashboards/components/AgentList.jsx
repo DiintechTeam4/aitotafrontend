@@ -1779,6 +1779,7 @@ const AgentList = ({ agents, isLoading, onEdit, onDelete, clientId }) => {
 
   const initiateCall = async () => {
     if (!phoneNumber.trim() || !selectedAgentForCall) return;
+    
     setCallStage("connecting");
     setCallMessages([]);
 
@@ -1794,132 +1795,141 @@ const AgentList = ({ agents, isLoading, onEdit, onDelete, clientId }) => {
       .substr(2, 9)}`;
     setDialUniqueId(generatedUniqueId);
 
-    const result = await makeUnifiedOutboundCall(
-      phoneNumber,
-      selectedAgentForCall,
-      clientId,
-      generatedUniqueId
-    );
+    try {
+      // If validation passed, proceed with call
+      const result = await makeUnifiedOutboundCall(
+        phoneNumber,
+        selectedAgentForCall,
+        clientId,
+        generatedUniqueId
+      );
 
-    if (result.success) {
-      setCallStage("connecting"); // Start with "connecting" instead of "connected"
-      setIsCallConnected(true);
-      callInitiatedTimeRef.current = Date.now(); // Track when call was initiated
-      // Don't start timer yet - wait for first transcript (WhatsApp-like behavior)
-      startLogsPolling(generatedUniqueId);
+      if (result.success) {
+        setCallStage("connecting"); // Start with "connecting" instead of "connected"
+        setIsCallConnected(true);
+        callInitiatedTimeRef.current = Date.now(); // Track when call was initiated
+        // Don't start timer yet - wait for first transcript (WhatsApp-like behavior)
+        startLogsPolling(generatedUniqueId);
 
-      // Fetch call termination data when call is connected
-      setTimeout(() => {
-        fetchCallTerminationData();
-      }, 1000);
+        // Fetch call termination data when call is connected
+        setTimeout(() => {
+          fetchCallTerminationData();
+        }, 1000);
 
-      // Set 40-second timeout to check for progress
-      callTimeoutRef.current = setTimeout(() => {
-        // Check if we have any transcript or call activity
-        if (
-          !liveTranscriptRef.current ||
-          liveTranscriptRef.current.trim() === ""
-        ) {
-          console.log(
-            "40-second timeout reached - no transcript progress detected"
-          );
-          setCallStage("timeout");
-          setIsCallConnected(false);
-          stopCallTimer();
-          stopLogsPolling();
-        }
-      }, 40000); // 40 seconds
+        // Set 40-second timeout to check for progress
+        callTimeoutRef.current = setTimeout(() => {
+          // Check if we have any transcript or call activity
+          if (
+            !liveTranscriptRef.current ||
+            liveTranscriptRef.current.trim() === ""
+          ) {
+            console.log(
+              "40-second timeout reached - no transcript progress detected"
+            );
+            setCallStage("timeout");
+            setIsCallConnected(false);
+            stopCallTimer();
+            stopLogsPolling();
+          }
+        }, 40000); // 40 seconds
 
-      // Additional aggressive timeout for mobile disconnection detection
-      setTimeout(() => {
-        if (callStageRef.current === "connected" && logsPollRef.current) {
-          console.log("Setting up aggressive mobile disconnection check...");
+        // Additional aggressive timeout for mobile disconnection detection
+        setTimeout(() => {
+          if (callStageRef.current === "connected" && logsPollRef.current) {
+            console.log("Setting up aggressive mobile disconnection check...");
 
-          // Check every 30 seconds if call is still active
-          const mobileDisconnectCheck = setInterval(() => {
-            if (callStageRef.current === "connected") {
-              console.log(
-                "Aggressive check: Verifying mobile call is still active..."
-              );
+            // Check every 30 seconds if call is still active
+            const mobileDisconnectCheck = setInterval(() => {
+              if (callStageRef.current === "connected") {
+                console.log(
+                  "Aggressive check: Verifying mobile call is still active..."
+                );
 
-              // Check if we're still in grace period
-              const timeSinceInitiation = callInitiatedTimeRef.current
-                ? Date.now() - callInitiatedTimeRef.current
-                : 0;
-              const isInGracePeriod = timeSinceInitiation < 15000; // 15-second grace period
+                // Check if we're still in grace period
+                const timeSinceInitiation = callInitiatedTimeRef.current
+                  ? Date.now() - callInitiatedTimeRef.current
+                  : 0;
+                const isInGracePeriod = timeSinceInitiation < 15000; // 15-second grace period
 
-              if (isInGracePeriod) {
-                console.log("Still in grace period, skipping aggressive check");
-                return;
-              }
+                if (isInGracePeriod) {
+                  console.log("Still in grace period, skipping aggressive check");
+                  return;
+                }
 
-              // Force a poll and check if we're getting any response
-              const forceCheck = async () => {
-                try {
-                  const params = new URLSearchParams({
-                    uniqueid: generatedUniqueId,
-                    clientId: String(clientId || ""),
-                    limit: "1",
-                    sortBy: "createdAt",
-                    sortOrder: "desc",
-                  });
-                  const resp = await fetch(
-                    `${API_BASE_URL}/logs?${params.toString()}`
-                  );
-                  if (resp.ok) {
-                    const data = await resp.json();
-                    const log = data?.logs?.[0];
+                // Force a poll and check if we're getting any response
+                const forceCheck = async () => {
+                  try {
+                    const params = new URLSearchParams({
+                      uniqueid: generatedUniqueId,
+                      clientId: String(clientId || ""),
+                      limit: "1",
+                      sortBy: "createdAt",
+                      sortOrder: "desc",
+                    });
+                    const resp = await fetch(
+                      `${API_BASE_URL}/logs?${params.toString()}`
+                    );
+                    if (resp.ok) {
+                      const data = await resp.json();
+                      const log = data?.logs?.[0];
 
-                    if (log) {
-                      const timeSinceLastUpdate =
-                        Date.now() -
-                        new Date(
-                          log.metadata?.lastUpdated || log.createdAt
-                        ).getTime();
-                      console.log(
-                        `Time since last update: ${timeSinceLastUpdate}ms`
-                      );
-
-                      // If no activity for more than 2 minutes, consider call disconnected
-                      if (timeSinceLastUpdate > 120000) {
-                        // 2 minutes
+                      if (log) {
+                        const timeSinceLastUpdate =
+                          Date.now() -
+                          new Date(
+                            log.metadata?.lastUpdated || log.createdAt
+                          ).getTime();
                         console.log(
-                          "No recent activity detected, considering call disconnected from mobile"
+                          `Time since last update: ${timeSinceLastUpdate}ms`
+                        );
+
+                        // If no activity for more than 2 minutes, consider call disconnected
+                        if (timeSinceLastUpdate > 120000) {
+                          // 2 minutes
+                          console.log(
+                            "No recent activity detected, considering call disconnected from mobile"
+                          );
+                          clearInterval(mobileDisconnectCheck);
+                          handleAutomaticCallTermination({
+                            ...log,
+                            leadStatus: "not_connected",
+                            metadata: { ...log.metadata, isActive: false },
+                          });
+                        }
+                      } else {
+                        console.log(
+                          "No log found, considering call disconnected"
                         );
                         clearInterval(mobileDisconnectCheck);
                         handleAutomaticCallTermination({
-                          ...log,
                           leadStatus: "not_connected",
-                          metadata: { ...log.metadata, isActive: false },
+                          metadata: { isActive: false },
                         });
                       }
-                    } else {
-                      console.log(
-                        "No log found, considering call disconnected"
-                      );
-                      clearInterval(mobileDisconnectCheck);
-                      handleAutomaticCallTermination({
-                        leadStatus: "not_connected",
-                        metadata: { isActive: false },
-                      });
                     }
+                  } catch (e) {
+                    console.error("Aggressive check failed:", e);
                   }
-                } catch (e) {
-                  console.error("Aggressive check failed:", e);
-                }
-              };
+                };
 
-              forceCheck();
-            } else {
-              clearInterval(mobileDisconnectCheck);
-            }
-          }, 30000); // Check every 30 seconds
-        }
-      }, 60000); // Start after 1 minute
-    } else {
+                forceCheck();
+              } else {
+                clearInterval(mobileDisconnectCheck);
+              }
+            }, 30000); // Check every 30 seconds
+          }
+        }, 60000); // Start after 1 minute
+      } else {
+        setCallStage("input");
+        setIsCallConnected(false);
+        // Show clear error message from call initiation
+        alert(`❌ Call Failed\n\n${result.error || "Unable to initiate call. Please try again."}\n\nPlease check your agent configuration and try again.`);
+      }
+    } catch (error) {
+      console.error("Call initiation error:", error);
       setCallStage("input");
       setIsCallConnected(false);
-      alert(`Failed to initiate call: ${result.error}`);
+      alert(`❌ System Error\n\n${error.message || "An unexpected error occurred. Please try again."}\n\nIf the problem persists, please contact support.`);
     }
   };
 
@@ -2159,6 +2169,7 @@ const AgentList = ({ agents, isLoading, onEdit, onDelete, clientId }) => {
       clearInterval(callTimerRef.current);
     }
   };
+
 
   const cancelCall = () => {
     setShowCallModal(false);
