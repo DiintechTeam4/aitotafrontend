@@ -1,5 +1,5 @@
 "use client";
-import { FiMail, FiMessageSquare, FiTrash2, FiEdit } from "react-icons/fi";
+import { FiMail, FiMessageSquare, FiTrash2, FiEdit, FiGrid, FiList } from "react-icons/fi";
 import { useState, useEffect } from "react";
 import VoiceSynthesizer from "./VoiceSynthesizer";
 import AudioRecorder from "./AudioRecorder";
@@ -42,6 +42,12 @@ const AgentForm = ({
     backgroundColor: "",
   });
 
+  // Dynamic info and system prompt lists
+  const [dynamicInfoList, setDynamicInfoList] = useState([{ text: "", isDefault: false }]);
+  const [systemPromptList, setSystemPromptList] = useState([{ text: "", isDefault: false }]);
+  const [defaultDynamicInfoIndex, setDefaultDynamicInfoIndex] = useState(0);
+  const [defaultSystemPromptIndex, setDefaultSystemPromptIndex] = useState(0);
+
   const [startingMessages, setStartingMessages] = useState([{ text: "" }]);
   const [defaultStartingMessageIndex, setDefaultStartingMessageIndex] =
     useState(0);
@@ -82,6 +88,10 @@ const AgentForm = ({
   const [newQa, setNewQa] = useState({ question: '', answer: '' });
   const [editingQaIndex, setEditingQaIndex] = useState(null);
   const [editingQaDraft, setEditingQaDraft] = useState({ question: '', answer: '' });
+
+  // View mode states for lists
+  const [dynamicInfoViewMode, setDynamicInfoViewMode] = useState('form'); // 'form' | 'list'
+  const [systemPromptViewMode, setSystemPromptViewMode] = useState('form'); // 'form' | 'list'
 
   // Voice mapping for different services
   const voiceMappings = {
@@ -150,6 +160,26 @@ const AgentForm = ({
       if (agent.startingMessages && agent.startingMessages.length > 0) {
         setStartingMessages(agent.startingMessages);
         setDefaultStartingMessageIndex(agent.defaultStartingMessageIndex || 0);
+      }
+
+      // Load dynamic info list if it exists
+      if (agent.dynamicInfoList && agent.dynamicInfoList.length > 0) {
+        setDynamicInfoList(agent.dynamicInfoList);
+        setDefaultDynamicInfoIndex(agent.defaultDynamicInfoIndex || 0);
+      } else if (agent.details) {
+        // Migrate old single details field to list
+        setDynamicInfoList([{ text: agent.details, isDefault: true }]);
+        setDefaultDynamicInfoIndex(0);
+      }
+
+      // Load system prompt list if it exists
+      if (agent.systemPromptList && agent.systemPromptList.length > 0) {
+        setSystemPromptList(agent.systemPromptList);
+        setDefaultSystemPromptIndex(agent.defaultSystemPromptIndex || 0);
+      } else if (agent.systemPrompt) {
+        // Migrate old single systemPrompt field to list
+        setSystemPromptList([{ text: agent.systemPrompt, isDefault: true }]);
+        setDefaultSystemPromptIndex(0);
       }
 
       // Hydrate knowledge base and depositions
@@ -815,6 +845,213 @@ const AgentForm = ({
     setStartingMessages(newMessages);
   };
 
+  // Dynamic Info List Functions
+  const handleDynamicInfoChange = (idx, value) => {
+    const newList = [...dynamicInfoList];
+    newList[idx].text = value;
+    setDynamicInfoList(newList);
+  };
+
+  const addDynamicInfo = () => {
+    setDynamicInfoList([...dynamicInfoList, { text: "", isDefault: false }]);
+  };
+
+  const removeDynamicInfo = (idx) => {
+    if (dynamicInfoList.length > 1) {
+      const newList = dynamicInfoList.filter((_, index) => index !== idx);
+      setDynamicInfoList(newList);
+      if (defaultDynamicInfoIndex >= idx && defaultDynamicInfoIndex > 0) {
+        setDefaultDynamicInfoIndex(defaultDynamicInfoIndex - 1);
+      }
+    }
+  };
+
+  // System Prompt List Functions
+  const handleSystemPromptChange = (idx, value) => {
+    const newList = [...systemPromptList];
+    newList[idx].text = value;
+    setSystemPromptList(newList);
+  };
+
+  const addSystemPrompt = () => {
+    setSystemPromptList([...systemPromptList, { text: "", isDefault: false }]);
+  };
+
+  const removeSystemPrompt = (idx) => {
+    if (systemPromptList.length > 1) {
+      const newList = systemPromptList.filter((_, index) => index !== idx);
+      setSystemPromptList(newList);
+      if (defaultSystemPromptIndex >= idx && defaultSystemPromptIndex > 0) {
+        setDefaultSystemPromptIndex(defaultSystemPromptIndex - 1);
+      }
+    }
+  };
+
+  // List view components
+  const renderDynamicInfoListView = () => (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold text-gray-800">Dynamic Information List</h3>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              addDynamicInfo();
+              setDynamicInfoViewMode('form');
+            }}
+            className="px-3 py-1 text-sm bg-black text-white rounded hover:bg-gray-800 transition-colors"
+          >
+            + Add
+          </button>
+        </div>
+      </div>
+      
+      {dynamicInfoList.length === 0 ? (
+        <div className="text-center py-8 text-gray-500">
+          <p>No dynamic information added yet.</p>
+          <button
+            type="button"
+            onClick={() => setDynamicInfoViewMode('form')}
+            className="mt-2 px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-colors"
+          >
+            Add Dynamic Info
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {dynamicInfoList.map((info, idx) => (
+            <div
+              key={idx}
+              className={`p-4 border rounded-lg ${
+                defaultDynamicInfoIndex === idx
+                  ? 'border-indigo-500 bg-indigo-50'
+                  : 'border-gray-200 bg-white'
+              }`}
+            >
+              <div className="flex items-start justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-gray-600">
+                    Dynamic Info {idx + 1}
+                  </span>
+                  {defaultDynamicInfoIndex === idx && (
+                    <span className="px-2 py-1 text-xs bg-indigo-100 text-indigo-700 rounded-full">
+                      Default
+                    </span>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  {defaultDynamicInfoIndex !== idx && (
+                    <button
+                      type="button"
+                      onClick={() => setDefaultDynamicInfoIndex(idx)}
+                      className="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors"
+                    >
+                      Set Default
+                    </button>
+                  )}
+                  {dynamicInfoList.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removeDynamicInfo(idx)}
+                      className="px-2 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors"
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div className="text-sm text-gray-700 whitespace-pre-wrap line-clamp-3">
+                {info.text || <span className="text-gray-400 italic">No content</span>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  const renderSystemPromptListView = () => (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold text-gray-800">System Prompts List</h3>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              addSystemPrompt();
+              setSystemPromptViewMode('form');
+            }}
+            className="px-3 py-1 text-sm bg-black text-white rounded hover:bg-gray-800 transition-colors"
+          >
+            + Add
+          </button>
+        </div>
+      </div>
+      
+      {systemPromptList.length === 0 ? (
+        <div className="text-center py-8 text-gray-500">
+          <p>No system prompts added yet.</p>
+          <button
+            type="button"
+            onClick={() => setSystemPromptViewMode('form')}
+            className="mt-2 px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-colors"
+          >
+            Add System Prompt
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {systemPromptList.map((prompt, idx) => (
+            <div
+              key={idx}
+              className={`p-4 border rounded-lg ${
+                defaultSystemPromptIndex === idx
+                  ? 'border-indigo-500 bg-indigo-50'
+                  : 'border-gray-200 bg-white'
+              }`}
+            >
+              <div className="flex items-start justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-gray-600">
+                    System Prompt {idx + 1}
+                  </span>
+                  {defaultSystemPromptIndex === idx && (
+                    <span className="px-2 py-1 text-xs bg-indigo-100 text-indigo-700 rounded-full">
+                      Default
+                    </span>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  {defaultSystemPromptIndex !== idx && (
+                    <button
+                      type="button"
+                      onClick={() => setDefaultSystemPromptIndex(idx)}
+                      className="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors"
+                    >
+                      Set Default
+                    </button>
+                  )}
+                  {systemPromptList.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removeSystemPrompt(idx)}
+                      className="px-2 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors"
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div className="text-sm text-gray-700 whitespace-pre-wrap line-clamp-4">
+                {prompt.text || <span className="text-gray-400 italic">No content</span>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
   const handleAudioGeneratedForMessage = (
     idx,
     audioBlob,
@@ -854,7 +1091,7 @@ const AgentForm = ({
       case "voice":
         return formData.language && formData.voiceSelection;
       case "system":
-        return formData.systemPrompt.trim() !== "";
+        return systemPromptList.some((prompt) => prompt.text.trim() !== "");
       case "integration":
         return true; // Integration settings are optional
       case "social":
@@ -904,8 +1141,8 @@ const AgentForm = ({
         setIsLoading(false);
         return;
       }
-      if (!formData.systemPrompt.trim()) {
-        alert("System prompt is required");
+      if (!systemPromptList.some((prompt) => prompt.text.trim() !== "")) {
+        alert("At least one system prompt is required");
         setIsLoading(false);
         return;
       }
@@ -930,7 +1167,8 @@ const AgentForm = ({
         }
       }
 
-      const { serviceProvider, ...formDataWithoutServiceProvider } = formData;
+      // Exclude audioBase64 from form data to avoid storing base64 in DB
+      const { serviceProvider, audioBase64, ...formDataWithoutServiceProvider } = formData;
       // Derive socials payload from current selections
       const deriveSocials = () => {
         const platforms = ["whatsapp", "telegram", "email", "sms"];
@@ -977,12 +1215,52 @@ const AgentForm = ({
         return socials;
       };
 
+      // Sanitize list fields: remove empty items and fix default indices
+      const cleanedDynamicInfoList = Array.isArray(dynamicInfoList)
+        ? dynamicInfoList
+            .map((item) => ({
+              text: typeof item?.text === "string" ? item.text.trim() : "",
+              isDefault: !!item?.isDefault,
+            }))
+            .filter((item) => item.text !== "")
+        : [];
+
+      let newDefaultDynamicInfoIndex = 0;
+      if (cleanedDynamicInfoList.length > 0) {
+        newDefaultDynamicInfoIndex = Math.min(
+          Math.max(0, defaultDynamicInfoIndex || 0),
+          cleanedDynamicInfoList.length - 1
+        );
+      }
+
+      const cleanedSystemPromptList = Array.isArray(systemPromptList)
+        ? systemPromptList
+            .map((item) => ({
+              text: typeof item?.text === "string" ? item.text.trim() : "",
+              isDefault: !!item?.isDefault,
+            }))
+            .filter((item) => item.text !== "")
+        : [];
+
+      let newDefaultSystemPromptIndex = 0;
+      if (cleanedSystemPromptList.length > 0) {
+        newDefaultSystemPromptIndex = Math.min(
+          Math.max(0, defaultSystemPromptIndex || 0),
+          cleanedSystemPromptList.length - 1
+        );
+      }
+
+      // Strip audioBase64 from startingMessages before sending to backend
+      const sanitizedStartingMessages = Array.isArray(startingMessages)
+        ? startingMessages.map((m) => ({ text: (m?.text || "").trim() }))
+        : [];
+
       const payload = {
         ...formDataWithoutServiceProvider,
-        startingMessages,
+        startingMessages: sanitizedStartingMessages,
         defaultStartingMessageIndex,
         firstMessage:
-          startingMessages[defaultStartingMessageIndex]?.text ||
+          sanitizedStartingMessages[defaultStartingMessageIndex]?.text ||
           formData.firstMessage,
         defaultTemplate,
         // knowledgeBase is now managed separately via KnowledgeBase model
@@ -990,8 +1268,20 @@ const AgentForm = ({
         // Include voice service provider and voice ID
         voiceServiceProvider: formData.voiceServiceProvider,
         voiceId: formData.voiceId,
-        // Persist dynamic details separately
-        details: formData.details,
+        // Include sanitized list structures
+        dynamicInfoList: cleanedDynamicInfoList,
+        defaultDynamicInfoIndex: newDefaultDynamicInfoIndex,
+        systemPromptList: cleanedSystemPromptList,
+        defaultSystemPromptIndex: newDefaultSystemPromptIndex,
+        // Set primary fields from default selections when available
+        details:
+          cleanedDynamicInfoList.length > 0
+            ? cleanedDynamicInfoList[newDefaultDynamicInfoIndex]?.text || ""
+            : formData.details,
+        systemPrompt:
+          cleanedSystemPromptList.length > 0
+            ? cleanedSystemPromptList[newDefaultSystemPromptIndex]?.text || ""
+            : formData.systemPrompt,
         // Save all Q&A in one go on Update
         qa: qaItems,
         ...deriveSocials(),
@@ -1026,20 +1316,22 @@ const AgentForm = ({
         delete payload.callerId;
       }
 
-      const url = agent
-        ? `${API_BASE_URL}/client/agents/${agent._id}${
-            clientId ? `?clientId=${clientId}` : ""
-          }`
-        : `${API_BASE_URL}/client/agents${
-            clientId ? `?clientId=${clientId}` : ""
-          }`;
+      // Choose endpoint based on available token (client vs admin)
+      const adminToken = localStorage.getItem('admintoken') || sessionStorage.getItem('admintoken');
+      const clientTok = clientToken || sessionStorage.getItem("clienttoken");
+
+      // If updating and we have an admin token (and no client token), use admin endpoint
+      const useAdminEndpoint = !!agent && !!adminToken && !clientTok;
+
+      const url = useAdminEndpoint
+        ? `${API_BASE_URL}/admin/update-agent/${agent._id}`
+        : agent
+          ? `${API_BASE_URL}/client/agents/${agent._id}${clientId ? `?clientId=${clientId}` : ""}`
+          : `${API_BASE_URL}/client/agents${clientId ? `?clientId=${clientId}` : ""}`;
 
       const method = agent ? "PUT" : "POST";
 
-      const authToken =
-        clientToken ||
-        sessionStorage.getItem("clienttoken") ||
-        localStorage.getItem("admintoken");
+      const authToken = useAdminEndpoint ? adminToken : (clientTok || adminToken);
       const response = await fetch(url, {
         method,
         headers: {
@@ -1417,43 +1709,175 @@ const AgentForm = ({
         case "basic":
           return (
             <div className="space-y-6">
-              <div>
-                <label
-                  htmlFor="systemPrompt"
-                  className="block mb-2 font-semibold text-gray-700"
-                >
-                  System Prompt *
-                </label>
-                <textarea
-                  id="systemPrompt"
-                  name="systemPrompt"
-                  value={formData.systemPrompt}
-                  onChange={handleInputChange}
-                  rows="12"
-                  required
-                  placeholder="Define the agent's behavior, knowledge, and capabilities..."
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors resize-vertical"
-                />
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-gray-800">
+                  System Prompts
+                </h3>
+                <div className="flex items-center gap-1 mr-1">
+                  <button
+                    className={`p-2 rounded-lg border ${
+                      systemPromptViewMode === 'form'
+                        ? 'bg-blue-600 text-white border-blue-600'
+                        : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+                    }`}
+                    title="Form view"
+                    type="button"
+                    onClick={() => setSystemPromptViewMode('form')}
+                  >
+                    <FiGrid />
+                  </button>
+                  <button
+                    className={`p-2 rounded-lg border ${
+                      systemPromptViewMode === 'list'
+                        ? 'bg-blue-600 text-white border-blue-600'
+                        : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+                    }`}
+                    title="List view"
+                    type="button"
+                    onClick={() => setSystemPromptViewMode('list')}
+                  >
+                    <FiList />
+                  </button>
+                </div>
               </div>
+              
+              {systemPromptViewMode === 'list' ? (
+                renderSystemPromptListView()
+              ) : (
+                <>
+                  {systemPromptList.map((prompt, idx) => (
+                <div
+                  key={idx}
+                  className="p-4 border border-gray-200 rounded-lg bg-white mb-3"
+                >
+                  <div className="flex items-center mb-3">
+                    <input
+                      type="radio"
+                      name="defaultSystemPrompt"
+                      checked={defaultSystemPromptIndex === idx}
+                      onChange={() => setDefaultSystemPromptIndex(idx)}
+                      className="mr-2"
+                    />
+                    <span className="text-sm text-gray-600">Set as default</span>
+                    {systemPromptList.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeSystemPrompt(idx)}
+                        className="ml-auto px-3 py-1 bg-red-500 text-white text-sm rounded hover:bg-red-600 transition-colors"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                  <textarea
+                    value={prompt.text}
+                    onChange={(e) => handleSystemPromptChange(idx, e.target.value)}
+                    rows="10"
+                    required
+                    placeholder={`System Prompt ${idx + 1} - Define the agent's behavior, knowledge, and capabilities...`}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors resize-vertical"
+                  />
+                </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={addSystemPrompt}
+                    className="px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors flex items-center gap-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                    Add System Prompt
+                  </button>
+                </>
+              )}
             </div>
           );
 
         case "dynamic":
           return (
             <div className="space-y-6">
-              <div>
-                <label className="block mb-2 font-semibold text-gray-700">
-                  Details
-                </label>
-                <textarea
-                  name="details"
-                  value={formData.details || ""}
-                  onChange={handleInputChange}
-                  rows="10"
-                  placeholder="Add dynamic details for the agent (used at runtime)"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-black transition-colors"
-                />
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-gray-800">
+                  Dynamic Information
+                </h3>
+                <div className="flex items-center gap-1 mr-1">
+                  <button
+                    className={`p-2 rounded-lg border ${
+                      dynamicInfoViewMode === 'form'
+                        ? 'bg-blue-600 text-white border-blue-600'
+                        : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+                    }`}
+                    title="Form view"
+                    type="button"
+                    onClick={() => setDynamicInfoViewMode('form')}
+                  >
+                    <FiGrid />
+                  </button>
+                  <button
+                    className={`p-2 rounded-lg border ${
+                      dynamicInfoViewMode === 'list'
+                        ? 'bg-blue-600 text-white border-blue-600'
+                        : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+                    }`}
+                    title="List view"
+                    type="button"
+                    onClick={() => setDynamicInfoViewMode('list')}
+                  >
+                    <FiList />
+                  </button>
+                </div>
               </div>
+              
+              {dynamicInfoViewMode === 'list' ? (
+                renderDynamicInfoListView()
+              ) : (
+                <>
+                  {dynamicInfoList.map((info, idx) => (
+                <div
+                  key={idx}
+                  className="p-4 border border-gray-200 rounded-lg bg-white mb-3"
+                >
+                  <div className="flex items-center mb-3">
+                    <input
+                      type="radio"
+                      name="defaultDynamicInfo"
+                      checked={defaultDynamicInfoIndex === idx}
+                      onChange={() => setDefaultDynamicInfoIndex(idx)}
+                      className="mr-2"
+                    />
+                    <span className="text-sm text-gray-600">Set as default</span>
+                    {dynamicInfoList.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeDynamicInfo(idx)}
+                        className="ml-auto px-3 py-1 bg-red-500 text-white text-sm rounded hover:bg-red-600 transition-colors"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                  <textarea
+                    value={info.text}
+                    onChange={(e) => handleDynamicInfoChange(idx, e.target.value)}
+                    rows="6"
+                    placeholder={`Dynamic Info ${idx + 1} - Add details for the agent (used at runtime)`}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors resize-vertical"
+                  />
+                </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={addDynamicInfo}
+                    className="px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors flex items-center gap-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                    Add Dynamic Info
+                  </button>
+                </>
+              )}
             </div>
           );
 
