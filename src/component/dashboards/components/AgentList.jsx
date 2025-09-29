@@ -313,8 +313,10 @@ const AgentList = ({ agents, isLoading, onEdit, onDelete, clientId }) => {
   const [liveTranscript, setLiveTranscript] = useState("");
   const [liveTranscriptLines, setLiveTranscriptLines] = useState([]);
   const [callTerminationReason, setCallTerminationReason] = useState("");
+  const [isCallLoading, setIsCallLoading] = useState(false);
   const logsPollRef = useRef(null);
   const callTimeoutRef = useRef(null);
+
 
   // Recent calls for quick selection
   const [recentCalls, setRecentCalls] = useState([]);
@@ -1387,7 +1389,15 @@ const AgentList = ({ agents, isLoading, onEdit, onDelete, clientId }) => {
   };
 
   // QR Code Functions
-  const handleShowQR = (agent) => {
+  const handleShowQR = async (agent) => {
+    // Validate agent credentials before showing QR code
+    const validation = await validateAgentCredentials(agent);
+    
+    if (!validation.isValid) {
+      showValidationError(validation, "Generate QR Code");
+      return;
+    }
+
     setSelectedAgentForQR(agent);
     setShowQRModal(true);
     setOpenMenuId(null);
@@ -1528,7 +1538,15 @@ const AgentList = ({ agents, isLoading, onEdit, onDelete, clientId }) => {
   };
 
   // Voice Chat Functions
-  const handleVoiceChat = (agent) => {
+  const handleVoiceChat = async (agent) => {
+    // Validate agent credentials before opening voice chat
+    const validation = await validateAgentCredentials(agent);
+    
+    if (!validation.isValid) {
+      showValidationError(validation, "Start Voice Chat");
+      return;
+    }
+
     setSelectedAgentForChat(agent);
     setShowVoiceChatModal(true);
     setOpenMenuId(null);
@@ -1777,25 +1795,84 @@ const AgentList = ({ agents, isLoading, onEdit, onDelete, clientId }) => {
     }
   };
 
+  // Show validation error alert
+  const showValidationError = (validation, actionType = "perform this action") => {
+    const missingFields = validation.missingFields || [];
+    const validationErrors = validation.validationErrors || [];
+    
+    let errorMessage = "";
+    if (missingFields.length > 0) {
+      errorMessage = `Missing: ${missingFields.join(', ')}`;
+    }
+    if (validationErrors.length > 0) {
+      errorMessage += errorMessage ? ` | ${validationErrors.join(', ')}` : validationErrors.join(', ');
+    }
+    
+    alert(errorMessage || "Configuration error");
+  };
+
+  // Validate agent credentials before making call
+  const validateAgentCredentials = async (agent) => {
+    try {
+      const token = sessionStorage.getItem("clienttoken");
+      if (!token) {
+        throw new Error("Client token not found. Please log in.");
+      }
+
+      const response = await fetch(
+        `${API_BASE_URL}/client/agents/${agent._id}/validate-credentials`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const result = await response.json();
+      return result;
+    } catch (error) {
+      console.error("Error validating agent credentials:", error);
+      return {
+        success: false,
+        isValid: false,
+        missingFields: ["Unable to validate credentials"],
+        validationErrors: ["System error during validation"],
+        message: "Failed to validate agent credentials"
+      };
+    }
+  };
+
   const initiateCall = async () => {
     if (!phoneNumber.trim() || !selectedAgentForCall) return;
     
-    setCallStage("connecting");
-    setCallMessages([]);
-
-    // Clear any previous termination data when starting a new call
-    setCallTerminationData({
-      accountSid: null,
-      callSid: null,
-      streamSid: null,
-    });
-
-    const generatedUniqueId = `aidial-${Date.now()}-${Math.random()
-      .toString(36)
-      .substr(2, 9)}`;
-    setDialUniqueId(generatedUniqueId);
-
+    setIsCallLoading(true);
+    
     try {
+      // Validate agent credentials first
+      const validation = await validateAgentCredentials(selectedAgentForCall);
+      
+      if (!validation.isValid) {
+        showValidationError(validation, "Make Call");
+        return;
+      }
+      
+      setCallStage("connecting");
+      setCallMessages([]);
+
+      // Clear any previous termination data when starting a new call
+      setCallTerminationData({
+        accountSid: null,
+        callSid: null,
+        streamSid: null,
+      });
+
+      const generatedUniqueId = `aidial-${Date.now()}-${Math.random()
+        .toString(36)
+        .substr(2, 9)}`;
+      setDialUniqueId(generatedUniqueId);
+
       // If validation passed, proceed with call
       const result = await makeUnifiedOutboundCall(
         phoneNumber,
@@ -1930,6 +2007,8 @@ const AgentList = ({ agents, isLoading, onEdit, onDelete, clientId }) => {
       setCallStage("input");
       setIsCallConnected(false);
       alert(`❌ System Error\n\n${error.message || "An unexpected error occurred. Please try again."}\n\nIf the problem persists, please contact support.`);
+    } finally {
+      setIsCallLoading(false);
     }
   };
 
@@ -2187,6 +2266,7 @@ const AgentList = ({ agents, isLoading, onEdit, onDelete, clientId }) => {
     setLiveTranscript("");
     setLiveTranscriptLines([]);
     setCallTerminationReason("");
+    setIsCallLoading(false); // Reset loading state
     callInitiatedTimeRef.current = null; // Reset initiated time
     stopLogsPolling();
     stopCallTimer();
@@ -2207,6 +2287,7 @@ const AgentList = ({ agents, isLoading, onEdit, onDelete, clientId }) => {
     setIsCallConnected(false);
     setIsCallRecording(false);
     setCallMicLevel(0);
+    setIsCallLoading(false); // Reset loading state
     stopLogsPolling();
     stopCallTimer();
     if (callMicIntervalRef.current) {
@@ -3703,14 +3784,21 @@ const AgentList = ({ agents, isLoading, onEdit, onDelete, clientId }) => {
                     </button>
                     <button
                       onClick={initiateCall}
-                      disabled={!phoneNumber.trim()}
-                      className={`px-6 py-3 text-white rounded-lg transition-colors ${
-                        phoneNumber.trim()
+                      disabled={!phoneNumber.trim() || isCallLoading}
+                      className={`px-6 py-3 text-white rounded-lg transition-colors flex items-center gap-2 ${
+                        phoneNumber.trim() && !isCallLoading
                           ? "bg-green-600 hover:bg-green-700"
                           : "bg-gray-400 cursor-not-allowed"
                       }`}
                     >
-                      Call
+                      {isCallLoading ? (
+                        <>
+                          <FiLoader className="w-4 h-4 animate-spin" />
+                          Calling...
+                        </>
+                      ) : (
+                        "Call"
+                      )}
                     </button>
                   </div>
                   {/* Recent calls quick fill */}
@@ -4153,6 +4241,7 @@ const AgentList = ({ agents, isLoading, onEdit, onDelete, clientId }) => {
           </div>
         </div>
       )}
+
     </div>
   );
 };
