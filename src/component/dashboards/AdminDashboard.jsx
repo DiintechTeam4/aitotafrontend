@@ -80,6 +80,7 @@ const AdminDashboard = ({ user, onLogout }) => {
     useState(null);
   const [clientTokenForHumanAgent, setClientTokenForHumanAgent] =
     useState(null);
+  const [isSubmittingClient, setIsSubmittingClient] = useState(false);
 
   // Helpers: JWT decode and expiry check
   const decodeJwt = (token) => {
@@ -663,6 +664,7 @@ const AdminDashboard = ({ user, onLogout }) => {
 
   const handleAddClient = async () => {
     try {
+      setIsSubmittingClient(true);
       if (newClient.password !== newClient.confirmPassword) {
         alert("Passwords do not match");
         return;
@@ -708,6 +710,9 @@ const AdminDashboard = ({ user, onLogout }) => {
     } catch (error) {
       console.error("Error creating client:", error);
       alert(error.message || "Failed to create client. Please try again.");
+    }
+    finally {
+      setIsSubmittingClient(false);
     }
   };
 
@@ -1114,10 +1119,15 @@ const AdminDashboard = ({ user, onLogout }) => {
                   Cancel
                 </button>
                 <button
-                  className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium shadow-sm"
+                  className={`px-6 py-2 rounded-lg transition-colors font-medium shadow-sm ${
+                    isSubmittingClient
+                      ? 'bg-gray-400 text-white cursor-not-allowed'
+                      : 'bg-red-600 text-white hover:bg-red-700'
+                  }`}
                   onClick={handleAddClient}
+                  disabled={isSubmittingClient}
                 >
-                  Submit
+                  {isSubmittingClient ? 'Submitting...' : 'Submit'}
                 </button>
               </div>
             </div>

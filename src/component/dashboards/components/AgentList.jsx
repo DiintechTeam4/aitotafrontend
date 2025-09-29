@@ -2012,6 +2012,36 @@ const AgentList = ({ agents, isLoading, onEdit, onDelete, clientId }) => {
     }
   };
 
+  // Robust redial that safely resets state and re-initiates the call
+  const handleRedial = async () => {
+    if (!phoneNumber || !selectedAgentForCall) return;
+
+    try {
+      // Ensure any prior polling/timers are cleared
+      stopLogsPolling();
+      stopCallTimer();
+
+      if (callTimeoutRef.current) {
+        clearTimeout(callTimeoutRef.current);
+        callTimeoutRef.current = null;
+      }
+
+      // Reset minimal state needed for a fresh call while keeping modal open
+      setCallStage("input");
+      setIsCallConnected(false);
+      setCallDuration(0);
+      setLiveTranscript("");
+      setLiveTranscriptLines([]);
+      setCallMessages([]);
+      setCallTerminationReason("");
+
+      // Defer to existing initiateCall which handles validation and flow
+      await initiateCall();
+    } catch (e) {
+      console.error("Redial error:", e);
+    }
+  };
+
   const stopLogsPolling = () => {
     if (logsPollRef.current) {
       clearInterval(logsPollRef.current);
@@ -4125,12 +4155,14 @@ const AgentList = ({ agents, isLoading, onEdit, onDelete, clientId }) => {
                     </div>
                     <div className="flex items-center gap-2">
                       <button
-                        onClick={() => {
-                          if (!phoneNumber || !selectedAgentForCall) return;
-                          initiateCall();
-                        }}
+                        onClick={handleRedial}
+                        disabled={isCallLoading}
                         title="Redial same number"
-                        className="p-2 bg-green-600 text-white rounded-full hover:bg-green-700 transition-colors text-sm flex items-center justify-center"
+                        className={`p-2 rounded-full transition-colors text-sm flex items-center justify-center ${
+                          isCallLoading
+                            ? 'bg-gray-400 text-white cursor-not-allowed'
+                            : 'bg-green-600 text-white hover:bg-green-700'
+                        }`}
                       >
                         <svg
                           xmlns="http://www.w3.org/2000/svg"
