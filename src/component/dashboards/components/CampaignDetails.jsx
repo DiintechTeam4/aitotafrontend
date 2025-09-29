@@ -53,6 +53,7 @@ function CampaignDetails({ campaignId, onBack }) {
 
   // Campaign history state
   const [campaignHistory, setCampaignHistory] = useState([]);
+  const [campaignHistoryLoading, setCampaignHistoryLoading] = useState(false);
   const [currentRunId, setCurrentRunId] = useState(null);
   const [runStartTime, setRunStartTime] = useState(null);
   const [campaignStartTime, setCampaignStartTime] = useState(null);
@@ -789,7 +790,6 @@ function CampaignDetails({ campaignId, onBack }) {
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   // Collapsible Campaign Runs section
   const [campaignRunsCollapsed, setCampaignRunsCollapsed] = useState(false);
-
   // Auto-refresh recent call logs (toggleable). When enabled, refresh every 2 seconds
   useEffect(() => {
     if (!autoRefreshCalls) return;
@@ -3768,7 +3768,6 @@ function CampaignDetails({ campaignId, onBack }) {
     setSelectedCallLogs([]);
     setSelectAllCallLogs(false);
   };
-
   const isCallLogSelected = (callLog) => {
     const callLogId =
       callLog.documentId ||
@@ -4326,6 +4325,7 @@ function CampaignDetails({ campaignId, onBack }) {
 
   const fetchCampaignHistory = async (campaignId) => {
     try {
+      setCampaignHistoryLoading(true);
       const response = await fetch(
         `${API_BASE}/campaigns/${campaignId}/history`,
         {
@@ -4341,8 +4341,18 @@ function CampaignDetails({ campaignId, onBack }) {
       }
     } catch (error) {
       console.error("Error fetching campaign history:", error);
+    } finally {
+      setCampaignHistoryLoading(false);
     }
   };
+
+  // Load campaign runs history on mount and when campaignId changes
+  useEffect(() => {
+    if (campaignId) {
+      fetchCampaignHistory(campaignId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [campaignId]);
 
   const fetchCurrentRunCallLogs = async (runId) => {
     try {
@@ -4421,7 +4431,6 @@ function CampaignDetails({ campaignId, onBack }) {
 
       // When a new run begins, ensure we show live data again
       setIsLiveCallActive(true);
-      toast.success("Campaign started");
     }
   };
   // CampaignHistoryCard component
@@ -5512,14 +5521,25 @@ function CampaignDetails({ campaignId, onBack }) {
                       : "bg-green-100 border-green-600 text-green-800 hover:bg-green-100"
                   }`}
                 >
-                  {campaign?.isRunning ? (
-                    <FiPause className="w-4 h-4" />
+                  {isTogglingCampaign ? (
+                    <>
+                      <span className="inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                      <span className="mx-2 text-lg text-gray-600">
+                        {campaign?.isRunning ? "Stopping..." : "Starting..."}
+                      </span>
+                    </>
                   ) : (
-                    <FiPlay className="w-4 h-4" />
+                    <>
+                      {campaign?.isRunning ? (
+                        <FiPause className="w-4 h-4" />
+                      ) : (
+                        <FiPlay className="w-4 h-4" />
+                      )}
+                      <span className="mx-2 text-lg text-gray-600">
+                        {campaign?.isRunning ? "Stop" : "Run"}
+                      </span>
+                    </>
                   )}
-                  <span className="mx-2 text-lg text-gray-600">
-                    {campaign?.isRunning ? "Stop" : "Run"}
-                  </span>
                 </button>
               </div>
 
@@ -6732,51 +6752,67 @@ function CampaignDetails({ campaignId, onBack }) {
           </div>
 
           {/* Campaign History Section (moved here after groups, before summary) */}
-          {Array.isArray(campaignHistory) && campaignHistory.length > 0 && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center space-x-3">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                  <h3 className="text-base font-medium text-gray-900">
-                    Campaign Runs History
-                  </h3>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={openReport}
-                    className="px-3 py-1.5 text-xs font-medium bg-purple-600 text-white rounded hover:bg-purple-700"
-                    title="Show completed contacts report"
-                  >
-                    Report
-                  </button>
-                  <div className="text-sm text-gray-500">
-                    {campaignHistory.length} saved run
-                    {campaignHistory.length > 1 ? "s" : ""}
-                  </div>
-                  <button
-                    onClick={() => setCampaignRunsCollapsed((v) => !v)}
-                    className="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-md border border-gray-200"
-                    title={campaignRunsCollapsed ? "Expand" : "Collapse"}
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className={`h-4 w-4 transition-transform ${
-                        campaignRunsCollapsed ? "transform rotate-180" : ""
-                      }`}
-                      viewBox="0 0 20 20"
-                      fill="currentColor"
-                    >
-                      <path
-                        fillRule="evenodd"
-                        d="M5.23 7.21a.75.75 0 011.06.02L10 11.094l3.71-3.864a.75.75 0 011.08 1.04l-4.24 4.41a.75.75 0 01-1.08 0l-4.24-4.41a.75.75 0 01.02-1.06z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
-                  </button>
-                </div>
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center space-x-3">
+                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                <h3 className="text-base font-medium text-gray-900">
+                  Campaign Runs History
+                </h3>
               </div>
-              <div className={`${campaignRunsCollapsed ? "hidden" : ""}`}>
-                {[...campaignHistory]
+              <div className="flex items-center gap-2 text-sm text-gray-500">
+                {campaignHistoryLoading ? (
+                  <div className="flex items-center text-xs text-gray-500">
+                    <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-gray-500 mr-2"></div>
+                    Loading...
+                  </div>
+                ) : (
+                  <span>
+                    {Array.isArray(campaignHistory)
+                      ? campaignHistory.length
+                      : 0}{" "}
+                    saved run
+                    {Array.isArray(campaignHistory) &&
+                    campaignHistory.length !== 1
+                      ? "s"
+                      : ""}
+                  </span>
+                )}
+                <button
+                  onClick={() => setCampaignRunsCollapsed((v) => !v)}
+                  className="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-md border border-gray-200"
+                  title={campaignRunsCollapsed ? "Expand" : "Collapse"}
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className={`h-4 w-4 transition-transform ${
+                      campaignRunsCollapsed ? "transform rotate-180" : ""
+                    }`}
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M5.23 7.21a.75.75 0 011.06.02L10 11.094l3.71-3.864a.75.75 0 011.08 1.04l-4.24 4.41a.75.75 0 01-1.08 0l-4.24-4.41a.75.75 0 01.02-1.06z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <div className={`${campaignRunsCollapsed ? "hidden" : ""}`}>
+              {campaignHistoryLoading ? (
+                <div className="space-y-3">
+                  {[...Array(3)].map((_, i) => (
+                    <div
+                      key={i}
+                      className="animate-pulse h-16 bg-gray-100 rounded-md border border-gray-200"
+                    />
+                  ))}
+                </div>
+              ) : Array.isArray(campaignHistory) &&
+                campaignHistory.length > 0 ? (
+                [...campaignHistory]
                   .sort(
                     (a, b) => (b.instanceNumber || 0) - (a.instanceNumber || 0)
                   )
@@ -6786,10 +6822,12 @@ function CampaignDetails({ campaignId, onBack }) {
                       run={run}
                       index={idx}
                     />
-                  ))}
-              </div>
+                  ))
+              ) : (
+                <div className="text-sm text-gray-500">No runs yet.</div>
+              )}
             </div>
-          )}
+          </div>
 
           {/* Missed Calls list removed; use filter + Call Again button in header */}
         </div>
@@ -7555,7 +7593,7 @@ function CampaignDetails({ campaignId, onBack }) {
                               strokeLinecap="round"
                               strokeLinejoin="round"
                               strokeWidth={2}
-                              d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                              d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2v-9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
                             />
                           </svg>
                           Save Progress
