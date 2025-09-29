@@ -1166,7 +1166,6 @@ const AgentForm = ({
           return;
         }
       }
-
       // Exclude audioBase64 from form data to avoid storing base64 in DB
       const { serviceProvider, audioBase64, ...formDataWithoutServiceProvider } = formData;
       // Derive socials payload from current selections
