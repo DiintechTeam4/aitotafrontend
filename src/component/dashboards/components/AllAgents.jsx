@@ -1027,7 +1027,7 @@ const AllAgents = () => {
                               rel="noopener noreferrer"
                               className="hover:underline"
                             >
-                              {getClientWebsiteUrl(agent.clientId)}
+                              <span className="font-doublebold underline">Visit ↗</span>
                             </a>
                           </div>
                         )}
