@@ -13,6 +13,7 @@ import {
   FaEllipsisV,
   FaEdit,
   FaTrash,
+  FaGlobe,
 } from "react-icons/fa";
 import { FiSettings } from 'react-icons/fi';
 import { useNavigate } from 'react-router-dom';
@@ -1027,7 +1028,10 @@ const AllAgents = () => {
                               rel="noopener noreferrer"
                               className="hover:underline"
                             >
-                              <span className="font-doublebold underline">Visit ↗</span>
+                              <span className="inline-flex items-center gap-1 font-doublebold underline">
+                                <FaGlobe className="inline-block" />
+                                Visit ↗
+                              </span>
                             </a>
                           </div>
                         )}
