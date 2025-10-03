@@ -60,7 +60,8 @@ function CampaignDetails({ campaignId, onBack }) {
   const [currentRunCallLogs, setCurrentRunCallLogs] = useState([]);
   // Series mode flag - now determined by agent configuration
   const [isSeriesMode, setIsSeriesMode] = useState(false);
-  const [agentConfigMode, setAgentConfigMode] = useState('parallel'); // Default to parallel
+  const [agentConfigMode, setAgentConfigMode] = useState('serial'); // Default to serial
+  const [agentConfigLoading, setAgentConfigLoading] = useState(false); // Track loading state
   // Guard refs to avoid duplicate autosaves
   const autoSavingRef = useRef(false);
   const lastSavedRunIdRef = useRef(null);
@@ -1145,6 +1146,20 @@ function CampaignDetails({ campaignId, onBack }) {
     fetchCampaignCallingStatus();
   }, [campaignId]);
 
+  // Auto-load agent configuration when campaign data is available
+  useEffect(() => {
+    if (campaign && campaign.agent) {
+      const primaryAgentId = getPrimaryAgentId();
+      if (primaryAgentId) {
+        console.log(`🔧 CAMPAIGN: Auto-loading agent configuration for agent ${primaryAgentId}`);
+        fetchAgentConfig(primaryAgentId);
+      } else {
+        console.log(`🔧 CAMPAIGN: No agent assigned to campaign`);
+        setAgentConfigMode('serial');
+      }
+    }
+  }, [campaign]); // Trigger when campaign data changes
+
   // Defer heavy data fetching until the campaign is actually running (with debouncing)
   useEffect(() => {
     const isRunning =
@@ -1351,6 +1366,7 @@ function CampaignDetails({ campaignId, onBack }) {
   // Fetch agent configuration to determine calling mode
   const fetchAgentConfig = async (agentId) => {
     try {
+      setAgentConfigLoading(true);
       const token = sessionStorage.getItem("clienttoken");
       const response = await fetch(`${API_BASE}/agent-config/${agentId}`, {
         headers: {
@@ -1366,16 +1382,18 @@ function CampaignDetails({ campaignId, onBack }) {
       const data = await response.json();
       console.log(`🔧 CAMPAIGN: Agent config API response for ${agentId}:`, data);
       if (data.success && data.data) {
-        const mode = data.data.mode || 'parallel';
+        const mode = data.data.mode || 'serial';
         setAgentConfigMode(mode);
         console.log(`🔧 CAMPAIGN: Agent ${agentId} configured for ${mode} mode`);
         return mode;
       }
     } catch (error) {
       console.error("Error fetching agent configuration:", error);
-      setAgentConfigMode('parallel'); // Default to parallel on error
+      setAgentConfigMode('serial'); // Default to serial on error
+    } finally {
+      setAgentConfigLoading(false);
     }
-    return 'parallel';
+    return 'serial';
   };
 
   // Resolve agent name by id using cached list or fetch single agent
@@ -1906,17 +1924,6 @@ function CampaignDetails({ campaignId, onBack }) {
           }
         } catch (_) {}
         setCampaign(next);
-        
-        // Fetch agent configuration when campaign loads
-        const primaryAgentId = getPrimaryAgentId();
-        if (primaryAgentId) {
-          console.log(`🔧 CAMPAIGN: Loading agent configuration for agent ${primaryAgentId}`);
-          fetchAgentConfig(primaryAgentId);
-        } else {
-          console.log(`🔧 CAMPAIGN: No agent assigned to campaign yet`);
-          // Set default mode when no agent is assigned
-          setAgentConfigMode('parallel');
-        }
         
         try {
           const savedRunId = localStorage.getItem(
@@ -4241,7 +4248,7 @@ function CampaignDetails({ campaignId, onBack }) {
       setIsTogglingCampaign(true);
       // Automatically determine mode based on agent configuration
       const primaryAgentId = getPrimaryAgentId();
-      let currentMode = 'parallel'; // Default fallback
+      let currentMode = 'serial'; // Default fallback
       
       if (primaryAgentId) {
         currentMode = await fetchAgentConfig(primaryAgentId);
@@ -5732,27 +5739,37 @@ function CampaignDetails({ campaignId, onBack }) {
                 {/* Calling Mode Indicator */}
                 <div className="mt-2 flex items-center">
                   <span className="text-sm text-gray-500 mr-2">Calling Mode:</span>
-                  <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                    agentConfigMode === 'serial' 
-                      ? 'bg-blue-100 text-blue-800' 
-                      : 'bg-green-100 text-green-800'
-                  }`}>
-                    {agentConfigMode === 'serial' ? (
-                      <>
-                        <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
-                        </svg>
-                        Series (One-by-One)
-                      </>
-                    ) : (
-                      <>
-                        <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
-                        </svg>
-                        Parallel (Simultaneous)
-                      </>
-                    )}
-                  </span>
+                  {agentConfigLoading ? (
+                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
+                      <svg className="w-3 h-3 mr-1 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Loading...
+                    </span>
+                  ) : (
+                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                      agentConfigMode === 'serial' 
+                        ? 'bg-blue-100 text-blue-800' 
+                        : 'bg-green-100 text-green-800'
+                    }`}>
+                      {agentConfigMode === 'serial' ? (
+                        <>
+                          <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
+                          </svg>
+                          Series (One-by-One)
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
+                          </svg>
+                          Parallel (Simultaneous)
+                        </>
+                      )}
+                    </span>
+                  )}
                   <span className="ml-2 text-xs text-gray-400">
                     (Based on agent configuration)
                   </span>
