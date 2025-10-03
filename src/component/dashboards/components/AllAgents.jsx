@@ -1107,6 +1107,13 @@ const AllAgents = () => {
                               Edit
                             </button>
                             <button
+                              onClick={() => navigate(`/admin/dashboard?tab=${encodeURIComponent('Agent Configure')}&agentId=${agent._id}`)}
+                              className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 focus:outline-none"
+                            >
+                              <FiSettings className="h-4 w-4 mr-2 text-purple-600" />
+                              Configure
+                            </button>
+                            <button
                               onClick={() => openCopyModal(agent)}
                               className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 focus:outline-none"
                             >
@@ -1959,64 +1966,68 @@ const AllAgents = () => {
               )}
 
               {assignProvider === "c-zentrax" && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                      X API Key
-                    </label>
-                    <input
-                      type="text"
-                      value={assignFormData.xApiKey}
-                      onChange={(e) =>
-                        handleAssignChange("xApiKey", e.target.value)
-                      }
-                      className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                      Account SID
-                    </label>
-                    <input
-                      type="text"
-                      value={assignFormData.accountSid}
-                      onChange={(e) =>
-                        handleAssignChange("accountSid", e.target.value)
-                      }
-                      className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                      Caller ID
-                    </label>
-                    <input
-                      type="text"
-                      value={assignFormData.callerId}
-                      onChange={(e) =>
-                        handleAssignChange("callerId", e.target.value)
-                      }
-                      className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                      placeholder="e.g., 01123456789"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                      DID Number
-                    </label>
-                    <input
-                      type="text"
-                      value={assignFormData.didNumber}
-                      onChange={(e) =>
-                        handleAssignChange("didNumber", e.target.value)
-                      }
-                      className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                      placeholder="e.g., 9123456789"
-                      required
-                    />
+                <div className="space-y-4">
+                
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        X API Key
+                      </label>
+                      <input
+                        type="text"
+                        value={assignFormData.xApiKey}
+                        onChange={(e) =>
+                          handleAssignChange("xApiKey", e.target.value)
+                        }
+                        className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        Account SID
+                      </label>
+                      <input
+                        type="text"
+                        value={assignFormData.accountSid}
+                        onChange={(e) =>
+                          handleAssignChange("accountSid", e.target.value)
+                        }
+                        className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        Caller ID
+                      </label>
+                      <input
+                        type="text"
+                        value={assignFormData.callerId}
+                        onChange={(e) =>
+                          handleAssignChange("callerId", e.target.value)
+                        }
+                        className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                        placeholder="e.g., 01123456789"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        DID Number
+                      </label>
+                      <input
+                        type="text"
+                        value={assignFormData.didNumber}
+                        onChange={(e) =>
+                          handleAssignChange("didNumber", e.target.value)
+                        }
+                        className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                        placeholder="e.g., 9123456789"
+                        required
+                      />
+                    </div>
                   </div>
                 </div>
               )}

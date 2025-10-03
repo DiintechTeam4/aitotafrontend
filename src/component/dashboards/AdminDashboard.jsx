@@ -27,6 +27,7 @@ import ApprovalFormDetails from "./components/ApprovalFormDetails";
 import HumanAgentManagement from "./components/HumanAgentManagement";
 import AdminAgents from "./components/AdminAgents";
 import AllAgents from "./components/AllAgents";
+import AgentConfigure from "./components/AgentConfigure";
 import SystemPrompts from "./components/SystemPrompts";
 import PlanManagement from "./components/PlanManagement";
 import CreditManagement from "./components/CreditManagement";
@@ -1475,6 +1476,7 @@ const AdminDashboard = ({ user, onLogout }) => {
             {activeTab === "Agents" && <AdminAgents />}
 
             {activeTab === "AI Agent" && <AllAgents />}
+            {activeTab === "Agent Configure" && <AgentConfigure />}
             {activeTab === "System Prompts" && <SystemPrompts />}
 
             {activeTab === "Plans" && <PlanManagement />}

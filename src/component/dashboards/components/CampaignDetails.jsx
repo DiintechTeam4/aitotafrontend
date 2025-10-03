@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import {
@@ -58,6 +58,9 @@ function CampaignDetails({ campaignId, onBack }) {
   const [runStartTime, setRunStartTime] = useState(null);
   const [campaignStartTime, setCampaignStartTime] = useState(null);
   const [currentRunCallLogs, setCurrentRunCallLogs] = useState([]);
+  // Series mode flag - now determined by agent configuration
+  const [isSeriesMode, setIsSeriesMode] = useState(false);
+  const [agentConfigMode, setAgentConfigMode] = useState('parallel'); // Default to parallel
   // Guard refs to avoid duplicate autosaves
   const autoSavingRef = useRef(false);
   const lastSavedRunIdRef = useRef(null);
@@ -1345,6 +1348,36 @@ function CampaignDetails({ campaignId, onBack }) {
     }
   };
 
+  // Fetch agent configuration to determine calling mode
+  const fetchAgentConfig = async (agentId) => {
+    try {
+      const token = sessionStorage.getItem("clienttoken");
+      const response = await fetch(`${API_BASE}/agent-config/${agentId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch agent configuration");
+      }
+
+      const data = await response.json();
+      console.log(`🔧 CAMPAIGN: Agent config API response for ${agentId}:`, data);
+      if (data.success && data.data) {
+        const mode = data.data.mode || 'parallel';
+        setAgentConfigMode(mode);
+        console.log(`🔧 CAMPAIGN: Agent ${agentId} configured for ${mode} mode`);
+        return mode;
+      }
+    } catch (error) {
+      console.error("Error fetching agent configuration:", error);
+      setAgentConfigMode('parallel'); // Default to parallel on error
+    }
+    return 'parallel';
+  };
+
   // Resolve agent name by id using cached list or fetch single agent
   const getAgentNameById = async (agentId) => {
     if (!agentId) return "";
@@ -1873,6 +1906,18 @@ function CampaignDetails({ campaignId, onBack }) {
           }
         } catch (_) {}
         setCampaign(next);
+        
+        // Fetch agent configuration when campaign loads
+        const primaryAgentId = getPrimaryAgentId();
+        if (primaryAgentId) {
+          console.log(`🔧 CAMPAIGN: Loading agent configuration for agent ${primaryAgentId}`);
+          fetchAgentConfig(primaryAgentId);
+        } else {
+          console.log(`🔧 CAMPAIGN: No agent assigned to campaign yet`);
+          // Set default mode when no agent is assigned
+          setAgentConfigMode('parallel');
+        }
+        
         try {
           const savedRunId = localStorage.getItem(
             getStorageKey("currentRunId")
@@ -3113,8 +3158,9 @@ function CampaignDetails({ campaignId, onBack }) {
   };
 
   // Poll calling status only when campaign is running and page is visible (every 5 seconds)
+  // BUT NOT when in series mode (series mode has its own polling)
   useEffect(() => {
-    if (!campaignId || !campaign?.isRunning) return;
+    if (!campaignId || !campaign?.isRunning || isSeriesMode) return;
 
     let intervalId = null;
     const poll = () => {
@@ -3126,7 +3172,7 @@ function CampaignDetails({ campaignId, onBack }) {
     poll(); // Initial call
     intervalId = setInterval(poll, 5000); // Changed from 3000ms to 5000ms
     return () => intervalId && clearInterval(intervalId);
-  }, [campaignId, campaign?.isRunning]); // Added campaign?.isRunning dependency
+  }, [campaignId, campaign?.isRunning, isSeriesMode]); // Added isSeriesMode dependency
 
   // Universal calling function that handles all calling scenarios
   // Helper function to generate consistent runIds
@@ -4146,6 +4192,10 @@ function CampaignDetails({ campaignId, onBack }) {
         return;
       }
       setCampaign(result.data);
+      
+      // Fetch agent configuration when agent is assigned
+      await fetchAgentConfig(selectedAgentIdForAssign);
+      
       // Optimistically set agent name so UI updates immediately without refresh
       try {
         const picked = (agents || []).find(
@@ -4188,37 +4238,73 @@ function CampaignDetails({ campaignId, onBack }) {
       if (!campaign?._id) return;
 
       // Get primary agent ID for campaign
-      const primaryAgentId =
-        Array.isArray(campaign.agent) && campaign.agent.length > 0
-          ? campaign.agent[0]
-          : null;
-
       setIsTogglingCampaign(true);
+      // Automatically determine mode based on agent configuration
+      const primaryAgentId = getPrimaryAgentId();
+      let currentMode = 'parallel'; // Default fallback
+      
+      if (primaryAgentId) {
+        currentMode = await fetchAgentConfig(primaryAgentId);
+      }
+      
+      const runSeries = currentMode === 'serial';
+      
+      console.log(`🚀 CAMPAIGN: Starting campaign in ${runSeries ? 'SERIES' : 'PARALLEL'} mode (agent config: ${currentMode})`);
 
-      const result = await universalCalling({
-        type: "campaign",
-        agentId: primaryAgentId,
-        delayBetweenCalls: 2000,
-        onSuccess: (data) => {
-          // Capture runId from backend and start local tracking
-          try {
-            const newRunId = data?.data?.runId;
-            if (newRunId) {
-              setCurrentRunId(newRunId);
-              setCampaignStartTime(new Date());
-            }
-          } catch (_) {}
-          setCampaign((prev) => (prev ? { ...prev, isRunning: true } : prev));
-          setLastUpdated(new Date());
-        },
-        onError: (error) => {
-          console.error("Start calling failed:", error);
-        },
-      });
+      if (runSeries) {
+        // Start series calling via backend
+        const token = sessionStorage.getItem("clienttoken");
+        const resp = await fetch(`${API_BASE}/series-campaign/start`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ campaignId: campaign._id, agentId: primaryAgentId, minDelayMs: 5000 }),
+        });
+        const data = await resp.json();
+        if (!resp.ok || data.error) {
+          throw new Error(data.error || "Failed to start series campaign");
+        }
+        try {
+          const newRunId = data?.status?.runId;
+          if (newRunId) {
+            setCurrentRunId(newRunId);
+            setCampaignStartTime(new Date());
+          }
+        } catch (_) {}
+        setCampaign((prev) => (prev ? { ...prev, isRunning: true } : prev));
+        setLastUpdated(new Date());
+        // Begin polling series status to reflect progress in UI
+        startSeriesStatusPolling(campaign._id);
+        setIsSeriesMode(true);
+      } else {
+        // Keep existing parallel behavior
+        const result = await universalCalling({
+          type: "campaign",
+          agentId: primaryAgentId,
+          delayBetweenCalls: 2000,
+          onSuccess: (data) => {
+            // Capture runId from backend and start local tracking
+            try {
+              const newRunId = data?.data?.runId;
+              if (newRunId) {
+                setCurrentRunId(newRunId);
+                setCampaignStartTime(new Date());
+              }
+            } catch (_) {}
+            setCampaign((prev) => (prev ? { ...prev, isRunning: true } : prev));
+            setLastUpdated(new Date());
+          },
+          onError: (error) => {
+            console.error("Start calling failed:", error);
+          },
+        });
 
-      if (!result.success) {
-        // Error handling is done in universalCalling
-        return;
+        if (!result.success) {
+          // Error handling is done in universalCalling
+          return;
+        }
       }
     } catch (e) {
       console.error("Start calling failed:", e);
@@ -4237,35 +4323,132 @@ function CampaignDetails({ campaignId, onBack }) {
       }
       setIsTogglingCampaign(true);
       const token = sessionStorage.getItem("clienttoken");
-      console.log("🛑 FRONTEND: Making API call to stop campaign");
-      const resp = await fetch(
-        `${API_BASE}/campaigns/${campaign._id}/stop-calling`,
-        {
+      
+      // Handle series mode differently
+      if (isSeriesMode) {
+        console.log("🛑 FRONTEND: Stopping series campaign");
+        const resp = await fetch(`${API_BASE}/series-campaign/stop`, {
           method: "POST",
           headers: {
             Authorization: `Bearer ${token}`,
             "Content-Type": "application/json",
           },
+          body: JSON.stringify({ campaignId: campaign._id }),
+        });
+        const result = await resp.json();
+        if (!resp.ok || result.error) {
+          console.log("❌ FRONTEND: Series stop failed:", result.error);
+          toast.error(result.error || "Failed to stop series campaign");
+          return;
         }
-      );
-      console.log("🛑 FRONTEND: API response status:", resp.status);
-      const result = await resp.json();
-      console.log("🛑 FRONTEND: API response result:", result);
-      if (!resp.ok || result.success === false) {
-        console.log("❌ FRONTEND: API call failed:", result.error);
-        toast.error(result.error || "Failed to stop campaign calling");
-        return;
+        console.log("✅ FRONTEND: Series campaign stopped");
+      } else {
+        console.log("🛑 FRONTEND: Making API call to stop parallel campaign");
+        const resp = await fetch(
+          `${API_BASE}/campaigns/${campaign._id}/stop-calling`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+          }
+        );
+        console.log("🛑 FRONTEND: API response status:", resp.status);
+        const result = await resp.json();
+        console.log("🛑 FRONTEND: API response result:", result);
+        if (!resp.ok || result.success === false) {
+          console.log("❌ FRONTEND: API call failed:", result.error);
+          toast.error(result.error || "Failed to stop campaign calling");
+          return;
+        }
       }
+      
       setCampaign((prev) => (prev ? { ...prev, isRunning: false } : prev));
       // Mark UI as ready for next run and stop any live polling
       setReadyFlag(true);
       stopLiveCallPolling();
+      stopSeriesStatusPolling();
+      setIsSeriesMode(false);
       setLastUpdated(new Date());
     } catch (e) {
       console.error("Stop calling failed:", e);
       toast.error("Failed to stop campaign calling");
     } finally {
       setIsTogglingCampaign(false);
+    }
+  };
+
+  // SERIES STATUS POLLING
+  const seriesStatusIntervalRef = useRef(null);
+  const [seriesStatus, setSeriesStatus] = useState({ isRunning: false, currentIndex: 0, total: 0 });
+
+  const startSeriesStatusPolling = (cid) => {
+    try {
+      stopSeriesStatusPolling();
+      let lastIndex = -1;
+      let lastRunningState = null;
+      seriesStatusIntervalRef.current = setInterval(async () => {
+        try {
+          const resp = await fetch(`${API_BASE}/series-campaign/status/${cid}`);
+          if (!resp.ok) return;
+          const data = await resp.json();
+          const status = data?.status || null;
+          if (status) {
+            const total = Array.isArray(campaign?.contacts) ? campaign.contacts.length : 0;
+            const currentIndex = Number(status.currentIndex || 0);
+            const isRunning = !!status.isRunning;
+            
+            setSeriesStatus({
+              isRunning: isRunning,
+              currentIndex: currentIndex,
+              total: total,
+            });
+            
+            // Only update campaign running state if it actually changed to prevent flicker
+            if (lastRunningState !== isRunning) {
+              setCampaign((prev) => (prev ? { ...prev, isRunning: isRunning } : prev));
+              lastRunningState = isRunning;
+            }
+            
+            // If progressed to next contact, refresh campaign details in UI
+            if (currentIndex !== lastIndex) {
+              lastIndex = currentIndex;
+              try { await fetchCampaignDetails(); } catch {}
+              setLastUpdated(new Date());
+              try {
+                const humanIndex = lastIndex + 1;
+                if (isRunning) {
+                  toast.info(`Series dialing ${humanIndex}/${total}...`, { autoClose: 2000 });
+                }
+              } catch {}
+            }
+            
+            // Stop polling when finished and update UI flag
+            if (!isRunning) {
+              stopSeriesStatusPolling();
+              setCampaign((prev) => (prev ? { ...prev, isRunning: false } : prev));
+              // Add small delay to ensure backend has finished saving to database
+              setTimeout(async () => {
+                try { await fetchCampaignHistory(cid); } catch {}
+                try { await fetchCampaignDetails(); } catch {}
+                setLastUpdated(new Date());
+                try { toast.success('Series run completed and saved to history'); } catch {}
+              }, 1000);
+              setIsSeriesMode(false);
+            }
+          }
+        } catch (error) {
+          console.log("Series status polling error:", error);
+        }
+      }, 3000);
+    } catch (_) {}
+  };
+
+  const stopSeriesStatusPolling = () => {
+    if (seriesStatusIntervalRef.current) {
+      clearInterval(seriesStatusIntervalRef.current);
+      seriesStatusIntervalRef.current = null;
     }
   };
 
@@ -4278,6 +4461,11 @@ function CampaignDetails({ campaignId, onBack }) {
     callLogs,
     runId
   ) => {
+    // Skip saving from frontend during Series mode; backend auto-saves at the end
+    if (isSeriesMode) {
+      try { console.log("💾 FRONTEND: Skipping save during series mode (backend will auto-save)"); } catch {}
+      return;
+    }
     try {
       console.log("💾 FRONTEND: saveCampaignRun called with:", {
         campaignId,
@@ -5359,6 +5547,81 @@ function CampaignDetails({ campaignId, onBack }) {
     setCallConnectionStatus("connected");
   };
 
+  // Terminate current live call
+  const terminateCurrentCall = async () => {
+    try {
+      if (!selectedCall) return;
+      const agentId = selectedCall.agentId?._id || selectedCall.agentId || null;
+      const providerRaw = (selectedCall.agentId?.serviceProvider || selectedCall.provider || selectedCall.metadata?.provider || '').toLowerCase();
+      let provider = providerRaw === 'c-zentrax' ? 'c-zentrix' : providerRaw;
+      const uniqueId =
+        selectedCall?.metadata?.customParams?.uniqueid ||
+        selectedCall?.documentId ||
+        selectedCall?.uniqueId ||
+        selectedCall?.metadata?.uniqueid || null;
+      // Try to pick SANPBX callid if present in the log
+      const callid = selectedCall?.metadata?.callid || selectedCall?.externalResponse?.callid || null;
+      // Extract possible c-zentrix fields if present (to avoid backend lookup)
+      const accountSid = selectedCall?.metadata?.accountSid || selectedCall?.metadata?.twilio?.accountSid || null;
+      const callSid = selectedCall?.metadata?.callSid || selectedCall?.metadata?.twilio?.callSid || null;
+      const streamSid = selectedCall?.metadata?.streamSid || selectedCall?.metadata?.twilio?.streamSid || null;
+
+      // Infer provider as czentrix if unknown but Twilio-like fields exist
+      if (!provider && (selectedCall?.metadata?.accountSid || selectedCall?.metadata?.twilio?.accountSid)) {
+        provider = 'czentrix';
+      }
+
+      if (provider === 'c-zentrix' || provider === 'czentrix') {
+        // Use backend proxy for CZentrix termination as well
+        const token = sessionStorage.getItem('clienttoken');
+        const resp = await fetch(`${API_BASE}/series-campaign/terminate`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {})
+          },
+          body: JSON.stringify({ agentId, provider: 'czentrix', uniqueId, accountSid, callSid, streamSid })
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok || data.success === false) throw new Error(data.error || 'Failed to terminate czentrix call');
+      } else if (provider === 'sanpbx' || provider === 'snapbx') {
+        // Use our backend proxy for SANPBX termination
+        const token = sessionStorage.getItem('clienttoken');
+        const resp = await fetch(`${API_BASE}/series-campaign/terminate`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {})
+          },
+          body: JSON.stringify({ agentId, provider: 'sanpbx', callid, uniqueId })
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok || data.success === false) throw new Error(data.error || 'Failed to terminate SANPBX call');
+      } else {
+        // As a safe fallback, attempt czentrix termination with uniqueId via backend
+        const token = sessionStorage.getItem('clienttoken');
+        const resp = await fetch(`${API_BASE}/series-campaign/terminate`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {})
+          },
+          body: JSON.stringify({ agentId, provider: 'czentrix', uniqueId })
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok || data.success === false) throw new Error(data.error || 'Failed to terminate call');
+      }
+
+      try { toast.success('Call termination requested'); } catch {}
+      // Stop polling and close modal after termination request
+      stopLiveCallPolling();
+      setShowLiveCallModal(false);
+    } catch (e) {
+      console.error('Terminate call failed:', e);
+      try { toast.error(e?.message || 'Failed to terminate call'); } catch {}
+    }
+  };
+
   const handleViewLiveCall = (call) => {
     console.log("Opening live call modal for:", call);
     setSelectedCall(call);
@@ -5466,6 +5729,34 @@ function CampaignDetails({ campaignId, onBack }) {
                   {campaign.name}
                 </h1>
                 <p className="text-gray-600 mt-1">{campaign.description}</p>
+                {/* Calling Mode Indicator */}
+                <div className="mt-2 flex items-center">
+                  <span className="text-sm text-gray-500 mr-2">Calling Mode:</span>
+                  <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                    agentConfigMode === 'serial' 
+                      ? 'bg-blue-100 text-blue-800' 
+                      : 'bg-green-100 text-green-800'
+                  }`}>
+                    {agentConfigMode === 'serial' ? (
+                      <>
+                        <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
+                        </svg>
+                        Series (One-by-One)
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
+                        </svg>
+                        Parallel (Simultaneous)
+                      </>
+                    )}
+                  </span>
+                  <span className="ml-2 text-xs text-gray-400">
+                    (Based on agent configuration)
+                  </span>
+                </div>
               </div>
             </div>
             <button></button>
@@ -7101,6 +7392,16 @@ function CampaignDetails({ campaignId, onBack }) {
                   </>
                 )}
               </button>
+              {/* End Call (shown when call appears active) */}
+              {selectedCall?.metadata?.isActive !== false && (
+                <button
+                  className="ml-3 bg-red-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-red-700 transition-colors"
+                  onClick={terminateCurrentCall}
+                  title="End call"
+                >
+                  End Call
+                </button>
+              )}
               <button
                 className="bg-none border-none text-2xl cursor-pointer text-gray-500 hover:text-gray-700 p-2 w-10 h-10 flex items-center justify-center rounded-lg hover:bg-gray-200 transition-colors duration-200 ml-4"
                 onClick={() => setShowTranscriptModal(false)}
@@ -8652,10 +8953,20 @@ function CampaignDetails({ campaignId, onBack }) {
                         : "Not polling"}
                     </span>
                   </div>
-                  <div className="text-sm text-gray-500">
+                  <div className="flex items-center space-x-3 text-sm text-gray-500">
                     {liveCallDetails
                       ? `Last updated: ${new Date().toLocaleTimeString()}`
                       : "Waiting for call data..."}
+                    {(isPolling || liveCallDetails?.metadata?.isActive !== false) && (
+                      <button
+                        type="button"
+                        onClick={terminateCurrentCall}
+                        className="inline-flex items-center px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
+                        title="End call"
+                      >
+                        End Call
+                      </button>
+                    )}
                   </div>
                 </div>
 
