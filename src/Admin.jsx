@@ -127,10 +127,12 @@ const Admin = () => {
           }
         />
         {isAuthenticated && (
-          <Route
-            path="dashboard"
-            element={<AdminDashboard onLogout={handleLogout} />}
-          />
+          <>
+            <Route
+              path="dashboard"
+              element={<AdminDashboard onLogout={handleLogout} />}
+            />
+          </>
         )}
         <Route
           path="*"
