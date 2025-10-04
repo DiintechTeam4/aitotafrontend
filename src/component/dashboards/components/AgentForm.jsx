@@ -28,6 +28,7 @@ const AgentForm = ({
     sttSelection: "google",
     ttsSelection: "sarvam",
     voiceServiceProvider: "sarvam",
+    voiceTier: "basic",
     voiceSelection: "meera",
     voiceId: "",
     accountSid: "",
@@ -114,6 +115,106 @@ const AgentForm = ({
       monika: { name: "Monika", id: "NaKPQmdr7mMxXuXrNeFC" },
       aahir: { name: "Aahir", id: "RKshBIkZ7DwU6YNPq5Jd" },
       kanika: { name: "Kanika", id: "xccfcojYYGnqTTxwZEDU" },
+    },
+    smallest: {
+      leon: { name: "Leon", id: "leon" },
+      alice: { name: "Alice", id: "alice" },
+      katie: { name: "Katie", id: "katie" },
+      natalie: { name: "Natalie", id: "natalie" },
+      meera: { name: "Meera", id: "meera" },
+      ishika: { name: "Ishika", id: "ishika" },
+      christine: { name: "Christine", id: "christine" },
+      aarushi: { name: "Aarushi", id: "aarushi" },
+      john: { name: "John", id: "john" },
+      bruce: { name: "Bruce", id: "bruce" },
+      ashley: { name: "Ashley", id: "ashley" },
+      eleanor: { name: "Eleanor", id: "eleanor" },
+      madison: { name: "Madison", id: "madison" },
+      tasha: { name: "Tasha", id: "tasha" },
+      chloe: { name: "Chloe", id: "chloe" },
+      ryan: { name: "Ryan", id: "ryan" },
+      alistair: { name: "Alistair", id: "alistair" },
+      walter: { name: "Walter", id: "walter" },
+      julian: { name: "Julian", id: "julian" },
+      shivangi: { name: "Shivangi", id: "shivangi" },
+      ronald: { name: "Ronald", id: "ronald" },
+      gerard: { name: "Gerard", id: "gerard" },
+      isabel: { name: "Isabel", id: "isabel" },
+      enzo: { name: "Enzo", id: "enzo" },
+      hamees: { name: "Hamees", id: "hamees" },
+      yasmin: { name: "Yasmin", id: "yasmin" },
+      biswa: { name: "Biswa", id: "biswa" },
+      adele: { name: "Adele", id: "adele" },
+      maya: { name: "Maya", id: "maya" },
+      anika: { name: "Anika", id: "anika" },
+      rishika: { name: "Rishika", id: "rishika" },
+      wasim: { name: "Wasim", id: "wasim" },
+      ganya: { name: "Ganya", id: "ganya" },
+      khushi: { name: "Khushi", id: "khushi" },
+      priya: { name: "Priya", id: "priya" },
+      aahan: { name: "Aahan", id: "aahan" },
+      fatema: { name: "Fatema", id: "fatema" },
+      ariba: { name: "Ariba", id: "ariba" },
+      varun: { name: "Varun", id: "varun" },
+      isha: { name: "Isha", id: "isha" },
+      neha: { name: "Neha", id: "neha" },
+      ayaan: { name: "Ayaan", id: "ayaan" },
+      felix: { name: "Felix", id: "felix" },
+      tanvi: { name: "Tanvi", id: "tanvi" },
+      sanjay: { name: "Sanjay", id: "sanjay" },
+      amit: { name: "Amit", id: "amit" },
+      disha: { name: "Disha", id: "disha" },
+      advait: { name: "Advait", id: "advait" },
+      nirupma: { name: "Nirupma", id: "nirupma" },
+      anita: { name: "Anita", id: "anita" },
+      rohit: { name: "Rohit", id: "rohit" },
+      sangeeta: { name: "Sangeeta", id: "sangeeta" },
+      ram: { name: "Ram", id: "ram" },
+      kiara: { name: "Kiara", id: "kiara" },
+      aditya: { name: "Aditya", id: "aditya" },
+      saad: { name: "Saad", id: "saad" },
+      kabir: { name: "Kabir", id: "kabir" },
+      rohan: { name: "Rohan", id: "rohan" },
+      vikram: { name: "Vikram", id: "vikram" },
+      claire: { name: "Claire", id: "claire" },
+      vihaan: { name: "Vihaan", id: "vihaan" },
+      blofeld: { name: "Blofeld", id: "blofeld" },
+      chirag: { name: "Chirag", id: "chirag" },
+      luther: { name: "Luther", id: "luther" },
+      julia: { name: "Julia", id: "julia" },
+      erica: { name: "Erica", id: "erica" },
+      nyah: { name: "Nyah", id: "nyah" },
+      william: { name: "William", id: "william" },
+      aditi: { name: "Aditi", id: "aditi" },
+      angela: { name: "Angela", id: "angela" },
+      radhika: { name: "Radhika", id: "radhika" },
+      zorin: { name: "Zorin", id: "zorin" },
+      alec: { name: "Alec", id: "alec" },
+      solomon: { name: "Solomon", id: "solomon" },
+      yash: { name: "Yash", id: "yash" },
+      chinmay: { name: "Chinmay", id: "chinmay" },
+      karan: { name: "Karan", id: "karan" },
+      ilsa: { name: "Ilsa", id: "ilsa" },
+      bellatrix: { name: "Bellatrix", id: "bellatrix" },
+      nikita: { name: "Nikita", id: "nikita" },
+      roma: { name: "Roma", id: "roma" },
+      kartik: { name: "Kartik", id: "kartik" },
+      gargi: { name: "Gargi", id: "gargi" },
+      albus: { name: "Albus", id: "albus" },
+      lakshya: { name: "Lakshya", id: "lakshya" },
+      irisha: { name: "Irisha", id: "irisha" },
+      lukas: { name: "Lukas", id: "lukas" },
+      dhruv: { name: "Dhruv", id: "dhruv" },
+      bogambo: { name: "Bogambo", id: "bogambo" },
+      natasha: { name: "Natasha", id: "natasha" },
+      malcolm: { name: "Malcolm", id: "malcolm" },
+      andrea: { name: "Andrea", id: "andrea" },
+      adriana: { name: "Adriana", id: "adriana" },
+      vijay: { name: "Vijay", id: "vijay" },
+      vidya: { name: "Vidya", id: "vidya" },
+      dmitry: { name: "Dmitry", id: "dmitry" },
+      maria: { name: "Maria", id: "maria" },
+      emmanuel: { name: "Emmanuel", id: "emmanuel" },
     }
   };
 
@@ -143,6 +244,7 @@ const AgentForm = ({
         sttSelection: agent.sttSelection || "google",
         ttsSelection: agent.ttsSelection || "sarvam",
         voiceServiceProvider: agent.voiceServiceProvider || "sarvam",
+        voiceTier: agent.voiceTier || "basic",
         callingNumber: agent.callingNumber || "",
         callingType: agent.callingType || "both",
         voiceSelection: agent.voiceSelection || "meera",
@@ -401,6 +503,37 @@ const AgentForm = ({
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleVoiceTierChange = (e) => {
+    const { value } = e.target;
+    let serviceProvider = "sarvam";
+    
+    // Map voice tier to service provider
+    switch(value) {
+      case "basic":
+        serviceProvider = "sarvam";
+        break;
+      case "advanced":
+        serviceProvider = "smallest";
+        break;
+      case "premium":
+        serviceProvider = "elevenlabs";
+        break;
+      default:
+        serviceProvider = "sarvam";
+    }
+    
+    const availableVoices = Object.keys(voiceMappings[serviceProvider] || {});
+    const firstVoice = availableVoices[0] || "";
+    
+    setFormData((prev) => ({
+      ...prev,
+      voiceTier: value,
+      voiceServiceProvider: serviceProvider,
+      voiceSelection: firstVoice,
+      voiceId: firstVoice ? voiceMappings[serviceProvider][firstVoice]?.id || "" : ""
+    }));
   };
 
   const handleVoiceServiceProviderChange = (e) => {
@@ -1264,8 +1397,9 @@ const AgentForm = ({
         defaultTemplate,
         // knowledgeBase is now managed separately via KnowledgeBase model
         depositions,
-        // Include voice service provider and voice ID
+        // Include voice service provider, voice tier, and voice ID
         voiceServiceProvider: formData.voiceServiceProvider,
+        voiceTier: formData.voiceTier,
         voiceId: formData.voiceId,
         // Include sanitized list structures
         dynamicInfoList: cleanedDynamicInfoList,
@@ -1578,20 +1712,21 @@ const AgentForm = ({
 
         <div>
           <label
-            htmlFor="voiceServiceProvider"
+            htmlFor="voiceTier"
             className="block mb-2 font-semibold text-gray-700"
           >
-            Voice Service Provider
+            Voice Tier
           </label>
           <select
-            id="voiceServiceProvider"
-            name="voiceServiceProvider"
-            value={formData.voiceServiceProvider}
-            onChange={handleVoiceServiceProviderChange}
+            id="voiceTier"
+            name="voiceTier"
+            value={formData.voiceTier}
+            onChange={handleVoiceTierChange}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
           >
-            <option value="sarvam">Basic</option>
-            <option value="elevenlabs">Premium</option>
+            <option value="basic">Basic</option>
+            <option value="advanced">Advanced</option>
+            <option value="premium">Premium</option>
           </select>
         </div>
       </div>
@@ -1629,7 +1764,111 @@ const AgentForm = ({
                 <option value="arjun">Arjun</option>
               </optgroup>
             </>
-          ) : (
+          ) : formData.voiceServiceProvider === "smallest" ? (
+            <>
+              <optgroup label="Female">
+                <option value="alice">Alice</option>
+                <option value="katie">Katie</option>
+                <option value="natalie">Natalie</option>
+                <option value="meera">Meera</option>
+                <option value="ishika">Ishika</option>
+                <option value="christine">Christine</option>
+                <option value="aarushi">Aarushi</option>
+                <option value="ashley">Ashley</option>
+                <option value="eleanor">Eleanor</option>
+                <option value="madison">Madison</option>
+                <option value="tasha">Tasha</option>
+                <option value="chloe">Chloe</option>
+                <option value="shivangi">Shivangi</option>
+                <option value="isabel">Isabel</option>
+                <option value="yasmin">Yasmin</option>
+                <option value="adele">Adele</option>
+                <option value="maya">Maya</option>
+                <option value="anika">Anika</option>
+                <option value="rishika">Rishika</option>
+                <option value="ganya">Ganya</option>
+                <option value="khushi">Khushi</option>
+                <option value="priya">Priya</option>
+                <option value="fatema">Fatema</option>
+                <option value="ariba">Ariba</option>
+                <option value="isha">Isha</option>
+                <option value="neha">Neha</option>
+                <option value="tanvi">Tanvi</option>
+                <option value="disha">Disha</option>
+                <option value="nirupma">Nirupma</option>
+                <option value="anita">Anita</option>
+                <option value="sangeeta">Sangeeta</option>
+                <option value="kiara">Kiara</option>
+                <option value="claire">Claire</option>
+                <option value="luther">Luther</option>
+                <option value="julia">Julia</option>
+                <option value="erica">Erica</option>
+                <option value="nyah">Nyah</option>
+                <option value="aditi">Aditi</option>
+                <option value="angela">Angela</option>
+                <option value="radhika">Radhika</option>
+                <option value="bellatrix">Bellatrix</option>
+                <option value="nikita">Nikita</option>
+                <option value="roma">Roma</option>
+                <option value="gargi">Gargi</option>
+                <option value="irisha">Irisha</option>
+                <option value="natasha">Natasha</option>
+                <option value="andrea">Andrea</option>
+                <option value="adriana">Adriana</option>
+                <option value="vidya">Vidya</option>
+                <option value="maria">Maria</option>
+              </optgroup>
+              <optgroup label="Male">
+                <option value="leon">Leon</option>
+                <option value="john">John</option>
+                <option value="bruce">Bruce</option>
+                <option value="ryan">Ryan</option>
+                <option value="alistair">Alistair</option>
+                <option value="walter">Walter</option>
+                <option value="julian">Julian</option>
+                <option value="ronald">Ronald</option>
+                <option value="gerard">Gerard</option>
+                <option value="enzo">Enzo</option>
+                <option value="hamees">Hamees</option>
+                <option value="biswa">Biswa</option>
+                <option value="wasim">Wasim</option>
+                <option value="aahan">Aahan</option>
+                <option value="varun">Varun</option>
+                <option value="ayaan">Ayaan</option>
+                <option value="felix">Felix</option>
+                <option value="sanjay">Sanjay</option>
+                <option value="amit">Amit</option>
+                <option value="advait">Advait</option>
+                <option value="rohit">Rohit</option>
+                <option value="ram">Ram</option>
+                <option value="aditya">Aditya</option>
+                <option value="saad">Saad</option>
+                <option value="kabir">Kabir</option>
+                <option value="rohan">Rohan</option>
+                <option value="vikram">Vikram</option>
+                <option value="vihaan">Vihaan</option>
+                <option value="blofeld">Blofeld</option>
+                <option value="chirag">Chirag</option>
+                <option value="william">William</option>
+                <option value="zorin">Zorin</option>
+                <option value="alec">Alec</option>
+                <option value="solomon">Solomon</option>
+                <option value="yash">Yash</option>
+                <option value="chinmay">Chinmay</option>
+                <option value="karan">Karan</option>
+                <option value="kartik">Kartik</option>
+                <option value="albus">Albus</option>
+                <option value="lakshya">Lakshya</option>
+                <option value="lukas">Lukas</option>
+                <option value="dhruv">Dhruv</option>
+                <option value="bogambo">Bogambo</option>
+                <option value="malcolm">Malcolm</option>
+                <option value="vijay">Vijay</option>
+                <option value="dmitry">Dmitry</option>
+                <option value="emmanuel">Emmanuel</option>
+              </optgroup>
+            </>
+          ) : formData.voiceServiceProvider === "elevenlabs" ? (
             <>
               <optgroup label="Female">
                 <option value="monika">Monika</option>
@@ -1640,7 +1879,7 @@ const AgentForm = ({
                 <option value="aahir">Aahir</option>
               </optgroup>
             </>
-          )}
+          ) : null}
         </select>
       </div>
       <div>
