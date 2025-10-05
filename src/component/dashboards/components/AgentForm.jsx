@@ -1703,8 +1703,8 @@ const AgentForm = ({
             onChange={handleInputChange}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
           >
+            <option value="hi">Hindi (Multi-lingual)</option>
             <option value="en">English</option>
-            <option value="hi">Hindi</option>
             <option value="es">Spanish</option>
             <option value="fr">French</option>
           </select>
