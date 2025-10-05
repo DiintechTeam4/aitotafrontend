@@ -1474,15 +1474,15 @@ const AgentForm = ({
         body: JSON.stringify(payload),
       });
 
-      const result = await response.json();
-
-      if (response.ok) {
+      // Use the utility function to handle the response
+      try {
+        
         alert(
           agent ? "Agent updated successfully!" : "Agent created successfully!"
         );
         onSave();
-      } else {
-        alert(`Error: ${result.error || "Failed to save agent"}`);
+      } catch (error) {
+        alert(`Error: ${error.message}`);
       }
     } catch (error) {
       console.error("Error saving agent:", error);
