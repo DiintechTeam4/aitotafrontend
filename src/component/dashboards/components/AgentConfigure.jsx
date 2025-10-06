@@ -11,7 +11,7 @@ const AgentConfigure = () => {
   const [loading, setLoading] = useState(false);
   const [agentMeta, setAgentMeta] = useState({ agentName: '', didNumbers: [''] });
   const [items, setItems] = useState([{ n: 1, g: 1, rSec: 5 }]);
-  const [mode, setMode] = useState('parallel');
+  const [mode, setMode] = useState('serial');
   const gOptions = useMemo(() => [1,2,3,4,5], []);
   const rOptions = useMemo(() => [5,10,20,30,60], []);
   const [docId, setDocId] = useState(null);

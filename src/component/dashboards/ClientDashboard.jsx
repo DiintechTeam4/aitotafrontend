@@ -936,109 +936,127 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
 
           <nav className="flex-1 py-4 overflow-y-auto scrollbar-hide">
             <button
-              className={`flex items-center w-full px-6 py-4 text-left transition-all duration-200 gap-3 ${
+              className={`relative flex items-center w-full px-6 py-4 text-left transition-all duration-200 gap-3 ${
                 activeSection === "performance"
-                  ? "bg-black text-white border-r-4 border-white"
+                  ? "bg-white/10 text-white border-r-4 border-white font-semibold"
                   : "text-gray-300 hover:bg-gray-800 hover:text-white"
               }`}
+              aria-current={activeSection === "performance" ? "page" : undefined}
               onClick={() => handleSectionChange("performance")}
             >
+              <span className={`${activeSection === "performance" ? "absolute left-0 top-0 h-full w-1 bg-white" : "hidden"}`}></span>
               <FiTrendingUp className="text-xl w-6 text-center" />
               <span className="flex-1 font-medium">Performance</span>
             </button>
 
             <button
-              className={`flex items-center w-full px-6 py-4 text-left transition-all duration-200 gap-3 ${
+              className={`relative flex items-center w-full px-6 py-4 text-left transition-all duration-200 gap-3 ${
                 activeSection === "agents"
-                  ? "bg-black text-white border-r-4 border-white"
+                  ? "bg-white/10 text-white border-r-4 border-white font-semibold"
                   : "text-gray-300 hover:bg-gray-800 hover:text-white"
               }`}
+              aria-current={activeSection === "agents" ? "page" : undefined}
               onClick={() => handleSectionChange("agents")}
             >
+              <span className={`${activeSection === "agents" ? "absolute left-0 top-0 h-full w-1 bg-white" : "hidden"}`}></span>
               <FiUsers className="text-xl w-6 text-center" />
               <span className="flex-1 font-medium">AI Agents</span>
             </button>
 
             <button
-              className={`flex items-center w-full px-6 py-4 text-left transition-all duration-200 gap-3 ${
+              className={`relative flex items-center w-full px-6 py-4 text-left transition-all duration-200 gap-3 ${
                 activeSection === "bond"
-                  ? "bg-black text-white border-r-4 border-white"
+                  ? "bg-white/10 text-white border-r-4 border-white font-semibold"
                   : "text-gray-300 hover:bg-gray-800 hover:text-white"
               }`}
+              aria-current={activeSection === "bond" ? "page" : undefined}
               onClick={() => handleSectionChange("bond")}
             >
+              <span className={`${activeSection === "bond" ? "absolute left-0 top-0 h-full w-1 bg-white" : "hidden"}`}></span>
               <FiArrowDownLeft className="text-xl w-6 text-center" />
               <span className="flex-1 font-medium">InBound</span>
             </button>
 
             <button
-              className={`flex items-center w-full px-6 py-4 text-left transition-all duration-200 gap-3 ${
+              className={`relative flex items-center w-full px-6 py-4 text-left transition-all duration-200 gap-3 ${
                 activeSection === "outbound"
-                  ? "bg-black text-white border-r-4 border-white"
+                  ? "bg-white/10 text-white border-r-4 border-white font-semibold"
                   : "text-gray-300 hover:bg-gray-800 hover:text-white"
               }`}
+              aria-current={activeSection === "outbound" ? "page" : undefined}
               onClick={() => handleSectionChange("outbound")}
             >
+              <span className={`${activeSection === "outbound" ? "absolute left-0 top-0 h-full w-1 bg-white" : "hidden"}`}></span>
               <FiArrowUpRight className="text-xl w-6 text-center" />
               <span className="flex-1 font-medium">Outbound</span>
             </button>
 
             <button
-              className={`flex items-center w-full px-6 py-4 text-left transition-all duration-200 gap-3 ${
+              className={`relative flex items-center w-full px-6 py-4 text-left transition-all duration-200 gap-3 ${
                 activeSection === "human_agent"
-                  ? "bg-black text-white border-r-4 border-white"
+                  ? "bg-white/10 text-white border-r-4 border-white font-semibold"
                   : "text-gray-300 hover:bg-gray-800 hover:text-white"
               }`}
+              aria-current={activeSection === "human_agent" ? "page" : undefined}
               onClick={() => handleSectionChange("human_agent")}
             >
+              <span className={`${activeSection === "human_agent" ? "absolute left-0 top-0 h-full w-1 bg-white" : "hidden"}`}></span>
               <FiUserCheck className="text-xl w-6 text-center" />
               <span className="flex-1 font-medium">Sales Staff</span>
             </button>
 
             <button
-              className={`flex items-center w-full px-6 py-4 text-left transition-all duration-200 gap-3 ${
+              className={`relative flex items-center w-full px-6 py-4 text-left transition-all duration-200 gap-3 ${
                 activeSection === "mybusiness"
-                  ? "bg-black text-white border-r-4 border-white"
+                  ? "bg-white/10 text-white border-r-4 border-white font-semibold"
                   : "text-gray-300 hover:bg-gray-800 hover:text-white"
               }`}
+              aria-current={activeSection === "mybusiness" ? "page" : undefined}
               onClick={() => handleSectionChange("mybusiness")}
             >
+              <span className={`${activeSection === "mybusiness" ? "absolute left-0 top-0 h-full w-1 bg-white" : "hidden"}`}></span>
               <FiBriefcase className="text-xl w-6 text-center" />
               <span className="flex-1 font-medium">My Business</span>
             </button>
 
             <button
-              className={`flex items-center w-full px-6 py-4 text-left transition-all duration-200 gap-3 ${
+              className={`relative flex items-center w-full px-6 py-4 text-left transition-all duration-200 gap-3 ${
                 activeSection === "mydials"
-                  ? "bg-black text-white border-r-4 border-white"
+                  ? "bg-white/10 text-white border-r-4 border-white font-semibold"
                   : "text-gray-300 hover:bg-gray-800 hover:text-white"
               }`}
+              aria-current={activeSection === "mydials" ? "page" : undefined}
               onClick={() => handleSectionChange("mydials")}
             >
+              <span className={`${activeSection === "mydials" ? "absolute left-0 top-0 h-full w-1 bg-white" : "hidden"}`}></span>
               <FiPhone className="text-xl w-6 text-center" />
               <span className="flex-1 font-medium">My Dials</span>
             </button>
 
             <button
-              className={`flex items-center w-full px-6 py-4 text-left transition-all duration-200 gap-3 ${
+              className={`relative flex items-center w-full px-6 py-4 text-left transition-all duration-200 gap-3 ${
                 activeSection === "credits"
-                  ? "bg-black text-white border-r-4 border-white"
+                  ? "bg-white/10 text-white border-r-4 border-white font-semibold"
                   : "text-gray-300 hover:bg-gray-800 hover:text-white"
               }`}
+              aria-current={activeSection === "credits" ? "page" : undefined}
               onClick={() => handleSectionChange("credits")}
             >
+              <span className={`${activeSection === "credits" ? "absolute left-0 top-0 h-full w-1 bg-white" : "hidden"}`}></span>
               <FiTrendingUp className="text-xl w-6 text-center" />
               <span className="flex-1 font-medium">Credits</span>
             </button>
 
             <button
-              className={`flex items-center w-full px-6 py-4 text-left transition-all duration-200 gap-3 ${
+              className={`relative flex items-center w-full px-6 py-4 text-left transition-all duration-200 gap-3 ${
                 activeSection === "api-settings"
-                  ? "bg-black text-white border-r-4 border-white"
+                  ? "bg-white/10 text-white border-r-4 border-white font-semibold"
                   : "text-gray-300 hover:bg-gray-800 hover:text-white"
               }`}
+              aria-current={activeSection === "api-settings" ? "page" : undefined}
               onClick={() => handleSectionChange("api-settings")}
             >
+              <span className={`${activeSection === "api-settings" ? "absolute left-0 top-0 h-full w-1 bg-white" : "hidden"}`}></span>
               <FiSettings className="text-xl w-6 text-center" />
               <span className="flex-1 font-medium">API Settings</span>
             </button>
@@ -1046,13 +1064,15 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
 
           <div className="p-4">
             <button
-              className={`flex items-center w-full px-6 py-4 text-left transition-all duration-200 gap-3 ${
+              className={`relative flex items-center w-full px-6 py-4 text-left transition-all duration-200 gap-3 ${
                 activeSection === "about"
-                  ? "bg-black text-white border-r-4 border-white"
+                  ? "bg-white/10 text-white border-r-4 border-white font-semibold"
                   : "text-gray-300 hover:bg-gray-800 hover:text-white"
               }`}
+              aria-current={activeSection === "about" ? "page" : undefined}
               onClick={() => handleSectionChange("about")}
             >
+              <span className={`${activeSection === "about" ? "absolute left-0 top-0 h-full w-1 bg-white" : "hidden"}`}></span>
               <FiInfo className="text-xl w-6 text-center" />
               <span className="flex-1 font-medium">About Us</span>
             </button>
