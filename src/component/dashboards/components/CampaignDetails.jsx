@@ -50,6 +50,20 @@ function CampaignDetails({ campaignId, onBack }) {
   // WhatsApp mini chat countdown (24h)
   const [waChatDeadline, setWaChatDeadline] = useState(null);
   const [waChatRemaining, setWaChatRemaining] = useState("24:00:00");
+  const [showDownloadMenu, setShowDownloadMenu] = useState(false);
+  const downloadMenuRef = useRef(null);
+
+  useEffect(() => {
+    const handleDocClick = (e) => {
+      try {
+        if (showDownloadMenu && downloadMenuRef.current && !downloadMenuRef.current.contains(e.target)) {
+          setShowDownloadMenu(false);
+        }
+      } catch (_) {}
+    };
+    document.addEventListener('mousedown', handleDocClick);
+    return () => document.removeEventListener('mousedown', handleDocClick);
+  }, [showDownloadMenu]);
 
   // Campaign history state
   const [campaignHistory, setCampaignHistory] = useState([]);
@@ -838,13 +852,13 @@ function CampaignDetails({ campaignId, onBack }) {
   const [loadingContacts, setLoadingContacts] = useState(false);
   const [showRestoreNotification, setShowRestoreNotification] = useState(false);
 
-  // Format seconds to M:SS
+  // Format seconds to MM:SS
   const formatDuration = (seconds) => {
     if (!seconds || isNaN(seconds)) return "0:00";
     const total = Math.round(seconds);
     const mins = Math.floor(total / 60);
     const secs = total % 60;
-    return `${mins}:${secs.toString().padStart(2, "0")}`;
+    return `${String(mins).padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   };
 
   // Format seconds as MM:SSsec or HH:MM:SSsec when hours are present
@@ -1014,6 +1028,21 @@ function CampaignDetails({ campaignId, onBack }) {
     } catch (error) {
       console.error("Error formatting timestamp:", error);
       return "Error";
+    }
+  };
+
+  // Compact date+time formatter for headers
+  const formatDateTimeCompact = (timestamp) => {
+    if (!timestamp) return "";
+    try {
+      const date = timestamp instanceof Date ? timestamp : new Date(timestamp);
+      if (isNaN(date.getTime())) return "";
+      // Example: 06 Oct 2025, 14:35
+      const d = date.toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' });
+      const t = date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+      return `${d}, ${t}`;
+    } catch {
+      return "";
     }
   };
 
@@ -2988,6 +3017,26 @@ function CampaignDetails({ campaignId, onBack }) {
       alert("Unable to download PDF right now. Please try again.");
     } finally {
       setIsDownloadingPdf(false);
+    }
+  };
+
+  // Download transcript as TXT
+  const handleDownloadTranscriptTXT = async () => {
+    try {
+      if (!selectedCall) return;
+      const content = transcriptContent || '';
+      const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `transcript_${selectedCall.documentId || selectedCall.uniqueId || Date.now()}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error('TXT download failed:', e);
+      try { toast.error('Failed to download TXT'); } catch {}
     }
   };
 
@@ -5024,6 +5073,11 @@ function CampaignDetails({ campaignId, onBack }) {
                           "not_connected",
                           "failed",
                         ];
+                        // In NGR mode we exclude live statuses from recent table; in serial we show all
+                        if (agentConfigMode !== 'serial') {
+                          const isLive = status === 'ringing' || status === 'ongoing';
+                          if (isLive) return false;
+                        }
                         const byStatus =
                           callFilter === "all"
                             ? true
@@ -6394,6 +6448,225 @@ function CampaignDetails({ campaignId, onBack }) {
             </div>
           )}
 
+          {/* Live call logs (Ringing/Ongoing) - show only in NGR/parallel mode */}
+          {agentConfigMode !== 'serial' && (
+          <div className={`bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8 ${statusLogsCollapsed ? "hidden" : ""}`}>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-base font-medium text-gray-900">Live call logs</h2>
+              <div className="flex items-center gap-3">
+                {/* Auto refresh toggle (same visual) */}
+                <label className="flex items-center gap-2 text-sm select-none">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4"
+                    checked={autoRefreshCalls}
+                    onChange={(e) => setAutoRefreshCalls(e.target.checked)}
+                  />
+                  {autoRefreshCalls ? "Auto-refresh: On" : "Auto-refresh: Off"}
+                </label>
+                <button
+                  onClick={() => fetchApiMergedCalls(1, false, false)}
+                  className="text-sm px-2 py-1 bg-gray-50 text-black rounded-md hover:bg-gray-100 transition-colors border border-gray-200 flex items-center justify-between"
+                  title="Refresh"
+                >
+                  <svg className="w-3 h-3 mx-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  <span>Refresh</span>
+                </button>
+                {/* Visual parity selects (disabled for live) */}
+                <select
+                  className="text-sm border border-gray-300 rounded-md px-2 py-1 opacity-60 cursor-not-allowed"
+                  value={callFilter}
+                  disabled
+                  onChange={() => {}}
+                >
+                  <option>All</option>
+                </select>
+                <select
+                  className="text-sm border border-gray-300 rounded-md px-2 py-1 opacity-60 cursor-not-allowed"
+                  value={durationSort}
+                  disabled
+                  onChange={() => {}}
+                >
+                  <option>Sort by</option>
+                </select>
+              </div>
+            </div>
+            {apiMergedCallsLoading ? (
+              <div className="text-center py-10">Loading live calls...</div>
+            ) : (() => {
+              const liveCalls = (apiMergedCalls || []).filter((lead) => {
+                const status = String(lead?.status || '').toLowerCase();
+                return status === 'ringing' || status === 'ongoing';
+              });
+              if (liveCalls.length === 0) {
+                return <div className="text-center py-10 text-gray-500">No live calls</div>;
+              }
+              return (
+                <div className="overflow-x-auto">
+                  {/* Select and action controls (visual parity with Recent) */}
+                  {liveCalls.length > 0 && !apiMergedCallsLoading && (
+                    <div className="mb-4 p-4 bg-gray-50 rounded-lg border">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <label className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={selectAllCallLogs}
+                              onChange={handleSelectAllCallLogs}
+                              className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                            />
+                            <span className="text-sm font-medium text-gray-700">
+                              Select All Call Logs ({selectedCallLogs.length} selected)
+                            </span>
+                          </label>
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={callSelectedCallLogs}
+                            disabled={selectedCallLogs.length === 0}
+                            className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                            </svg>
+                            Call Selected ({selectedCallLogs.length})
+                          </button>
+                          <button
+                            onClick={() => {
+                              setSelectedCallLogs([]);
+                              setSelectAllCallLogs(false);
+                            }}
+                            disabled={selectedCallLogs.length === 0}
+                            className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            Clear Selection
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  <table className="min-w-full text-sm border border-gray-200 rounded-lg overflow-hidden">
+                    <thead className="bg-gray-50 sticky top-0 z-10">
+                      <tr className="text-left text-gray-700">
+                        <th className="py-2 px-3">
+                          <input
+                            type="checkbox"
+                            checked={selectAllCallLogs}
+                            onChange={handleSelectAllCallLogs}
+                            className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                          />
+                        </th>
+                        <th className="py-2 px-3">S. No.</th>
+                        <th className="py-2 px-3">Date & Time</th>
+                        <th className="py-2 px-3">Name</th>
+                        <th className="py-2 px-3">Number</th>
+                        <th className="py-2 px-3">Status</th>
+                        <th className="py-2 px-3">
+                          <FiClock />
+                        </th>
+                        <th className="py-2 px-3">Conversation</th>
+                        <th className="py-2 px-3">Flag</th>
+                        <th className="py-2 px-3">Disposition</th>
+                        <th className="py-2 px-3">Action</th>
+                        <th className="py-2 px-3">Redial</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {liveCalls.map((lead, idx) => (
+                        <tr key={`${lead.documentId || lead.contactId || 'live'}-${idx}`} className="hover:bg-gray-50 ${isCallLogSelected(lead) ? 'bg-blue-50 border-blue-200' : ''}">
+                          <td className="py-2 px-3">
+                            <input
+                              type="checkbox"
+                              checked={isCallLogSelected(lead)}
+                              onChange={() => handleSelectCallLog(lead)}
+                              className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                            />
+                          </td>
+                          <td className="py-2 px-3 text-gray-700">{idx + 1}</td>
+                          <td className="py-2 px-3 text-gray-700 flex flex-col items-center gap-2">
+                            <span>
+                              {lead.time
+                                ? new Date(lead.time).toLocaleDateString()
+                                : "-"}{" "}
+                            </span>
+                            <span>
+                              {lead.time
+                                ? new Date(lead.time).toLocaleTimeString([], {
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })
+                                : "-"}
+                            </span>
+                          </td>
+                          <td className="py-2 px-3 text-gray-700">{lead.name || '-'}</td>
+                          <td className="py-2 px-3 text-gray-700">{lead.number || '-'}</td>
+                          <td className="py-2 px-3">
+                            <span className={`px-2 py-1 rounded text-xs font-medium ${String(lead.status || '').toLowerCase() === 'ringing' ? 'bg-yellow-100 text-yellow-800' : 'bg-blue-100 text-blue-800'}`}>
+                              {String(lead.status || '').toUpperCase()}
+                            </span>
+                          </td>
+                          {/* Duration (⏱) */}
+                          <td className="py-2 px-3">
+                            {formatDuration(lead.duration)}
+                          </td>
+                          {/* Conversation (Transcript) button - mirrors recent style */}
+                          <td className="py-2 px-3">
+                            <button
+                              className={`text-xs px-2 py-1 rounded-md border ${
+                                lead.documentId && viewedTranscripts.has(lead.documentId)
+                                  ? "bg-green-50 text-fuchsia-700 border-green-200"
+                                  : "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
+                              }`}
+                              title={
+                                lead.documentId && viewedTranscripts.has(lead.documentId)
+                                  ? "Transcript viewed"
+                                  : "View transcript"
+                              }
+                              onClick={() => openTranscriptSmart(lead)}
+                            >
+                              <svg className="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 16h8M8 12h8M8 8h8M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H7l-2 2H3v12a2 2 0 002 2z" />
+                              </svg>
+                              {(() => {
+                                const baseLabel =
+                                  lead.documentId && viewedTranscripts.has(lead.documentId)
+                                    ? "Viewed"
+                                    : "Transcript";
+                                const count =
+                                  (typeof lead.transcriptCount === "number" ? lead.transcriptCount : undefined) ??
+                                  getTranscriptMessageCount(lead);
+                                return count > 0 ? `${baseLabel} (${count})` : baseLabel;
+                              })()}
+                            </button>
+                          </td>
+                          {/* Flag (kept empty to mirror recent visual spacing) */}
+                          <td className="py-2 px-3"></td>
+                          {/* Disposition (empty) */}
+                          <td className="py-2 px-3"></td>
+                          {/* Action (empty) */}
+                          <td className="py-2 px-3"></td>
+                          <td className="py-2 px-3">
+                            <button
+                              className="inline-flex items-center px-3 py-1 text-xs bg-green-50 text-green-700 border border-green-200 rounded hover:bg-green-100 disabled:opacity-50"
+                              title={!lead.number ? "No phone number available" : lead.status === "ringing" || lead.status === "ongoing" ? "Call already in progress" : "Retry this contact"}
+                              onClick={() => handleRetryLead(lead)}
+                              disabled={!lead.number || lead.status === "ringing" || lead.status === "ongoing"}
+                            >
+                              <FiPhone className="w-3 h-3 text-green-700 mx-2" style={{ minWidth: "16px", minHeight: "16px" }} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              );
+            })()}
+          </div>
+          )}
+
           {/* Minimal Leads + Transcript Section */}
           <div
             className={`bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8 ${
@@ -7340,7 +7613,15 @@ function CampaignDetails({ campaignId, onBack }) {
       {/* Transcript Modal */}
       {showTranscriptModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[90]">
-          <div className="bg-white rounded-2xl w-11/12 max-w-4xl max-h-[90vh] overflow-y-auto shadow-2xl">
+          <div className="relative bg-white rounded-2xl w-11/12 max-w-4xl max-h-[90vh] overflow-y-auto shadow-2xl">
+            {/* Top-right close button */}
+            <button
+              className="absolute top-2 right-2 bg-none border-none text-2xl cursor-pointer text-gray-500 hover:text-gray-700 p-2 w-10 h-10 flex items-center justify-center rounded-lg hover:bg-gray-200 transition-colors duration-200"
+              onClick={() => setShowTranscriptModal(false)}
+              title="Close"
+            >
+              <FiX />
+            </button>
             <div className="flex justify-between items-center p-3 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-blue-100">
               <div className="flex-1">
                 <h3 className="text-lg font-bold text-gray-800 flex items-center">
@@ -7358,6 +7639,16 @@ function CampaignDetails({ campaignId, onBack }) {
                     />
                   </svg>
                   Call Transcript
+                  {selectedCall && (
+                    <span className="ml-3 text-xs font-normal text-gray-600 whitespace-nowrap">
+                      {formatDateTimeCompact(
+                        selectedCall.time ||
+                        selectedCall.createdAt ||
+                        (selectedCall.metadata && (selectedCall.metadata.startTime || selectedCall.metadata.callStartTime)) ||
+                        (selectedCall.externalResponse && selectedCall.externalResponse.startTime)
+                      )}
+                    </span>
+                  )}
                 </h3>
 
                 {/* Call Details */}
@@ -7387,27 +7678,80 @@ function CampaignDetails({ campaignId, onBack }) {
                         {formatDuration(selectedCall.duration || 0)}
                       </div>
                     </div>
+                    {/* Removed large Call Started block to save space */}
                   </div>
                 )}
               </div>
-              {/* Download PDF button */}
-              <button
-                className="ml-3 bg-black text-white text-sm px-4 py-2 rounded-lg hover:bg-gray-800 transition-colors flex items-center gap-2 disabled:opacity-60"
-                onClick={handleDownloadTranscriptPDF}
-                title="Download PDF"
-                disabled={isDownloadingPdf}
-              >
-                {isDownloadingPdf ? (
-                  <>
-                    <FiLoader className="animate-spin" />
-                    Generating...
-                  </>
-                ) : (
-                  <>
-                    <FiDownload />
-                    Download PDF
-                  </>
+              {/* Action buttons */}
+              <div className="relative ml-3" ref={downloadMenuRef}>
+                <button
+                  className={`text-sm px-4 py-2 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-60 border focus:outline-none focus:ring-2 focus:ring-blue-300 ${showDownloadMenu ? 'bg-gray-900 text-white border-gray-900' : 'bg-black text-white border-transparent hover:bg-gray-800'}`}
+                  onClick={() => setShowDownloadMenu((v) => !v)}
+                  title="Download"
+                  disabled={isDownloadingPdf}
+                >
+                  {isDownloadingPdf ? (
+                    <>
+                      <FiLoader className="animate-spin" />
+                      Generating...
+                    </>
+                  ) : (
+                    <>
+                      <FiDownload />
+                      Download
+                    </>
+                  )}
+                </button>
+                {showDownloadMenu && (
+                  <div className="absolute right-0 mt-2 w-44 bg-white rounded-lg shadow-xl z-10 overflow-hidden ring-1 ring-black/5">
+                    <button
+                      className="w-full text-left px-3 py-2 text-sm flex items-center gap-2 transition-colors hover:bg-blue-50 hover:text-blue-700"
+                      onClick={() => {
+                        setShowDownloadMenu(false);
+                        handleDownloadTranscriptPDF();
+                      }}
+                    >
+                      <span className="inline-block w-2 h-2 rounded-full bg-gray-800"></span>
+                      <span>PDF</span>
+                    </button>
+                    <button
+                      className="w-full text-left px-3 py-2 text-sm flex items-center gap-2 transition-colors hover:bg-blue-50 hover:text-blue-700"
+                      onClick={() => {
+                        setShowDownloadMenu(false);
+                        handleDownloadTranscriptTXT();
+                      }}
+                    >
+                      <span className="inline-block w-2 h-2 rounded-full bg-gray-400"></span>
+                      <span>TXT</span>
+                    </button>
+                  </div>
                 )}
+              </div>
+              {/* WhatsApp redirect button */}
+              <button
+                className="ml-3 bg-green-500 text-white text-sm px-3 py-2 rounded-lg hover:bg-green-600 transition-colors flex items-center gap-2 disabled:opacity-60"
+                onClick={() => {
+                  try {
+                    const raw = (selectedCall && (selectedCall.number || selectedCall.phone || selectedCall.mobile || (selectedCall.metadata && selectedCall.metadata.customParams && selectedCall.metadata.customParams.phone))) || '';
+                    const digits = String(raw || '').replace(/\D/g, '');
+                    // Remove any leading zeros (e.g., 09546423919 -> 9546423919)
+                    const normalized = digits.replace(/^0+/, '');
+                    // Ensure Indian country code is prefixed (WhatsApp expects country code without +)
+                    const phone = normalized.startsWith('91') ? normalized : (normalized ? `91${normalized}` : '');
+                    if (!phone) {
+                      try { toast.warn('No phone number found'); } catch {}
+                      return;
+                    }
+                    // Explicitly open WhatsApp Web
+                    const url = `https://web.whatsapp.com/send?phone=${phone}`;
+                    window.open(url, '_blank', 'noopener,noreferrer');
+                  } catch (_) {}
+                }}
+                title="Open WhatsApp"
+                disabled={!selectedCall}
+              >
+                <FaWhatsapp />
+                WhatsApp
               </button>
               {/* End Call (shown when call appears active) */}
               {selectedCall?.metadata?.isActive !== false && (
@@ -7419,12 +7763,6 @@ function CampaignDetails({ campaignId, onBack }) {
                   End Call
                 </button>
               )}
-              <button
-                className="bg-none border-none text-2xl cursor-pointer text-gray-500 hover:text-gray-700 p-2 w-10 h-10 flex items-center justify-center rounded-lg hover:bg-gray-200 transition-colors duration-200 ml-4"
-                onClick={() => setShowTranscriptModal(false)}
-              >
-                <FiX />
-              </button>
             </div>
             <div className="p-6">
               {transcriptLoading ? (
