@@ -314,9 +314,9 @@ const AgentList = ({ agents, isLoading, onEdit, onDelete, clientId }) => {
   const [liveTranscriptLines, setLiveTranscriptLines] = useState([]);
   const [callTerminationReason, setCallTerminationReason] = useState("");
   const [isCallLoading, setIsCallLoading] = useState(false);
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
   const logsPollRef = useRef(null);
   const callTimeoutRef = useRef(null);
-
 
   // Recent calls for quick selection
   const [recentCalls, setRecentCalls] = useState([]);
@@ -1392,7 +1392,7 @@ const AgentList = ({ agents, isLoading, onEdit, onDelete, clientId }) => {
   const handleShowQR = async (agent) => {
     // Validate agent credentials before showing QR code
     const validation = await validateAgentCredentials(agent);
-    
+
     if (!validation.isValid) {
       showValidationError(validation, "Generate QR Code");
       return;
@@ -1462,7 +1462,7 @@ const AgentList = ({ agents, isLoading, onEdit, onDelete, clientId }) => {
   const playAudio = async (agentId) => {
     try {
       const response = await fetch(
-        `${API_BASE_URL}/client/agents/${agentId}/audio?clientId=${clientId}`,
+        `${API_BASE_URL}/client/agents/${agentId}/first-message/audio?clientId=${clientId}`,
         {
           headers: {
             Authorization: `Bearer ${sessionStorage.getItem("clienttoken")}`,
@@ -1541,7 +1541,7 @@ const AgentList = ({ agents, isLoading, onEdit, onDelete, clientId }) => {
   const handleVoiceChat = async (agent) => {
     // Validate agent credentials before opening voice chat
     const validation = await validateAgentCredentials(agent);
-    
+
     if (!validation.isValid) {
       showValidationError(validation, "Start Voice Chat");
       return;
@@ -1714,7 +1714,7 @@ const AgentList = ({ agents, isLoading, onEdit, onDelete, clientId }) => {
             },
           }),
         });
-        
+
         const data = await resp.json();
         if (!resp.ok || data?.success !== true) {
           throw new Error(data?.error || "Failed to initiate SANPBX call");
@@ -1796,19 +1796,78 @@ const AgentList = ({ agents, isLoading, onEdit, onDelete, clientId }) => {
   };
 
   // Show validation error alert
-  const showValidationError = (validation, actionType = "perform this action") => {
+  const showValidationError = (
+    validation,
+    actionType = "perform this action"
+  ) => {
     const missingFields = validation.missingFields || [];
     const validationErrors = validation.validationErrors || [];
-    
+
     let errorMessage = "";
     if (missingFields.length > 0) {
-      errorMessage = `Missing: ${missingFields.join(', ')}`;
+      errorMessage = `Missing: ${missingFields.join(", ")}`;
     }
     if (validationErrors.length > 0) {
-      errorMessage += errorMessage ? ` | ${validationErrors.join(', ')}` : validationErrors.join(', ');
+      errorMessage += errorMessage
+        ? ` | ${validationErrors.join(", ")}`
+        : validationErrors.join(", ");
     }
-    
+
     alert(errorMessage || "Configuration error");
+  };
+
+  // Helper: readable error text (avoid [object Object])
+  const formatReadableError = (err) => {
+    if (!err) return "Unknown error";
+    if (typeof err === "string") return err;
+    if (typeof err?.message === "string") return err.message;
+    try {
+      return JSON.stringify(err);
+    } catch (_) {
+      return String(err);
+    }
+  };
+
+  // Helper: preflight validation for AI dial inputs and agent creds
+  const validateBeforeDial = (agent, phone, clientUuid) => {
+    const digits = String(phone || "").replace(/[^\d]/g, "");
+    if (!digits) {
+      alert("Please enter a phone number.");
+      return false;
+    }
+    if (digits.length < 7) {
+      alert("Phone number seems too short. Please enter a valid number.");
+      return false;
+    }
+    if (!agent) {
+      alert("No agent selected. Please select an agent and try again.");
+      return false;
+    }
+    if (!clientUuid) {
+      alert("Missing client ID. Please re-login and try again.");
+      return false;
+    }
+    const provider = String(agent?.serviceProvider || "").toLowerCase();
+    if (!agent.callerId) {
+      alert("Missing Agent Caller ID. Please set caller ID in agent settings.");
+      return false;
+    }
+    if (provider === "snapbx" || provider === "sanpbx") {
+      // SANPBX flow currently needs callerId (already checked) and agentId
+      if (!agent._id) {
+        alert("Agent ID missing. Please re-save the agent and try again.");
+        return false;
+      }
+    } else {
+      // Default CZ route needs X_API_KEY
+      if (!agent?.X_API_KEY) {
+        alert(
+          "Missing Agent API Key (X_API_KEY). Please configure the agent API key."
+        );
+        return false;
+      }
+    }
+    return true;
   };
 
   // Validate agent credentials before making call
@@ -1839,25 +1898,30 @@ const AgentList = ({ agents, isLoading, onEdit, onDelete, clientId }) => {
         isValid: false,
         missingFields: ["Unable to validate credentials"],
         validationErrors: ["System error during validation"],
-        message: "Failed to validate agent credentials"
+        message: "Failed to validate agent credentials",
       };
     }
   };
 
   const initiateCall = async () => {
     if (!phoneNumber.trim() || !selectedAgentForCall) return;
-    
+
     setIsCallLoading(true);
-    
+
     try {
+      // Quick pre-flight input checks (alerts for specifics)
+      if (!validateBeforeDial(selectedAgentForCall, phoneNumber, clientId)) {
+        setIsCallLoading(false);
+        return;
+      }
       // Validate agent credentials first
       const validation = await validateAgentCredentials(selectedAgentForCall);
-      
+
       if (!validation.isValid) {
         showValidationError(validation, "Make Call");
         return;
       }
-      
+
       setCallStage("connecting");
       setCallMessages([]);
 
@@ -1929,7 +1993,9 @@ const AgentList = ({ agents, isLoading, onEdit, onDelete, clientId }) => {
                 const isInGracePeriod = timeSinceInitiation < 15000; // 15-second grace period
 
                 if (isInGracePeriod) {
-                  console.log("Still in grace period, skipping aggressive check");
+                  console.log(
+                    "Still in grace period, skipping aggressive check"
+                  );
                   return;
                 }
 
@@ -2000,13 +2066,21 @@ const AgentList = ({ agents, isLoading, onEdit, onDelete, clientId }) => {
         setCallStage("input");
         setIsCallConnected(false);
         // Show clear error message from call initiation
-        alert(`❌ Call Failed\n\n${result.error || "Unable to initiate call. Please try again."}\n\nPlease check your agent configuration and try again.`);
+        alert(
+          `❌ Call Failed\n\n${
+            formatReadableError(result.error) || "Unable to initiate call."
+          }\n\nPlease check your agent configuration and try again.`
+        );
       }
     } catch (error) {
       console.error("Call initiation error:", error);
       setCallStage("input");
       setIsCallConnected(false);
-      alert(`❌ System Error\n\n${error.message || "An unexpected error occurred. Please try again."}\n\nIf the problem persists, please contact support.`);
+      alert(
+        `❌ System Error\n\n${formatReadableError(
+          error
+        )}\n\nIf the problem persists, please contact support.`
+      );
     } finally {
       setIsCallLoading(false);
     }
@@ -2278,7 +2352,6 @@ const AgentList = ({ agents, isLoading, onEdit, onDelete, clientId }) => {
       clearInterval(callTimerRef.current);
     }
   };
-
 
   const cancelCall = () => {
     setShowCallModal(false);
@@ -2717,6 +2790,290 @@ const AgentList = ({ agents, isLoading, onEdit, onDelete, clientId }) => {
         minute: "2-digit",
         hour12: false,
       });
+    }
+  };
+
+  // ===== Transcript PDF helpers (copied/adapted from CampaignDetails.jsx) =====
+  const ensureJsPDFLoaded = async () => {
+    const mod = await import("jspdf");
+    return mod.jsPDF || mod.default || mod;
+  };
+
+  const ensureHtml2CanvasLoaded = async () => {
+    const mod = await import("html2canvas");
+    return mod.default || mod;
+  };
+
+  const loadImageAsDataURL = async (url) => {
+    try {
+      const res = await fetch(url);
+      const blob = await res.blob();
+      return await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.readAsDataURL(blob);
+      });
+    } catch (e) {
+      return null;
+    }
+  };
+
+  const formatDuration = (seconds) => {
+    const mins = Math.floor((seconds || 0) / 60);
+    const secs = Math.floor((seconds || 0) % 60);
+    return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+  };
+
+  const getContactDisplayNameBlank = () => {
+    return (contactName && contactName.trim()) || "-";
+  };
+
+  // Convert liveTranscriptLines into chat message objects compatible with the PDF renderer
+  const parseTranscriptToChat = (lines) => {
+    if (!Array.isArray(lines)) return [];
+    return lines.map((line) => {
+      const isUser = line.includes("] User (");
+      const isAI = !isUser;
+      // Extract text similar to UI rendering
+      const text = line
+        .replace(/^\[[^\]]+\]\s(User|AI)\s\([^\)]+\):\s*/, "")
+        .replace(/^\[[^\]]+\]\s*/, "");
+      // Extract timestamp inside [] if present
+      let ts = "";
+      const m = line.match(/\[([^\]]+)\]/);
+      if (m && m[1]) {
+        try {
+          const dt = new Date(m[1]);
+          ts = isNaN(dt.getTime())
+            ? ""
+            : dt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+        } catch (_) {}
+      }
+      return { isUser, isAI, text, timestamp: ts };
+    });
+  };
+
+  const handleDownloadTranscriptPDF = async () => {
+    try {
+      if (callStage !== "terminated") return; // only after call ended
+      setIsDownloadingPdf(true);
+      const [jsPDFCtor, html2canvas] = await Promise.all([
+        ensureJsPDFLoaded(),
+        ensureHtml2CanvasLoaded(),
+      ]);
+      const doc = new jsPDFCtor({ unit: "pt", format: "a4" });
+
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const marginX = 40;
+      let cursorY = 60;
+
+      // Header branding
+      try {
+        const logoUrl = "/AitotaLogo.png";
+        const dataUrl = await loadImageAsDataURL(logoUrl);
+        if (dataUrl) {
+          const logoW = 60;
+          const logoH = 60;
+          doc.addImage(
+            dataUrl,
+            "PNG",
+            pageWidth - marginX - logoW,
+            30,
+            logoW,
+            logoH
+          );
+        }
+      } catch (_) {}
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(18);
+      doc.text("Call Transcript", marginX, cursorY);
+      cursorY += 26;
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(11);
+
+      const contact = getContactDisplayNameBlank();
+      const phone = phoneNumber || "-";
+      const dateStr = new Date().toLocaleString();
+      const durationStr = formatDuration(callDuration || 0);
+
+      [
+        `Name: ${contact}`,
+        `Mobile: ${phone}`,
+        `Date & Time: ${dateStr}`,
+        `Duration: ${durationStr}`,
+      ].forEach((l) => {
+        doc.text(l, marginX, cursorY);
+        cursorY += 16;
+      });
+
+      cursorY += 8;
+      doc.setDrawColor(220);
+      doc.line(marginX, cursorY, pageWidth - marginX, cursorY);
+      cursorY += 20;
+
+      // Chat content header
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(13);
+      doc.text("Conversation", marginX, cursorY);
+      cursorY += 12;
+
+      const chatMessages = parseTranscriptToChat(liveTranscriptLines || []);
+
+      // Render conversation bubbles into an offscreen container, then rasterize per page
+      const container = document.createElement("div");
+      container.style.position = "fixed";
+      container.style.left = "-10000px";
+      container.style.top = "0";
+      container.style.width = "560px";
+      container.style.padding = "6px";
+      container.style.background = "#ffffff";
+      container.style.color = "#111827";
+      container.style.fontFamily =
+        'system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Noto Sans", "Noto Sans Devanagari", sans-serif';
+      container.style.fontSize = "12px";
+      container.style.lineHeight = "1.4";
+      document.body.appendChild(container);
+
+      const createBubbleNode = (msg) => {
+        const wrapper = document.createElement("div");
+        wrapper.style.display = "flex";
+        wrapper.style.marginBottom = "6px";
+        wrapper.style.width = "100%";
+        wrapper.style.boxSizing = "border-box";
+        wrapper.style.justifyContent = msg.isUser
+          ? "flex-end"
+          : msg.isAI
+          ? "flex-start"
+          : "center";
+
+        const bubble = document.createElement("div");
+        bubble.style.maxWidth = "72%";
+        bubble.style.borderRadius = "10px";
+        bubble.style.padding = "8px 10px";
+        bubble.style.boxSizing = "border-box";
+        bubble.style.whiteSpace = "pre-wrap";
+        bubble.style.wordBreak = "break-word";
+        bubble.style.border = msg.isAI
+          ? "1px solid #93c5fd"
+          : msg.isUser
+          ? "1px solid #d1d5db"
+          : "1px solid #e5e7eb";
+        bubble.style.background = msg.isAI
+          ? "#e0f2fe"
+          : msg.isUser
+          ? "#f3f4f6"
+          : "#f9fafb";
+        bubble.style.color = "#111827";
+
+        const header = document.createElement("div");
+        header.style.display = "flex";
+        header.style.alignItems = "baseline";
+        header.style.gap = "6px";
+        header.style.marginBottom = "4px";
+
+        const who = document.createElement("strong");
+        who.textContent = msg.isAI ? "AI" : msg.isUser ? "User" : "System";
+        who.style.fontSize = "11px";
+
+        const tsSpan = document.createElement("span");
+        tsSpan.style.fontSize = "10px";
+        tsSpan.style.color = "#6B7280";
+        tsSpan.textContent = msg.timestamp || "";
+
+        header.appendChild(who);
+        if (msg.timestamp) header.appendChild(tsSpan);
+
+        const text = document.createElement("div");
+        text.style.fontSize = "12px";
+        text.textContent = msg.text || "";
+
+        bubble.appendChild(header);
+        bubble.appendChild(text);
+        wrapper.appendChild(bubble);
+        return wrapper;
+      };
+
+      const scale = 1.25;
+      const imgWidth = pageWidth - marginX * 2;
+      const containerWidthPx = parseInt(container.style.width, 10) || 560;
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const bottomMargin = 40;
+      const calcMaxContentPx = (availablePt) =>
+        Math.floor((availablePt * containerWidthPx) / imgWidth);
+
+      let pageDiv = document.createElement("div");
+      pageDiv.style.width = "100%";
+      pageDiv.style.boxSizing = "border-box";
+      container.appendChild(pageDiv);
+
+      const renderCurrentPage = async (cursorYForPage) => {
+        const canvas = await html2canvas(pageDiv, {
+          scale,
+          backgroundColor: "#ffffff",
+        });
+        const drawHeight = (canvas.height / canvas.width) * imgWidth;
+        const imgData = canvas.toDataURL("image/jpeg", 0.72);
+        doc.addImage(
+          imgData,
+          "JPEG",
+          marginX,
+          cursorYForPage,
+          imgWidth,
+          drawHeight
+        );
+      };
+
+      const firstPageMaxPx = calcMaxContentPx(
+        pageHeight - cursorY - bottomMargin
+      );
+      const nextPagesMaxPx = calcMaxContentPx(pageHeight - 60 - bottomMargin);
+      let isFirstPage = true;
+
+      for (let i = 0; i < chatMessages.length; i++) {
+        const node = createBubbleNode(chatMessages[i]);
+        pageDiv.appendChild(node);
+        const maxPx = isFirstPage ? firstPageMaxPx : nextPagesMaxPx;
+        if (pageDiv.scrollHeight > maxPx && pageDiv.childElementCount > 1) {
+          pageDiv.removeChild(node);
+          await renderCurrentPage(isFirstPage ? cursorY : 60);
+          doc.addPage();
+          isFirstPage = false;
+          pageDiv = document.createElement("div");
+          pageDiv.style.width = "100%";
+          pageDiv.style.boxSizing = "border-box";
+          container.innerHTML = "";
+          container.appendChild(pageDiv);
+          pageDiv.appendChild(node);
+        }
+      }
+      if (pageDiv.childElementCount > 0) {
+        await renderCurrentPage(isFirstPage ? cursorY : 60);
+      }
+      if (container && container.parentNode) {
+        container.parentNode.removeChild(container);
+      }
+
+      // Footer branding
+      const footer = "Powered by AItota";
+      doc.setFont("helvetica", "italic");
+      doc.setFontSize(10);
+      const footerY = doc.internal.pageSize.getHeight() - 30;
+      doc.text(footer, pageWidth - marginX - doc.getTextWidth(footer), footerY);
+
+      const safeName = (contact || "transcript")
+        .toString()
+        .replace(/[^a-z0-9_-]+/gi, "_");
+      const fileName = `AItota_Transcript_${safeName}_${String(
+        phone || ""
+      ).replace(/\D/g, "")}.pdf`;
+      doc.save(fileName);
+    } catch (e) {
+      console.error("Failed to generate transcript PDF", e);
+      alert("Unable to download PDF right now. Please try again.");
+    } finally {
+      setIsDownloadingPdf(false);
     }
   };
 
@@ -4154,14 +4511,41 @@ const AgentList = ({ agents, isLoading, onEdit, onDelete, clientId }) => {
                       )}
                     </div>
                     <div className="flex items-center gap-2">
+                      {/* Download Transcript button - only when ended */}
+                      <button
+                        onClick={handleDownloadTranscriptPDF}
+                        disabled={
+                          isDownloadingPdf ||
+                          (liveTranscriptLines.length === 0 && !liveTranscript)
+                        }
+                        title="Download transcript as PDF"
+                        className={`px-4 py-2 rounded-lg text-sm flex items-center gap-2 ${
+                          isDownloadingPdf ||
+                          (liveTranscriptLines.length === 0 && !liveTranscript)
+                            ? "bg-gray-300 text-gray-600 cursor-not-allowed"
+                            : "bg-gray-800 text-white hover:bg-black"
+                        }`}
+                      >
+                        {isDownloadingPdf ? (
+                          <>
+                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                            Generating...
+                          </>
+                        ) : (
+                          <>
+                            <FiDownload className="w-4 h-4" />
+                            Download
+                          </>
+                        )}
+                      </button>
                       <button
                         onClick={handleRedial}
                         disabled={isCallLoading}
                         title="Redial same number"
                         className={`p-2 rounded-full transition-colors text-sm flex items-center justify-center ${
                           isCallLoading
-                            ? 'bg-gray-400 text-white cursor-not-allowed'
-                            : 'bg-green-600 text-white hover:bg-green-700'
+                            ? "bg-gray-400 text-white cursor-not-allowed"
+                            : "bg-green-600 text-white hover:bg-green-700"
                         }`}
                       >
                         <svg
@@ -4273,7 +4657,6 @@ const AgentList = ({ agents, isLoading, onEdit, onDelete, clientId }) => {
           </div>
         </div>
       )}
-
     </div>
   );
 };

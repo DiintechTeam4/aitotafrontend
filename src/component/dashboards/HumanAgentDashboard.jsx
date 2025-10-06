@@ -143,21 +143,9 @@ const HumanAgentDashboard = ({ userData, onLogout }) => {
   const renderMainContent = () => {
     switch (activeSection) {
       case "kpi":
-        return (
-          <div className="h-full flex flex-col">
-            <div className="bg-white border-b border-gray-200 px-8 py-6">
-              <h2 className="text-3xl font-bold text-gray-900 mb-4">
-                Performance KPIs
-              </h2>
-              <p className="text-gray-600 text-lg">
-                Track your performance metrics and analytics
-              </p>
-            </div>
-            <div className="flex-1 p-8 overflow-y-auto">
+        return <div className="flex-1 p-8 overflow-y-auto">
               <PerformanceKPIs />
             </div>
-          </div>
-        );
 
       case "agents":
         return (

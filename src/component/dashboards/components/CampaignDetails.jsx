@@ -56,13 +56,17 @@ function CampaignDetails({ campaignId, onBack }) {
   useEffect(() => {
     const handleDocClick = (e) => {
       try {
-        if (showDownloadMenu && downloadMenuRef.current && !downloadMenuRef.current.contains(e.target)) {
+        if (
+          showDownloadMenu &&
+          downloadMenuRef.current &&
+          !downloadMenuRef.current.contains(e.target)
+        ) {
           setShowDownloadMenu(false);
         }
       } catch (_) {}
     };
-    document.addEventListener('mousedown', handleDocClick);
-    return () => document.removeEventListener('mousedown', handleDocClick);
+    document.addEventListener("mousedown", handleDocClick);
+    return () => document.removeEventListener("mousedown", handleDocClick);
   }, [showDownloadMenu]);
 
   // Campaign history state
@@ -74,7 +78,7 @@ function CampaignDetails({ campaignId, onBack }) {
   const [currentRunCallLogs, setCurrentRunCallLogs] = useState([]);
   // Series mode flag - now determined by agent configuration
   const [isSeriesMode, setIsSeriesMode] = useState(false);
-  const [agentConfigMode, setAgentConfigMode] = useState('serial'); // Default to serial
+  const [agentConfigMode, setAgentConfigMode] = useState("serial"); // Default to serial
   const [agentConfigLoading, setAgentConfigLoading] = useState(false); // Track loading state
   // Guard refs to avoid duplicate autosaves
   const autoSavingRef = useRef(false);
@@ -858,7 +862,9 @@ function CampaignDetails({ campaignId, onBack }) {
     const total = Math.round(seconds);
     const mins = Math.floor(total / 60);
     const secs = total % 60;
-    return `${String(mins).padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+    return `${String(mins).padStart(2, "0")}:${secs
+      .toString()
+      .padStart(2, "0")}`;
   };
 
   // Format seconds as MM:SSsec or HH:MM:SSsec when hours are present
@@ -1038,8 +1044,15 @@ function CampaignDetails({ campaignId, onBack }) {
       const date = timestamp instanceof Date ? timestamp : new Date(timestamp);
       if (isNaN(date.getTime())) return "";
       // Example: 06 Oct 2025, 14:35
-      const d = date.toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' });
-      const t = date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+      const d = date.toLocaleDateString(undefined, {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      });
+      const t = date.toLocaleTimeString(undefined, {
+        hour: "2-digit",
+        minute: "2-digit",
+      });
       return `${d}, ${t}`;
     } catch {
       return "";
@@ -1180,11 +1193,13 @@ function CampaignDetails({ campaignId, onBack }) {
     if (campaign && campaign.agent) {
       const primaryAgentId = getPrimaryAgentId();
       if (primaryAgentId) {
-        console.log(`🔧 CAMPAIGN: Auto-loading agent configuration for agent ${primaryAgentId}`);
+        console.log(
+          `🔧 CAMPAIGN: Auto-loading agent configuration for agent ${primaryAgentId}`
+        );
         fetchAgentConfig(primaryAgentId);
       } else {
         console.log(`🔧 CAMPAIGN: No agent assigned to campaign`);
-        setAgentConfigMode('serial');
+        setAgentConfigMode("serial");
       }
     }
   }, [campaign]); // Trigger when campaign data changes
@@ -1409,20 +1424,25 @@ function CampaignDetails({ campaignId, onBack }) {
       }
 
       const data = await response.json();
-      console.log(`🔧 CAMPAIGN: Agent config API response for ${agentId}:`, data);
+      console.log(
+        `🔧 CAMPAIGN: Agent config API response for ${agentId}:`,
+        data
+      );
       if (data.success && data.data) {
-        const mode = data.data.mode || 'serial';
+        const mode = data.data.mode || "serial";
         setAgentConfigMode(mode);
-        console.log(`🔧 CAMPAIGN: Agent ${agentId} configured for ${mode} mode`);
+        console.log(
+          `🔧 CAMPAIGN: Agent ${agentId} configured for ${mode} mode`
+        );
         return mode;
       }
     } catch (error) {
       console.error("Error fetching agent configuration:", error);
-      setAgentConfigMode('serial'); // Default to serial on error
+      setAgentConfigMode("serial"); // Default to serial on error
     } finally {
       setAgentConfigLoading(false);
     }
-    return 'serial';
+    return "serial";
   };
 
   // Resolve agent name by id using cached list or fetch single agent
@@ -1953,7 +1973,7 @@ function CampaignDetails({ campaignId, onBack }) {
           }
         } catch (_) {}
         setCampaign(next);
-        
+
         try {
           const savedRunId = localStorage.getItem(
             getStorageKey("currentRunId")
@@ -3024,19 +3044,23 @@ function CampaignDetails({ campaignId, onBack }) {
   const handleDownloadTranscriptTXT = async () => {
     try {
       if (!selectedCall) return;
-      const content = transcriptContent || '';
-      const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+      const content = transcriptContent || "";
+      const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
       const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
+      const a = document.createElement("a");
       a.href = url;
-      a.download = `transcript_${selectedCall.documentId || selectedCall.uniqueId || Date.now()}.txt`;
+      a.download = `transcript_${
+        selectedCall.documentId || selectedCall.uniqueId || Date.now()
+      }.txt`;
       document.body.appendChild(a);
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
     } catch (e) {
-      console.error('TXT download failed:', e);
-      try { toast.error('Failed to download TXT'); } catch {}
+      console.error("TXT download failed:", e);
+      try {
+        toast.error("Failed to download TXT");
+      } catch {}
     }
   };
 
@@ -4248,10 +4272,10 @@ function CampaignDetails({ campaignId, onBack }) {
         return;
       }
       setCampaign(result.data);
-      
+
       // Fetch agent configuration when agent is assigned
       await fetchAgentConfig(selectedAgentIdForAssign);
-      
+
       // Optimistically set agent name so UI updates immediately without refresh
       try {
         const picked = (agents || []).find(
@@ -4297,15 +4321,19 @@ function CampaignDetails({ campaignId, onBack }) {
       setIsTogglingCampaign(true);
       // Automatically determine mode based on agent configuration
       const primaryAgentId = getPrimaryAgentId();
-      let currentMode = 'serial'; // Default fallback
-      
+      let currentMode = "serial"; // Default fallback
+
       if (primaryAgentId) {
         currentMode = await fetchAgentConfig(primaryAgentId);
       }
-      
-      const runSeries = currentMode === 'serial';
-      
-      console.log(`🚀 CAMPAIGN: Starting campaign in ${runSeries ? 'SERIES' : 'PARALLEL'} mode (agent config: ${currentMode})`);
+
+      const runSeries = currentMode === "serial";
+
+      console.log(
+        `🚀 CAMPAIGN: Starting campaign in ${
+          runSeries ? "SERIES" : "PARALLEL"
+        } mode (agent config: ${currentMode})`
+      );
 
       if (runSeries) {
         // Start series calling via backend
@@ -4316,7 +4344,11 @@ function CampaignDetails({ campaignId, onBack }) {
             Authorization: `Bearer ${token}`,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ campaignId: campaign._id, agentId: primaryAgentId, minDelayMs: 5000 }),
+          body: JSON.stringify({
+            campaignId: campaign._id,
+            agentId: primaryAgentId,
+            minDelayMs: 5000,
+          }),
         });
         const data = await resp.json();
         if (!resp.ok || data.error) {
@@ -4379,7 +4411,7 @@ function CampaignDetails({ campaignId, onBack }) {
       }
       setIsTogglingCampaign(true);
       const token = sessionStorage.getItem("clienttoken");
-      
+
       // Handle series mode differently
       if (isSeriesMode) {
         console.log("🛑 FRONTEND: Stopping series campaign");
@@ -4419,7 +4451,7 @@ function CampaignDetails({ campaignId, onBack }) {
           return;
         }
       }
-      
+
       setCampaign((prev) => (prev ? { ...prev, isRunning: false } : prev));
       // Mark UI as ready for next run and stop any live polling
       setReadyFlag(true);
@@ -4437,7 +4469,11 @@ function CampaignDetails({ campaignId, onBack }) {
 
   // SERIES STATUS POLLING
   const seriesStatusIntervalRef = useRef(null);
-  const [seriesStatus, setSeriesStatus] = useState({ isRunning: false, currentIndex: 0, total: 0 });
+  const [seriesStatus, setSeriesStatus] = useState({
+    isRunning: false,
+    currentIndex: 0,
+    total: 0,
+  });
 
   const startSeriesStatusPolling = (cid) => {
     try {
@@ -4451,45 +4487,61 @@ function CampaignDetails({ campaignId, onBack }) {
           const data = await resp.json();
           const status = data?.status || null;
           if (status) {
-            const total = Array.isArray(campaign?.contacts) ? campaign.contacts.length : 0;
+            const total = Array.isArray(campaign?.contacts)
+              ? campaign.contacts.length
+              : 0;
             const currentIndex = Number(status.currentIndex || 0);
             const isRunning = !!status.isRunning;
-            
+
             setSeriesStatus({
               isRunning: isRunning,
               currentIndex: currentIndex,
               total: total,
             });
-            
+
             // Only update campaign running state if it actually changed to prevent flicker
             if (lastRunningState !== isRunning) {
-              setCampaign((prev) => (prev ? { ...prev, isRunning: isRunning } : prev));
+              setCampaign((prev) =>
+                prev ? { ...prev, isRunning: isRunning } : prev
+              );
               lastRunningState = isRunning;
             }
-            
+
             // If progressed to next contact, refresh campaign details in UI
             if (currentIndex !== lastIndex) {
               lastIndex = currentIndex;
-              try { await fetchCampaignDetails(); } catch {}
+              try {
+                await fetchCampaignDetails();
+              } catch {}
               setLastUpdated(new Date());
               try {
                 const humanIndex = lastIndex + 1;
                 if (isRunning) {
-                  toast.info(`Series dialing ${humanIndex}/${total}...`, { autoClose: 2000 });
+                  toast.info(`Series dialing ${humanIndex}/${total}...`, {
+                    autoClose: 2000,
+                  });
                 }
               } catch {}
             }
-            
+
             // Stop polling when finished and update UI flag
             if (!isRunning) {
               stopSeriesStatusPolling();
-              setCampaign((prev) => (prev ? { ...prev, isRunning: false } : prev));
+              setCampaign((prev) =>
+                prev ? { ...prev, isRunning: false } : prev
+              );
               // Add small delay to ensure backend has finished saving to database
               setTimeout(async () => {
-                try { await fetchCampaignHistory(cid); } catch {}
-                try { await fetchCampaignDetails(); } catch {}
+                try {
+                  await fetchCampaignHistory(cid);
+                } catch {}
+                try {
+                  await fetchCampaignDetails();
+                } catch {}
                 setLastUpdated(new Date());
-                try { toast.success('Series run completed and saved to history'); } catch {}
+                try {
+                  toast.success("Series run completed and saved to history");
+                } catch {}
               }, 1000);
               setIsSeriesMode(false);
             }
@@ -4519,7 +4571,11 @@ function CampaignDetails({ campaignId, onBack }) {
   ) => {
     // Skip saving from frontend during Series mode; backend auto-saves at the end
     if (isSeriesMode) {
-      try { console.log("💾 FRONTEND: Skipping save during series mode (backend will auto-save)"); } catch {}
+      try {
+        console.log(
+          "💾 FRONTEND: Skipping save during series mode (backend will auto-save)"
+        );
+      } catch {}
       return;
     }
     try {
@@ -5074,8 +5130,9 @@ function CampaignDetails({ campaignId, onBack }) {
                           "failed",
                         ];
                         // In NGR mode we exclude live statuses from recent table; in serial we show all
-                        if (agentConfigMode !== 'serial') {
-                          const isLive = status === 'ringing' || status === 'ongoing';
+                        if (agentConfigMode !== "serial") {
+                          const isLive =
+                            status === "ringing" || status === "ongoing";
                           if (isLive) return false;
                         }
                         const byStatus =
@@ -5368,7 +5425,7 @@ function CampaignDetails({ campaignId, onBack }) {
                                 <FaWhatsapp className="w-4 h-4 text-green-600" />
                               </button>
                             ) : (
-                              ""
+                              <span className="text-gray-400 text-xs">-</span>
                             )}
                           </td>
                           <td className="py-2 px-3">
@@ -5613,73 +5670,114 @@ function CampaignDetails({ campaignId, onBack }) {
     try {
       if (!selectedCall) return;
       const agentId = selectedCall.agentId?._id || selectedCall.agentId || null;
-      const providerRaw = (selectedCall.agentId?.serviceProvider || selectedCall.provider || selectedCall.metadata?.provider || '').toLowerCase();
-      let provider = providerRaw === 'c-zentrax' ? 'c-zentrix' : providerRaw;
+      const providerRaw = (
+        selectedCall.agentId?.serviceProvider ||
+        selectedCall.provider ||
+        selectedCall.metadata?.provider ||
+        ""
+      ).toLowerCase();
+      let provider = providerRaw === "c-zentrax" ? "c-zentrix" : providerRaw;
       const uniqueId =
         selectedCall?.metadata?.customParams?.uniqueid ||
         selectedCall?.documentId ||
         selectedCall?.uniqueId ||
-        selectedCall?.metadata?.uniqueid || null;
+        selectedCall?.metadata?.uniqueid ||
+        null;
       // Try to pick SANPBX callid if present in the log
-      const callid = selectedCall?.metadata?.callid || selectedCall?.externalResponse?.callid || null;
+      const callid =
+        selectedCall?.metadata?.callid ||
+        selectedCall?.externalResponse?.callid ||
+        null;
       // Extract possible c-zentrix fields if present (to avoid backend lookup)
-      const accountSid = selectedCall?.metadata?.accountSid || selectedCall?.metadata?.twilio?.accountSid || null;
-      const callSid = selectedCall?.metadata?.callSid || selectedCall?.metadata?.twilio?.callSid || null;
-      const streamSid = selectedCall?.metadata?.streamSid || selectedCall?.metadata?.twilio?.streamSid || null;
+      const accountSid =
+        selectedCall?.metadata?.accountSid ||
+        selectedCall?.metadata?.twilio?.accountSid ||
+        null;
+      const callSid =
+        selectedCall?.metadata?.callSid ||
+        selectedCall?.metadata?.twilio?.callSid ||
+        null;
+      const streamSid =
+        selectedCall?.metadata?.streamSid ||
+        selectedCall?.metadata?.twilio?.streamSid ||
+        null;
 
       // Infer provider as czentrix if unknown but Twilio-like fields exist
-      if (!provider && (selectedCall?.metadata?.accountSid || selectedCall?.metadata?.twilio?.accountSid)) {
-        provider = 'czentrix';
+      if (
+        !provider &&
+        (selectedCall?.metadata?.accountSid ||
+          selectedCall?.metadata?.twilio?.accountSid)
+      ) {
+        provider = "czentrix";
       }
 
-      if (provider === 'c-zentrix' || provider === 'czentrix') {
+      if (provider === "c-zentrix" || provider === "czentrix") {
         // Use backend proxy for CZentrix termination as well
-        const token = sessionStorage.getItem('clienttoken');
+        const token = sessionStorage.getItem("clienttoken");
         const resp = await fetch(`${API_BASE}/series-campaign/terminate`, {
-          method: 'POST',
+          method: "POST",
           headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {})
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
-          body: JSON.stringify({ agentId, provider: 'czentrix', uniqueId, accountSid, callSid, streamSid })
+          body: JSON.stringify({
+            agentId,
+            provider: "czentrix",
+            uniqueId,
+            accountSid,
+            callSid,
+            streamSid,
+          }),
         });
         const data = await resp.json().catch(() => ({}));
-        if (!resp.ok || data.success === false) throw new Error(data.error || 'Failed to terminate czentrix call');
-      } else if (provider === 'sanpbx' || provider === 'snapbx') {
+        if (!resp.ok || data.success === false)
+          throw new Error(data.error || "Failed to terminate czentrix call");
+      } else if (provider === "sanpbx" || provider === "snapbx") {
         // Use our backend proxy for SANPBX termination
-        const token = sessionStorage.getItem('clienttoken');
+        const token = sessionStorage.getItem("clienttoken");
         const resp = await fetch(`${API_BASE}/series-campaign/terminate`, {
-          method: 'POST',
+          method: "POST",
           headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {})
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
-          body: JSON.stringify({ agentId, provider: 'sanpbx', callid, uniqueId })
+          body: JSON.stringify({
+            agentId,
+            provider: "sanpbx",
+            callid,
+            uniqueId,
+          }),
         });
         const data = await resp.json().catch(() => ({}));
-        if (!resp.ok || data.success === false) throw new Error(data.error || 'Failed to terminate SANPBX call');
+        if (!resp.ok || data.success === false)
+          throw new Error(data.error || "Failed to terminate SANPBX call");
       } else {
         // As a safe fallback, attempt czentrix termination with uniqueId via backend
-        const token = sessionStorage.getItem('clienttoken');
+        const token = sessionStorage.getItem("clienttoken");
         const resp = await fetch(`${API_BASE}/series-campaign/terminate`, {
-          method: 'POST',
+          method: "POST",
           headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {})
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
-          body: JSON.stringify({ agentId, provider: 'czentrix', uniqueId })
+          body: JSON.stringify({ agentId, provider: "czentrix", uniqueId }),
         });
         const data = await resp.json().catch(() => ({}));
-        if (!resp.ok || data.success === false) throw new Error(data.error || 'Failed to terminate call');
+        if (!resp.ok || data.success === false)
+          throw new Error(data.error || "Failed to terminate call");
       }
 
-      try { toast.success('Call termination requested'); } catch {}
+      try {
+        toast.success("Call termination requested");
+      } catch {}
       // Stop polling and close modal after termination request
       stopLiveCallPolling();
       setShowLiveCallModal(false);
     } catch (e) {
-      console.error('Terminate call failed:', e);
-      try { toast.error(e?.message || 'Failed to terminate call'); } catch {}
+      console.error("Terminate call failed:", e);
+      try {
+        toast.error(e?.message || "Failed to terminate call");
+      } catch {}
     }
   };
 
@@ -5790,43 +5888,26 @@ function CampaignDetails({ campaignId, onBack }) {
                   {campaign.name}
                 </h1>
                 <p className="text-gray-600 mt-1">{campaign.description}</p>
-                {/* Calling Mode Indicator */}
+                {/* Calling Mode compact badge (P/S) */}
                 <div className="mt-2 flex items-center">
-                  <span className="text-sm text-gray-500 mr-2">Calling Mode:</span>
                   {agentConfigLoading ? (
-                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
-                      <svg className="w-3 h-3 mr-1 animate-spin" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                      Loading...
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 text-gray-600">
+                      …
                     </span>
                   ) : (
-                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                      agentConfigMode === 'serial' 
-                        ? 'bg-blue-100 text-blue-800' 
-                        : 'bg-green-100 text-green-800'
-                    }`}>
-                      {agentConfigMode === 'serial' ? (
-                        <>
-                          <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
-                          </svg>
-                          Series (One-by-One)
-                        </>
-                      ) : (
-                        <>
-                          <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
-                          </svg>
-                          Parallel (Simultaneous)
-                        </>
-                      )}
+                    <span
+                      className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold ${
+                        agentConfigMode === "serial"
+                          ? "bg-blue-100 text-blue-800"
+                          : "bg-green-100 text-green-800"
+                      }`}
+                      title={
+                        agentConfigMode === "serial" ? "Serial" : "Parallel"
+                      }
+                    >
+                      {agentConfigMode === "serial" ? "S" : "P"}
                     </span>
                   )}
-                  <span className="ml-2 text-xs text-gray-400">
-                    (Based on agent configuration)
-                  </span>
                 </div>
               </div>
             </div>
@@ -6059,6 +6140,17 @@ function CampaignDetails({ campaignId, onBack }) {
                     />
                   </svg>
                 </button>
+                {/* Compact calling mode badge next to arrow */}
+                <span
+                  className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold ${
+                    agentConfigMode === "serial"
+                      ? "bg-blue-100 text-blue-800"
+                      : "bg-green-100 text-green-800"
+                  }`}
+                  title={agentConfigMode === "serial" ? "Serial" : "Parallel"}
+                >
+                  {agentConfigMode === "serial" ? "S" : "P"}
+                </span>
               </div>
             </div>
 
@@ -6449,222 +6541,511 @@ function CampaignDetails({ campaignId, onBack }) {
           )}
 
           {/* Live call logs (Ringing/Ongoing) - show only in NGR/parallel mode */}
-          {agentConfigMode !== 'serial' && (
-          <div className={`bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8 ${statusLogsCollapsed ? "hidden" : ""}`}>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-medium text-gray-900">Live call logs</h2>
-              <div className="flex items-center gap-3">
-                {/* Auto refresh toggle (same visual) */}
-                <label className="flex items-center gap-2 text-sm select-none">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4"
-                    checked={autoRefreshCalls}
-                    onChange={(e) => setAutoRefreshCalls(e.target.checked)}
-                  />
-                  {autoRefreshCalls ? "Auto-refresh: On" : "Auto-refresh: Off"}
-                </label>
-                <button
-                  onClick={() => fetchApiMergedCalls(1, false, false)}
-                  className="text-sm px-2 py-1 bg-gray-50 text-black rounded-md hover:bg-gray-100 transition-colors border border-gray-200 flex items-center justify-between"
-                  title="Refresh"
-                >
-                  <svg className="w-3 h-3 mx-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                  <span>Refresh</span>
-                </button>
-                {/* Visual parity selects (disabled for live) */}
-                <select
-                  className="text-sm border border-gray-300 rounded-md px-2 py-1 opacity-60 cursor-not-allowed"
-                  value={callFilter}
-                  disabled
-                  onChange={() => {}}
-                >
-                  <option>All</option>
-                </select>
-                <select
-                  className="text-sm border border-gray-300 rounded-md px-2 py-1 opacity-60 cursor-not-allowed"
-                  value={durationSort}
-                  disabled
-                  onChange={() => {}}
-                >
-                  <option>Sort by</option>
-                </select>
-              </div>
-            </div>
-            {apiMergedCallsLoading ? (
-              <div className="text-center py-10">Loading live calls...</div>
-            ) : (() => {
-              const liveCalls = (apiMergedCalls || []).filter((lead) => {
-                const status = String(lead?.status || '').toLowerCase();
-                return status === 'ringing' || status === 'ongoing';
-              });
-              if (liveCalls.length === 0) {
-                return <div className="text-center py-10 text-gray-500">No live calls</div>;
-              }
-              return (
-                <div className="overflow-x-auto">
-                  {/* Select and action controls (visual parity with Recent) */}
-                  {liveCalls.length > 0 && !apiMergedCallsLoading && (
-                    <div className="mb-4 p-4 bg-gray-50 rounded-lg border">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-4">
-                          <label className="flex items-center gap-2">
-                            <input
-                              type="checkbox"
-                              checked={selectAllCallLogs}
-                              onChange={handleSelectAllCallLogs}
-                              className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-                            />
-                            <span className="text-sm font-medium text-gray-700">
-                              Select All Call Logs ({selectedCallLogs.length} selected)
-                            </span>
-                          </label>
-                        </div>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={callSelectedCallLogs}
-                            disabled={selectedCallLogs.length === 0}
-                            className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                            </svg>
-                            Call Selected ({selectedCallLogs.length})
-                          </button>
-                          <button
-                            onClick={() => {
-                              setSelectedCallLogs([]);
-                              setSelectAllCallLogs(false);
-                            }}
-                            disabled={selectedCallLogs.length === 0}
-                            className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            Clear Selection
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                  <table className="min-w-full text-sm border border-gray-200 rounded-lg overflow-hidden">
-                    <thead className="bg-gray-50 sticky top-0 z-10">
-                      <tr className="text-left text-gray-700">
-                        <th className="py-2 px-3">
-                          <input
-                            type="checkbox"
-                            checked={selectAllCallLogs}
-                            onChange={handleSelectAllCallLogs}
-                            className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-                          />
-                        </th>
-                        <th className="py-2 px-3">S. No.</th>
-                        <th className="py-2 px-3">Date & Time</th>
-                        <th className="py-2 px-3">Name</th>
-                        <th className="py-2 px-3">Number</th>
-                        <th className="py-2 px-3">Status</th>
-                        <th className="py-2 px-3">
-                          <FiClock />
-                        </th>
-                        <th className="py-2 px-3">Conversation</th>
-                        <th className="py-2 px-3">Flag</th>
-                        <th className="py-2 px-3">Disposition</th>
-                        <th className="py-2 px-3">Action</th>
-                        <th className="py-2 px-3">Redial</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {liveCalls.map((lead, idx) => (
-                        <tr key={`${lead.documentId || lead.contactId || 'live'}-${idx}`} className="hover:bg-gray-50 ${isCallLogSelected(lead) ? 'bg-blue-50 border-blue-200' : ''}">
-                          <td className="py-2 px-3">
-                            <input
-                              type="checkbox"
-                              checked={isCallLogSelected(lead)}
-                              onChange={() => handleSelectCallLog(lead)}
-                              className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-                            />
-                          </td>
-                          <td className="py-2 px-3 text-gray-700">{idx + 1}</td>
-                          <td className="py-2 px-3 text-gray-700 flex flex-col items-center gap-2">
-                            <span>
-                              {lead.time
-                                ? new Date(lead.time).toLocaleDateString()
-                                : "-"}{" "}
-                            </span>
-                            <span>
-                              {lead.time
-                                ? new Date(lead.time).toLocaleTimeString([], {
-                                    hour: "2-digit",
-                                    minute: "2-digit",
-                                  })
-                                : "-"}
-                            </span>
-                          </td>
-                          <td className="py-2 px-3 text-gray-700">{lead.name || '-'}</td>
-                          <td className="py-2 px-3 text-gray-700">{lead.number || '-'}</td>
-                          <td className="py-2 px-3">
-                            <span className={`px-2 py-1 rounded text-xs font-medium ${String(lead.status || '').toLowerCase() === 'ringing' ? 'bg-yellow-100 text-yellow-800' : 'bg-blue-100 text-blue-800'}`}>
-                              {String(lead.status || '').toUpperCase()}
-                            </span>
-                          </td>
-                          {/* Duration (⏱) */}
-                          <td className="py-2 px-3">
-                            {formatDuration(lead.duration)}
-                          </td>
-                          {/* Conversation (Transcript) button - mirrors recent style */}
-                          <td className="py-2 px-3">
-                            <button
-                              className={`text-xs px-2 py-1 rounded-md border ${
-                                lead.documentId && viewedTranscripts.has(lead.documentId)
-                                  ? "bg-green-50 text-fuchsia-700 border-green-200"
-                                  : "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
-                              }`}
-                              title={
-                                lead.documentId && viewedTranscripts.has(lead.documentId)
-                                  ? "Transcript viewed"
-                                  : "View transcript"
-                              }
-                              onClick={() => openTranscriptSmart(lead)}
-                            >
-                              <svg className="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 16h8M8 12h8M8 8h8M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H7l-2 2H3v12a2 2 0 002 2z" />
-                              </svg>
-                              {(() => {
-                                const baseLabel =
-                                  lead.documentId && viewedTranscripts.has(lead.documentId)
-                                    ? "Viewed"
-                                    : "Transcript";
-                                const count =
-                                  (typeof lead.transcriptCount === "number" ? lead.transcriptCount : undefined) ??
-                                  getTranscriptMessageCount(lead);
-                                return count > 0 ? `${baseLabel} (${count})` : baseLabel;
-                              })()}
-                            </button>
-                          </td>
-                          {/* Flag (kept empty to mirror recent visual spacing) */}
-                          <td className="py-2 px-3"></td>
-                          {/* Disposition (empty) */}
-                          <td className="py-2 px-3"></td>
-                          {/* Action (empty) */}
-                          <td className="py-2 px-3"></td>
-                          <td className="py-2 px-3">
-                            <button
-                              className="inline-flex items-center px-3 py-1 text-xs bg-green-50 text-green-700 border border-green-200 rounded hover:bg-green-100 disabled:opacity-50"
-                              title={!lead.number ? "No phone number available" : lead.status === "ringing" || lead.status === "ongoing" ? "Call already in progress" : "Retry this contact"}
-                              onClick={() => handleRetryLead(lead)}
-                              disabled={!lead.number || lead.status === "ringing" || lead.status === "ongoing"}
-                            >
-                              <FiPhone className="w-3 h-3 text-green-700 mx-2" style={{ minWidth: "16px", minHeight: "16px" }} />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+          {agentConfigMode !== "serial" && (
+            <div
+              className={`bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8 ${
+                statusLogsCollapsed ? "hidden" : ""
+              }`}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-base font-medium text-gray-900">
+                  Live call logs
+                </h2>
+                <div className="flex items-center gap-3">
+                  {/* Auto refresh toggle (same visual) */}
+                  <label className="flex items-center gap-2 text-sm select-none">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4"
+                      checked={autoRefreshCalls}
+                      onChange={(e) => setAutoRefreshCalls(e.target.checked)}
+                    />
+                    {autoRefreshCalls
+                      ? "Auto-refresh: On"
+                      : "Auto-refresh: Off"}
+                  </label>
+                  <button
+                    onClick={() => fetchApiMergedCalls(1, false, false)}
+                    className="text-sm px-2 py-1 bg-gray-50 text-black rounded-md hover:bg-gray-100 transition-colors border border-gray-200 flex items-center justify-between"
+                    title="Refresh"
+                  >
+                    <svg
+                      className="w-3 h-3 mx-1"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                      />
+                    </svg>
+                    <span>Refresh</span>
+                  </button>
+                  {/* Visual parity selects (disabled for live) */}
+                  <select
+                    className="text-sm border border-gray-300 rounded-md px-2 py-1 opacity-60 cursor-not-allowed"
+                    value={callFilter}
+                    disabled
+                    onChange={() => {}}
+                  >
+                    <option>All</option>
+                  </select>
+                  <select
+                    className="text-sm border border-gray-300 rounded-md px-2 py-1 opacity-60 cursor-not-allowed"
+                    value={durationSort}
+                    disabled
+                    onChange={() => {}}
+                  >
+                    <option>Sort by</option>
+                  </select>
                 </div>
-              );
-            })()}
-          </div>
+              </div>
+              {apiMergedCallsLoading ? (
+                <div className="text-center py-10">Loading live calls...</div>
+              ) : (
+                (() => {
+                  const liveCalls = (apiMergedCalls || []).filter((lead) => {
+                    const status = String(lead?.status || "").toLowerCase();
+                    return status === "ringing" || status === "ongoing";
+                  });
+                  if (liveCalls.length === 0) {
+                    return (
+                      <div className="text-center py-10 text-gray-500">
+                        No live calls
+                      </div>
+                    );
+                  }
+                  return (
+                    <div className="overflow-x-auto">
+                      {/* Select and action controls (visual parity with Recent) */}
+                      {liveCalls.length > 0 && !apiMergedCallsLoading && (
+                        <div className="mb-4 p-4 bg-gray-50 rounded-lg border">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-4">
+                              <label className="flex items-center gap-2">
+                                <input
+                                  type="checkbox"
+                                  checked={selectAllCallLogs}
+                                  onChange={handleSelectAllCallLogs}
+                                  className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                                />
+                                <span className="text-sm font-medium text-gray-700">
+                                  Select All Call Logs (
+                                  {selectedCallLogs.length} selected)
+                                </span>
+                              </label>
+                            </div>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={callSelectedCallLogs}
+                                disabled={selectedCallLogs.length === 0}
+                                className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                              >
+                                <svg
+                                  className="w-4 h-4"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  viewBox="0 0 24 24"
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
+                                  />
+                                </svg>
+                                Call Selected ({selectedCallLogs.length})
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setSelectedCallLogs([]);
+                                  setSelectAllCallLogs(false);
+                                }}
+                                disabled={selectedCallLogs.length === 0}
+                                className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                Clear Selection
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      <table className="min-w-full text-sm border border-gray-200 rounded-lg overflow-hidden">
+                        <thead className="bg-gray-50 sticky top-0 z-10">
+                          <tr className="text-left text-gray-700">
+                            <th className="py-2 px-3">
+                              <input
+                                type="checkbox"
+                                checked={selectAllCallLogs}
+                                onChange={handleSelectAllCallLogs}
+                                className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                              />
+                            </th>
+                            <th className="py-2 px-3">S. No.</th>
+                            <th className="py-2 px-3">Date & Time</th>
+                            <th className="py-2 px-3">Name</th>
+                            <th className="py-2 px-3">Number</th>
+                            <th className="py-2 px-3">Status</th>
+                            <th className="py-2 px-3">
+                              <FiClock />
+                            </th>
+                            <th className="py-2 px-3">Conversation</th>
+                            <th className="py-2 px-3">Flag</th>
+                            <th className="py-2 px-3">Disposition</th>
+                            <th className="py-2 px-3">Action</th>
+                            <th className="py-2 px-3">Redial</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {liveCalls.map((lead, idx) => (
+                            <tr
+                              key={`${
+                                lead.documentId || lead.contactId || "live"
+                              }-${idx}`}
+                              className="hover:bg-gray-50 ${isCallLogSelected(lead) ? 'bg-blue-50 border-blue-200' : ''}"
+                            >
+                              <td className="py-2 px-3">
+                                <input
+                                  type="checkbox"
+                                  checked={isCallLogSelected(lead)}
+                                  onChange={() => handleSelectCallLog(lead)}
+                                  className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                                />
+                              </td>
+                              <td className="py-2 px-3 text-gray-700">
+                                {idx + 1}
+                              </td>
+                              <td className="py-2 px-3 text-gray-700 flex flex-col items-center gap-2">
+                                <span>
+                                  {lead.time
+                                    ? new Date(lead.time).toLocaleDateString()
+                                    : "-"}{" "}
+                                </span>
+                                <span>
+                                  {lead.time
+                                    ? new Date(lead.time).toLocaleTimeString(
+                                        [],
+                                        {
+                                          hour: "2-digit",
+                                          minute: "2-digit",
+                                        }
+                                      )
+                                    : "-"}
+                                </span>
+                              </td>
+                              <td className="py-2 px-3 text-gray-700">
+                                {lead.name || "-"}
+                              </td>
+                              <td className="py-2 px-3 text-gray-700">
+                                {lead.number || "-"}
+                              </td>
+                              <td className="py-2 px-3">
+                                <span
+                                  className={`px-2 py-1 rounded text-xs font-medium ${
+                                    String(lead.status || "").toLowerCase() ===
+                                    "ringing"
+                                      ? "bg-yellow-100 text-yellow-800"
+                                      : "bg-blue-100 text-blue-800"
+                                  }`}
+                                >
+                                  {String(lead.status || "").toUpperCase()}
+                                </span>
+                              </td>
+                              {/* Duration (⏱) */}
+                              <td className="py-2 px-3">
+                                {formatDuration(lead.duration)}
+                              </td>
+                              {/* Conversation (Transcript) button - mirrors recent style */}
+                              <td className="py-2 px-3">
+                                <button
+                                  className={`text-xs px-2 py-1 rounded-md border ${
+                                    lead.documentId &&
+                                    viewedTranscripts.has(lead.documentId)
+                                      ? "bg-green-50 text-fuchsia-700 border-green-200"
+                                      : "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
+                                  }`}
+                                  title={
+                                    lead.documentId &&
+                                    viewedTranscripts.has(lead.documentId)
+                                      ? "Transcript viewed"
+                                      : "View transcript"
+                                  }
+                                  onClick={() => openTranscriptSmart(lead)}
+                                >
+                                  <svg
+                                    className="w-4 h-4 mr-1 inline"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth="2"
+                                      d="M8 16h8M8 12h8M8 8h8M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H7l-2 2H3v12a2 2 0 002 2z"
+                                    />
+                                  </svg>
+                                  {(() => {
+                                    const baseLabel =
+                                      lead.documentId &&
+                                      viewedTranscripts.has(lead.documentId)
+                                        ? "Viewed"
+                                        : "Transcript";
+                                    const count =
+                                      (typeof lead.transcriptCount === "number"
+                                        ? lead.transcriptCount
+                                        : undefined) ??
+                                      getTranscriptMessageCount(lead);
+                                    return count > 0
+                                      ? `${baseLabel} (${count})`
+                                      : baseLabel;
+                                  })()}
+                                </button>
+                              </td>
+                              {/* Flag (WhatsApp mini chat indicator, same as Recent) */}
+                              <td className="py-2 px-3 text-gray-700">
+                                {lead.whatsappRequested &&
+                                lead.whatsappMessageSent ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => openWhatsAppMiniChat(lead)}
+                                    title="Open WhatsApp chat"
+                                    className="inline-flex items-center justify-center"
+                                  >
+                                    <FaWhatsapp className="w-4 h-4 text-green-600" />
+                                  </button>
+                                ) : (
+                                  ""
+                                )}
+                              </td>
+                              {/* Disposition (same dropdown control as Recent) */}
+                              <td className="py-2 px-3">
+                                {(() => {
+                                  const rowId =
+                                    lead.documentId ||
+                                    lead.contactId ||
+                                    `${idx}`;
+                                  const selected = rowDisposition[rowId];
+                                  const colorClass =
+                                    selected === "interested"
+                                      ? "bg-green-200 text-green-900 border-green-300"
+                                      : selected === "not interested"
+                                      ? "bg-red-200 text-red-900 border-red-300"
+                                      : selected === "maybe"
+                                      ? "bg-yellow-200 text-yellow-900 border-yellow-300"
+                                      : "bg-gray-50 text-gray-700 border-gray-200";
+                                  const label = selected ? selected : "Default";
+                                  const icon =
+                                    selected === "interested" ? (
+                                      <svg
+                                        className="w-4 h-4 mr-2"
+                                        fill="none"
+                                        viewBox="0 0 24 24"
+                                        stroke="currentColor"
+                                      >
+                                        <path
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                          strokeWidth="2"
+                                          d="M5 13l4 4L19 7"
+                                        />
+                                      </svg>
+                                    ) : selected === "not interested" ? (
+                                      <svg
+                                        className="w-4 h-4 mr-2"
+                                        fill="none"
+                                        viewBox="0 0 24 24"
+                                        stroke="currentColor"
+                                      >
+                                        <path
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                          strokeWidth="2"
+                                          d="M6 18L18 6M6 6l12 12"
+                                        />
+                                      </svg>
+                                    ) : selected === "maybe" ? (
+                                      <svg
+                                        className="w-4 h-4 mr-2"
+                                        fill="none"
+                                        viewBox="0 0 24 24"
+                                        stroke="currentColor"
+                                      >
+                                        <path
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                          strokeWidth="2"
+                                          d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                                        />
+                                      </svg>
+                                    ) : (
+                                      <svg
+                                        className="w-4 h-4 mr-2"
+                                        fill="none"
+                                        viewBox="0 0 24 24"
+                                        stroke="currentColor"
+                                      >
+                                        <path
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                          strokeWidth="2"
+                                          d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                                        />
+                                      </svg>
+                                    );
+
+                                  return (
+                                    <div className="relative inline-block text-left">
+                                      <button
+                                        type="button"
+                                        className={`inline-flex items-center px-3 py-1 text-xs border rounded ${colorClass}`}
+                                        onClick={() =>
+                                          setOpenDispositionFor(
+                                            openDispositionFor === rowId
+                                              ? null
+                                              : rowId
+                                          )
+                                        }
+                                      >
+                                        {icon}
+                                        {label}
+                                        <svg
+                                          className="w-4 h-4 ml-2"
+                                          fill="none"
+                                          viewBox="0 0 24 24"
+                                          stroke="currentColor"
+                                        >
+                                          <path
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                            strokeWidth="2"
+                                            d="M19 9l-7 7-7-7"
+                                          />
+                                        </svg>
+                                      </button>
+
+                                      {openDispositionFor === rowId && (
+                                        <div className="absolute z-10 mt-1 w-40 bg-white border border-gray-200 rounded shadow">
+                                          {[
+                                            {
+                                              key: "interested",
+                                              label: "Interested",
+                                              cls: "text-green-700",
+                                            },
+                                            {
+                                              key: "not interested",
+                                              label: "Not Interested",
+                                              cls: "text-red-700",
+                                            },
+                                            {
+                                              key: "maybe",
+                                              label: "Maybe",
+                                              cls: "text-yellow-700",
+                                            },
+                                            {
+                                              key: undefined,
+                                              label: "Default",
+                                              cls: "text-gray-700",
+                                            },
+                                          ].map((opt) => (
+                                            <button
+                                              key={`${rowId}-${opt.label}`}
+                                              type="button"
+                                              className={`w-full text-left px-3 py-2 text-xs hover:bg-gray-50 ${opt.cls}`}
+                                              onClick={() => {
+                                                setRowDisposition((prev) => ({
+                                                  ...prev,
+                                                  [rowId]: opt.key,
+                                                }));
+                                                // Persist to backend
+                                                try {
+                                                  const authToken =
+                                                    sessionStorage.getItem(
+                                                      "clienttoken"
+                                                    ) ||
+                                                    localStorage.getItem(
+                                                      "admintoken"
+                                                    );
+                                                  const url = `${API_BASE}/groups/mark-contact-status`;
+                                                  const payload = {
+                                                    campaignId:
+                                                      campaign && campaign._id,
+                                                    phone:
+                                                      lead &&
+                                                      (lead.number ||
+                                                        lead.phone),
+                                                    status:
+                                                      opt.key || "default",
+                                                  };
+                                                  fetch(url, {
+                                                    method: "POST",
+                                                    headers: {
+                                                      "Content-Type":
+                                                        "application/json",
+                                                      ...(authToken
+                                                        ? {
+                                                            Authorization: `Bearer ${authToken}`,
+                                                          }
+                                                        : {}),
+                                                    },
+                                                    body: JSON.stringify(
+                                                      payload
+                                                    ),
+                                                  }).catch(() => {});
+                                                } catch (e) {}
+                                                setOpenDispositionFor(null);
+                                              }}
+                                            >
+                                              {opt.label}
+                                            </button>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })()}
+                              </td>
+                              {/* Action (keep consistent with Recent; currently no extra action) */}
+                              <td className="py-2 px-3"></td>
+                              <td className="py-2 px-3">
+                                <button
+                                  className="inline-flex items-center px-3 py-1 text-xs bg-green-50 text-green-700 border border-green-200 rounded hover:bg-green-100 disabled:opacity-50"
+                                  title={
+                                    !lead.number
+                                      ? "No phone number available"
+                                      : lead.status === "ringing" ||
+                                        lead.status === "ongoing"
+                                      ? "Call already in progress"
+                                      : "Retry this contact"
+                                  }
+                                  onClick={() => handleRetryLead(lead)}
+                                  disabled={
+                                    !lead.number ||
+                                    lead.status === "ringing" ||
+                                    lead.status === "ongoing"
+                                  }
+                                >
+                                  <FiPhone
+                                    className="w-3 h-3 text-green-700 mx-2"
+                                    style={{
+                                      minWidth: "16px",
+                                      minHeight: "16px",
+                                    }}
+                                  />
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  );
+                })()
+              )}
+            </div>
           )}
 
           {/* Minimal Leads + Transcript Section */}
@@ -6847,23 +7228,24 @@ function CampaignDetails({ campaignId, onBack }) {
                           number && number !== "-" && /\d/.test(number);
                         const byData = hasRealName || hasRealNumber;
                         const status = (lead.status || "").toLowerCase();
-                        const connectedStatuses = [
-                          "connected",
-                          "completed",
-                          "ongoing",
-                        ];
+                        // Only show completed and missed-like calls in default view
+                        // and exclude live states (ringing/ongoing) across filters
+                        const connectedStatuses = ["connected", "completed"]; // exclude ongoing
                         const missedStatuses = [
                           "missed",
                           "not_connected",
                           "failed",
                         ];
+                        const notLive =
+                          status !== "ringing" && status !== "ongoing";
                         const byStatus =
                           callFilter === "all"
-                            ? true
+                            ? status === "completed" ||
+                              missedStatuses.includes(status)
                             : callFilter === "connected"
                             ? connectedStatuses.includes(status)
                             : missedStatuses.includes(status);
-                        return byData && byStatus;
+                        return byData && byStatus && notLive;
                       })
                       .sort((a, b) => {
                         if (durationSort === "none") return 0;
@@ -7643,9 +8025,12 @@ function CampaignDetails({ campaignId, onBack }) {
                     <span className="ml-3 text-xs font-normal text-gray-600 whitespace-nowrap">
                       {formatDateTimeCompact(
                         selectedCall.time ||
-                        selectedCall.createdAt ||
-                        (selectedCall.metadata && (selectedCall.metadata.startTime || selectedCall.metadata.callStartTime)) ||
-                        (selectedCall.externalResponse && selectedCall.externalResponse.startTime)
+                          selectedCall.createdAt ||
+                          (selectedCall.metadata &&
+                            (selectedCall.metadata.startTime ||
+                              selectedCall.metadata.callStartTime)) ||
+                          (selectedCall.externalResponse &&
+                            selectedCall.externalResponse.startTime)
                       )}
                     </span>
                   )}
@@ -7661,7 +8046,6 @@ function CampaignDetails({ campaignId, onBack }) {
                       <div className="font-semibold text-gray-800">
                         {getContactDisplayNameBlank(selectedCall)}
                       </div>
-                      
                     </div>
                     <div className="p-3">
                       <div className="text-sm text-gray-500 mb-1">
@@ -7686,7 +8070,11 @@ function CampaignDetails({ campaignId, onBack }) {
               {/* Action buttons */}
               <div className="relative ml-3" ref={downloadMenuRef}>
                 <button
-                  className={`text-sm px-4 py-2 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-60 border focus:outline-none focus:ring-2 focus:ring-blue-300 ${showDownloadMenu ? 'bg-gray-900 text-white border-gray-900' : 'bg-black text-white border-transparent hover:bg-gray-800'}`}
+                  className={`text-sm px-4 py-2 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-60 border focus:outline-none focus:ring-2 focus:ring-blue-300 ${
+                    showDownloadMenu
+                      ? "bg-gray-900 text-white border-gray-900"
+                      : "bg-black text-white border-transparent hover:bg-gray-800"
+                  }`}
                   onClick={() => setShowDownloadMenu((v) => !v)}
                   title="Download"
                   disabled={isDownloadingPdf}
@@ -7733,19 +8121,33 @@ function CampaignDetails({ campaignId, onBack }) {
                 className="ml-3 bg-green-500 text-white text-sm px-3 py-2 rounded-lg hover:bg-green-600 transition-colors flex items-center gap-2 disabled:opacity-60"
                 onClick={() => {
                   try {
-                    const raw = (selectedCall && (selectedCall.number || selectedCall.phone || selectedCall.mobile || (selectedCall.metadata && selectedCall.metadata.customParams && selectedCall.metadata.customParams.phone))) || '';
-                    const digits = String(raw || '').replace(/\D/g, '');
+                    const raw =
+                      (selectedCall &&
+                        (selectedCall.number ||
+                          selectedCall.phone ||
+                          selectedCall.mobile ||
+                          (selectedCall.metadata &&
+                            selectedCall.metadata.customParams &&
+                            selectedCall.metadata.customParams.phone))) ||
+                      "";
+                    const digits = String(raw || "").replace(/\D/g, "");
                     // Remove any leading zeros (e.g., 09546423919 -> 9546423919)
-                    const normalized = digits.replace(/^0+/, '');
+                    const normalized = digits.replace(/^0+/, "");
                     // Ensure Indian country code is prefixed (WhatsApp expects country code without +)
-                    const phone = normalized.startsWith('91') ? normalized : (normalized ? `91${normalized}` : '');
+                    const phone = normalized.startsWith("91")
+                      ? normalized
+                      : normalized
+                      ? `91${normalized}`
+                      : "";
                     if (!phone) {
-                      try { toast.warn('No phone number found'); } catch {}
+                      try {
+                        toast.warn("No phone number found");
+                      } catch {}
                       return;
                     }
                     // Explicitly open WhatsApp Web
                     const url = `https://web.whatsapp.com/send?phone=${phone}`;
-                    window.open(url, '_blank', 'noopener,noreferrer');
+                    window.open(url, "_blank", "noopener,noreferrer");
                   } catch (_) {}
                 }}
                 title="Open WhatsApp"
@@ -9313,7 +9715,8 @@ function CampaignDetails({ campaignId, onBack }) {
                     {liveCallDetails
                       ? `Last updated: ${new Date().toLocaleTimeString()}`
                       : "Waiting for call data..."}
-                    {(isPolling || liveCallDetails?.metadata?.isActive !== false) && (
+                    {(isPolling ||
+                      liveCallDetails?.metadata?.isActive !== false) && (
                       <button
                         type="button"
                         onClick={terminateCurrentCall}

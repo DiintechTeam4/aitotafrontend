@@ -14,11 +14,13 @@ import {
   FaUserCheck,
   FaIdBadge,
   FaCalendarAlt,
+  FaEdit,
+  FaTrash,
 } from "react-icons/fa";
 import { API_BASE_URL } from "../../../config";
 import { FiUserCheck } from "react-icons/fi";
 
-const ApprovalFormDetails = ({ clientId, onClose, onApprove }) => {
+const ApprovalFormDetails = ({ clientId, onClose, onApprove, onEdit }) => {
   const [clientData, setClientData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -27,6 +29,9 @@ const ApprovalFormDetails = ({ clientId, onClose, onApprove }) => {
   const [clientType, setClientType] = useState("new");
   const [updatingType, setUpdatingType] = useState(false);
   const [updateTypeMsg, setUpdateTypeMsg] = useState("");
+  const [editMode, setEditMode] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [editForm, setEditForm] = useState({});
 
   const getClientTypeBadgeClass = (type) => {
     const t = (type || "").toString().toLowerCase();
@@ -186,6 +191,17 @@ const ApprovalFormDetails = ({ clientId, onClose, onApprove }) => {
 
       setClientData(combinedData);
       setClientToken(clientToken);
+      setEditForm({
+        name: combinedData.name || combinedData.contactName || "",
+        businessName: combinedData.businessName || "",
+        mobileNo: combinedData.mobileNo || combinedData.contactNumber || "",
+        websiteUrl: combinedData.websiteUrl || combinedData.website || "",
+        address: combinedData.address || "",
+        city: combinedData.city || "",
+        pincode: combinedData.pincode || "",
+        gstNo: combinedData.gstNo || combinedData.gst || "",
+        panNo: combinedData.panNo || combinedData.pancard || "",
+      });
       try {
         const normalizedType = (client.clientType || "new")
           .toString()
@@ -308,6 +324,118 @@ const ApprovalFormDetails = ({ clientId, onClose, onApprove }) => {
     }
   };
 
+  const startEdit = () => {
+    setEditMode(true);
+  };
+
+  const handleDeleteClient = () => {
+    setShowDeleteModal(true);
+  };
+
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const confirmDeleteClient = async () => {
+    try {
+      setDeleting(true);
+      const adminToken = localStorage.getItem("admintoken");
+      if (!adminToken) throw new Error("Admin token not found");
+      const resp = await fetch(
+        `${API_BASE_URL}/admin/deleteclient/${clientId}`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${adminToken}`,
+          },
+        }
+      );
+      const result = await resp.json().catch(() => ({}));
+      if (!resp.ok || result?.success !== true) {
+        throw new Error(
+          result?.message || result?.error || "Failed to delete client"
+        );
+      }
+      alert("Client deleted successfully");
+      setShowDeleteModal(false);
+      if (onClose) onClose();
+    } catch (e) {
+      alert(e.message || "Delete failed");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const cancelEdit = () => {
+    // Reset form back to latest clientData and exit edit mode
+    if (clientData) {
+      setEditForm({
+        name: clientData.name || clientData.contactName || "",
+        businessName: clientData.businessName || "",
+        mobileNo: clientData.mobileNo || clientData.contactNumber || "",
+        websiteUrl: clientData.websiteUrl || clientData.website || "",
+        address: clientData.address || "",
+        city: clientData.city || "",
+        pincode: clientData.pincode || "",
+        gstNo: clientData.gstNo || clientData.gst || "",
+        panNo: clientData.panNo || clientData.pancard || "",
+      });
+    }
+    setEditMode(false);
+  };
+
+  const handleSaveProfile = async () => {
+    try {
+      setSavingProfile(true);
+      const adminToken = localStorage.getItem("admintoken");
+      if (!adminToken) throw new Error("Admin token not found");
+
+      // Basic client-side validations
+      if (!editForm.name || !editForm.businessName) {
+        alert("Please fill Name and Business Name");
+        return;
+      }
+
+      const resp = await fetch(
+        `${API_BASE_URL}/admin/update-client/${clientId}`,
+        {
+          method: "PUT",
+          headers: {
+            Authorization: `Bearer ${adminToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(editForm),
+        }
+      );
+
+      const result = await resp.json().catch(() => ({}));
+      if (!resp.ok || result?.success === false) {
+        throw new Error(
+          result?.error || result?.message || "Failed to update profile"
+        );
+      }
+
+      // Refresh local data without refetch when possible
+      setClientData((prev) => ({
+        ...(prev || {}),
+        name: editForm.name,
+        businessName: editForm.businessName,
+        mobileNo: editForm.mobileNo,
+        websiteUrl: editForm.websiteUrl,
+        address: editForm.address,
+        city: editForm.city,
+        pincode: editForm.pincode,
+        gstNo: editForm.gstNo,
+        panNo: editForm.panNo,
+      }));
+      setEditMode(false);
+      alert("Client information updated");
+    } catch (e) {
+      alert(e.message || "Update failed");
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-white">
@@ -388,11 +516,13 @@ const ApprovalFormDetails = ({ clientId, onClose, onApprove }) => {
                     )}
                   </div>
                   <div>
-                    <h2 className="text-xl font-bold text-gray-800">
-                      {clientData.name ||
-                        clientData.contactName ||
-                        "Not provided"}
-                    </h2>
+                    <div className="flex items-center gap-3">
+                      <h2 className="text-xl font-bold text-gray-800">
+                        {clientData.name ||
+                          clientData.contactName ||
+                          "Not provided"}
+                      </h2>
+                    </div>
                     <p className="text-gray-500 text-sm">
                       {clientData.businessName || "Business name not provided"}
                     </p>
@@ -400,6 +530,21 @@ const ApprovalFormDetails = ({ clientId, onClose, onApprove }) => {
                 </div>
                 <div className="flex justify-end text-right">
                   <div className="flex justify-end space-x-3">
+                    {/* Edit button */}
+                    <button
+                      onClick={handleDeleteClient}
+                      className="px-4 py-2 rounded-full bg-red-500 text-white transition-colors flex items-center font-semibold text-xs shadow-sm hover:bg-red-700"
+                    >
+                      <FaTrash className="mr-2 text-white" />
+                      Delete Client
+                    </button>
+                    <button
+                      onClick={startEdit}
+                      className="px-4 py-2 rounded-full bg-blue-500 text-white transition-colors flex items-center font-semibold text-xs shadow-sm hover:bg-blue-700"
+                    >
+                      <FaEdit className="mr-2 text-white" />
+                      Edit Info
+                    </button>
                     {String(clientData.clientType || "").toLowerCase() ===
                     "rejected" ? null : clientData?.isApproved ? (
                       <button
@@ -448,180 +593,354 @@ const ApprovalFormDetails = ({ clientId, onClose, onApprove }) => {
               </div>
             </div>
 
-            {/* Client Details Grid */}
+            {/* Client Details Grid (view or edit mode) */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
               <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
                 <FaIdBadge className="mr-2 text-red-600" />
                 Client Information
               </h3>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {/* Name */}
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <label className="block text-xs font-medium text-gray-500 mb-1.5 flex items-center">
-                    <FaUser className="mr-2 text-red-500" />
-                    Full Name
-                  </label>
-                  <p className="text-base font-semibold text-gray-900">
-                    {clientData.name ||
-                      clientData.contactName ||
-                      "Not provided"}
-                  </p>
-                </div>
-
-                {/* Business Name */}
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <label className="block text-xs font-medium text-gray-500 mb-1.5 flex items-center">
-                    <FaBuilding className="mr-2 text-red-500" />
-                    Business Name
-                  </label>
-                  <p className="text-base font-semibold text-gray-900">
-                    {clientData.businessName || "Not provided"}
-                  </p>
-                </div>
-
-                {/* Mobile Number */}
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <label className="block text-xs font-medium text-gray-500 mb-1.5 flex items-center">
-                    <FaPhone className="mr-2 text-red-500" />
-                    Mobile Number
-                  </label>
-                  <p className="text-base font-semibold text-gray-900">
-                    {clientData.mobileNo ||
-                      clientData.contactNumber ||
-                      "Not provided"}
-                  </p>
-                </div>
-
-                {/* GST Number */}
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <label className="block text-xs font-medium text-gray-500 mb-1.5 flex items-center">
-                    <FaIdCard className="mr-2 text-red-500" />
-                    GST Number
-                  </label>
-                  <p className="text-base font-semibold text-gray-900">
-                    {clientData.gstNo || clientData.gst || "Not provided"}
-                  </p>
-                </div>
-
-                {/* PAN Number */}
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <label className="block text-xs font-medium text-gray-500 mb-1.5 flex items-center">
-                    <FaIdCard className="mr-2 text-red-500" />
-                    PAN Number
-                  </label>
-                  <p className="text-base font-semibold text-gray-900">
-                    {clientData.panNo || clientData.pancard || "Not provided"}
-                  </p>
-                </div>
-
-                {/* Email */}
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <label className="block text-xs font-medium text-gray-500 mb-1.5 flex items-center">
-                    <FaGlobe className="mr-2 text-red-500" />
-                    Email Address
-                  </label>
-                  <p className="text-base font-semibold text-gray-900">
-                    {clientData.email || "Not provided"}
-                  </p>
-                </div>
-
-                {/* Address */}
-                <div className="bg-gray-50 rounded-lg p-3 md:col-span-2">
-                  <label className="block text-xs font-medium text-gray-500 mb-1.5 flex items-center">
-                    <FaMapMarkerAlt className="mr-2 text-red-500" />
-                    Address
-                  </label>
-                  <p className="text-base font-semibold text-gray-900">
-                    {clientData.address || "Not provided"}
-                  </p>
-                </div>
-
-                {/* City */}
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <label className="block text-xs font-medium text-gray-500 mb-1.5 flex items-center">
-                    <FaMapMarkerAlt className="mr-2 text-red-500" />
-                    City
-                  </label>
-                  <p className="text-base font-semibold text-gray-900">
-                    {clientData.city || "Not provided"}
-                  </p>
-                </div>
-
-                {/* Pincode */}
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <label className="block text-xs font-medium text-gray-500 mb-1.5 flex items-center">
-                    <FaMapMarkerAlt className="mr-2 text-red-500" />
-                    Pincode
-                  </label>
-                  <p className="text-base font-semibold text-gray-900">
-                    {clientData.pincode || "Not provided"}
-                  </p>
-                </div>
-
-                {/* Website */}
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <label className="block text-xs font-medium text-gray-500 mb-1.5 flex items-center">
-                    <FaGlobe className="mr-2 text-red-500" />
-                    Website
-                  </label>
-                  <p className="text-base font-semibold text-gray-900">
-                    {clientData.websiteUrl ||
-                      clientData.website ||
-                      "Not provided"}
-                  </p>
-                </div>
-
-                {/* Client Type */}
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <label className="block text-xs font-medium text-gray-500 mb-1.5 flex items-center">
-                    <FaIdBadge className="mr-2 text-red-500" />
-                    Account Type
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <select
-                      value={clientType}
-                      onChange={(e) => setClientType(e.target.value)}
-                      className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 bg-white"
-                    >
-                      {clientTypeOptions.map((opt) => (
-                        <option key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </option>
-                      ))}
-                    </select>
+              {editMode ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <label className="block text-xs font-medium text-gray-500 mb-1.5">
+                      Full Name
+                    </label>
+                    <input
+                      value={editForm.name || ""}
+                      onChange={(e) =>
+                        setEditForm({ ...editForm, name: e.target.value })
+                      }
+                      className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                      placeholder="Full Name"
+                    />
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <label className="block text-xs font-medium text-gray-500 mb-1.5">
+                      Business Name
+                    </label>
+                    <input
+                      value={editForm.businessName || ""}
+                      onChange={(e) =>
+                        setEditForm({
+                          ...editForm,
+                          businessName: e.target.value,
+                        })
+                      }
+                      className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                      placeholder="Business Name"
+                    />
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <label className="block text-xs font-medium text-gray-500 mb-1.5">
+                      Mobile Number
+                    </label>
+                    <input
+                      value={editForm.mobileNo || ""}
+                      onChange={(e) =>
+                        setEditForm({ ...editForm, mobileNo: e.target.value })
+                      }
+                      className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                      placeholder="Phone"
+                    />
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <label className="block text-xs font-medium text-gray-500 mb-1.5">
+                      GST Number
+                    </label>
+                    <input
+                      value={editForm.gstNo || ""}
+                      onChange={(e) =>
+                        setEditForm({ ...editForm, gstNo: e.target.value })
+                      }
+                      className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                      placeholder="GST"
+                    />
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <label className="block text-xs font-medium text-gray-500 mb-1.5">
+                      PAN Number
+                    </label>
+                    <input
+                      value={editForm.panNo || ""}
+                      onChange={(e) =>
+                        setEditForm({ ...editForm, panNo: e.target.value })
+                      }
+                      className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                      placeholder="PAN"
+                    />
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <label className="block text-xs font-medium text-gray-500 mb-1.5">
+                      Website
+                    </label>
+                    <input
+                      value={editForm.websiteUrl || ""}
+                      onChange={(e) =>
+                        setEditForm({ ...editForm, websiteUrl: e.target.value })
+                      }
+                      className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                      placeholder="Website"
+                    />
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-3 md:col-span-2">
+                    <label className="block text-xs font-medium text-gray-500 mb-1.5">
+                      Address
+                    </label>
+                    <input
+                      value={editForm.address || ""}
+                      onChange={(e) =>
+                        setEditForm({ ...editForm, address: e.target.value })
+                      }
+                      className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                      placeholder="Address"
+                    />
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <label className="block text-xs font-medium text-gray-500 mb-1.5">
+                      City
+                    </label>
+                    <input
+                      value={editForm.city || ""}
+                      onChange={(e) =>
+                        setEditForm({ ...editForm, city: e.target.value })
+                      }
+                      className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                      placeholder="City"
+                    />
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <label className="block text-xs font-medium text-gray-500 mb-1.5">
+                      Pincode
+                    </label>
+                    <input
+                      value={editForm.pincode || ""}
+                      onChange={(e) =>
+                        setEditForm({ ...editForm, pincode: e.target.value })
+                      }
+                      className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                      placeholder="Pincode"
+                    />
+                  </div>
+                  <div className="md:col-span-3 flex items-center gap-3 mt-2">
                     <button
-                      onClick={handleUpdateClientType}
-                      disabled={updatingType}
-                      className="px-3 py-2 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700 disabled:opacity-50"
+                      onClick={handleSaveProfile}
+                      disabled={savingProfile}
+                      className="px-4 py-2 bg-green-600 text-white rounded-md text-sm hover:bg-green-700 disabled:opacity-50"
                     >
-                      {updatingType ? "Saving..." : "Update"}
+                      {savingProfile ? "Saving..." : "Save Changes"}
+                    </button>
+                    <button
+                      onClick={cancelEdit}
+                      className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md text-sm hover:bg-gray-300"
+                    >
+                      Cancel
                     </button>
                   </div>
-                  {updateTypeMsg && (
-                    <p className="mt-1 text-xs text-gray-600">
-                      {updateTypeMsg}
-                    </p>
-                  )}
                 </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {/* Name */}
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <label className="block text-xs font-medium text-gray-500 mb-1.5 flex items-center">
+                      <FaUser className="mr-2 text-red-500" />
+                      Full Name
+                    </label>
+                    <p className="text-base font-semibold text-gray-900">
+                      {clientData.name ||
+                        clientData.contactName ||
+                        "Not provided"}
+                    </p>
+                  </div>
 
-                {/* Created At */}
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <label className="block text-xs font-medium text-gray-500 mb-1.5 flex items-center">
-                    <FaCalendarAlt className="mr-2 text-red-500" />
-                    Registration Date
-                  </label>
-                  <p className="text-base font-semibold text-gray-900">
-                    {clientData.createdAt
-                      ? new Date(clientData.createdAt).toLocaleDateString(
-                          "en-US",
-                          { year: "numeric", month: "long", day: "numeric" }
-                        )
-                      : "Not provided"}
-                  </p>
+                  {/* Business Name */}
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <label className="block text-xs font-medium text-gray-500 mb-1.5 flex items-center">
+                      <FaBuilding className="mr-2 text-red-500" />
+                      Business Name
+                    </label>
+                    <p className="text-base font-semibold text-gray-900">
+                      {clientData.businessName || "Not provided"}
+                    </p>
+                  </div>
+
+                  {/* Mobile Number */}
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <label className="block text-xs font-medium text-gray-500 mb-1.5 flex items-center">
+                      <FaPhone className="mr-2 text-red-500" />
+                      Mobile Number
+                    </label>
+                    <p className="text-base font-semibold text-gray-900">
+                      {clientData.mobileNo ||
+                        clientData.contactNumber ||
+                        "Not provided"}
+                    </p>
+                  </div>
+
+                  {/* GST Number */}
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <label className="block text-xs font-medium text-gray-500 mb-1.5 flex items-center">
+                      <FaIdCard className="mr-2 text-red-500" />
+                      GST Number
+                    </label>
+                    <p className="text-base font-semibold text-gray-900">
+                      {clientData.gstNo || clientData.gst || "Not provided"}
+                    </p>
+                  </div>
+
+                  {/* PAN Number */}
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <label className="block text-xs font-medium text-gray-500 mb-1.5 flex items-center">
+                      <FaIdCard className="mr-2 text-red-500" />
+                      PAN Number
+                    </label>
+                    <p className="text-base font-semibold text-gray-900">
+                      {clientData.panNo || clientData.pancard || "Not provided"}
+                    </p>
+                  </div>
+
+                  {/* Email */}
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <label className="block text-xs font-medium text-gray-500 mb-1.5 flex items-center">
+                      <FaGlobe className="mr-2 text-red-500" />
+                      Email Address
+                    </label>
+                    <p className="text-base font-semibold text-gray-900">
+                      {clientData.email || "Not provided"}
+                    </p>
+                  </div>
+
+                  {/* Address */}
+                  <div className="bg-gray-50 rounded-lg p-3 md:col-span-2">
+                    <label className="block text-xs font-medium text-gray-500 mb-1.5 flex items-center">
+                      <FaMapMarkerAlt className="mr-2 text-red-500" />
+                      Address
+                    </label>
+                    <p className="text-base font-semibold text-gray-900">
+                      {clientData.address || "Not provided"}
+                    </p>
+                  </div>
+
+                  {/* City */}
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <label className="block text-xs font-medium text-gray-500 mb-1.5 flex items-center">
+                      <FaMapMarkerAlt className="mr-2 text-red-500" />
+                      City
+                    </label>
+                    <p className="text-base font-semibold text-gray-900">
+                      {clientData.city || "Not provided"}
+                    </p>
+                  </div>
+
+                  {/* Pincode */}
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <label className="block text-xs font-medium text-gray-500 mb-1.5 flex items-center">
+                      <FaMapMarkerAlt className="mr-2 text-red-500" />
+                      Pincode
+                    </label>
+                    <p className="text-base font-semibold text-gray-900">
+                      {clientData.pincode || "Not provided"}
+                    </p>
+                  </div>
+
+                  {/* Website */}
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <label className="block text-xs font-medium text-gray-500 mb-1.5 flex items-center">
+                      <FaGlobe className="mr-2 text-red-500" />
+                      Website
+                    </label>
+                    <p className="text-base font-semibold text-gray-900">
+                      {clientData.websiteUrl ||
+                        clientData.website ||
+                        "Not provided"}
+                    </p>
+                  </div>
+
+                  {/* Client Type */}
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <label className="block text-xs font-medium text-gray-500 mb-1.5 flex items-center">
+                      <FaIdBadge className="mr-2 text-red-500" />
+                      Account Type
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={clientType}
+                        onChange={(e) => setClientType(e.target.value)}
+                        className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 bg-white"
+                      >
+                        {clientTypeOptions.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        onClick={handleUpdateClientType}
+                        disabled={updatingType}
+                        className="px-3 py-2 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700 disabled:opacity-50"
+                      >
+                        {updatingType ? "Saving..." : "Update"}
+                      </button>
+                    </div>
+                    {updateTypeMsg && (
+                      <p className="mt-1 text-xs text-gray-600">
+                        {updateTypeMsg}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Created At */}
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <label className="block text-xs font-medium text-gray-500 mb-1.5 flex items-center">
+                      <FaCalendarAlt className="mr-2 text-red-500" />
+                      Registration Date
+                    </label>
+                    <p className="text-base font-semibold text-gray-900">
+                      {clientData.createdAt
+                        ? new Date(clientData.createdAt).toLocaleDateString(
+                            "en-US",
+                            { year: "numeric", month: "long", day: "numeric" }
+                          )
+                        : "Not provided"}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Delete Confirmation Modal */}
+            {showDeleteModal && (
+              <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                <div className="bg-white rounded-lg shadow-xl w-full max-w-sm mx-4">
+                  <div className="px-5 py-4 border-b border-gray-200">
+                    <h4 className="m-0 text-lg font-semibold text-gray-800">
+                      Delete Client
+                    </h4>
+                  </div>
+                  <div className="px-5 py-4 text-sm text-gray-700">
+                    Are you sure you want to delete this client? This action
+                    cannot be undone.
+                  </div>
+                  <div className="px-5 py-4 border-t border-gray-200 flex items-center justify-end gap-2">
+                    <button
+                      onClick={() => setShowDeleteModal(false)}
+                      className="px-4 py-2 bg-gray-100 text-gray-800 rounded-md hover:bg-gray-200 text-sm"
+                      disabled={deleting}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={confirmDeleteClient}
+                      className={`px-4 py-2 rounded-md text-sm text-white ${
+                        deleting ? "bg-red-400" : "bg-red-600 hover:bg-red-700"
+                      }`}
+                      disabled={deleting}
+                    >
+                      {deleting ? "Deleting..." : "Delete"}
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
           </div>
         )}
       </div>

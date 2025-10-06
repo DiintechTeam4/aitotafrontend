@@ -1497,7 +1497,7 @@ const AgentDetails = ({
   const playAudio = async () => {
     try {
       const response = await fetch(
-        `${API_BASE_URL}/client/agents/${agent._id}/audio?clientId=${clientId}`,
+        `${API_BASE_URL}/client/agents/${agent._id}/first-message/audio?clientId=${clientId}`,
         {
           headers: {
             Authorization: `Bearer ${sessionStorage.getItem("clienttoken")}`,
@@ -2587,20 +2587,42 @@ const AgentDetails = ({
 
               {/* Knowledge Base Links */}
               <div className="space-y-3">
-                <h3 className="text-lg font-semibold text-gray-800">Knowledge Base</h3>
-                {Array.isArray(agent.knowledgeBase) && agent.knowledgeBase.length > 0 ? (
+                <h3 className="text-lg font-semibold text-gray-800">
+                  Knowledge Base
+                </h3>
+                {Array.isArray(agent.knowledgeBase) &&
+                agent.knowledgeBase.length > 0 ? (
                   <ul className="space-y-2">
                     {agent.knowledgeBase.map((kb, idx) => (
-                      <li key={idx} className="p-3 bg-white border border-gray-200 rounded-lg flex items-center justify-between">
+                      <li
+                        key={idx}
+                        className="p-3 bg-white border border-gray-200 rounded-lg flex items-center justify-between"
+                      >
                         <div className="flex items-center gap-2 min-w-0">
-                          <span className={`inline-flex items-center px-2 py-0.5 text-[10px] rounded-full ${String(kb?.name || kb?.key).toLowerCase().endsWith('.pdf') ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'}`}>
-                            {String(kb?.name || kb?.key).toLowerCase().endsWith('.pdf') ? 'PDF' : 'FILE'}
+                          <span
+                            className={`inline-flex items-center px-2 py-0.5 text-[10px] rounded-full ${
+                              String(kb?.name || kb?.key)
+                                .toLowerCase()
+                                .endsWith(".pdf")
+                                ? "bg-red-100 text-red-700"
+                                : "bg-gray-100 text-gray-700"
+                            }`}
+                          >
+                            {String(kb?.name || kb?.key)
+                              .toLowerCase()
+                              .endsWith(".pdf")
+                              ? "PDF"
+                              : "FILE"}
                           </span>
-                          <div className="text-sm truncate">{kb.name || kb.key}</div>
+                          <div className="text-sm truncate">
+                            {kb.name || kb.key}
+                          </div>
                         </div>
                         <div className="flex items-center gap-2">
                           <a
-                            href={`${API_BASE_URL}/client/file-url?key=${encodeURIComponent(kb.key)}`}
+                            href={`${API_BASE_URL}/client/file-url?key=${encodeURIComponent(
+                              kb.key
+                            )}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="px-3 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700"
@@ -2612,7 +2634,9 @@ const AgentDetails = ({
                     ))}
                   </ul>
                 ) : (
-                  <div className="text-sm text-gray-500">No knowledge base files</div>
+                  <div className="text-sm text-gray-500">
+                    No knowledge base files
+                  </div>
                 )}
               </div>
             </div>
