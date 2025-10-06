@@ -7661,6 +7661,7 @@ function CampaignDetails({ campaignId, onBack }) {
                       <div className="font-semibold text-gray-800">
                         {getContactDisplayNameBlank(selectedCall)}
                       </div>
+                      
                     </div>
                     <div className="p-3">
                       <div className="text-sm text-gray-500 mb-1">
