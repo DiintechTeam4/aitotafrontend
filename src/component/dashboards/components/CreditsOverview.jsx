@@ -25,6 +25,13 @@ export default function CreditsOverview() {
   const [uniqueIdToCampaign, setUniqueIdToCampaign] = useState({});
   const [paymentHistory, setPaymentHistory] = useState([]);
   const [paymentHistoryLoading, setPaymentHistoryLoading] = useState(false);
+  const [paymentHistoryPagination, setPaymentHistoryPagination] = useState({
+    page: 1,
+    limit: 5,
+    total: 0,
+    pages: 0,
+  });
+  const [paymentHistoryCount, setPaymentHistoryCount] = useState(0);
   const [activeTab, setActiveTab] = useState("overview");
   const [selectedFilter, setSelectedFilter] = useState("credit");
   const [dateFilter, setDateFilter] = useState("all");
@@ -44,13 +51,13 @@ export default function CreditsOverview() {
     page: 1,
     limit: 50,
     total: 0,
-    pages: 0
+    pages: 0,
   });
   const [cache, setCache] = useState({
     balance: null,
     campaigns: null,
     fullHistory: null,
-    lastFetch: null
+    lastFetch: null,
   });
   const [invoiceModal, setInvoiceModal] = useState({
     isOpen: false,
@@ -277,18 +284,19 @@ export default function CreditsOverview() {
   const fetchAll = async () => {
     try {
       setLoading(true);
-      
+
       // Check cache validity (5 minutes)
       const now = Date.now();
-      const cacheValid = cache.lastFetch && (now - cache.lastFetch) < 5 * 60 * 1000;
-      
+      const cacheValid =
+        cache.lastFetch && now - cache.lastFetch < 5 * 60 * 1000;
+
       if (cacheValid && cache.balance && cache.campaigns && cache.fullHistory) {
         // Use cached data
         setBalance(cache.balance);
         setCampaigns(cache.campaigns);
         setHistory(cache.fullHistory);
         setFilteredHistory(cache.fullHistory.filter((item) => item.amount > 0));
-        
+
         // Build uniqueId -> campaignName map from cache
         const mapping = {};
         cache.campaigns.forEach((c) => {
@@ -301,13 +309,13 @@ export default function CreditsOverview() {
           }
         });
         setUniqueIdToCampaign(mapping);
-        
+
         // Still fetch fresh paginated history for table
         await fetchHistoryPage(1);
         setLoading(false);
         return;
       }
-      
+
       // Fetch data with optimized limits
       const [balRes, histRes, campRes] = await Promise.all([
         fetch(`${API_BASE_URL}/client/credits/balance?includeHistory=false`, {
@@ -320,31 +328,35 @@ export default function CreditsOverview() {
           headers: { Authorization: `Bearer ${token}` },
         }),
       ]);
-      
+
       const bal = await balRes.json();
       const hist = await histRes.json();
       const camp = await campRes.json();
-      
+
       if (bal.success) {
         setBalance(bal.data);
-        setCache(prev => ({ ...prev, balance: bal.data, lastFetch: now }));
+        setCache((prev) => ({ ...prev, balance: bal.data, lastFetch: now }));
       }
-      
+
       if (hist.success) {
         const rows = Array.isArray(hist.data?.history) ? hist.data.history : [];
-        console.log("🔍 [FRONTEND DEBUG] History received:", rows.length, "items");
+        console.log(
+          "🔍 [FRONTEND DEBUG] History received:",
+          rows.length,
+          "items"
+        );
         console.log("🔍 [FRONTEND DEBUG] First few items:", rows.slice(0, 2));
         setHistory(rows);
         setFilteredHistory(rows.filter((item) => item.amount > 0));
-        setCache(prev => ({ ...prev, fullHistory: rows, lastFetch: now }));
+        setCache((prev) => ({ ...prev, fullHistory: rows, lastFetch: now }));
       } else {
         console.error("🔍 [FRONTEND DEBUG] History fetch failed:", hist);
       }
-      
+
       if (camp.success && Array.isArray(camp.data)) {
         setCampaigns(camp.data);
-        setCache(prev => ({ ...prev, campaigns: camp.data, lastFetch: now }));
-        
+        setCache((prev) => ({ ...prev, campaigns: camp.data, lastFetch: now }));
+
         // Build uniqueId -> campaignName map
         const mapping = {};
         camp.data.forEach((c) => {
@@ -358,7 +370,6 @@ export default function CreditsOverview() {
         });
         setUniqueIdToCampaign(mapping);
       }
-      
     } catch (e) {
       console.error("Failed to load credits:", e);
     } finally {
@@ -376,12 +387,12 @@ export default function CreditsOverview() {
         }
       );
       const hist = await histRes.json();
-      
+
       if (hist.success) {
         const rows = Array.isArray(hist.data?.history) ? hist.data.history : [];
         setHistory(rows);
         setFilteredHistory(rows.filter((item) => item.amount > 0));
-        
+
         // Update pagination state
         if (hist.data?.pagination) {
           setHistoryPagination(hist.data.pagination);
@@ -426,29 +437,71 @@ export default function CreditsOverview() {
   // New function to fetch payment history independently
   const fetchPaymentHistory = async (page = 1, limit = 5, type = null) => {
     try {
-      console.log("🔍 [PAYMENT HISTORY] Function called with:", { page, limit, type });
+      console.log("🔍 [PAYMENT HISTORY] Function called with:", {
+        page,
+        limit,
+        type,
+        dateFilter,
+      });
       setPaymentHistoryLoading(true);
       console.log("🔍 [PAYMENT HISTORY] Fetching payment history...");
-      
+
       let url = `${API_BASE_URL}/client/credits/payment-history?page=${page}&limit=${limit}`;
       if (type) {
         url += `&type=${type}`;
       }
-      
+
+      // Add date filter parameters
+      if (dateFilter !== "all") {
+        const now = new Date();
+        const filterDate = new Date();
+
+        switch (dateFilter) {
+          case "7days":
+            filterDate.setDate(now.getDate() - 7);
+            break;
+          case "30days":
+            filterDate.setDate(now.getDate() - 30);
+            break;
+          case "90days":
+            filterDate.setDate(now.getDate() - 90);
+            break;
+        }
+
+        url += `&startDate=${filterDate.toISOString()}`;
+      }
+
       console.log("🔍 [PAYMENT HISTORY] API URL:", url);
       console.log("🔍 [PAYMENT HISTORY] Token present:", !!token);
-      
+
       const res = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      
+
       console.log("🔍 [PAYMENT HISTORY] Response status:", res.status);
       const data = await res.json();
       console.log("🔍 [PAYMENT HISTORY] Response:", data);
-      
+
       if (data.success) {
-        setPaymentHistory(data.data.history);
-        console.log("🔍 [PAYMENT HISTORY] Set payment history:", data.data.history.length, "items");
+        // Filter to only show entries with amount > 0
+        const filteredHistory = data.data.history.filter(
+          (item) => item.amount > 0
+        );
+        setPaymentHistory(filteredHistory);
+        console.log(
+          "🔍 [PAYMENT HISTORY] Set payment history:",
+          filteredHistory.length,
+          "items (filtered for amount > 0)"
+        );
+
+        // Update pagination state
+        if (data.data?.pagination) {
+          setPaymentHistoryPagination({
+            ...data.data.pagination,
+            page: page,
+            limit: limit,
+          });
+        }
       } else {
         console.error("🔍 [PAYMENT HISTORY] Failed:", data);
       }
@@ -462,6 +515,7 @@ export default function CreditsOverview() {
 
   useEffect(() => {
     if (token) fetchAll();
+    fetchPaymentHistory();
   }, []);
 
   useEffect(() => {
@@ -478,9 +532,22 @@ export default function CreditsOverview() {
     console.log("🔍 [TAB DEBUG] activeTab changed to:", activeTab);
     if (activeTab === "history" && token) {
       console.log("🔍 [TAB DEBUG] Triggering fetchPaymentHistory...");
-      fetchPaymentHistory(1, 5); // Load last 5 items for fast loading
+      fetchPaymentHistory(
+        paymentHistoryPagination.page,
+        paymentHistoryPagination.limit
+      );
     }
   }, [activeTab, token]);
+
+  // Refetch payment history when date filter changes
+  useEffect(() => {
+    if (activeTab === "history" && token) {
+      console.log("🔍 [DATE FILTER DEBUG] Date filter changed to:", dateFilter);
+      // Reset to page 1 when filter changes
+      setPaymentHistoryPagination((prev) => ({ ...prev, page: 1 }));
+      fetchPaymentHistory(1, paymentHistoryPagination.limit);
+    }
+  }, [dateFilter]);
 
   let cashfreeInstanceRef = null;
   const ensureCashfreeInstance = async () => {
@@ -1567,279 +1634,295 @@ export default function CreditsOverview() {
     console.log("🔍 [PAYMENT DEBUG] PaymentHistoryTab rendering with:", {
       paymentHistory: paymentHistory.length,
       loading: paymentHistoryLoading,
-      activeTab
+      activeTab,
     });
 
     return (
-    <div className="space-y-6">
-        {/* Debug Controls */}
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-          <div className="flex items-center gap-4">
-            <div>
-              <p className="text-sm font-medium text-yellow-800">Debug Info:</p>
-              <p className="text-xs text-yellow-600">
-                Payment History: {paymentHistory.length} items | Loading: {paymentHistoryLoading ? 'Yes' : 'No'}
-              </p>
-            </div>
-            <button
-              onClick={() => fetchPaymentHistory(1, 5)}
-              className="px-3 py-1 bg-yellow-600 text-white text-xs rounded hover:bg-yellow-700"
-            >
-              Test API Call
-            </button>
-          </div>
+      <div className="space-y-6">
+        {/* Filters */}
+        <div className="flex flex-col sm:flex-row gap-3">
+          <select
+            value={dateFilter}
+            onChange={(e) => setDateFilter(e.target.value)}
+            className="px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm font-medium focus:ring-2 focus:ring-black focus:border-black"
+          >
+            <option value="all">All Time</option>
+            <option value="7days">Last 7 Days</option>
+            <option value="30days">Last 30 Days</option>
+            <option value="90days">Last 90 Days</option>
+          </select>
         </div>
-        
-      {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <select
-          value={dateFilter}
-          onChange={(e) => setDateFilter(e.target.value)}
-          className="px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm font-medium focus:ring-2 focus:ring-black focus:border-black"
-        >
-          <option value="all">All Time</option>
-          <option value="7days">Last 7 Days</option>
-          <option value="30days">Last 30 Days</option>
-          <option value="90days">Last 90 Days</option>
-        </select>
-      </div>
 
-      {/* Transaction History Table */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <table className="min-w-full">
-          <thead className="bg-gray-50 border-b border-gray-200">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Date & Time
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Order ID
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Transaction ID
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Description
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Amount
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Credits
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Invoice
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-100">
-            {paymentHistoryLoading ? (
+        {/* Transaction History Table */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+          <table className="min-w-full">
+            <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                <td colSpan={7} className="px-6 py-12 text-center">
-                  <div className="flex items-center justify-center">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
-                    <span className="ml-2 text-gray-600">Loading payment history...</span>
-                  </div>
-                </td>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Date & Time
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Order ID
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Transaction ID
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Description
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Amount
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Credits
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Invoice
+                </th>
               </tr>
-            ) : paymentHistory.map((h, idx) => (
-              <tr
-                key={idx}
-                className="hover:bg-gray-50 transition-colors duration-200"
-              >
-                <td className="px-6 py-4 text-sm">
-                  <div className="font-medium text-gray-900 text-sm">
-                    {new Date(h.timestamp).toLocaleDateString("en-US", {
-                      month: "short",
-                      day: "numeric",
-                      year: "numeric",
-                    })}
-                  </div>
-                  <div className="text-gray-500 text-xs mt-1">
-                    {new Date(h.timestamp).toLocaleTimeString("en-US", {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </div>
-                </td>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-100">
+              {paymentHistoryLoading ? (
+                <tr>
+                  <td colSpan={7} className="px-6 py-12 text-center">
+                    <div className="flex items-center justify-center">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+                      <span className="ml-2 text-gray-600">
+                        Loading payment history...
+                      </span>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                paymentHistory.map((h, idx) => (
+                  <tr
+                    key={idx}
+                    className="hover:bg-gray-50 transition-colors duration-200"
+                  >
+                    <td className="px-6 py-4 text-sm">
+                      <div className="font-medium text-gray-900 text-sm">
+                        {new Date(h.timestamp).toLocaleDateString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                        })}
+                      </div>
+                      <div className="text-gray-500 text-xs mt-1">
+                        {new Date(h.timestamp).toLocaleTimeString("en-US", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </div>
+                    </td>
 
-                <td className="px-6 py-4 text-sm">
-                  <div className="text-sm text-gray-900 font-mono">
-                    {h.orderId || "-"}
-                  </div>
-                </td>
-                <td className="px-6 py-4 text-sm">
-                  <div className="text-sm text-gray-900 font-mono">
-                    {h.transactionId || "-"}
-                  </div>
-                </td>
-                <td className="px-6 py-4 text-sm">
-                  <div className="font-medium text-gray-900 text-sm mb-1">
-                    {h.description}
-                  </div>
-                  {h.planType && (
-                    <span className="inline-flex items-center px-2 py-1 bg-blue-50 text-blue-700 text-xs rounded-md border border-blue-200 font-medium">
-                      {h.planType} Plan
-                    </span>
-                  )}
-                </td>
-                <td className="px-6 py-4 text-sm">
-                  <div className="text-right">
-                    <div
-                      className={`text-lg font-bold ${
-                        h.amount < 0 ? "text-red-600" : "text-green-600"
+                    <td className="px-6 py-4 text-sm">
+                      <div className="text-sm text-gray-900 font-mono">
+                        {h.orderId || "-"}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-sm">
+                      <div className="text-sm text-gray-900 font-mono">
+                        {h.transactionId || "-"}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-sm">
+                      <div className="font-medium text-gray-900 text-sm mb-1">
+                        {h.description}
+                      </div>
+                      {h.planType && (
+                        <span className="inline-flex items-center px-2 py-1 bg-blue-50 text-blue-700 text-xs rounded-md border border-blue-200 font-medium">
+                          {h.planType} Plan
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-sm">
+                      <div className="text-right">
+                        <div
+                          className={`text-lg font-bold ${
+                            h.amount < 0 ? "text-red-600" : "text-green-600"
+                          }`}
+                        >
+                          ₹{Math.abs(h.amount)}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-sm">
+                      <div className="text-right">
+                        <div
+                          className={`text-lg font-bold ${
+                            h.amount < 0 ? "text-red-600" : "text-green-600"
+                          } mb-1`}
+                        >
+                          {h.amount > 0 ? "+" : ""}
+                          {h.amount}
+                        </div>
+                        <div className="text-gray-500 text-xs font-medium">
+                          credits
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-sm">
+                      <button
+                        onClick={() => openInvoiceModal(h)}
+                        className="px-3 py-1 bg-gray-600 text-white text-xs rounded-md hover:bg-gray-700 transition-colors"
+                      >
+                        View
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+              {!paymentHistoryLoading && paymentHistory.length === 0 && (
+                <tr>
+                  <td
+                    className="px-6 py-12 text-center text-gray-500"
+                    colSpan={7}
+                  >
+                    <div className="flex flex-col items-center">
+                      <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <svg
+                          className="w-8 h-8 text-gray-400"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={1.5}
+                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                          />
+                        </svg>
+                      </div>
+                      <h4 className="text-base font-medium text-gray-700 mb-2">
+                        No payment history found
+                      </h4>
+                      <p className="text-gray-500 text-sm mb-2">
+                        No credit purchases found in your history.
+                      </p>
+                      <p className="text-xs text-gray-400">
+                        Debug: Payment history items: {paymentHistory.length}
+                      </p>
+                    </div>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Pagination Controls */}
+        {paymentHistoryPagination.pages > 1 && (
+          <div className="flex items-center justify-between px-4 py-3 bg-white border-t border-gray-200">
+            <div className="flex items-center text-sm text-gray-700">
+              <span>
+                Showing{" "}
+                {(paymentHistoryPagination.page - 1) *
+                  paymentHistoryPagination.limit +
+                  1}{" "}
+                to{" "}
+                {Math.min(
+                  paymentHistoryPagination.page *
+                    paymentHistoryPagination.limit,
+                  paymentHistoryPagination.total
+                )}{" "}
+                of {paymentHistoryPagination.total} results
+              </span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => {
+                  const newPage = Math.max(
+                    paymentHistoryPagination.page - 1,
+                    1
+                  );
+                  setPaymentHistoryPagination((prev) => ({
+                    ...prev,
+                    page: newPage,
+                  }));
+                  fetchPaymentHistory(newPage, paymentHistoryPagination.limit);
+                }}
+                disabled={paymentHistoryPagination.page === 1}
+                className={`px-3 py-1 text-sm rounded-md ${
+                  paymentHistoryPagination.page === 1
+                    ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                    : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
+                }`}
+              >
+                Previous
+              </button>
+              <div className="flex items-center space-x-1">
+                {(() => {
+                  const totalPages = paymentHistoryPagination.pages;
+                  const current = paymentHistoryPagination.page;
+                  let pages = [];
+
+                  if (totalPages <= 3) {
+                    pages = Array.from({ length: totalPages }, (_, i) => i + 1);
+                  } else {
+                    if (current <= 2) {
+                      pages = [1, 2, 3];
+                    } else if (current >= totalPages - 1) {
+                      pages = [totalPages - 2, totalPages - 1, totalPages];
+                    } else {
+                      pages = [current - 1, current, current + 1];
+                    }
+                  }
+
+                  return pages.map((page) => (
+                    <button
+                      key={page}
+                      onClick={() => {
+                        setPaymentHistoryPagination((prev) => ({
+                          ...prev,
+                          page,
+                        }));
+                        fetchPaymentHistory(
+                          page,
+                          paymentHistoryPagination.limit
+                        );
+                      }}
+                      className={`px-3 py-1 text-sm rounded-md ${
+                        paymentHistoryPagination.page === page
+                          ? "bg-black text-white"
+                          : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
                       }`}
                     >
-                      ₹{Math.abs(h.amount)}
-                    </div>
-                  </div>
-                </td>
-                <td className="px-6 py-4 text-sm">
-                  <div className="text-right">
-                    <div
-                      className={`text-lg font-bold ${
-                        h.amount < 0 ? "text-red-600" : "text-green-600"
-                      } mb-1`}
-                    >
-                      {h.amount > 0 ? "+" : ""}
-                      {h.amount}
-                    </div>
-                    <div className="text-gray-500 text-xs font-medium">
-                      credits
-                    </div>
-                  </div>
-                </td>
-                <td className="px-6 py-4 text-sm">
-                  <button
-                    onClick={() => openInvoiceModal(h)}
-                    className="px-3 py-1 bg-gray-600 text-white text-xs rounded-md hover:bg-gray-700 transition-colors"
-                  >
-                    View
-                  </button>
-                </td>
-              </tr>
-            ))}
-            {!paymentHistoryLoading && paymentHistory.length === 0 && (
-              <tr>
-                <td
-                  className="px-6 py-12 text-center text-gray-500"
-                  colSpan={7}
-                >
-                  <div className="flex flex-col items-center">
-                    <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <svg
-                        className="w-8 h-8 text-gray-400"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={1.5}
-                          d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                        />
-                      </svg>
-                    </div>
-                    <h4 className="text-base font-medium text-gray-700 mb-2">
-                      No payment history found
-                    </h4>
-                    <p className="text-gray-500 text-sm mb-2">
-                      No credit purchases found in your history.
-                    </p>
-                    <p className="text-xs text-gray-400">
-                      Debug: Payment history items: {paymentHistory.length}
-                    </p>
-                  </div>
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Pagination Controls */}
-      {historyPagination.pages > 1 && (
-        <div className="flex items-center justify-between px-4 py-3 bg-white border-t border-gray-200">
-          <div className="flex items-center text-sm text-gray-700">
-            <span>
-              Showing {((historyPagination.page - 1) * historyPagination.limit) + 1} to{" "}
-              {Math.min(historyPagination.page * historyPagination.limit, historyPagination.total)}{" "}
-              of {historyPagination.total} results
-            </span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={() => {
-                const newPage = Math.max(historyPagination.page - 1, 1);
-                setHistoryPagination(prev => ({ ...prev, page: newPage }));
-                fetchHistoryPage(newPage, historyPagination.limit);
-              }}
-              disabled={historyPagination.page === 1}
-              className={`px-3 py-1 text-sm rounded-md ${
-                historyPagination.page === 1
-                  ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                  : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
-              }`}
-            >
-              Previous
-            </button>
-            <div className="flex items-center space-x-1">
-              {(() => {
-                const totalPages = historyPagination.pages;
-                const current = historyPagination.page;
-                let pages = [];
-
-                if (totalPages <= 3) {
-                  pages = Array.from({ length: totalPages }, (_, i) => i + 1);
-                } else {
-                  if (current <= 2) {
-                    pages = [1, 2, 3];
-                  } else if (current >= totalPages - 1) {
-                    pages = [totalPages - 2, totalPages - 1, totalPages];
-                  } else {
-                    pages = [current - 1, current, current + 1];
-                  }
+                      {page}
+                    </button>
+                  ));
+                })()}
+              </div>
+              <button
+                onClick={() => {
+                  const newPage = Math.min(
+                    paymentHistoryPagination.page + 1,
+                    paymentHistoryPagination.pages
+                  );
+                  setPaymentHistoryPagination((prev) => ({
+                    ...prev,
+                    page: newPage,
+                  }));
+                  fetchPaymentHistory(newPage, paymentHistoryPagination.limit);
+                }}
+                disabled={
+                  paymentHistoryPagination.page ===
+                  paymentHistoryPagination.pages
                 }
-
-                return pages.map((page) => (
-                  <button
-                    key={page}
-                    onClick={() => {
-                      setHistoryPagination(prev => ({ ...prev, page }));
-                      fetchHistoryPage(page, historyPagination.limit);
-                    }}
-                    className={`px-3 py-1 text-sm rounded-md ${
-                      historyPagination.page === page
-                        ? "bg-black text-white"
-                        : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
-                    }`}
-                  >
-                    {page}
-                  </button>
-                ));
-              })()}
+                className={`px-3 py-1 text-sm rounded-md ${
+                  paymentHistoryPagination.page ===
+                  paymentHistoryPagination.pages
+                    ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                    : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
+                }`}
+              >
+                Next
+              </button>
             </div>
-            <button
-              onClick={() => {
-                const newPage = Math.min(historyPagination.page + 1, historyPagination.pages);
-                setHistoryPagination(prev => ({ ...prev, page: newPage }));
-                fetchHistoryPage(newPage, historyPagination.limit);
-              }}
-              disabled={historyPagination.page === historyPagination.pages}
-              className={`px-3 py-1 text-sm rounded-md ${
-                historyPagination.page === historyPagination.pages
-                  ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                  : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
-              }`}
-            >
-              Next
-            </button>
           </div>
-        </div>
-      )}
-    </div>
-  );
+        )}
+      </div>
+    );
   };
 
   // Inline purchase section (replaces modal)
@@ -2032,7 +2115,8 @@ export default function CreditsOverview() {
                   Payment History
                 </div>
                 <div className="text-3xl font-bold text-gray-900 mb-1">
-                  {history.filter((item) => item.amount > 0).length}
+                  {paymentHistoryPagination.total ||
+                    history.filter((item) => item.amount > 0).length}
                 </div>
                 <div className="text-gray-500 text-sm">Total Transactions</div>
               </div>
