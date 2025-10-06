@@ -18,6 +18,7 @@ import {
   FiPlay,
   FiPause,
   FiFileText,
+  FiDownload,
   FiX,
 } from "react-icons/fi";
 import { API_BASE_URL } from "../../../config";
@@ -36,6 +37,7 @@ const CallLogs = ({ agentId, clientId }) => {
   const [agent, setAgent] = useState(null);
   const [selectedTranscript, setSelectedTranscript] = useState(null);
   const [showTranscriptPopup, setShowTranscriptPopup] = useState(false);
+  const [downloadingId, setDownloadingId] = useState(null);
 
   const formatTime = (seconds) => {
     if (!seconds) return "0:00";
@@ -205,6 +207,305 @@ const CallLogs = ({ agentId, clientId }) => {
   const closeTranscriptPopup = () => {
     setShowTranscriptPopup(false);
     setSelectedTranscript(null);
+  };
+
+  // ===== Lightweight PDF helpers (inline, similar to AgentList/CampaignDetails) =====
+  const ensureJsPDFLoaded = async () => {
+    const mod = await import("jspdf");
+    return mod.jsPDF || mod.default || mod;
+  };
+
+  const ensureHtml2CanvasLoaded = async () => {
+    const mod = await import("html2canvas");
+    return mod.default || mod;
+  };
+
+  const loadImageAsDataURL = async (url) => {
+    try {
+      const res = await fetch(url);
+      const blob = await res.blob();
+      return await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.readAsDataURL(blob);
+      });
+    } catch (_) {
+      return null;
+    }
+  };
+
+  const parseTranscriptToChat = (raw) => {
+    if (!raw || typeof raw !== "string") return [];
+    const lines = raw.split("\n").filter((l) => l.trim());
+    return lines.map((line) => {
+      const isUser = /\]\s*User\s*\(/i.test(line) || /^User:/i.test(line);
+      const isAI = !isUser;
+      const text = line
+        .replace(/^\[[^\]]+\]\s(User|AI)\s\([^\)]+\):\s*/, "")
+        .replace(/^\[[^\]]+\]\s*/, "")
+        .replace(/^(User|AI)\s*:\s*/i, "");
+      let ts = "";
+      const m = line.match(/\[([^\]]+)\]/);
+      if (m && m[1]) {
+        const d = new Date(m[1]);
+        if (!isNaN(d.getTime())) {
+          ts = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+        }
+      }
+      return { isUser, isAI, text, timestamp: ts };
+    });
+  };
+
+  const downloadLogTranscriptPdf = async (log) => {
+    try {
+      setDownloadingId(log._id);
+      // Prefer transcript from log; if absent, try fetching by unique id
+      let transcript = log?.transcript || "";
+      if (!transcript) {
+        try {
+          const token = sessionStorage.getItem("clienttoken");
+          const uniqueId =
+            log?.metadata?.customParams?.uniqueid ||
+            log?.uniqueId ||
+            log?.uniqueid ||
+            "";
+          if (uniqueId) {
+            const resp = await fetch(
+              `${API_BASE_URL}/client/call-logs/transcript/${uniqueId}`,
+              { headers: { Authorization: `Bearer ${token}` } }
+            );
+            if (resp.ok) {
+              const data = await resp.json();
+              if (data?.success && data?.data?.transcript) {
+                transcript = data.data.transcript;
+              }
+            }
+          }
+        } catch (_) {}
+      }
+
+      if (!transcript) {
+        alert("No transcript available for this call");
+        return;
+      }
+
+      const [jsPDFCtor, html2canvas] = await Promise.all([
+        ensureJsPDFLoaded(),
+        ensureHtml2CanvasLoaded(),
+      ]);
+      const doc = new jsPDFCtor({ unit: "pt", format: "a4" });
+
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const marginX = 40;
+      let cursorY = 60;
+
+      // Header branding
+      try {
+        const dataUrl = await loadImageAsDataURL("/AitotaLogo.png");
+        if (dataUrl) {
+          const logoW = 60;
+          const logoH = 60;
+          doc.addImage(
+            dataUrl,
+            "PNG",
+            pageWidth - marginX - logoW,
+            30,
+            logoW,
+            logoH
+          );
+        }
+      } catch (_) {}
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(18);
+      doc.text("Call Transcript", marginX, cursorY);
+      cursorY += 26;
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(11);
+      const phone = log?.mobile || "-";
+      const dateStr = log?.time
+        ? new Date(log.time).toLocaleString()
+        : new Date().toLocaleString();
+      const mins = Math.floor((log?.duration || 0) / 60);
+      const secs = Math.floor((log?.duration || 0) % 60);
+      const durationStr = `${String(mins).padStart(2, "0")}:${String(
+        secs
+      ).padStart(2, "0")}`;
+
+      [
+        `Name: -`,
+        `Mobile: ${phone}`,
+        `Date & Time: ${dateStr}`,
+        `Duration: ${durationStr}`,
+      ].forEach((l) => {
+        doc.text(l, marginX, cursorY);
+        cursorY += 16;
+      });
+
+      cursorY += 8;
+      doc.setDrawColor(220);
+      doc.line(marginX, cursorY, pageWidth - marginX, cursorY);
+      cursorY += 20;
+
+      // Chat header
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(13);
+      doc.text("Conversation", marginX, cursorY);
+      cursorY += 12;
+
+      const chatMessages = parseTranscriptToChat(transcript);
+
+      // Offscreen container and rasterization
+      const container = document.createElement("div");
+      container.style.position = "fixed";
+      container.style.left = "-10000px";
+      container.style.top = "0";
+      container.style.width = "560px";
+      container.style.padding = "6px";
+      container.style.background = "#ffffff";
+      container.style.color = "#111827";
+      container.style.fontFamily =
+        'system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Noto Sans", "Noto Sans Devanagari", sans-serif';
+      container.style.fontSize = "12px";
+      container.style.lineHeight = "1.4";
+      document.body.appendChild(container);
+
+      const createBubbleNode = (msg) => {
+        const wrapper = document.createElement("div");
+        wrapper.style.display = "flex";
+        wrapper.style.marginBottom = "6px";
+        wrapper.style.width = "100%";
+        wrapper.style.boxSizing = "border-box";
+        wrapper.style.justifyContent = msg.isUser
+          ? "flex-end"
+          : msg.isAI
+          ? "flex-start"
+          : "center";
+
+        const bubble = document.createElement("div");
+        bubble.style.maxWidth = "72%";
+        bubble.style.borderRadius = "10px";
+        bubble.style.padding = "8px 10px";
+        bubble.style.boxSizing = "border-box";
+        bubble.style.whiteSpace = "pre-wrap";
+        bubble.style.wordBreak = "break-word";
+        bubble.style.border = msg.isAI
+          ? "1px solid #93c5fd"
+          : msg.isUser
+          ? "1px solid #d1d5db"
+          : "1px solid #e5e7eb";
+        bubble.style.background = msg.isAI
+          ? "#e0f2fe"
+          : msg.isUser
+          ? "#f3f4f6"
+          : "#f9fafb";
+        bubble.style.color = "#111827";
+
+        const header = document.createElement("div");
+        header.style.display = "flex";
+        header.style.alignItems = "baseline";
+        header.style.gap = "6px";
+        header.style.marginBottom = "4px";
+
+        const who = document.createElement("strong");
+        who.textContent = msg.isAI ? "AI" : msg.isUser ? "User" : "System";
+        who.style.fontSize = "11px";
+
+        const tsSpan = document.createElement("span");
+        tsSpan.style.fontSize = "10px";
+        tsSpan.style.color = "#6B7280";
+        tsSpan.textContent = msg.timestamp || "";
+
+        header.appendChild(who);
+        if (msg.timestamp) header.appendChild(tsSpan);
+
+        const text = document.createElement("div");
+        text.style.fontSize = "12px";
+        text.textContent = msg.text || "";
+
+        bubble.appendChild(header);
+        bubble.appendChild(text);
+        wrapper.appendChild(bubble);
+        return wrapper;
+      };
+
+      const scale = 1.25;
+      const pageWidthPt = pageWidth;
+      const imgWidth = pageWidthPt - marginX * 2;
+      const containerWidthPx = parseInt(container.style.width, 10) || 560;
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const bottomMargin = 40;
+      const calcMaxContentPx = (availablePt) =>
+        Math.floor((availablePt * containerWidthPx) / imgWidth);
+
+      let pageDiv = document.createElement("div");
+      pageDiv.style.width = "100%";
+      pageDiv.style.boxSizing = "border-box";
+      container.appendChild(pageDiv);
+
+      const renderCurrentPage = async (cursorYForPage) => {
+        const canvas = await html2canvas(pageDiv, {
+          scale,
+          backgroundColor: "#ffffff",
+        });
+        const drawHeight = (canvas.height / canvas.width) * imgWidth;
+        const imgData = canvas.toDataURL("image/jpeg", 0.72);
+        doc.addImage(
+          imgData,
+          "JPEG",
+          marginX,
+          cursorYForPage,
+          imgWidth,
+          drawHeight
+        );
+      };
+
+      const firstPageMaxPx = calcMaxContentPx(
+        pageHeight - cursorY - bottomMargin
+      );
+      const nextPagesMaxPx = calcMaxContentPx(pageHeight - 60 - bottomMargin);
+      let isFirstPage = true;
+
+      for (let i = 0; i < chatMessages.length; i++) {
+        const node = createBubbleNode(chatMessages[i]);
+        pageDiv.appendChild(node);
+        const maxPx = isFirstPage ? firstPageMaxPx : nextPagesMaxPx;
+        if (pageDiv.scrollHeight > maxPx && pageDiv.childElementCount > 1) {
+          pageDiv.removeChild(node);
+          await renderCurrentPage(isFirstPage ? cursorY : 60);
+          doc.addPage();
+          isFirstPage = false;
+          pageDiv = document.createElement("div");
+          pageDiv.style.width = "100%";
+          pageDiv.style.boxSizing = "border-box";
+          container.innerHTML = "";
+          container.appendChild(pageDiv);
+          pageDiv.appendChild(node);
+        }
+      }
+      if (pageDiv.childElementCount > 0) {
+        await renderCurrentPage(isFirstPage ? cursorY : 60);
+      }
+      if (container && container.parentNode)
+        container.parentNode.removeChild(container);
+
+      // Footer branding
+      const footer = "Powered by AItota";
+      doc.setFont("helvetica", "italic");
+      doc.setFontSize(10);
+      const footerY = doc.internal.pageSize.getHeight() - 30;
+      doc.text(footer, pageWidth - marginX - doc.getTextWidth(footer), footerY);
+
+      const safePhone = String(phone || "").replace(/\D/g, "");
+      const fileName = `AItota_Transcript_${safePhone || "call"}.pdf`;
+      doc.save(fileName);
+    } catch (e) {
+      console.error("Failed to generate transcript PDF", e);
+      alert("Unable to download PDF. Please try again.");
+    } finally {
+      setDownloadingId(null);
+    }
   };
 
   if (!agentId || !clientId) {
@@ -436,13 +737,32 @@ const CallLogs = ({ agentId, clientId }) => {
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          <button
-                            onClick={() => openTranscriptPopup(log)}
-                            className="flex items-center gap-2 px-3 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors"
-                          >
-                            <FiFileText className="w-4 h-4" />
-                            <span>Transcript</span>
-                          </button>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => openTranscriptPopup(log)}
+                              className="flex items-center gap-2 px-3 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors"
+                              title="View Transcript"
+                            >
+                              <FiFileText className="w-4 h-4" />
+                              <span>Transcript</span>
+                            </button>
+                            <button
+                              onClick={() => downloadLogTranscriptPdf(log)}
+                              className={`p-2 rounded-md border border-gray-200 hover:bg-gray-100 transition-colors ${
+                                downloadingId === log._id
+                                  ? "opacity-60 cursor-wait"
+                                  : ""
+                              }`}
+                              title="Download PDF"
+                              disabled={downloadingId === log._id}
+                            >
+                              {downloadingId === log._id ? (
+                                <div className="w-4 h-4 border-2 border-gray-600 border-t-transparent rounded-full animate-spin" />
+                              ) : (
+                                <FiDownload className="w-4 h-4 text-gray-700" />
+                              )}
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
