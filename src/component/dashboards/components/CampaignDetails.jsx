@@ -5226,56 +5226,6 @@ function CampaignDetails({ campaignId, onBack }) {
                             {formatDuration(lead.duration)}
                           </td>
                           <td className="py-2 px-3">
-                            {lead.status === "missed" ? (
-                              <span className="text-gray-400 text-xs text-center"></span>
-                            ) : (
-                              <button
-                                className={`inline-flex items-center px-3 py-1 text-xs border rounded hover:opacity-80 transition-all duration-200 ${
-                                  lead.documentId &&
-                                  viewedTranscripts.has(lead.documentId)
-                                    ? "bg-green-50 text-fuchsia-700 border-green-200"
-                                    : "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
-                                }`}
-                                title={
-                                  lead.documentId &&
-                                  viewedTranscripts.has(lead.documentId)
-                                    ? "Transcript viewed"
-                                    : "View transcript"
-                                }
-                                onClick={() => openTranscriptSmart(lead)}
-                              >
-                                <svg
-                                  className="w-4 h-4 mr-1"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  viewBox="0 0 24 24"
-                                >
-                                  <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth="2"
-                                    d="M8 16h8M8 12h8M8 8h8M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H7l-2 2H3v12a2 2 0 002 2z"
-                                  />
-                                </svg>
-                                {(() => {
-                                  const baseLabel =
-                                    lead.documentId &&
-                                    viewedTranscripts.has(lead.documentId)
-                                      ? "Viewed"
-                                      : "Transcript";
-                                  const count =
-                                    (typeof lead.transcriptCount === "number"
-                                      ? lead.transcriptCount
-                                      : undefined) ??
-                                    getTranscriptMessageCount(lead);
-                                  return count > 0
-                                    ? `${baseLabel} (${count})`
-                                    : baseLabel;
-                                })()}
-                              </button>
-                            )}
-                          </td>
-                          <td className="py-2 px-3">
                             {/* Reuse same flag dropdown logic via rowDisposition */}
                             {(() => {
                               const uniquePrefix = `history-${
@@ -5412,6 +5362,57 @@ function CampaignDetails({ campaignId, onBack }) {
                               );
                             })()}
                           </td>
+                          <td className="py-2 px-3">
+                            {lead.status === "missed" ? (
+                              <span className="text-gray-400 text-xs text-center"></span>
+                            ) : (
+                              <button
+                                className={`inline-flex items-center px-3 py-1 text-xs border rounded hover:opacity-80 transition-all duration-200 ${
+                                  lead.documentId &&
+                                  viewedTranscripts.has(lead.documentId)
+                                    ? "bg-green-50 text-fuchsia-700 border-green-200"
+                                    : "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
+                                }`}
+                                title={
+                                  lead.documentId &&
+                                  viewedTranscripts.has(lead.documentId)
+                                    ? "Transcript viewed"
+                                    : "View transcript"
+                                }
+                                onClick={() => openTranscriptSmart(lead)}
+                              >
+                                <svg
+                                  className="w-4 h-4 mr-1"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  viewBox="0 0 24 24"
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth="2"
+                                    d="M8 16h8M8 12h8M8 8h8M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H7l-2 2H3v12a2 2 0 002 2z"
+                                  />
+                                </svg>
+                                {(() => {
+                                  const baseLabel =
+                                    lead.documentId &&
+                                    viewedTranscripts.has(lead.documentId)
+                                      ? "Viewed"
+                                      : "Transcript";
+                                  const count =
+                                    (typeof lead.transcriptCount === "number"
+                                      ? lead.transcriptCount
+                                      : undefined) ??
+                                    getTranscriptMessageCount(lead);
+                                  return count > 0
+                                    ? `${baseLabel} (${count})`
+                                    : baseLabel;
+                                })()}
+                              </button>
+                            )}
+                          </td>
+
                           <td className="py-2 px-3">{lead.leadStatus}</td>
                           <td className="py-2 px-3 text-gray-700">
                             {lead.whatsappRequested &&
@@ -5889,26 +5890,7 @@ function CampaignDetails({ campaignId, onBack }) {
                 </h1>
                 <p className="text-gray-600 mt-1">{campaign.description}</p>
                 {/* Calling Mode compact badge (P/S) */}
-                <div className="mt-2 flex items-center">
-                  {agentConfigLoading ? (
-                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 text-gray-600">
-                      …
-                    </span>
-                  ) : (
-                    <span
-                      className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold ${
-                        agentConfigMode === "serial"
-                          ? "bg-blue-100 text-blue-800"
-                          : "bg-green-100 text-green-800"
-                      }`}
-                      title={
-                        agentConfigMode === "serial" ? "Serial" : "Parallel"
-                      }
-                    >
-                      {agentConfigMode === "serial" ? "S" : "P"}
-                    </span>
-                  )}
-                </div>
+                <div className="mt-2 flex items-center"></div>
               </div>
             </div>
             <button></button>
