@@ -1765,21 +1765,37 @@ const AgentForm = ({
         >
           {formData.voiceServiceProvider === "sarvam" ? (
             <>
-              <optgroup label="Female">
-                <option value="meera">Meera</option>
-                <option value="pavithra">Pavithra</option>
-                <option value="maitreyi">Maitreyi</option>
-                <option value="diya">Diya</option>
-                <option value="misha">Misha</option>
-                <option value="maya">Maya</option>
-              </optgroup>
-              <optgroup label="Male">
-                <option value="arvind">Arvind</option>
-                <option value="amol">Amol</option>
-                <option value="amartya">Amartya</option>
-                <option value="neel">Neel</option>
-                <option value="vian">Vian</option>
-                <option value="arjun">Arjun</option>
+              <optgroup label="Hindi">
+                <option value="anushka">Anushka</option>
+                <option value="abhilash">Abhilash</option>
+                <option value="manisha">Manisha</option>
+                <option value="vidya">Vidya</option>
+                <option value="arya">Arya</option>
+                <option value="karun">Karun</option>
+                <option value="hitesh">Hitesh</option>
+                <option value="aditya">Aditya</option>
+                <option value="isha">Isha</option>
+                <option value="ritu">Ritu</option>
+                <option value="chirag">Chirag</option>
+                <option value="harsh">Harsh</option>
+                <option value="sakshi">Sakshi</option>
+                <option value="priya">Priya</option>
+                <option value="neha">Neha</option>
+                <option value="rahul">Rahul</option>
+                <option value="pooja">Pooja</option>
+                <option value="rohan">Rohan</option>
+                <option value="simran">Simran</option>
+                <option value="kavya">Kavya</option>
+                <option value="anjali">Anjali</option>
+                <option value="sneha">Sneha</option>
+                <option value="kiran">Kiran</option>
+                <option value="vikram">Vikram</option>
+                <option value="rajesh">Rajesh</option>
+                <option value="sunita">Sunita</option>
+                <option value="tara">Tara</option>
+                <option value="anirudh">Anirudh</option>
+                <option value="kriti">Kriti</option>
+                <option value="ishaan">Ishaan</option>
               </optgroup>
             </>
           ) : formData.voiceServiceProvider === "smallest" ? (
