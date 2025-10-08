@@ -26,7 +26,8 @@ function CampaignDetails({ campaignId, onBack }) {
   const [campaign, setCampaign] = useState(null);
   const [availableGroups, setAvailableGroups] = useState([]);
   const [selectedGroups, setSelectedGroups] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [isTogglingCampaign, setIsTogglingCampaign] = useState(false);
   const [addingGroups, setAddingGroups] = useState(false);
   // Auto-refresh toggle for Recent call logs
   const [autoRefreshCalls, setAutoRefreshCalls] = useState(false);
@@ -745,7 +746,6 @@ function CampaignDetails({ campaignId, onBack }) {
   const [showAddAgentModal, setShowAddAgentModal] = useState(false);
   const [selectedAgentIdForAssign, setSelectedAgentIdForAssign] = useState("");
   // Backend start/stop calling toggle state
-  const [isTogglingCampaign, setIsTogglingCampaign] = useState(false);
   // Insufficient credits modal
   const [showCreditsModal, setShowCreditsModal] = useState(false);
   // Transcript modal states
@@ -1179,13 +1179,25 @@ function CampaignDetails({ campaignId, onBack }) {
     } catch (_) {}
 
     // Then load fresh data from backend
-    fetchCampaignDetails();
-    fetchAvailableGroups();
-    fetchAgents();
-    fetchClientData();
-    fetchCampaignGroups();
-    fetchCampaignHistory(campaignId);
-    fetchCampaignCallingStatus();
+    const loadData = async () => {
+      try {
+        await Promise.all([
+          fetchCampaignDetails(),
+          fetchAvailableGroups(),
+          fetchAgents(),
+          fetchClientData(),
+          fetchCampaignGroups(),
+          fetchCampaignHistory(campaignId),
+          fetchCampaignCallingStatus()
+        ]);
+      } catch (error) {
+        console.error("Error loading campaign data:", error);
+        // Set loading to false even if there's an error
+        setLoading(false);
+      }
+    };
+
+    loadData();
   }, [campaignId]);
 
   // Auto-load agent configuration when campaign data is available
@@ -1952,6 +1964,10 @@ function CampaignDetails({ campaignId, onBack }) {
     try {
       setLoading(true);
       const token = sessionStorage.getItem("clienttoken");
+      
+      if (!token) {
+        throw new Error("No authentication token found");
+      }
 
       const response = await fetch(`${API_BASE}/campaigns/${campaignId}`, {
         headers: {
@@ -1959,6 +1975,10 @@ function CampaignDetails({ campaignId, onBack }) {
           "Content-Type": "application/json",
         },
       });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
 
       const result = await response.json();
       if (result.success) {
@@ -1997,17 +2017,7 @@ function CampaignDetails({ campaignId, onBack }) {
         // fetchCampaignGroups();
       } else {
         console.error("Failed to fetch campaign details:", result.error);
-        // For demo purposes, create a dummy campaign if API fails
-        setCampaign({
-          _id: campaignId,
-          name: "Demo Campaign",
-          description: "This is a demo campaign for testing purposes",
-          groupIds: [],
-          startDate: new Date(),
-          endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
-          status: "draft",
-          createdAt: new Date(),
-        });
+        throw new Error(result.error || "Failed to fetch campaign details");
       }
     } catch (error) {
       console.error("Error fetching campaign details:", error);
@@ -2023,6 +2033,7 @@ function CampaignDetails({ campaignId, onBack }) {
         createdAt: new Date(),
       });
     } finally {
+      // Only update loading state if component is still mounted
       setLoading(false);
     }
   };
@@ -3153,17 +3164,26 @@ function CampaignDetails({ campaignId, onBack }) {
         if (result.success && result.data) {
           // Update campaign running status from backend
           const nextIsRunning = result.data.isRunning;
+          const backendAllFinalized = !!result?.data?.allCallsFinalized;
+          const isActuallyRunning = !!result?.data?.isActuallyRunning;
+          
           // Auto-save history when backend indicates calling has become inactive
           try {
             const wasRunning = campaign?.isRunning;
-            const backendAllFinalized = !!result?.data?.allCallsFinalized;
             const effectiveRunId = currentRunId || result?.data?.latestRunId;
-            if (
-              ((wasRunning && !nextIsRunning) || backendAllFinalized) &&
-              effectiveRunId &&
-              !autoSavingRef.current &&
-              lastSavedRunIdRef.current !== effectiveRunId
-            ) {
+            
+            // More robust completion detection
+            const shouldAutoSave = (
+              // Campaign was running and now stopped
+              (wasRunning && !nextIsRunning) ||
+              // All calls are finalized (regardless of isRunning state)
+              backendAllFinalized ||
+              // Campaign is not actually running despite being marked as running
+              (!isActuallyRunning && wasRunning)
+            ) && effectiveRunId && !autoSavingRef.current && lastSavedRunIdRef.current !== effectiveRunId;
+            
+            if (shouldAutoSave) {
+              console.log(`💾 FRONTEND: Auto-saving campaign run ${effectiveRunId}`);
               autoSavingRef.current = true;
               const endTime = new Date();
               const inferredStart = result?.data?.runStartTime
@@ -3193,12 +3213,17 @@ function CampaignDetails({ campaignId, onBack }) {
               resetSectionForNextRun();
               setReadyFlag(true);
               stopLiveCallPolling();
+              
+              // Refresh campaign history to show the new entry
+              await fetchCampaignHistory(campaignId);
             }
           } catch (e) {
             console.error("Auto-save on inactive failed:", e);
           } finally {
             autoSavingRef.current = false;
           }
+          
+          // Update campaign state if it changed
           if (nextIsRunning !== campaign?.isRunning) {
             setCampaign((prev) =>
               prev ? { ...prev, isRunning: nextIsRunning } : null
@@ -4698,39 +4723,51 @@ function CampaignDetails({ campaignId, onBack }) {
   };
 
   const handleToggleCampaignCalling = async () => {
-    if (campaign?.isRunning) {
-      // Stopping campaign - DON'T save immediately, let backend handle it
-      const confirmStop = window.confirm(
-        "Are you sure you want to stop this campaign? Ongoing calls will complete naturally."
-      );
-      if (!confirmStop) return;
+    // Prevent multiple simultaneous toggles
+    if (isTogglingCampaign) {
+      console.log("🔄 FRONTEND: Toggle already in progress, ignoring");
+      return;
+    }
 
-      console.log(
-        "🛑 FRONTEND: Stopping campaign, waiting for calls to complete..."
-      );
+    setIsTogglingCampaign(true);
 
-      // Stop campaign (this will wait for ongoing calls to complete)
-      await stopCampaignCallingBackend();
+    try {
+      if (campaign?.isRunning) {
+        // Stopping campaign - DON'T save immediately, let backend handle it
+        const confirmStop = window.confirm(
+          "Are you sure you want to stop this campaign? Ongoing calls will complete naturally."
+        );
+        if (!confirmStop) return;
 
-      // Reset run tracking
-      setCurrentRunId(null);
-      setRunStartTime(null);
-      setCurrentRunCallLogs([]);
-      setIsLiveCallActive(false);
+        console.log(
+          "🛑 FRONTEND: Stopping campaign, waiting for calls to complete..."
+        );
 
-      // Refresh call logs to show the final state
-      await fetchApiMergedCalls(1, false, false);
+        // Stop campaign (this will wait for ongoing calls to complete)
+        await stopCampaignCallingBackend();
 
-      toast.success("Campaign stopped - ongoing calls will complete naturally");
-    } else {
-      const confirmStart = window.confirm("Start the campaign now?");
-      if (!confirmStart) return;
+        // Reset run tracking
+        setCurrentRunId(null);
+        setRunStartTime(null);
+        setCurrentRunCallLogs([]);
+        setIsLiveCallActive(false);
 
-      // Start campaign
-      await startCampaignCallingBackend();
+        // Refresh call logs to show the final state
+        await fetchApiMergedCalls(1, false, false);
 
-      // When a new run begins, ensure we show live data again
-      setIsLiveCallActive(true);
+        toast.success("Campaign stopped - ongoing calls will complete naturally");
+      } else {
+        const confirmStart = window.confirm("Start the campaign now?");
+        if (!confirmStart) return;
+
+        // Start campaign
+        await startCampaignCallingBackend();
+
+        // When a new run begins, ensure we show live data again
+        setIsLiveCallActive(true);
+      }
+    } finally {
+      setIsTogglingCampaign(false);
     }
   };
   // CampaignHistoryCard component
@@ -5839,20 +5876,23 @@ function CampaignDetails({ campaignId, onBack }) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-600"></div>
+        <span className="ml-3 text-gray-600">Loading campaign details...</span>
       </div>
     );
   }
 
   if (!campaign) {
     return (
-      <div className="text-center py-12">
-        <div className="text-gray-600">Campaign not found</div>
-        <button
-          onClick={onBack}
-          className="mt-4 px-4 py-2 bg-black text-white rounded hover:bg-gray-800 transition-colors"
-        >
-          Go Back
-        </button>
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="text-gray-500 text-lg mb-2">Campaign not found</div>
+          <button
+            onClick={onBack}
+            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+          >
+            Go Back
+          </button>
+        </div>
       </div>
     );
   }
