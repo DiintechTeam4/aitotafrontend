@@ -484,7 +484,6 @@ function StaffAgents() {
             </button>
           </div>
         </div>
-
         {/* Provider Selection Modal */}
         {showCreateAgentModal && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-60">
@@ -568,6 +567,14 @@ function StaffAgents() {
   return (
     <div className="w-full">
       {/* Top actions */}
+      <div className="bg-white border-b border-gray-200 px-8 py-6">
+              <h2 className="text-3xl font-bold text-gray-900 mb-4">
+                Agents
+              </h2>
+              <p className="text-gray-600 text-lg">
+                Handle agents assigned to a staff
+              </p>
+            </div>
       <div className="flex justify-end mb-4">
         <button
           onClick={openCreateAgentModal}

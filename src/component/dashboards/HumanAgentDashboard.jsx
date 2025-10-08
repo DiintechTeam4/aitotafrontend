@@ -149,19 +149,7 @@ const HumanAgentDashboard = ({ userData, onLogout }) => {
 
       case "agents":
         return (
-          <div className="h-full flex flex-col">
-            <div className="bg-white border-b border-gray-200 px-8 py-6">
-              <h2 className="text-3xl font-bold text-gray-900 mb-4">
-                Agents
-              </h2>
-              <p className="text-gray-600 text-lg">
-                Handle agents assigned to a staff
-              </p>
-            </div>
-            <div className="flex-1 p-8 overflow-y-auto">
               <StaffAgents />
-            </div>
-          </div>
         );
 
       case "inbound":
@@ -169,7 +157,7 @@ const HumanAgentDashboard = ({ userData, onLogout }) => {
           <div className="h-full flex flex-col">
             <div className="bg-white border-b border-gray-200 px-8 py-6">
               <h2 className="text-3xl font-bold text-gray-900 mb-4">
-                Inbound Calls
+                Inbound
               </h2>
               <p className="text-gray-600 text-lg">
                 Handle incoming calls and leads
@@ -183,19 +171,7 @@ const HumanAgentDashboard = ({ userData, onLogout }) => {
 
       case "outbound":
         return (
-          <div className="h-full flex flex-col">
-            <div className="bg-white border-b border-gray-200 px-8 py-6">
-              <h2 className="text-3xl font-bold text-gray-900 mb-4">
-                Outbound Campaigns
-              </h2>
-              <p className="text-gray-600 text-lg">
-                Manage outbound calling campaigns
-              </p>
-            </div>
-            <div className="flex-1 p-8 overflow-y-auto">
               <OutboundSection />
-            </div>
-          </div>
         );
 
       case "my-dials":
@@ -417,7 +393,7 @@ const HumanAgentDashboard = ({ userData, onLogout }) => {
               <h2 className="text-3xl font-bold text-gray-900 mb-4">
                 Welcome, {humanAgent?.name || "Agent"}
               </h2>
-              <p className="text-gray-600 text-lg">Human Agent Dashboard</p>
+              <p className="text-gray-600 text-lg">Team Dashboard</p>
             </div>
             <div className="flex-1 p-8 overflow-y-auto">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -524,7 +500,7 @@ const HumanAgentDashboard = ({ userData, onLogout }) => {
           } ${isMobile ? "fixed z-50 h-full" : ""}`}
         >
           <div className="p-6 border-b border-gray-700">
-            <h1 className="text-2xl font-bold text-white mb-3">Human Agent</h1>
+            <h1 className="text-2xl font-bold text-white mb-3">Team</h1>
             <div className="flex flex-row gap-2">
               <span className="text-sm text-gray-300 font-semibold">
                 {humanAgent?.name || "Agent"}
