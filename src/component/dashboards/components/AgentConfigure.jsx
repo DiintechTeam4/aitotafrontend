@@ -12,6 +12,7 @@ const AgentConfigure = () => {
   const [agentMeta, setAgentMeta] = useState({ agentName: '', didNumbers: [''] });
   const [items, setItems] = useState([{ n: 1, g: 1, rSec: 5 }]);
   const [mode, setMode] = useState('serial');
+  const [pMode, setPMode] = useState('effective'); // slow | fast | effective for parallel
   const gOptions = useMemo(() => [1,2,3,4,5], []);
   const rOptions = useMemo(() => [5,10,20,30,60], []);
   const [docId, setDocId] = useState(null);
@@ -37,6 +38,7 @@ const AgentConfigure = () => {
           const row = json.data[0];
           setDocId(row._id);
           if (row.mode === 'serial' || row.mode === 'parallel') setMode(row.mode);
+          if (typeof row.pMode === 'string') setPMode(row.pMode);
           const didNumbers = row.didNumbers && Array.isArray(row.didNumbers) && row.didNumbers.length 
             ? row.didNumbers 
             : (row.didNumber ? [row.didNumber] : agentMeta.didNumbers);
@@ -73,6 +75,7 @@ const AgentConfigure = () => {
       agentId, 
       items: items.map(it => ({ n: 1, g: Number(it.g)||1, rSec: Number(it.rSec)||5 })),
       mode: mode === 'serial' ? 'serial' : 'parallel',
+      pMode: mode === 'parallel' ? (pMode || 'effective') : undefined,
       didNumbers: agentMeta.didNumbers.filter(num => num.trim() !== '')
     };
     const method = docId ? 'PUT' : 'POST';
@@ -150,6 +153,52 @@ const AgentConfigure = () => {
                       </div>
                     </div>
                   </div>
+                    {mode === 'parallel' && (
+                    <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <label className={`flex items-center justify-center gap-2 px-4 py-3 border-2 rounded-lg cursor-pointer transition-all ${
+                          pMode === 'slow'
+                          ? 'bg-green-50 border-green-600 text-green-700'
+                          : 'bg-white border-gray-200 text-gray-700 hover:border-gray-300'
+                      }`}>
+                        <input
+                          type="radio"
+                          name="pMode"
+                            checked={pMode === 'slow'}
+                            onChange={() => setPMode('slow')}
+                          className="w-4 h-4 text-green-600"
+                        />
+                          <span className="font-medium">Slow (max safety)</span>
+                      </label>
+                      <label className={`flex items-center justify-center gap-2 px-4 py-3 border-2 rounded-lg cursor-pointer transition-all ${
+                          pMode === 'fast'
+                          ? 'bg-yellow-50 border-yellow-600 text-yellow-700'
+                          : 'bg-white border-gray-200 text-gray-700 hover:border-gray-300'
+                      }`}>
+                        <input
+                          type="radio"
+                          name="pMode"
+                            checked={pMode === 'fast'}
+                            onChange={() => setPMode('fast')}
+                          className="w-4 h-4 text-yellow-600"
+                        />
+                          <span className="font-medium">Fast (strict batches)</span>
+                      </label>
+                      <label className={`flex items-center justify-center gap-2 px-4 py-3 border-2 rounded-lg cursor-pointer transition-all ${
+                        pMode === 'effective'
+                          ? 'bg-blue-50 border-blue-600 text-blue-700'
+                          : 'bg-white border-gray-200 text-gray-700 hover:border-gray-300'
+                      }`}>
+                        <input
+                          type="radio"
+                          name="pMode"
+                          checked={pMode === 'effective'}
+                          onChange={() => setPMode('effective')}
+                          className="w-4 h-4 text-blue-600"
+                        />
+                        <span className="font-medium">Effective (keep N full)</span>
+                      </label>
+                    </div>
+                  )}
 
                   {/* Mode Selection */}
                   <div>
