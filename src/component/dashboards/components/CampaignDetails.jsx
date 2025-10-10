@@ -1018,8 +1018,9 @@ function CampaignDetails({ campaignId, onBack }) {
   const [showGroupRangeModal, setShowGroupRangeModal] = useState(false);
   const [rangeModalLoading, setRangeModalLoading] = useState(false);
   const [rangeModalGroup, setRangeModalGroup] = useState(null);
-  const [rangeStartIndex, setRangeStartIndex] = useState(0);
-  const [rangeEndIndex, setRangeEndIndex] = useState(0);
+  const [rangeStartIndex, setRangeStartIndex] = useState(1); // 1-based default
+  const [rangeEndIndex, setRangeEndIndex] = useState(1);
+  const [selectedRangesDisplay, setSelectedRangesDisplay] = useState([]); // [{groupName,start,end}]
   const [selectedContactIndices, setSelectedContactIndices] = useState([]);
   const [groupModalTab, setGroupModalTab] = useState("range"); // 'range' | 'select'
   const [lastUpdated, setLastUpdated] = useState(null);
@@ -1042,6 +1043,7 @@ function CampaignDetails({ campaignId, onBack }) {
   const [durationSort, setDurationSort] = useState("none"); // all | connected | missed
   const [rowDisposition, setRowDisposition] = useState({}); // { [rowId]: 'interested'|'not interested'|'maybe'|undefined }
   const [openDispositionFor, setOpenDispositionFor] = useState(null); // rowId for which dropdown is open
+  const [rowDispositionPosition, setRowDispositionPosition] = useState({}); // { [rowId]: 'top'|'bottom' }
   // Filters for flag (local label) and disposition (from backend leadStatus/disposition)
   const [flagFilter, setFlagFilter] = useState("all"); // 'all'|'interested'|'not interested'|'maybe'|'do not call'|'unlabeled'
   const [dispositionFilter, setDispositionFilter] = useState("all"); // 'all' or a specific disposition/leadStatus
@@ -2551,16 +2553,18 @@ function CampaignDetails({ campaignId, onBack }) {
         }
         body.selectedIndices = selectedContactIndices;
       } else {
-        body.startIndex = Math.max(0, Number(rangeStartIndex) || 0);
-        body.endIndex = Math.max(0, Number(rangeEndIndex) || 0);
+        // Convert 1-based UI to 0-based backend; end is exclusive already
+        body.startIndex = Math.max(0, (Number(rangeStartIndex) || 1) - 1);
+        body.endIndex = Math.max(0, Number(rangeEndIndex) || 1);
       }
+      if (currentRunId) body.runId = currentRunId;
       const resp = await fetch(
         `${API_BASE}/campaigns/${campaign._id}/groups/${rangeModalGroup._id}/contacts-range`,
         {
           method: "POST",
           headers: {
-            Authorization: `Bearer ${token}`,
             "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify(body),
         }
@@ -2568,8 +2572,18 @@ function CampaignDetails({ campaignId, onBack }) {
       const result = await resp.json();
       if (result.success) {
         toast.success(
-          `Added ${result.data.added} of ${result.data.totalSelected} contacts from range ${result.data.range.startIndex}-${result.data.range.endIndex}`
+          `Added ${result.data.added} of ${result.data.totalSelected} contacts from range ${body.startIndex + 1}-${body.endIndex}`
         );
+        setSelectedRangesDisplay((prev) => ([
+          ...prev,
+          {
+            groupId: String(rangeModalGroup._id),
+            groupName: rangeModalGroup.name || "",
+            start: body.startIndex + 1,
+            end: body.endIndex,
+            selectedAt: Date.now(),
+          },
+        ]));
         setShowGroupRangeModal(false);
         setRangeModalGroup(null);
         await fetchCampaignContacts();
@@ -5398,6 +5412,12 @@ function CampaignDetails({ campaignId, onBack }) {
                 </h3>
                 <p className="text-sm text-gray-500">
                   <span className="mr-3">
+                    <strong>Date:</strong> {(() => {
+                      const d = new Date(run.createdAt || run.startTime || Date.now());
+                      return d.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" });
+                    })()}
+                  </span>
+                  <span className="mr-3">
                     <strong>Start:</strong> {run.startTime}
                   </span>
                   <span className="mr-3">
@@ -6205,6 +6225,8 @@ function CampaignDetails({ campaignId, onBack }) {
                                       e.stopPropagation();
                                       // Ensure the history card remains open while interacting
                                       setIsExpanded(true);
+                                      const direction = calculateDropdownPosition(e.currentTarget);
+                                      setRowDispositionPosition((prev) => ({ ...prev, [rowId]: direction }));
                                       setOpenDispositionFor(
                                         openDispositionFor === rowId
                                           ? null
@@ -6229,7 +6251,11 @@ function CampaignDetails({ campaignId, onBack }) {
                                   </button>
                                   {openDispositionFor === rowId && (
                                     <div
-                                      className="absolute z-10 mt-1 w-40 bg-white border border-gray-200 rounded shadow"
+                                      className={`absolute z-10 w-40 bg-white border border-gray-200 rounded shadow ${
+                                        (rowDispositionPosition && rowDispositionPosition[rowId]) === "top"
+                                          ? "bottom-full mb-1"
+                                          : "mt-1"
+                                      }`}
                                       onClick={(e) => e.stopPropagation()}
                                       onMouseDown={(e) => e.stopPropagation()}
                                     >
@@ -6925,6 +6951,14 @@ function CampaignDetails({ campaignId, onBack }) {
               {/* Add buttons */}
 
               <div className="flex items-center gap-2">
+                {Array.isArray(selectedRangesDisplay) && selectedRangesDisplay.length > 0 && (
+                  <div className="mr-4 text-right">
+                    <div className="text-xs text-gray-500">Selected range</div>
+                    <div className="text-sm font-semibold text-gray-800">
+                      {selectedRangesDisplay[selectedRangesDisplay.length - 1].groupName}: {selectedRangesDisplay[selectedRangesDisplay.length - 1].start}-{selectedRangesDisplay[selectedRangesDisplay.length - 1].end}
+                    </div>
+                  </div>
+                )}
                 <div className="mb-2 text-sm text-gray-700 flex items-center gap-4">
                   {Array.isArray(campaign?.agent) &&
                     campaign.agent.length > 0 && (
@@ -7333,14 +7367,14 @@ function CampaignDetails({ campaignId, onBack }) {
                         </label>
                         <input
                           type="number"
-                          min={0}
+                          min={1}
                           max={Math.max(
                             0,
                             rangeModalGroup.contacts?.length || 0
                           )}
                           value={rangeStartIndex}
                           onChange={(e) =>
-                            setRangeStartIndex(parseInt(e.target.value || 0))
+                            setRangeStartIndex(parseInt(e.target.value || 1))
                           }
                           className="w-full border border-gray-300 rounded-md px-2 py-1"
                         />
@@ -7351,14 +7385,14 @@ function CampaignDetails({ campaignId, onBack }) {
                         </label>
                         <input
                           type="number"
-                          min={0}
+                          min={1}
                           max={Math.max(
                             0,
                             rangeModalGroup.contacts?.length || 0
                           )}
                           value={rangeEndIndex}
                           onChange={(e) =>
-                            setRangeEndIndex(parseInt(e.target.value || 0))
+                            setRangeEndIndex(parseInt(e.target.value || 1))
                           }
                           className="w-full border border-gray-300 rounded-md px-2 py-1"
                         />
@@ -7475,7 +7509,7 @@ function CampaignDetails({ campaignId, onBack }) {
           )}
 
           {/* Live call logs (Ringing/Ongoing) - show only in NGR/parallel mode */}
-          {agentConfigMode !== "serial" && (
+          {true && (
             <div
               className={`bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8 ${
                 statusLogsCollapsed ? "hidden" : ""
@@ -7975,13 +8009,13 @@ function CampaignDetails({ campaignId, onBack }) {
                                       <button
                                         type="button"
                                         className={`inline-flex items-center px-3 py-1 text-xs border rounded ${colorClass}`}
-                                        onClick={() =>
+                                        onClick={(e) => {
+                                          const direction = calculateDropdownPosition(e.currentTarget);
+                                          setRowDispositionPosition((prev) => ({ ...prev, [rowId]: direction }));
                                           setOpenDispositionFor(
-                                            openDispositionFor === rowId
-                                              ? null
-                                              : rowId
-                                          )
-                                        }
+                                            openDispositionFor === rowId ? null : rowId
+                                          );
+                                        }}
                                       >
                                         {icon}
                                         {label}
@@ -8001,7 +8035,11 @@ function CampaignDetails({ campaignId, onBack }) {
                                       </button>
 
                                       {openDispositionFor === rowId && (
-                                        <div className="absolute z-10 mt-1 w-40 bg-white border border-gray-200 rounded shadow">
+                                        <div className={`absolute z-10 w-40 bg-white border border-gray-200 rounded shadow ${
+                                          (rowDispositionPosition && rowDispositionPosition[rowId]) === "top"
+                                            ? "bottom-full mb-1"
+                                            : "mt-1"
+                                        }`}>
                                           {[
                                             {
                                               key: "interested",
@@ -8750,13 +8788,13 @@ function CampaignDetails({ campaignId, onBack }) {
                                   <button
                                     type="button"
                                     className={`inline-flex items-center px-3 py-1 text-xs border rounded ${colorClass}`}
-                                    onClick={() =>
+                                    onClick={(e) => {
+                                      const direction = calculateDropdownPosition(e.currentTarget);
+                                      setRowDispositionPosition((prev) => ({ ...prev, [rowId]: direction }));
                                       setOpenDispositionFor(
-                                        openDispositionFor === rowId
-                                          ? null
-                                          : rowId
-                                      )
-                                    }
+                                        openDispositionFor === rowId ? null : rowId
+                                      );
+                                    }}
                                   >
                                     {icon}
                                     {label}
@@ -8776,7 +8814,11 @@ function CampaignDetails({ campaignId, onBack }) {
                                   </button>
 
                                   {openDispositionFor === rowId && (
-                                    <div className="absolute z-10 mt-1 w-40 bg-white border border-gray-200 rounded shadow">
+                                    <div className={`absolute z-10 w-40 bg-white border border-gray-200 rounded shadow ${
+                                      (rowDispositionPosition && rowDispositionPosition[rowId]) === "top"
+                                        ? "bottom-full mb-1"
+                                        : "mt-1"
+                                    }`}>
                                       {[
                                         {
                                           key: "interested",
