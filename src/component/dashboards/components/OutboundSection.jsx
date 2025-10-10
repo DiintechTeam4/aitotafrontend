@@ -89,8 +89,16 @@ function OutboundSection({ tenantId }) {
   const [loading, setLoading] = useState(false);
 
   // Navigation state
-  const [selectedGroupId, setSelectedGroupId] = useState(null);
-  const [selectedCampaignId, setSelectedCampaignId] = useState(null);
+  const [selectedGroupId, setSelectedGroupId] = useState(() => {
+    // Initialize from URL params
+    const urlParams = new URLSearchParams(window.location.search);
+    return urlParams.get('groupId') || null;
+  });
+  const [selectedCampaignId, setSelectedCampaignId] = useState(() => {
+    // Initialize from URL params
+    const urlParams = new URLSearchParams(window.location.search);
+    return urlParams.get('campaignId') || null;
+  });
   const [viewMode, setViewMode] = useState("grid");
   const [campaignViewMode, setCampaignViewMode] = useState("grid");
   const [selectedCategory, setSelectedCategory] = useState("all");
@@ -99,6 +107,25 @@ function OutboundSection({ tenantId }) {
   useEffect(() => {
     setSelectedCategory("all");
   }, [activeTab]);
+
+  // Update URL when selected IDs change
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    
+    if (selectedGroupId) {
+      urlParams.set('groupId', selectedGroupId);
+      urlParams.delete('campaignId'); // Remove campaignId if group is selected
+    } else if (selectedCampaignId) {
+      urlParams.set('campaignId', selectedCampaignId);
+      urlParams.delete('groupId'); // Remove groupId if campaign is selected
+    } else {
+      urlParams.delete('groupId');
+      urlParams.delete('campaignId');
+    }
+    
+    const newUrl = `${window.location.pathname}?${urlParams.toString()}`;
+    window.history.replaceState({}, '', newUrl);
+  }, [selectedGroupId, selectedCampaignId]);
 
   // Group editing UI state
   const [openMenuGroupId, setOpenMenuGroupId] = useState(null);
@@ -931,7 +958,15 @@ function OutboundSection({ tenantId }) {
                     <div
                       key={campaign._id}
                       className="group bg-white border border-gray-200 rounded-2xl p-5 hover:shadow-lg hover:border-blue-300 transition-all duration-200 h-48 flex flex-col cursor-pointer relative hover:-translate-y-0.5"
-                      onClick={() => setSelectedCampaignId(campaign._id)}
+                      onClick={() => {
+                        setSelectedCampaignId(campaign._id);
+                        // Update URL immediately
+                        const urlParams = new URLSearchParams(window.location.search);
+                        urlParams.set('campaignId', campaign._id);
+                        urlParams.delete('groupId');
+                        const newUrl = `${window.location.pathname}?${urlParams.toString()}`;
+                        window.history.replaceState({}, '', newUrl);
+                      }}
                     >
                       <div className="flex justify-between items-start mb-3">
                         <h3 className="text-sm font-bold text-gray-900 m-0 group-hover:text-blue-600 transition-colors line-clamp-1">
@@ -1013,7 +1048,15 @@ function OutboundSection({ tenantId }) {
                     >
                       <div
                         className="flex-1 min-w-0 cursor-pointer"
-                        onClick={() => setSelectedCampaignId(campaign._id)}
+                        onClick={() => {
+                          setSelectedCampaignId(campaign._id);
+                          // Update URL immediately
+                          const urlParams = new URLSearchParams(window.location.search);
+                          urlParams.set('campaignId', campaign._id);
+                          urlParams.delete('groupId');
+                          const newUrl = `${window.location.pathname}?${urlParams.toString()}`;
+                          window.history.replaceState({}, '', newUrl);
+                        }}
                       >
                         <div className="text-sm font-semibold text-gray-900 truncate">
                           {campaign.name}

@@ -50,6 +50,13 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
   const [agentsLoading, setAgentsLoading] = useState(false);
   const [editingAgent, setEditingAgent] = useState(null);
   const [activeSection, setActiveSection] = useState(() => {
+    // Check URL params first for campaign/group details
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('campaignId') || urlParams.get('groupId')) {
+      // Always stay on outbound section when campaign/group params are present
+      // This ensures campaign details page persists on refresh
+      return "outbound";
+    }
     // Get persisted section from localStorage, default to "agents"
     return localStorage.getItem("clientDashboard_activeSection") || "agents";
   });
@@ -85,6 +92,20 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
       }
     }
   }, []);
+
+  // Monitor URL changes and maintain activeSection for campaign/group views
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const campaignId = urlParams.get('campaignId');
+    const groupId = urlParams.get('groupId');
+    
+    if (campaignId || groupId) {
+      // Always set to outbound when campaign/group params are present
+      // This ensures campaign details page persists on refresh
+      setActiveSection("outbound");
+      localStorage.setItem("clientDashboard_activeSection", "outbound");
+    }
+  }, [window.location.search]);
 
   useEffect(() => {
     const token = sessionStorage.getItem("clienttoken");
