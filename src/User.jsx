@@ -53,10 +53,20 @@ const User = () => {
           setIsAuthenticated(true);
           setUserRole(parsedData.role);
 
+          // Check if we're already on a campaign/group page
+          const urlParams = new URLSearchParams(window.location.search);
+          const campaignId = urlParams.get('campaignId');
+          const groupId = urlParams.get('groupId');
+          
           // Navigate based on role
           console.log("Initializing auth with role:", parsedData.role);
           if (parsedData.role === "client") {
-            navigate("/auth/dashboard");
+            // If we have campaignId or groupId in URL, preserve them in navigation
+            if (campaignId || groupId) {
+              navigate(`/auth/dashboard?${urlParams.toString()}`);
+            } else {
+              navigate("/auth/dashboard");
+            }
           } else if (parsedData.role === "user") {
             navigate("/auth/dashboard");
           } else if (

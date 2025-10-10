@@ -16,6 +16,8 @@ const STT = ({ onBack }) => {
   const [uploading, setUploading] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [selectedItems, setSelectedItems] = useState(new Set());
+  const [chatPage, setChatPage] = useState(1);
+  const conversationsPerPage = 10;
 
   const token = localStorage.getItem('admintoken') || sessionStorage.getItem('admintoken');
 
@@ -106,100 +108,309 @@ const STT = ({ onBack }) => {
   };
 
   const getTranscript = async (itemId) => {
-    const resp = await fetch(`${API_BASE_URL}/stt/items/${itemId}/transcript-url`);
-    const json = await resp.json();
-    if (json?.success && json.url) downloadByUrl(json.url, 'transcript.txt');
-    else alert(json?.message || 'Transcript not ready');
-  };
-
-  const downloadTextAsPdf = (filename, text) => {
-    const doc = new jsPDF({ unit: 'pt', format: 'a4' });
-    const margin = 40;
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const pageHeight = doc.internal.pageSize.getHeight();
-    const usableWidth = pageWidth - margin * 2;
-    const lineHeight = 16;
-    let cursorY = margin;
-
-    const safe = sanitizeText(text);
-    const lines = doc.splitTextToSize(safe, usableWidth);
-    lines.forEach((line) => {
-      if (cursorY + lineHeight > pageHeight - margin) {
-        doc.addPage();
-        cursorY = margin;
+    try {
+      const resp = await fetch(`${API_BASE_URL}/stt/items/${itemId}/transcript-url`);
+      const json = await resp.json();
+      if (json?.success && json.url) {
+        const response = await fetch(json.url);
+        const text = await response.text();
+        
+        // Convert to conversation format
+        const conversations = splitIntoChatTurns(text);
+        let conversationText = '';
+        
+        if (conversations.length > 0) {
+          conversations.forEach((conversation) => {
+            conversationText += `${conversation.speaker}: ${conversation.text}\n\n`;
+          });
+        } else {
+          // Fallback to regular text if no conversations found
+          conversationText = sanitizeText(text);
+        }
+        
+        // Create and download the text file
+        const blob = new Blob([conversationText], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'transcript.txt';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      } else {
+        alert(json?.message || 'Transcript not ready');
       }
-      doc.text(line, margin, cursorY);
-      cursorY += lineHeight;
-    });
-    doc.save(filename);
+    } catch (e) {
+      alert('Failed to download transcript: ' + e.message);
+    }
   };
 
+  // Fixed sanitizeText function - more conservative approach
   const sanitizeText = (raw) => {
     if (!raw) return '';
-    // Normalize Unicode to compose characters properly for Indic scripts
-    let s = String(raw).normalize('NFC');
-    // Replace any characters outside permitted ranges with a space.
-    // Allowed: tabs/newlines, Basic Latin, Latin-1, General Punctuation, Devanagari, Devanagari Extended
-    s = s.replace(/[^\x09\x0A\x0D\x20-\x7E\u00A0-\u00FF\u2000-\u206F\u0900-\u097F\uA8E0-\uA8FF]/g, ' ');
-    // Remove remaining C0/C1 controls (except \n, \r, \t which we already kept)
-    s = s.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g, ' ');
-    // Collapse excessive whitespace
-    s = s.replace(/[\t\f\v]+/g, ' ')
-         .replace(/\s{2,}/g, ' ')
-         .replace(/ *(\n|\r\n) */g, '$1')
-         .trim();
-    return s;
+    
+    // Convert to string and normalize Unicode
+    let text = String(raw).normalize('NFC');
+    
+    // Only remove actual control characters that cause issues, keep everything else
+    // Remove only: NULL, SOH-STX, EOT-ENQ, ACK-BEL, VT, FF, SO-SI, DEL, and C1 controls
+    text = text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/g, '');
+    
+    // Clean up whitespace but preserve structure
+    text = text.replace(/\r\n/g, '\n')  // Normalize line endings
+             .replace(/\r/g, '\n')      // Convert remaining \r to \n
+             .replace(/[ \t]+/g, ' ')   // Collapse spaces and tabs
+             .replace(/\n[ \t]+/g, '\n') // Remove spaces after newlines
+             .replace(/[ \t]+\n/g, '\n') // Remove spaces before newlines
+             .replace(/\n{3,}/g, '\n\n') // Collapse multiple newlines
+             .trim();
+    
+    return text;
   };
 
+  // Fixed splitIntoChatTurns function
+  const splitIntoChatTurns = (raw) => {
+    const text = sanitizeText(raw);
+    if (!text) return [];
+    
+    // Clean up any duplicate speaker names that might be in the text
+    let cleanText = text.replace(/(Speaker [AB]:?\s*)+/gi, '');
+    
+    // Split into sentences on ., ?, !, Hindi danda à¥¤
+    const sentences = cleanText
+      .split(/(?<=[\.\?\!\u0964])\s+/)
+      .map(s => s.trim())
+      .filter(Boolean);
+    
+    const turns = [];
+    let buffer = [];
+    let speakerIndex = 0; // 0 -> Speaker A, 1 -> Speaker B
+    
+    if (sentences.length > 0) {
+      // Use sentence-based approach
+      sentences.forEach((s, idx) => {
+        buffer.push(s);
+        const isBoundary = buffer.length >= 2 || /[\?\!\u0964]$/.test(s);
+        if (isBoundary || idx === sentences.length - 1) {
+          turns.push({ speaker: speakerIndex % 2 === 0 ? 'Speaker A' : 'Speaker B', text: buffer.join(' ') });
+          buffer = [];
+          speakerIndex++;
+        }
+      });
+    } else {
+      // Fallback: split by line breaks if no sentences found
+      const lines = cleanText.split(/\n+/).map(s => s.trim()).filter(Boolean);
+      if (lines.length > 0) {
+        lines.forEach((line, idx) => {
+          turns.push({ 
+            speaker: idx % 2 === 0 ? 'Speaker A' : 'Speaker B', 
+            text: line 
+          });
+        });
+      } else {
+        // Last resort: create a single conversation
+        turns.push({ speaker: 'Speaker A', text: cleanText });
+      }
+    }
+    
+    return turns;
+  };
+
+  // Improved PDF generation with better text handling
+  const downloadTextAsPdf = (filename, text, isChatView = false) => {
+    // Create a temporary HTML element for better Unicode support
+    const container = document.createElement('div');
+    container.id = 'temp-pdf-content';
+    container.style.padding = '10px';
+    container.style.fontFamily = "'Noto Sans Devanagari', 'Noto Sans', 'Mangal', 'Arial Unicode MS', 'DejaVu Sans', Arial, sans-serif";
+    container.style.fontSize = '14px';
+    container.style.lineHeight = '1.4';
+    container.style.color = '#000000';
+    container.style.backgroundColor = '#ffffff';
+    
+    // Add CSS for page headers with logo
+    const style = document.createElement('style');
+    style.textContent = `
+      @page {
+        margin: 0.5in;
+        @top-right {
+          content: url('/AitotaLogo.png');
+          width: 60px;
+          height: 30px;
+          object-fit: contain;
+        }
+      }
+      .page-header {
+        position: fixed;
+        top: 0.5in;
+        right: 0.5in;
+        width: 60px;
+        height: 30px;
+        z-index: 1000;
+      }
+      .page-header img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+      }
+    `;
+    container.appendChild(style);
+    
+    // Add page header div for logo on every page
+    const pageHeader = document.createElement('div');
+    pageHeader.className = 'page-header';
+    const headerLogo = document.createElement('img');
+    headerLogo.src = '/AitotaLogo.png';
+    headerLogo.alt = 'Aitota Logo';
+    pageHeader.appendChild(headerLogo);
+    container.appendChild(pageHeader);
+    
+    if (isChatView) {
+      const conversations = splitIntoChatTurns(text);
+      
+      if (conversations.length === 0) {
+        // Fallback to regular text
+        const cleanText = sanitizeText(text);
+        const pre = document.createElement('div');
+        pre.textContent = cleanText;
+        pre.style.whiteSpace = 'pre-wrap';
+        pre.style.fontSize = '16px';
+        pre.style.lineHeight = '1.8';
+        pre.style.padding = '10px';
+        pre.style.border = '1px solid #e5e7eb';
+        pre.style.borderRadius = '6px';
+        container.appendChild(pre);
+      } else {
+        // Render conversations as chat bubbles
+        conversations.forEach((conversation, index) => {
+          const isLeft = index % 2 === 0;
+          
+          const chatDiv = document.createElement('div');
+          chatDiv.style.marginBottom = '12px';
+          chatDiv.style.display = 'flex';
+          chatDiv.style.justifyContent = isLeft ? 'flex-start' : 'flex-end';
+          
+          const bubble = document.createElement('div');
+          bubble.style.maxWidth = '75%';
+          bubble.style.padding = '8px 12px';
+          bubble.style.borderRadius = '8px';
+          bubble.style.backgroundColor = isLeft ? '#f8f9fa' : '#e3f2fd';
+          bubble.style.color = '#000000';
+          bubble.style.border = isLeft ? '1px solid #dee2e6' : '1px solid #bbdefb';
+          bubble.style.fontSize = '14px';
+          bubble.style.lineHeight = '1.4';
+          bubble.style.marginBottom = '8px';
+          
+          const speaker = document.createElement('div');
+          speaker.textContent = conversation.speaker;
+          speaker.style.fontSize = '11px';
+          speaker.style.fontWeight = '500';
+          speaker.style.marginBottom = '3px';
+          speaker.style.color = '#6c757d';
+          bubble.appendChild(speaker);
+          
+          const textDiv = document.createElement('div');
+          textDiv.textContent = conversation.text;
+          textDiv.style.whiteSpace = 'pre-wrap';
+          bubble.appendChild(textDiv);
+          
+          chatDiv.appendChild(bubble);
+          container.appendChild(chatDiv);
+        });
+      }
+    } else {
+      // Regular text PDF
+      const cleanText = sanitizeText(text);
+      const pre = document.createElement('div');
+      pre.textContent = cleanText;
+      pre.style.whiteSpace = 'pre-wrap';
+      pre.style.fontSize = '16px';
+      pre.style.lineHeight = '1.8';
+      pre.style.padding = '10px';
+      pre.style.border = '1px solid #e5e7eb';
+      pre.style.borderRadius = '6px';
+      container.appendChild(pre);
+    }
+    
+    // Add to DOM temporarily
+    document.body.appendChild(container);
+    
+    // Generate PDF using html2pdf with simplified configuration
+    const opt = {
+      margin: [1.0, 0.5, 0.5, 0.5], // top, right, bottom, left - more top margin for header
+      filename: filename,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { 
+        scale: 1,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#ffffff'
+      },
+      jsPDF: { 
+        unit: 'in', 
+        format: 'a4', 
+        orientation: 'portrait',
+        compress: true
+      }
+    };
+    
+    // Generate and save PDF
+    html2pdf().from(container).set(opt).save().finally(() => {
+      // Clean up
+      container.remove();
+    });
+  };
+
+  // Fixed modal PDF download
   const downloadModalAsPdf = async (title) => {
     try {
+      // For transcript in chat view, use text-based PDF generation
+      if (title === 'Transcript' && viewAsChat) {
+        downloadTextAsPdf(`${title.toLowerCase()}.pdf`, viewCard.content, true);
+        return;
+      }
+      
+      // For other content, use the existing HTML-based approach
       const el = document.getElementById('stt-modal-content');
       if (!el) return;
+      
       const opt = {
-        margin:       10,
-        filename:     `${String(title || 'content').toLowerCase().replace(/\s+/g,'-')}.pdf`,
-        image:        { type: 'jpeg', quality: 0.98 },
-        html2canvas:  {
-          scale: 2,
+        margin: [40, 40, 40, 40],
+        filename: `${String(title).toLowerCase().replace(/\s+/g,'-')}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: {
+          scale: 1.5,
           useCORS: true,
+          letterRendering: true,
           onclone: (clonedDoc) => {
             const node = clonedDoc.getElementById('stt-modal-content');
             if (!node) return;
-            // 1) Strip external stylesheets and style tags to avoid unsupported CSS like oklch()
-            const links = Array.from(clonedDoc.querySelectorAll('link[rel="stylesheet"], style'));
-            links.forEach(l => l.parentNode && l.parentNode.removeChild(l));
-            // 2) Apply safe font for Hindi and multilingual text
-            node.style.fontFamily = "'Noto Sans Devanagari', 'Mangal', 'Arial Unicode MS', Arial, sans-serif";
-            // 3) Force safe inline styles for all descendants (colors, borders, shadows)
+            
+            // Apply safe styling
+            node.style.fontFamily = 'Arial, sans-serif';
+            node.style.fontSize = '14px';
+            node.style.lineHeight = '1.5';
+            node.style.color = '#000000';
+            node.style.backgroundColor = '#ffffff';
+            
+            // Remove any problematic styling from descendants
             const all = node.querySelectorAll('*');
             all.forEach((n) => {
-              const cn = n.className || '';
-              // Text color
-              n.style.color = '#111111';
-              // Backgrounds
-              if (typeof cn === 'string' && cn.includes('bg-indigo-600')) {
-                n.style.backgroundColor = '#4f46e5';
-                n.style.color = '#ffffff';
-              } else if (typeof cn === 'string' && cn.includes('bg-white')) {
-                n.style.backgroundColor = '#ffffff';
-              } else if (typeof cn === 'string' && cn.includes('bg-gray-50')) {
-                n.style.backgroundColor = '#f9fafb';
-              } else if (!n.style.backgroundColor) {
-                n.style.backgroundColor = 'transparent';
-              }
-              // Borders and outlines
-              n.style.borderColor = n.style.borderColor || '#e5e7eb';
-              n.style.outlineColor = '#e5e7eb';
-              // Remove box-shadows that might use unsupported color functions
               n.style.boxShadow = 'none';
+              n.style.textShadow = 'none';
+              if (!n.style.color) n.style.color = '#000000';
+              if (!n.style.backgroundColor) n.style.backgroundColor = 'transparent';
             });
           }
         },
-        jsPDF:        { unit: 'pt', format: 'a4', orientation: 'portrait' }
+        jsPDF: { unit: 'pt', format: 'a4', orientation: 'portrait' }
       };
+      
       await html2pdf().from(el).set(opt).save();
     } catch (e) {
-      alert(e.message || 'Failed to generate PDF');
+      console.error('PDF generation error:', e);
+      alert('Failed to generate PDF: ' + e.message);
     }
   };
 
@@ -210,7 +421,7 @@ const STT = ({ onBack }) => {
       if (json?.success && json.url) {
         const r = await fetch(json.url);
         const text = await r.text();
-        downloadTextAsPdf('transcript.pdf', text);
+        downloadTextAsPdf('transcript.pdf', text, true);
       } else {
         alert(json?.message || 'Transcript not ready');
       }
@@ -242,7 +453,6 @@ const STT = ({ onBack }) => {
     else alert(json?.message || 'Q&A not ready');
   };
 
-  // Open transcript in a modal card for viewing
   const viewTranscript = async (itemId) => {
     try {
       const resp = await fetch(`${API_BASE_URL}/stt/items/${itemId}/transcript-url`);
@@ -253,6 +463,7 @@ const STT = ({ onBack }) => {
           const text = await r.text();
           setViewCard({ open: true, title: 'Transcript', content: text });
           setViewAsChat(true);
+          setChatPage(1);
         } catch {
           window.open(json.url, '_blank', 'noopener,noreferrer');
         }
@@ -264,7 +475,6 @@ const STT = ({ onBack }) => {
     }
   };
 
-  // Open Q&A in a modal card for viewing
   const viewQA = async (itemId) => {
     try {
       const resp = await fetch(`${API_BASE_URL}/stt/items/${itemId}/qa-url`);
@@ -286,47 +496,24 @@ const STT = ({ onBack }) => {
     }
   };
 
-  const splitIntoChatTurns = (raw) => {
-    const text = sanitizeText(raw);
-    if (!text) return [];
-    // Split into sentences on ., ?, !, Hindi danda ।
-    const sentences = text
-      .split(/(?<=[\.\?\!\u0964])\s+/)
-      .map(s => s.trim())
-      .filter(Boolean);
-    const turns = [];
-    let buffer = [];
-    let speakerIndex = 0; // 0 -> Speaker A, 1 -> Speaker B
-    sentences.forEach((s, idx) => {
-      buffer.push(s);
-      const isBoundary = buffer.length >= 2 || /[\?\!\u0964]$/.test(s);
-      if (isBoundary || idx === sentences.length - 1) {
-        turns.push({ speaker: speakerIndex % 2 === 0 ? 'Speaker A' : 'Speaker B', text: buffer.join(' ') });
-        buffer = [];
-        speakerIndex++;
-      }
-    });
-    return turns;
-  };
-
   const parseQAPairs = (raw) => {
     if (!raw) return [];
-    const text = String(raw);
+    const text = sanitizeText(raw);
     const regex = /Q\s*:\s*([\s\S]*?)\s*A\s*:\s*([\s\S]*?)(?=(?:\n|\r|\s)*Q\s*:|$)/gi;
     const pairs = [];
     let match;
     while ((match = regex.exec(text)) !== null) {
-      const q = sanitizeText(match[1] || '');
-      const a = sanitizeText(match[2] || '');
+      const q = match[1]?.trim() || '';
+      const a = match[2]?.trim() || '';
       if (q || a) pairs.push({ q, a });
     }
-    // Fallback: if no pairs matched but we still have Q:/A: tokens, try a simpler split
+    
     if (pairs.length === 0 && /Q\s*:/i.test(text)) {
       const rough = text.split(/Q\s*:/i).map(s => s.trim()).filter(Boolean);
       rough.forEach(chunk => {
         const parts = chunk.split(/A\s*:/i);
-        const q = sanitizeText(parts[0] || '');
-        const a = sanitizeText((parts[1] || '').replace(/\n+$/g, ''));
+        const q = parts[0]?.trim() || '';
+        const a = parts[1]?.trim().replace(/\n+$/g, '') || '';
         if (q || a) pairs.push({ q, a });
       });
     }
@@ -363,7 +550,21 @@ const STT = ({ onBack }) => {
           const response = await fetch(json.url);
           const text = await response.text();
           const item = selectedProject.items.find(i => i._id === itemId);
-          transcripts.push(`=== ${item?.originalFilename || itemId} ===\n${text}\n\n`);
+          
+          // Convert to conversation format
+          const conversations = splitIntoChatTurns(text);
+          let conversationText = '';
+          
+          if (conversations.length > 0) {
+            conversations.forEach((conversation) => {
+              conversationText += `${conversation.speaker}: ${conversation.text}\n\n`;
+            });
+          } else {
+            // Fallback to regular text if no conversations found
+            conversationText = sanitizeText(text);
+          }
+          
+          transcripts.push(`=== ${item?.originalFilename || itemId} ===\n${conversationText}\n\n`);
         }
       }
       
@@ -384,22 +585,186 @@ const STT = ({ onBack }) => {
     }
   };
 
+  // Create consistent header function for both transcript and Q&A PDFs
+  const createPageHeader = (title = '', includeTitle = true) => {
+    const headerDiv = document.createElement('div');
+    headerDiv.style.display = 'flex';
+    headerDiv.style.justifyContent = includeTitle ? 'space-between' : 'flex-end';
+    headerDiv.style.alignItems = 'center';
+    headerDiv.style.marginBottom = '15px';
+    headerDiv.style.paddingBottom = '10px';
+    headerDiv.style.borderBottom = '2px solid #e5e7eb';
+    headerDiv.style.width = '100%';
+    
+    if (includeTitle && title) {
+      const titleElement = document.createElement('h2');
+      titleElement.textContent = title;
+      titleElement.style.fontSize = '16px';
+      titleElement.style.fontWeight = '600';
+      titleElement.style.color = '#2d3748';
+      titleElement.style.margin = '0';
+      titleElement.style.flex = '1';
+      headerDiv.appendChild(titleElement);
+    }
+    
+    const logoContainer = document.createElement('div');
+    logoContainer.style.width = '60px';
+    logoContainer.style.height = '30px';
+    logoContainer.style.display = 'flex';
+    logoContainer.style.alignItems = 'center';
+    logoContainer.style.justifyContent = 'flex-end';
+    
+    const logo = document.createElement('img');
+    logo.src = '/AitotaLogo.png';
+    logo.style.maxWidth = '100%';
+    logo.style.maxHeight = '100%';
+    logo.style.objectFit = 'contain';
+    logoContainer.appendChild(logo);
+    
+    headerDiv.appendChild(logoContainer);
+    return headerDiv;
+  };
+
+  // Fixed bulk transcript PDF download with consistent header on every page
   const downloadBulkTranscriptsPdf = async () => {
     if (selectedItems.size === 0) return;
+    
     try {
-      const sections = [];
+      // Create a temporary HTML element for better Unicode support
+      const container = document.createElement('div');
+      container.id = 'bulk-pdf-content';
+      container.style.padding = '10px';
+      container.style.fontFamily = "'Noto Sans Devanagari', 'Noto Sans', 'Mangal', 'Arial Unicode MS', 'DejaVu Sans', Arial, sans-serif";
+      container.style.fontSize = '14px';
+      container.style.lineHeight = '1.4';
+      container.style.color = '#000000';
+      container.style.backgroundColor = '#ffffff';
+
       for (const itemId of selectedItems) {
         const resp = await fetch(`${API_BASE_URL}/stt/items/${itemId}/transcript-url`);
         const json = await resp.json();
+        
         if (json?.success && json.url) {
           const response = await fetch(json.url);
           const text = await response.text();
           const item = selectedProject.items.find(i => i._id === itemId);
-          sections.push({ title: item?.originalFilename || String(itemId), text: sanitizeText(text) });
+          
+          // Create file section with page break
+          const fileSection = document.createElement('div');
+          fileSection.style.marginBottom = '30px';
+          
+          // Add page break before each file (except first)
+          if (container.children.length > 0) {
+            fileSection.style.pageBreakBefore = 'always';
+          }
+          
+          // Add consistent header with logo and horizontal line for each file
+          const fileHeader = createPageHeader(item?.originalFilename || itemId, true);
+          fileSection.appendChild(fileHeader);
+          
+          // Process conversations
+          const conversations = splitIntoChatTurns(text);
+          
+          if (conversations.length === 0) {
+            // Fallback to regular text
+            const cleanText = sanitizeText(text);
+            const pre = document.createElement('div');
+            pre.textContent = cleanText;
+            pre.style.whiteSpace = 'pre-wrap';
+            pre.style.fontSize = '16px';
+            pre.style.lineHeight = '1.8';
+            pre.style.padding = '15px';
+            pre.style.border = '1px solid #e5e7eb';
+            pre.style.borderRadius = '8px';
+            pre.style.backgroundColor = '#f9fafb';
+            fileSection.appendChild(pre);
+          } else {
+            // Render conversations with page break handling and consistent header on each page
+            const conversationsPerPage = 5; // Reduced to leave space for header
+            
+            conversations.forEach((conversation, index) => {
+              const isLeft = index % 2 === 0;
+              
+              // Add page break and header every N conversations
+              if (index > 0 && index % conversationsPerPage === 0) {
+                const pageBreak = document.createElement('div');
+                pageBreak.style.pageBreakBefore = 'always';
+                pageBreak.style.paddingTop = '10px';
+                
+                // Add consistent header to new page
+                const pageHeader = createPageHeader('', false);
+                pageBreak.appendChild(pageHeader);
+                
+                fileSection.appendChild(pageBreak);
+              }
+              
+              const chatDiv = document.createElement('div');
+              chatDiv.style.marginBottom = '12px';
+              chatDiv.style.display = 'flex';
+              chatDiv.style.justifyContent = isLeft ? 'flex-start' : 'flex-end';
+              
+              const bubble = document.createElement('div');
+              bubble.style.maxWidth = '75%';
+              bubble.style.padding = '8px 12px';
+              bubble.style.borderRadius = '8px';
+              bubble.style.backgroundColor = isLeft ? '#f8f9fa' : '#e3f2fd';
+              bubble.style.color = '#000000';
+              bubble.style.border = isLeft ? '1px solid #dee2e6' : '1px solid #bbdefb';
+              bubble.style.fontSize = '14px';
+              bubble.style.lineHeight = '1.4';
+              bubble.style.marginBottom = '8px';
+              
+              const speaker = document.createElement('div');
+              speaker.textContent = conversation.speaker;
+              speaker.style.fontSize = '11px';
+              speaker.style.fontWeight = '500';
+              speaker.style.marginBottom = '3px';
+              speaker.style.color = '#6c757d';
+              bubble.appendChild(speaker);
+              
+              const textDiv = document.createElement('div');
+              textDiv.textContent = conversation.text;
+              textDiv.style.whiteSpace = 'pre-wrap';
+              bubble.appendChild(textDiv);
+              
+              chatDiv.appendChild(bubble);
+              fileSection.appendChild(chatDiv);
+            });
+          }
+          
+          container.appendChild(fileSection);
         }
       }
-      await exportSectionsAsPdf(`transcripts-${Date.now()}.pdf`, sections);
+      
+      // Add to DOM temporarily
+      document.body.appendChild(container);
+      
+      // Generate PDF using html2pdf with custom header configuration
+      const opt = {
+        margin: [1.0, 0.5, 0.5, 0.5], // top, right, bottom, left - more top margin for header
+        filename: `transcripts-bulk-${Date.now()}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { 
+          scale: 1,
+          useCORS: true,
+          allowTaint: true,
+          backgroundColor: '#ffffff'
+        },
+        jsPDF: { 
+          unit: 'in', 
+          format: 'a4', 
+          orientation: 'portrait',
+          compress: true
+        }
+      };
+      
+      // Generate and save PDF
+      await html2pdf().from(container).set(opt).save();
+      
+      // Clean up
+      container.remove();
     } catch (e) {
+      console.error('Bulk PDF error:', e);
       alert('Failed to download transcripts PDF: ' + e.message);
     }
   };
@@ -437,138 +802,167 @@ const STT = ({ onBack }) => {
     }
   };
 
+  // Fixed bulk Q&A PDF download with consistent header on every page
   const downloadBulkQAPdf = async () => {
     if (selectedItems.size === 0) return;
+    
     try {
-      const sections = [];
+      // Create a temporary HTML element for better Unicode support
+      const container = document.createElement('div');
+      container.id = 'bulk-qa-pdf-content';
+      container.style.padding = '10px';
+      container.style.fontFamily = "'Noto Sans Devanagari', 'Noto Sans', 'Mangal', 'Arial Unicode MS', 'DejaVu Sans', Arial, sans-serif";
+      container.style.fontSize = '14px';
+      container.style.lineHeight = '1.4';
+      container.style.color = '#000000';
+      container.style.backgroundColor = '#ffffff';
+
       for (const itemId of selectedItems) {
         const resp = await fetch(`${API_BASE_URL}/stt/items/${itemId}/qa-url`);
         const json = await resp.json();
+        
         if (json?.success && json.url) {
           const response = await fetch(json.url);
           const text = await response.text();
           const item = selectedProject.items.find(i => i._id === itemId);
-          sections.push({ title: item?.originalFilename || String(itemId), text: sanitizeText(text) });
-        }
-      }
-      await exportSectionsAsPdf(`qa-${Date.now()}.pdf`, sections);
-    } catch (e) {
-      alert('Failed to download Q&A PDF: ' + e.message);
-    }
-  };
-
-  const exportSectionsAsPdf = async (filename, sections) => {
-    if (!Array.isArray(sections) || sections.length === 0) return;
-    // Build a temporary DOM container per section
-    const container = document.createElement('div');
-    container.id = 'stt-bulk-export';
-    container.style.padding = '24px';
-    container.style.border = '8px solid #e5e7eb';
-    container.style.borderRadius = '8px';
-    container.style.fontFamily = "'Noto Sans Devanagari', 'Mangal', 'Arial Unicode MS', Arial, sans-serif";
-    sections.forEach((sec, idx) => {
-      const block = document.createElement('div');
-      block.style.marginBottom = '20px';
-      block.style.padding = '12px';
-      block.style.border = '1px solid #e5e7eb';
-      block.style.borderRadius = '6px';
-      block.style.backgroundColor = '#ffffff';
-      const h = document.createElement('h3');
-      h.textContent = sec.title;
-      h.style.fontSize = '15px';
-      h.style.margin = '0 0 10px 0';
-      h.style.color = '#111111';
-      block.appendChild(h);
-      const looksLikeQA = /^Q\s*:/i.test(sec.text) || /\nQ\s*:/i.test(sec.text);
-      if (looksLikeQA) {
-        // Render as Q&A boxes with better spacing
-        const pairs = parseQAPairs(sec.text);
-        pairs.forEach((p) => {
-          const qa = document.createElement('div');
-          qa.style.marginBottom = '10px';
-          qa.style.padding = '10px';
-          qa.style.border = '1px solid #e5e7eb';
-          qa.style.borderRadius = '6px';
-          qa.style.backgroundColor = '#ffffff';
-          if (p.q) {
-            const q = document.createElement('div');
-            q.style.marginBottom = '6px';
-            const qLabel = document.createElement('span');
-            qLabel.textContent = 'Q:';
-            qLabel.style.fontSize = '11px';
-            qLabel.style.fontWeight = '700';
-            qLabel.style.color = '#4338ca';
-            q.appendChild(qLabel);
-            const qText = document.createElement('span');
-            qText.textContent = ' ' + p.q;
-            qText.style.whiteSpace = 'pre-wrap';
-            qText.style.fontSize = '12px';
-            qText.style.color = '#111111';
-            q.appendChild(qText);
-            qa.appendChild(q);
+          
+          // Create file section with page break
+          const fileSection = document.createElement('div');
+          fileSection.style.marginBottom = '30px';
+          
+          // Add page break before each file (except first)
+          if (container.children.length > 0) {
+            fileSection.style.pageBreakBefore = 'always';
           }
-          if (p.a) {
-            const a = document.createElement('div');
-            const aLabel = document.createElement('span');
-            aLabel.textContent = 'A:';
-            aLabel.style.fontSize = '11px';
-            aLabel.style.fontWeight = '700';
-            aLabel.style.color = '#047857';
-            a.appendChild(aLabel);
-            const aText = document.createElement('span');
-            aText.textContent = ' ' + p.a;
-            aText.style.whiteSpace = 'pre-wrap';
-            aText.style.fontSize = '12px';
-            aText.style.color = '#111111';
-            a.appendChild(aText);
-            qa.appendChild(a);
-          }
-          block.appendChild(qa);
-        });
-      } else {
-        const pre = document.createElement('div');
-        pre.textContent = sec.text || '';
-        pre.style.whiteSpace = 'pre-wrap';
-        pre.style.fontSize = '12px';
-        pre.style.color = '#111111';
-        pre.style.backgroundColor = '#ffffff';
-        pre.style.border = '1px solid #e5e7eb';
-        pre.style.borderRadius = '6px';
-        pre.style.padding = '8px';
-        block.appendChild(pre);
-      }
-      container.appendChild(block);
-    });
-    document.body.appendChild(container);
-    try {
-      const opt = {
-        margin: 10,
-        filename,
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: {
-          scale: 2,
-          useCORS: true,
-          onclone: (clonedDoc) => {
-            // Remove styles to avoid oklch()
-            const links = Array.from(clonedDoc.querySelectorAll('link[rel="stylesheet"], style'));
-            links.forEach(l => l.parentNode && l.parentNode.removeChild(l));
-            const node = clonedDoc.getElementById('stt-bulk-export');
-            if (!node) return;
-            node.style.fontFamily = "'Noto Sans Devanagari', 'Mangal', 'Arial Unicode MS', Arial, sans-serif";
-            const all = node.querySelectorAll('*');
-            all.forEach((n) => {
-              n.style.boxShadow = 'none';
-              if (!n.style.color) n.style.color = '#111111';
-              if (!n.style.backgroundColor) n.style.backgroundColor = '#ffffff';
-              if (!n.style.borderColor) n.style.borderColor = '#e5e7eb';
+          
+          // Add consistent header with logo and horizontal line for each file
+          const fileHeader = createPageHeader(item?.originalFilename || itemId, true);
+          fileSection.appendChild(fileHeader);
+          
+          // Process Q&A pairs
+          const pairs = parseQAPairs(text);
+          
+          if (pairs.length === 0) {
+            // Fallback to regular text
+            const cleanText = sanitizeText(text);
+            const pre = document.createElement('div');
+            pre.textContent = cleanText;
+            pre.style.whiteSpace = 'pre-wrap';
+            pre.style.fontSize = '16px';
+            pre.style.lineHeight = '1.8';
+            pre.style.padding = '15px';
+            pre.style.border = '1px solid #e5e7eb';
+            pre.style.borderRadius = '8px';
+            pre.style.backgroundColor = '#f9fafb';
+            fileSection.appendChild(pre);
+          } else {
+            // Render Q&A pairs with page break handling and consistent header
+            const pairsPerPage = 9; // Reduced to leave space for header
+            
+            pairs.forEach((pair, index) => {
+              // Add page break and header every N Q&A pairs
+              if (index > 0 && index % pairsPerPage === 0) {
+                const pageBreak = document.createElement('div');
+                pageBreak.style.pageBreakBefore = 'always';
+                pageBreak.style.paddingTop = '10px';
+                
+                // Add consistent header to new page
+                const pageHeader = createPageHeader('', false);
+                pageBreak.appendChild(pageHeader);
+                
+                fileSection.appendChild(pageBreak);
+              }
+              
+              const qaDiv = document.createElement('div');
+              qaDiv.style.marginBottom = '12px';
+              qaDiv.style.padding = '12px';
+              qaDiv.style.border = '1px solid #e2e8f0';
+              qaDiv.style.borderRadius = '6px';
+              qaDiv.style.backgroundColor = '#f8f9fa';
+              
+              if (pair.q) {
+                const questionDiv = document.createElement('div');
+                questionDiv.style.marginBottom = '10px';
+                
+                const qLabel = document.createElement('span');
+                qLabel.textContent = 'Q:';
+                qLabel.style.fontSize = '12px';
+                qLabel.style.fontWeight = '600';
+                qLabel.style.color = '#2563eb';
+                qLabel.style.marginRight = '6px';
+                questionDiv.appendChild(qLabel);
+                
+                const qText = document.createElement('span');
+                qText.textContent = pair.q;
+                qText.style.whiteSpace = 'pre-wrap';
+                qText.style.fontSize = '14px';
+                qText.style.color = '#000000';
+                qText.style.lineHeight = '1.4';
+                questionDiv.appendChild(qText);
+                
+                qaDiv.appendChild(questionDiv);
+              }
+              
+              if (pair.a) {
+                const answerDiv = document.createElement('div');
+                
+                const aLabel = document.createElement('span');
+                aLabel.textContent = 'A:';
+                aLabel.style.fontSize = '12px';
+                aLabel.style.fontWeight = '600';
+                aLabel.style.color = '#059669';
+                aLabel.style.marginRight = '6px';
+                answerDiv.appendChild(aLabel);
+                
+                const aText = document.createElement('span');
+                aText.textContent = pair.a;
+                aText.style.whiteSpace = 'pre-wrap';
+                aText.style.fontSize = '14px';
+                aText.style.color = '#000000';
+                aText.style.lineHeight = '1.4';
+                answerDiv.appendChild(aText);
+                
+                qaDiv.appendChild(answerDiv);
+              }
+              
+              fileSection.appendChild(qaDiv);
             });
           }
+          
+          container.appendChild(fileSection);
+        }
+      }
+      
+      // Add to DOM temporarily
+      document.body.appendChild(container);
+      
+      // Generate PDF using html2pdf with custom header configuration
+      const opt = {
+        margin: [1.0, 0.5, 0.5, 0.5], // top, right, bottom, left - more top margin for header
+        filename: `qa-bulk-${Date.now()}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { 
+          scale: 1,
+          useCORS: true,
+          allowTaint: true,
+          backgroundColor: '#ffffff'
         },
-        jsPDF: { unit: 'pt', format: 'a4', orientation: 'portrait' }
+        jsPDF: { 
+          unit: 'in', 
+          format: 'a4', 
+          orientation: 'portrait',
+          compress: true
+        }
       };
+      
+      // Generate and save PDF
       await html2pdf().from(container).set(opt).save();
-    } finally {
+      
+      // Clean up
       container.remove();
+    } catch (e) {
+      console.error('Bulk Q&A PDF error:', e);
+      alert('Failed to download Q&A PDF: ' + e.message);
     }
   };
 
@@ -582,7 +976,6 @@ const STT = ({ onBack }) => {
     return () => clearInterval(id);
   }, [autoRefresh, selectedProject?._id]);
 
-  // Clear selected items when project changes
   useEffect(() => {
     setSelectedItems(new Set());
   }, [selectedProject?._id]);
@@ -715,7 +1108,6 @@ const STT = ({ onBack }) => {
                   </tbody>
                 </table>
               </div>
-
             </div>
           )}
         </div>
@@ -761,7 +1153,7 @@ const STT = ({ onBack }) => {
                 {viewCard.title === 'Transcript' && (
                   <>
                     <label className="text-xs text-gray-600 flex items-center gap-1">
-                      <input type="checkbox" className="rounded" checked={viewAsChat} onChange={(e) => setViewAsChat(e.target.checked)} />
+                      <input type="checkbox" className="rounded" checked={viewAsChat} onChange={(e) => { setViewAsChat(e.target.checked); setChatPage(1); }} />
                       Chat view
                     </label>
                   </>
@@ -819,4 +1211,3 @@ const STT = ({ onBack }) => {
 };
 
 export default STT;
-

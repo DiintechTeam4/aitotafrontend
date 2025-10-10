@@ -66,8 +66,25 @@ function CampaignDetails({ campaignId, onBack }) {
         }
       } catch (_) {}
     };
+    
+    const handleClick = (e) => {
+      // Only prevent default for non-interactive elements, allow filter button clicks
+      if (e.target.closest('[data-filter-button]')) {
+        // Allow the click to proceed normally for filter selection
+        return;
+      }
+    };
+
+    // Removed problematic scroll prevention that was causing scroll jumps
+    // Only keep essential event listeners
+    
     document.addEventListener("mousedown", handleDocClick);
-    return () => document.removeEventListener("mousedown", handleDocClick);
+    document.addEventListener("click", handleClick, true);
+    
+    return () => {
+      document.removeEventListener("mousedown", handleDocClick);
+      document.removeEventListener("click", handleClick, true);
+    };
   }, [showDownloadMenu]);
 
   // Campaign history state
@@ -132,7 +149,7 @@ function CampaignDetails({ campaignId, onBack }) {
         return;
       }
 
-      const [JsPDF] = await Promise.all([
+      await Promise.all([
         ensureJsPDFLoaded(),
         ensurePdfLibLoaded(),
         ensureHtml2CanvasLoaded(),
@@ -150,7 +167,7 @@ function CampaignDetails({ campaignId, onBack }) {
         return;
       }
 
-      // Generate individual PDFs in the same format as single transcript download
+      // Build individual transcript PDFs and merge them
       const pdfBuffers = [];
       for (const r of rows) {
         const buf = await generateTranscriptPdfForDocument(r);
@@ -162,7 +179,6 @@ function CampaignDetails({ campaignId, onBack }) {
         return;
       }
 
-      // Merge using pdf-lib
       const { PDFDocument } = window.PDFLib || {};
       if (!PDFDocument) throw new Error("PDF library not available");
       const merged = await PDFDocument.create();
@@ -185,6 +201,274 @@ function CampaignDetails({ campaignId, onBack }) {
     } catch (e) {
       console.error("Download report failed:", e);
       toast.error("Failed to download report");
+    }
+  };
+
+  // Helper to fetch transcript text by documentId
+  const fetchTranscriptTextByDocument = async (documentId) => {
+    try {
+      if (!documentId) return "";
+      const token = sessionStorage.getItem("clienttoken");
+      // Try primary WhatsApp transcript endpoint first
+      let transcript = "";
+      try {
+      const resp = await fetch(
+        `${API_BASE}/whatsapp/get-transcript-by-document/${documentId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+        if (resp.ok) {
+      const result = await resp.json();
+          transcript = result?.transcript || "";
+        }
+      } catch (_) {
+        // ignore and try fallback
+      }
+
+      // Fallback to campaign logs endpoint (used elsewhere in the UI)
+      if (!transcript && campaignId) {
+        try {
+          const resp2 = await fetch(
+            `${API_BASE}/campaigns/${campaignId}/logs/${documentId}`,
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+                "Content-Type": "application/json",
+              },
+            }
+          );
+          if (resp2.ok) {
+            const result2 = await resp2.json();
+            transcript = result2?.transcript || "";
+          }
+        } catch (_) {
+          // ignore
+        }
+      }
+
+      return transcript || "";
+    } catch (_) {
+      return "";
+    }
+  };
+
+  // Download merged TXT for selected rows in report (transcript-only)
+  const handleDownloadSelectedReportTXT = async () => {
+    try {
+      if (!reportSelectedIds || reportSelectedIds.size === 0) {
+        toast.warn("Select at least one row");
+        return;
+      }
+      const flatRows = (reportRuns || [])
+        .flatMap((run) => (run.contacts || []).map((c) => ({ ...c, __run: run })))
+        .filter((c) => reportSelectedIds.has(c.documentId));
+
+      if (flatRows.length === 0) {
+        toast.warn("Nothing selected");
+        return;
+      }
+      let parts = [];
+      for (const r of flatRows) {
+        const transcript = await fetchTranscriptTextByDocument(r.documentId);
+        const body = String(transcript || "").trim();
+        if (!body) continue; // skip empty transcripts
+        const headerLines = [
+          `Name: ${r.name || "-"}`,
+          `Number: ${r.number || r.phone || "-"}`,
+          `Document: ${r.documentId}`,
+        ];
+        parts.push(headerLines.join("\n") + "\n\n" + body);
+      }
+      if (parts.length === 0) {
+        toast.warn("No transcripts available for selected");
+        return;
+      }
+      const content = parts.join("\n\n==============================\n\n");
+      const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `AItota_Report_Selected_${Date.now()}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error("TXT report download failed:", e);
+      try { toast.error("Failed to download TXT report"); } catch {}
+    }
+  };
+
+  // Download merged CSV (Excel-compatible) for selected rows in report (Name, Number only)
+  const handleDownloadSelectedReportCSV = async () => {
+    try {
+      if (!reportSelectedIds || reportSelectedIds.size === 0) {
+        toast.warn("Select at least one row");
+        return;
+      }
+      const flatRows = (reportRuns || [])
+        .flatMap((run) => (run.contacts || []).map((c) => ({ ...c, __run: run })))
+        .filter((c) => reportSelectedIds.has(c.documentId));
+
+      if (flatRows.length === 0) {
+        toast.warn("Nothing selected");
+        return;
+      }
+      const headers = ["Name", "Number"]; // Restrict to Name and Number only
+      const escapeCsv = (val) => {
+        const s = (val == null ? "" : String(val));
+        if (/[",\n]/.test(s)) {
+          return '"' + s.replace(/"/g, '""') + '"';
+        }
+        return s;
+      };
+      const normalizeDigits = (v) => String(v || "").replace(/[^\d+]/g, "");
+      const excelTextNumber = (v) => `="${normalizeDigits(v)}"`;
+      const rows = [headers.join(",")];
+      for (const r of flatRows) {
+        rows.push([
+          escapeCsv(r.name || "-"),
+          // Force Excel to treat as text to avoid scientific notation
+          excelTextNumber(r.number || r.phone || "-"),
+        ].join(","));
+      }
+      const blob = new Blob([rows.join("\n")], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `AItota_Report_Selected_${Date.now()}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error("CSV report download failed:", e);
+      try { toast.error("Failed to download Excel (CSV)"); } catch {}
+    }
+  };
+
+  // Download merged PDF for selected rows in history (per run selection)
+  const handleDownloadSelectedHistoryPDF = async () => {
+    try {
+      const rows = (selectedCallLogs || []).filter((c) => !!c.documentId);
+      if (!rows.length) {
+        toast.warn("Select at least one item with transcript");
+        return;
+      }
+
+      const pdfBuffers = [];
+      for (const r of rows) {
+        const buf = await generateTranscriptPdfForDocument(r);
+        if (buf) pdfBuffers.push(buf);
+      }
+      if (pdfBuffers.length === 0) {
+        toast.warn("No transcripts available for selected");
+        return;
+      }
+      const PDFLib = await ensurePdfLibLoaded();
+      const mergedPdf = await PDFLib.PDFDocument.create();
+      for (const arrBuf of pdfBuffers) {
+        const src = await PDFLib.PDFDocument.load(arrBuf);
+        const pages = await mergedPdf.copyPages(src, src.getPageIndices());
+        pages.forEach((p) => mergedPdf.addPage(p));
+      }
+      const mergedBytes = await mergedPdf.save();
+      const blob = new Blob([mergedBytes], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `AItota_Selected_Transcripts_${Date.now()}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success("Downloading PDF...");
+    } catch (e) {
+      console.error("Selected PDF download failed:", e);
+      try { toast.error("Failed to download selected PDF"); } catch {}
+    }
+  };
+
+  // Download merged TXT for selected rows in history (transcript-only)
+  const handleDownloadSelectedHistoryTXT = async () => {
+    try {
+      const rows = (selectedCallLogs || []).filter((c) => !!c.documentId);
+      if (!rows.length) {
+        toast.warn("Select at least one item with transcript");
+        return;
+      }
+      let parts = [];
+      for (const r of rows) {
+        const transcript = await fetchTranscriptTextByDocument(r.documentId);
+        const body = String(transcript || "").trim();
+        if (!body) continue; // skip empty transcripts
+        const headerLines = [
+          `Name: ${r.name || "-"}`,
+          `Number: ${r.number || r.phone || "-"}`,
+          `Document: ${r.documentId}`,
+        ];
+        parts.push(headerLines.join("\n") + "\n\n" + body);
+      }
+      if (parts.length === 0) {
+        toast.warn("No transcripts available for selected");
+        return;
+      }
+      const content = parts.join("\n\n==============================\n\n");
+      const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `AItota_Selected_Transcripts_${Date.now()}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error("Selected TXT download failed:", e);
+      try { toast.error("Failed to download selected TXT"); } catch {}
+    }
+  };
+
+  // Download Excel-compatible CSV for selected rows in history (Name, Number only)
+  const handleDownloadSelectedHistoryCSV = async () => {
+    try {
+      const rows = selectedCallLogs || [];
+      if (!rows.length) {
+        toast.warn("Select at least one item");
+        return;
+      }
+      const headers = ["Name", "Number"]; // Restrict to Name and Number only
+      const escapeCsv = (val) => {
+        const s = (val == null ? "" : String(val));
+        if (/[",\n]/.test(s)) { return '"' + s.replace(/"/g, '""') + '"'; }
+        return s;
+      };
+      const normalizeDigits = (v) => String(v || "").replace(/[^\d+]/g, "");
+      const excelTextNumber = (v) => `="${normalizeDigits(v)}"`;
+      const lines = [headers.join(",")];
+      for (const r of rows) {
+        lines.push([
+          escapeCsv(r.name || "-"),
+          // Force Excel to treat as text to avoid scientific notation
+          excelTextNumber(r.number || r.phone || "-"),
+        ].join(","));
+      }
+      const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `AItota_Selected_Contacts_${Date.now()}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error("Selected CSV download failed:", e);
+      try { toast.error("Failed to download Excel (CSV)"); } catch {}
     }
   };
 
@@ -370,7 +654,6 @@ function CampaignDetails({ campaignId, onBack }) {
 
     return elements;
   };
-
   // Function to fetch WhatsApp templates
   const fetchWaTemplates = async () => {
     setWaTemplatesLoading(true);
@@ -521,7 +804,6 @@ function CampaignDetails({ campaignId, onBack }) {
       setWaTyping(false);
     }
   };
-
   const openWhatsAppMiniChat = async (lead) => {
     const derivedName =
       lead?.name ||
@@ -760,6 +1042,37 @@ function CampaignDetails({ campaignId, onBack }) {
   const [durationSort, setDurationSort] = useState("none"); // all | connected | missed
   const [rowDisposition, setRowDisposition] = useState({}); // { [rowId]: 'interested'|'not interested'|'maybe'|undefined }
   const [openDispositionFor, setOpenDispositionFor] = useState(null); // rowId for which dropdown is open
+  // Filters for flag (local label) and disposition (from backend leadStatus/disposition)
+  const [flagFilter, setFlagFilter] = useState("all"); // 'all'|'interested'|'not interested'|'maybe'|'do not call'|'unlabeled'
+  const [dispositionFilter, setDispositionFilter] = useState("all"); // 'all' or a specific disposition/leadStatus
+  const [flagMenuOpen, setFlagMenuOpen] = useState(false);
+  const [dispMenuOpen, setDispMenuOpen] = useState(false);
+  const [dispositionMenuOpen, setDispositionMenuOpen] = useState(false);
+  const [flagMenuPosition, setFlagMenuPosition] = useState("bottom");
+  const [dispMenuPosition, setDispMenuPosition] = useState("bottom");
+
+  // Function to calculate dropdown position
+  const calculateDropdownPosition = (buttonElement) => {
+    if (!buttonElement) return "bottom";
+    
+    const rect = buttonElement.getBoundingClientRect();
+    const viewportHeight = window.innerHeight;
+    const spaceBelow = viewportHeight - rect.bottom;
+    const spaceAbove = rect.top;
+    const dropdownHeight = 150; // Reduced height for better calculation
+    
+    // More aggressive upward positioning - if less than 200px space below, open upward
+    const shouldOpenUpward = spaceBelow < 200;
+    console.log('Dropdown position calculation:', {
+      spaceBelow,
+      spaceAbove,
+      viewportHeight,
+      rectBottom: rect.bottom,
+      shouldOpenUpward
+    });
+    
+    return shouldOpenUpward ? "top" : "bottom";
+  };
 
   // Merged calls API states
   const [apiMergedCalls, setApiMergedCalls] = useState([]);
@@ -940,6 +1253,56 @@ function CampaignDetails({ campaignId, onBack }) {
     localStorage.setItem(getStorageKey("callingState"), JSON.stringify(state));
   };
 
+  // Save filter states to localStorage
+  const saveFilterStates = () => {
+    const filterStates = {
+      flagFilter,
+      callFilter,
+      dispositionFilter,
+      rowDisposition,
+      timestamp: Date.now(),
+    };
+    console.log("Saving filter states:", filterStates);
+    localStorage.setItem(getStorageKey("filterStates"), JSON.stringify(filterStates));
+  };
+
+  // Load filter states from localStorage
+  const loadFilterStates = () => {
+    try {
+      const saved = localStorage.getItem(getStorageKey("filterStates"));
+      if (saved) {
+        const states = JSON.parse(saved);
+        // Only restore if the saved state is less than 24 hours old
+        if (Date.now() - states.timestamp < 24 * 60 * 60 * 1000) {
+          console.log("Restoring filter states:", states);
+          if (states.flagFilter) {
+            setFlagFilter(states.flagFilter);
+            console.log("Restored flagFilter:", states.flagFilter);
+          }
+          if (states.callFilter) {
+            setCallFilter(states.callFilter);
+            console.log("Restored callFilter:", states.callFilter);
+          }
+          if (states.dispositionFilter) {
+            setDispositionFilter(states.dispositionFilter);
+            console.log("Restored dispositionFilter:", states.dispositionFilter);
+          }
+          if (states.rowDisposition) {
+            setRowDisposition(states.rowDisposition);
+            console.log("Restored rowDisposition:", states.rowDisposition);
+          }
+          return true;
+        } else {
+          // Clear old state
+          localStorage.removeItem(getStorageKey("filterStates"));
+        }
+      }
+    } catch (error) {
+      console.error("Error loading filter states:", error);
+    }
+    return false;
+  };
+
   const saveViewedTranscripts = () => {
     localStorage.setItem(
       getStorageKey("viewedTranscripts"),
@@ -1014,7 +1377,6 @@ function CampaignDetails({ campaignId, onBack }) {
       }
     } catch (_) {}
   };
-
   useEffect(() => {
     try {
       const v = localStorage.getItem(getStorageKey("readyNextRun"));
@@ -1165,6 +1527,16 @@ function CampaignDetails({ campaignId, onBack }) {
     }
   }, [viewedTranscripts, campaignId]);
 
+  // Save filter states whenever they change
+  useEffect(() => {
+    if (campaignId) {
+      saveFilterStates();
+    }
+  }, [flagFilter, callFilter, dispositionFilter, rowDisposition, campaignId]);
+
+  // Removed scroll position preservation and scroll lock mechanisms
+  // that were causing unwanted scroll jumps in campaign history section
+
   useEffect(() => {
     // Restore persisted state FIRST to avoid UI flicker
     try {
@@ -1176,6 +1548,8 @@ function CampaignDetails({ campaignId, onBack }) {
           prev ? { ...prev, isRunning: savedIsRunning === "1" } : prev
         );
       }
+      // Restore filter states
+      loadFilterStates();
     } catch (_) {}
 
     // Then load fresh data from backend
@@ -1302,7 +1676,6 @@ function CampaignDetails({ campaignId, onBack }) {
       return () => clearTimeout(timer);
     }
   }, [callingStatus, campaignContacts, selectedAgent, isStartingCall]);
-
   // Check connection status for call results after 40 seconds AND automatically update campaign status
   useEffect(() => {
     callResults.forEach((result, index) => {
@@ -2093,7 +2466,6 @@ function CampaignDetails({ campaignId, onBack }) {
       console.error("Error fetching groups:", error);
     }
   };
-
   const fetchCampaignGroups = async () => {
     try {
       setLoadingCampaignGroups(true);
@@ -2211,7 +2583,6 @@ function CampaignDetails({ campaignId, onBack }) {
       toast.error("Error adding contacts by range");
     }
   };
-
   // Fetch campaign call logs
   const fetchCampaignCallLogs = async (page = 1) => {
     try {
@@ -2627,13 +2998,12 @@ function CampaignDetails({ campaignId, onBack }) {
     });
     return window.PDFLib;
   };
-
   // Build a single transcript PDF for a given contact row and return ArrayBuffer
   const generateTranscriptPdfForDocument = async (row) => {
-    const JsPDF = await ensureJsPDFLoaded();
+    const JsPDFCtor = await ensureJsPDFLoaded();
     await ensureHtml2CanvasLoaded();
 
-    const doc = new JsPDF({ unit: "pt", format: "a4" });
+    const doc = new JsPDFCtor({ unit: "pt", format: "a4" });
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
     const marginX = 40;
@@ -2710,108 +3080,161 @@ function CampaignDetails({ campaignId, onBack }) {
       transcriptText = result?.transcript || result?.transcriptText || "";
     } catch {}
 
-    // Render transcript as chat bubbles and snapshot with html2canvas
+    // Render transcript as chat bubbles (match single-download implementation) and snapshot per page via html2canvas
     try {
       const container = document.createElement("div");
       container.style.position = "fixed";
-      container.style.left = "-99999px";
+      container.style.left = "-10000px";
       container.style.top = "0";
-      container.style.width = `${Math.floor(pageWidth - marginX * 2)}px`;
-      container.style.padding = "8px";
-      container.style.boxSizing = "border-box";
+      container.style.width = "560px";
+      container.style.padding = "6px";
       container.style.background = "#ffffff";
+      container.style.color = "#111827";
+      container.style.fontFamily =
+        'system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Noto Sans", "Noto Sans Devanagari", sans-serif';
+      container.style.fontSize = "12px";
+      container.style.lineHeight = "1.4";
+      document.body.appendChild(container);
 
-      const heading = document.createElement("div");
-      heading.style.fontSize = "12px";
-      heading.style.margin = "8px 0 12px 0";
-      heading.textContent = "Transcript";
-      container.appendChild(heading);
+      const createBubbleNode = (msg) => {
+        const wrapper = document.createElement("div");
+        wrapper.style.display = "flex";
+        wrapper.style.marginBottom = "6px";
+        wrapper.style.width = "100%";
+        wrapper.style.boxSizing = "border-box";
+        if (msg.isAI) {
+          wrapper.style.justifyContent = "flex-start";
+        } else if (msg.isUser) {
+          wrapper.style.justifyContent = "flex-end";
+        } else {
+          wrapper.style.justifyContent = "center";
+        }
 
-      const messages = parseTranscriptToChat(transcriptText || "");
-      for (const m of messages) {
-        const rowEl = document.createElement("div");
-        rowEl.style.display = "flex";
-        rowEl.style.margin = "6px 0";
-        rowEl.style.justifyContent = m.isAI
-          ? "flex-start"
-          : m.isUser
-          ? "flex-end"
-          : "flex-start";
         const bubble = document.createElement("div");
-        bubble.style.maxWidth = "70%";
+        bubble.style.maxWidth = "72%";
         bubble.style.borderRadius = "10px";
         bubble.style.padding = "8px 10px";
-        bubble.style.fontSize = "11px";
-        bubble.style.lineHeight = "1.4";
-        bubble.style.background = m.isAI
-          ? "#2563EB"
-          : m.isUser
-          ? "#E5E7EB"
-          : "#F3F4F6";
-        bubble.style.color = m.isAI ? "#ffffff" : "#111827";
-        bubble.textContent = m.text || "";
-        rowEl.appendChild(bubble);
-        container.appendChild(rowEl);
-      }
+        bubble.style.boxSizing = "border-box";
+        bubble.style.whiteSpace = "pre-wrap";
+        bubble.style.wordBreak = "normal";
+        bubble.style.overflowWrap = "break-word";
+        bubble.style.border = msg.isAI
+          ? "1px solid #93c5fd"
+          : msg.isUser
+          ? "1px solid #d1d5db"
+          : "1px solid #e5e7eb";
+        bubble.style.background = msg.isAI
+          ? "#e0f2fe"
+          : msg.isUser
+          ? "#f3f4f6"
+          : "#f9fafb";
+        bubble.style.color = "#111827";
 
-      document.body.appendChild(container);
-      const canvas = await window.html2canvas(container, {
-        scale: 2,
-        backgroundColor: "#ffffff",
-      });
-      document.body.removeChild(container);
+        const header = document.createElement("div");
+        header.style.display = "flex";
+        header.style.alignItems = "baseline";
+        header.style.gap = "6px";
+        header.style.marginBottom = "4px";
 
-      const imgW = pageWidth - marginX * 2;
-      const imgH = (canvas.height * imgW) / canvas.width;
-      let y = yy + 10;
-      let remaining = imgH;
-      let srcY = 0;
-      const scale = imgW / canvas.width;
-      while (remaining > 0) {
-        const take = Math.min(
-          remaining,
-          doc.internal.pageSize.getHeight() - marginTop - y
+        const who = document.createElement("strong");
+        who.textContent = msg.isAI ? "AI" : msg.isUser ? "User" : "System";
+        who.style.fontSize = "11px";
+
+        const tsSpan = document.createElement("span");
+        tsSpan.style.fontSize = "10px";
+        tsSpan.style.color = "#6B7280";
+        tsSpan.textContent = msg.timestamp ? msg.timestamp : "";
+
+        header.appendChild(who);
+        if (msg.timestamp) header.appendChild(tsSpan);
+
+        const text = document.createElement("div");
+        text.style.fontSize = "12px";
+        text.textContent = msg.text || "";
+
+        bubble.appendChild(header);
+        bubble.appendChild(text);
+        wrapper.appendChild(bubble);
+        return wrapper;
+      };
+
+      const imgWidth = pageWidth - marginX * 2;
+      const containerWidthPx = 560;
+      const pageHeightPt = doc.internal.pageSize.getHeight();
+      const bottomMargin = 40;
+      const scale = 1.25;
+      const calcMaxContentPx = (availablePt) =>
+        Math.floor((availablePt * containerWidthPx) / imgWidth);
+
+      let pageDiv = document.createElement("div");
+      pageDiv.style.width = "100%";
+      pageDiv.style.boxSizing = "border-box";
+      container.appendChild(pageDiv);
+
+      const renderCurrentPage = async (cursorYForPage) => {
+        const canvas = await window.html2canvas(pageDiv, {
+          scale,
+          backgroundColor: "#ffffff",
+        });
+        const drawHeight = (canvas.height / canvas.width) * imgWidth;
+        const imgData = canvas.toDataURL("image/jpeg", 0.72);
+        doc.addImage(
+          imgData,
+          "JPEG",
+          marginX,
+          cursorYForPage,
+          imgWidth,
+          drawHeight
         );
-        const sliceCanvas = document.createElement("canvas");
-        sliceCanvas.width = canvas.width;
-        sliceCanvas.height = Math.floor(take / scale);
-        const sctx = sliceCanvas.getContext("2d");
-        sctx.drawImage(
-          canvas,
-          0,
-          srcY,
-          canvas.width,
-          sliceCanvas.height,
-          0,
-          0,
-          sliceCanvas.width,
-          sliceCanvas.height
-        );
-        const dataUrl = sliceCanvas.toDataURL("image/png");
-        doc.addImage(dataUrl, "PNG", marginX, y, imgW, take);
-        remaining -= take;
-        srcY += sliceCanvas.height;
-        if (remaining > 0) {
+      };
+
+      const firstPageMaxPx = calcMaxContentPx(
+        pageHeightPt - yy - 10 - bottomMargin
+      );
+      const nextPagesMaxPx = calcMaxContentPx(pageHeightPt - 60 - bottomMargin);
+      let isFirstPage = true;
+
+      const chatMessages = parseTranscriptToChat(transcriptText || "");
+      for (let i = 0; i < chatMessages.length; i++) {
+        const node = createBubbleNode(chatMessages[i]);
+        pageDiv.appendChild(node);
+        const maxPx = isFirstPage ? firstPageMaxPx : nextPagesMaxPx;
+        if (pageDiv.scrollHeight > maxPx && pageDiv.childElementCount > 1) {
+          pageDiv.removeChild(node);
+          await renderCurrentPage(isFirstPage ? yy + 10 : 60);
           doc.addPage();
-          y = marginTop;
+          isFirstPage = false;
+          pageDiv = document.createElement("div");
+          pageDiv.style.width = "100%";
+          pageDiv.style.boxSizing = "border-box";
+          container.innerHTML = "";
+          container.appendChild(pageDiv);
+          pageDiv.appendChild(node);
         }
       }
-    } catch {}
 
-    // Footer branding
-    try {
-      const footer = "Powered by AItota";
-      doc.setFont("helvetica", "italic");
-      doc.setFontSize(10);
-      const footerY = doc.internal.pageSize.getHeight() - 30;
-      doc.text(footer, pageWidth - marginX - doc.getTextWidth(footer), footerY);
+      if (pageDiv.childElementCount > 0) {
+        await renderCurrentPage(isFirstPage ? yy + 10 : 60);
+      }
+
+      if (container && container.parentNode) {
+        container.parentNode.removeChild(container);
+      }
+
+      // Footer
+      try {
+        const footer = "Powered by AItota";
+        doc.setFont("helvetica", "italic");
+        doc.setFontSize(10);
+        const footerY = doc.internal.pageSize.getHeight() - 30;
+        doc.text(footer, pageWidth - marginX - doc.getTextWidth(footer), footerY);
+      } catch {}
     } catch {}
 
     // Return as ArrayBuffer for merging
     const arrayBuffer = doc.output("arraybuffer");
     return arrayBuffer;
   };
-
   const handleDownloadTranscriptPDF = async () => {
     try {
       setIsDownloadingPdf(true);
@@ -2924,7 +3347,8 @@ function CampaignDetails({ campaignId, onBack }) {
         bubble.style.padding = "8px 10px";
         bubble.style.boxSizing = "border-box";
         bubble.style.whiteSpace = "pre-wrap";
-        bubble.style.wordBreak = "break-word";
+        bubble.style.wordBreak = "normal";
+        bubble.style.overflowWrap = "break-word";
         bubble.style.border = msg.isAI
           ? "1px solid #93c5fd"
           : msg.isUser
@@ -3143,7 +3567,6 @@ function CampaignDetails({ campaignId, onBack }) {
       console.error("Failed to open transcript smartly:", e);
     }
   };
-
   // Fetch campaign calling status and progress
   const fetchCampaignCallingStatus = async () => {
     try {
@@ -3228,6 +3651,16 @@ function CampaignDetails({ campaignId, onBack }) {
             setCampaign((prev) =>
               prev ? { ...prev, isRunning: nextIsRunning } : null
             );
+
+            // Broadcast status change to other tabs
+            const channel = new BroadcastChannel(`campaign-status-${campaignId}`);
+            channel.postMessage({
+              type: 'campaign-status-update',
+              isRunning: nextIsRunning,
+              runId: currentRunId,
+              timestamp: Date.now()
+            });
+            channel.close();
           }
 
           // Update calling status based on backend data
@@ -3262,22 +3695,94 @@ function CampaignDetails({ campaignId, onBack }) {
     }
   };
 
-  // Poll calling status only when campaign is running and page is visible (every 5 seconds)
-  // BUT NOT when in series mode (series mode has its own polling)
+  // Cross-tab communication for campaign status updates
   useEffect(() => {
-    if (!campaignId || !campaign?.isRunning || isSeriesMode) return;
+    if (!campaignId) return;
 
-    let intervalId = null;
-    const poll = () => {
-      // Only fetch if page is visible to user
-      if (document.visibilityState === "visible") {
-        fetchCampaignCallingStatus();
+    const channel = new BroadcastChannel(`campaign-status-${campaignId}`);
+    
+    const handleMessage = (event) => {
+      if (event.data.type === 'campaign-status-update') {
+        const { isRunning, runId, timestamp } = event.data;
+        
+        // Update campaign status if it's different
+        if (campaign?.isRunning !== isRunning) {
+          setCampaign((prev) => prev ? { ...prev, isRunning } : prev);
+          
+          // Update runId if provided
+          if (runId && runId !== currentRunId) {
+            setCurrentRunId(runId);
+          }
+          
+          // Show notification for status changes from other tabs
+          if (isRunning) {
+            toast.info("Campaign started from another tab", { autoClose: 3000 });
+          } else {
+            toast.info("Campaign stopped from another tab", { autoClose: 3000 });
+          }
+        }
       }
     };
-    poll(); // Initial call
-    intervalId = setInterval(poll, 5000); // Changed from 3000ms to 5000ms
-    return () => intervalId && clearInterval(intervalId);
-  }, [campaignId, campaign?.isRunning, isSeriesMode]); // Added isSeriesMode dependency
+
+    channel.addEventListener('message', handleMessage);
+    
+    return () => {
+      channel.removeEventListener('message', handleMessage);
+      channel.close();
+    };
+  }, [campaignId, campaign?.isRunning, currentRunId]);
+
+  // Enhanced polling with immediate refresh on tab visibility
+  useEffect(() => {
+    if (!campaignId || isSeriesMode) return;
+
+    let intervalId = null;
+    let visibilityIntervalId = null;
+    
+    const poll = () => {
+        fetchCampaignCallingStatus();
+    };
+    
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        // Immediate refresh when tab becomes visible
+        poll();
+        
+        // Also broadcast current status to other tabs
+        if (campaign?.isRunning !== undefined) {
+          const channel = new BroadcastChannel(`campaign-status-${campaignId}`);
+          channel.postMessage({
+            type: 'campaign-status-update',
+            isRunning: campaign.isRunning,
+            runId: currentRunId,
+            timestamp: Date.now()
+          });
+          channel.close();
+        }
+      }
+    };
+
+    // Initial call
+    poll();
+    
+    // Set up polling based on campaign status
+    if (campaign?.isRunning) {
+      // More frequent polling when campaign is running (every 2 seconds)
+      intervalId = setInterval(poll, 2000);
+    } else {
+      // Less frequent polling when campaign is idle (every 10 seconds)
+      intervalId = setInterval(poll, 10000);
+    }
+    
+    // Listen for visibility changes
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+      if (visibilityIntervalId) clearInterval(visibilityIntervalId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [campaignId, campaign?.isRunning, isSeriesMode, currentRunId]);
 
   // Universal calling function that handles all calling scenarios
   // Helper function to generate consistent runIds
@@ -3469,7 +3974,6 @@ function CampaignDetails({ campaignId, onBack }) {
         }
       }
       let response, result;
-
       // Handle different calling types
       switch (type) {
         case "single":
@@ -3895,7 +4399,26 @@ function CampaignDetails({ campaignId, onBack }) {
             : callFilter === "connected"
             ? connectedStatuses.includes(status)
             : missedStatuses.includes(status);
-        return byData && byStatus;
+        // Flag filter
+        const rowId = `${lead.runInstanceNumber || lead.runId || lead.index}-${
+          lead.documentId || lead.contactId || lead.idx
+        }`;
+        const selectedFlag = rowDisposition[rowId];
+        const byFlag =
+          flagFilter === "all"
+            ? true
+            : flagFilter === "unlabeled"
+            ? !selectedFlag
+            : selectedFlag === flagFilter;
+        // Disposition filter
+        const leadDisposition = (
+          lead.leadStatus || lead.disposition || ""
+        ).toLowerCase();
+        const byDisposition =
+          dispositionFilter === "all"
+            ? true
+            : leadDisposition === dispositionFilter;
+        return byData && byStatus && byFlag && byDisposition;
       });
       setSelectedCallLogs([...filteredCallLogs]);
       setSelectAllCallLogs(true);
@@ -4066,7 +4589,6 @@ function CampaignDetails({ campaignId, onBack }) {
       setLoadingContacts(false);
     }
   };
-
   const removeContactFromCampaign = async (contactId) => {
     if (
       !window.confirm(
@@ -4391,6 +4913,16 @@ function CampaignDetails({ campaignId, onBack }) {
         // Begin polling series status to reflect progress in UI
         startSeriesStatusPolling(campaign._id);
         setIsSeriesMode(true);
+
+        // Broadcast status change to other tabs
+        const channel = new BroadcastChannel(`campaign-status-${campaign._id}`);
+        channel.postMessage({
+          type: 'campaign-status-update',
+          isRunning: true,
+          runId: newRunId,
+          timestamp: Date.now()
+        });
+        channel.close();
       } else {
         // Keep existing parallel behavior
         const result = await universalCalling({
@@ -4484,6 +5016,16 @@ function CampaignDetails({ campaignId, onBack }) {
       stopSeriesStatusPolling();
       setIsSeriesMode(false);
       setLastUpdated(new Date());
+
+      // Broadcast status change to other tabs
+      const channel = new BroadcastChannel(`campaign-status-${campaign._id}`);
+      channel.postMessage({
+        type: 'campaign-status-update',
+        isRunning: false,
+        runId: null,
+        timestamp: Date.now()
+      });
+      channel.close();
     } catch (e) {
       console.error("Stop calling failed:", e);
       toast.error("Failed to stop campaign calling");
@@ -4530,6 +5072,16 @@ function CampaignDetails({ campaignId, onBack }) {
                 prev ? { ...prev, isRunning: isRunning } : prev
               );
               lastRunningState = isRunning;
+
+              // Broadcast status change to other tabs
+              const channel = new BroadcastChannel(`campaign-status-${cid}`);
+              channel.postMessage({
+                type: 'campaign-status-update',
+                isRunning: isRunning,
+                runId: currentRunId,
+                timestamp: Date.now()
+              });
+              channel.close();
             }
 
             // If progressed to next contact, refresh campaign details in UI
@@ -4755,6 +5307,16 @@ function CampaignDetails({ campaignId, onBack }) {
         // Refresh call logs to show the final state
         await fetchApiMergedCalls(1, false, false);
 
+        // Broadcast status change to other tabs
+        const channel = new BroadcastChannel(`campaign-status-${campaignId}`);
+        channel.postMessage({
+          type: 'campaign-status-update',
+          isRunning: false,
+          runId: null,
+          timestamp: Date.now()
+        });
+        channel.close();
+
         toast.success("Campaign stopped - ongoing calls will complete naturally");
       } else {
         const confirmStart = window.confirm("Start the campaign now?");
@@ -4765,6 +5327,16 @@ function CampaignDetails({ campaignId, onBack }) {
 
         // When a new run begins, ensure we show live data again
         setIsLiveCallActive(true);
+
+        // Broadcast status change to other tabs
+        const channel = new BroadcastChannel(`campaign-status-${campaignId}`);
+        channel.postMessage({
+          type: 'campaign-status-update',
+          isRunning: true,
+          runId: currentRunId,
+          timestamp: Date.now()
+        });
+        channel.close();
       }
     } finally {
       setIsTogglingCampaign(false);
@@ -4908,27 +5480,69 @@ function CampaignDetails({ campaignId, onBack }) {
             {/* History table - mirrors Recent call logs */}
             <div className="space-y-2">
               <h4 className="font-semibold text-gray-900 mb-2">Call Logs</h4>
-              {/* Controls: filter, sort, call missed again */}
+              {/* Controls: filter, sort, flag/disposition filters, call missed again */}
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
-                  <select
-                    className="text-sm border border-gray-300 rounded-md px-2 py-1"
-                    value={callFilter}
-                    onChange={(e) => setCallFilter(e.target.value)}
-                  >
-                    <option value="all">All</option>
-                    <option value="connected">Connected</option>
-                    <option value="missed">Missed</option>
-                  </select>
-                  <select
-                    className="text-sm border border-gray-300 rounded-md px-2 py-1"
-                    value={durationSort}
-                    onChange={(e) => setDurationSort(e.target.value)}
-                  >
-                    <option value="none">Sort by</option>
-                    <option value="longest">Longest First</option>
-                    <option value="shortest">Shortest First</option>
-                  </select>
+                  <div className="inline-flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setCallFilter("all")}
+                      className={`text-sm px-3 py-1 rounded border ${
+                        callFilter === "all"
+                          ? "bg-blue-600 text-white border-blue-600"
+                          : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                      }`}
+                    >
+                      All
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCallFilter("connected")}
+                      className={`text-sm px-3 py-1 rounded border ${
+                        callFilter === "connected"
+                          ? "bg-blue-600 text-white border-blue-600"
+                          : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                      }`}
+                    >
+                      Connected
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCallFilter("missed")}
+                      className={`text-sm px-3 py-1 rounded border ${
+                        callFilter === "missed"
+                          ? "bg-blue-600 text-white border-blue-600"
+                          : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                      }`}
+                    >
+                      Missed
+                    </button>
+                  </div>
+                  {/* removed top-level Flag and Disposition selects; header filters are used instead */}
+                  <div className="inline-flex items-center gap-2 ml-2">
+                    <button
+                      type="button"
+                      onClick={() => setDurationSort("longest")}
+                      className={`text-sm px-3 py-1 rounded border ${
+                        durationSort === "longest"
+                          ? "bg-purple-600 text-white border-purple-600"
+                          : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                      }`}
+                    >
+                      Longest First
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDurationSort("shortest")}
+                      className={`text-sm px-3 py-1 rounded border ${
+                        durationSort === "shortest"
+                          ? "bg-purple-600 text-white border-purple-600"
+                          : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                      }`}
+                    >
+                      Shortest First
+                    </button>
+                  </div>
                 </div>
                 <div className="flex items-center gap-2">
                   {callFilter === "missed" && (
@@ -4982,7 +5596,25 @@ function CampaignDetails({ campaignId, onBack }) {
                             : callFilter === "connected"
                             ? connectedStatuses.includes(status)
                             : missedStatuses.includes(status);
-                        return byData && byStatus;
+                        // Apply flag filter using local rowDisposition (row id resolution mirrors below rendering)
+                        const rowId = `${run.instanceNumber || run._id || index}-${
+                          lead.documentId || lead.contactId || `${idx}`
+                        }`;
+                        const selectedFlag = rowDisposition[rowId];
+                        const byFlag =
+                          flagFilter === "all"
+                            ? true
+                            : flagFilter === "unlabeled"
+                            ? !selectedFlag
+                            : selectedFlag === flagFilter;
+                        // Apply disposition filter using backend fields
+                        const leadDisposition =
+                          (lead.leadStatus || lead.disposition || "").toLowerCase();
+                        const byDisposition =
+                          dispositionFilter === "all"
+                            ? true
+                            : leadDisposition === dispositionFilter;
+                        return byData && byStatus && byFlag && byDisposition;
                       });
                       if (filtered.length === 0) {
                         toast.warn("No logs to call for the selected filter");
@@ -4998,6 +5630,31 @@ function CampaignDetails({ campaignId, onBack }) {
                     title="Call the filtered logs from this run"
                   >
                     Call Selected
+                  </button>
+                  {/* Bulk download for selected history */}
+                  <button
+                    className="text-sm px-3 py-1 bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-50"
+                    onClick={handleDownloadSelectedHistoryPDF}
+                    disabled={selectedCallLogs.length === 0}
+                    title="Download selected transcripts as one PDF"
+                  >
+                    Download PDF
+                  </button>
+                  <button
+                    className="text-sm px-3 py-1 bg-gray-700 text-white rounded hover:bg-gray-800 disabled:opacity-50"
+                    onClick={handleDownloadSelectedHistoryTXT}
+                    disabled={selectedCallLogs.length === 0}
+                    title="Download selected transcripts as TXT"
+                  >
+                    Download TXT
+                  </button>
+                  <button
+                    className="text-sm px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+                    onClick={handleDownloadSelectedHistoryCSV}
+                    disabled={selectedCallLogs.length === 0}
+                    title="Download selected names and numbers to Excel (CSV)"
+                  >
+                    Download Excel
                   </button>
                 </div>
               </div>
@@ -5040,7 +5697,25 @@ function CampaignDetails({ campaignId, onBack }) {
                                     : callFilter === "connected"
                                     ? connectedStatuses.includes(status)
                                     : missedStatuses.includes(status);
-                                return byData && byStatus;
+                                // Apply flag filter using local rowDisposition (row id resolution mirrors below rendering)
+                                const rowId = `${run.instanceNumber || run._id || index}-${
+                                  lead.documentId || lead.contactId || `${idx}`
+                                }`;
+                                const selectedFlag = rowDisposition[rowId];
+                                const byFlag =
+                                  flagFilter === "all"
+                                    ? true
+                                    : flagFilter === "unlabeled"
+                                    ? !selectedFlag
+                                    : selectedFlag === flagFilter;
+                                // Apply disposition filter using backend fields
+                                const leadDisposition =
+                                  (lead.leadStatus || lead.disposition || "").toLowerCase();
+                                const byDisposition =
+                                  dispositionFilter === "all"
+                                    ? true
+                                    : leadDisposition === dispositionFilter;
+                                return byData && byStatus && byFlag && byDisposition;
                               }
                             );
                             return (
@@ -5080,7 +5755,26 @@ function CampaignDetails({ campaignId, onBack }) {
                                     : callFilter === "connected"
                                     ? connectedStatuses.includes(status)
                                     : missedStatuses.includes(status);
-                                return byData && byStatus;
+                                // Flag filter
+                                const rowId = `${run.instanceNumber || run._id || index}-${
+                                  lead.documentId || lead.contactId || `${idx}`
+                                }`;
+                                const selectedFlag = rowDisposition[rowId];
+                                const byFlag =
+                                  flagFilter === "all"
+                                    ? true
+                                    : flagFilter === "unlabeled"
+                                    ? !selectedFlag
+                                    : selectedFlag === flagFilter;
+                                // Disposition filter
+                                const leadDisposition = (
+                                  lead.leadStatus || lead.disposition || ""
+                                ).toLowerCase();
+                                const byDisposition =
+                                  dispositionFilter === "all"
+                                    ? true
+                                    : leadDisposition === dispositionFilter;
+                                return byData && byStatus && byFlag && byDisposition;
                               }
                             );
                             const allSelected =
@@ -5137,9 +5831,205 @@ function CampaignDetails({ campaignId, onBack }) {
                       <th className="py-2 px-3">Number</th>
                       <th className="py-2 px-3">Status</th>
                       <th className="py-2 px-3">⏱</th>
+                      <th className="py-2 px-3">
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            className="text-left"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const newState = !flagMenuOpen;
+                              if (newState) {
+                                const position = calculateDropdownPosition(e.target.closest('button'));
+                                setFlagMenuPosition(position);
+                              }
+                              setFlagMenuOpen(newState);
+                            }}
+                            title="Filter by flag"
+                          >
+                            Flag
+                          </button>
+                          <div className="relative">
+                            <button
+                              type="button"
+                              className={`p-1 rounded border ${
+                                flagFilter !== "all"
+                                  ? "bg-yellow-100 border-yellow-300"
+                                  : "bg-white border-gray-300 hover:bg-gray-50"
+                              }`}
+                              title="Filter by flag"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const newState = !flagMenuOpen;
+                                if (newState) {
+                                  const position = calculateDropdownPosition(e.target.closest('button'));
+                                  console.log('Setting flag menu position to:', position);
+                                  setFlagMenuPosition(position);
+                                }
+                                setFlagMenuOpen(newState);
+                              }}
+                            >
+                              {/* small flag icon */}
+                              <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                className="h-4 w-4 text-gray-700"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M4 6v14M4 6h12l-3 4 3 4H4"
+                                />
+                              </svg>
+                            </button>
+                            {flagMenuOpen && (
+                              <div
+                                className={`absolute right-0 w-44 bg-white border border-gray-200 rounded shadow-lg z-[100] p-2 min-h-[100px] ${
+                                  flagMenuPosition === "top" ? "bottom-full mb-1" : "top-full mt-1"
+                                }`}
+                                onMouseDown={(e) => e.stopPropagation()}
+                                onClick={(e) => e.stopPropagation()}
+                                style={{ 
+                                  backgroundColor: flagMenuPosition === "top" ? "#fef3c7" : "#ffffff",
+                                  border: flagMenuPosition === "top" ? "2px solid #f59e0b" : "1px solid #e5e7eb"
+                                }}
+                              >
+                                {(() => {
+                                  const options = [
+                                    { key: "all", label: "All" },
+                                    { key: "interested", label: "Interested" },
+                                    { key: "not interested", label: "Not Interested" },
+                                    { key: "maybe", label: "Maybe" },
+                                    { key: "do not call", label: "Do Not Call" },
+                                  ];
+                                  return (
+                                    <div className="py-1">
+                                      {options.map((opt) => (
+                                        <button
+                                          key={opt.key}
+                                          data-filter-button
+                                          className={`w-full text-left px-3 py-1.5 text-sm hover:bg-gray-50 ${
+                                            opt.key === flagFilter ? "bg-yellow-50" : ""
+                                          }`}
+                                          onClick={(e) => {
+                                            // Allow normal click behavior for filter selection
+                                            setFlagFilter(opt.key);
+                                            setFlagMenuOpen(false);
+                                          }}
+                                        >
+                                          {opt.label}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  );
+                                })()}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </th>
                       <th className="py-2 px-3">Conversation</th>
-                      <th className="py-2 px-3">Flag</th>
-                      <th className="py-2 px-3">Disposition</th>
+                      <th className="py-2 px-3">
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            className="text-left"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const newState = !dispMenuOpen;
+                              if (newState) {
+                                const position = calculateDropdownPosition(e.target.closest('button'));
+                                setDispMenuPosition(position);
+                              }
+                              setDispMenuOpen(newState);
+                            }}
+                            title="Filter by disposition"
+                          >
+                            Disposition
+                          </button>
+                          <div className="relative">
+                            <button
+                              type="button"
+                              className={`p-1 rounded border ${
+                                dispositionFilter !== "all"
+                                  ? "bg-blue-100 border-blue-300"
+                                  : "bg-white border-gray-300 hover:bg-gray-50"
+                              }`}
+                              title="Filter by disposition"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDispMenuOpen((v) => !v);
+                              }}
+                            >
+                              {/* funnel icon */}
+                              <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                className="h-4 w-4 text-gray-700"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M3 4h18l-7 8v6l-4 2v-8L3 4z"
+                                />
+                              </svg>
+                            </button>
+                            {dispMenuOpen && (
+                              <div
+                                className={`absolute right-0 w-56 max-h-64 overflow-auto bg-white border border-gray-200 rounded shadow-lg z-[100] p-2 min-h-[100px] ${
+                                  dispMenuPosition === "top" ? "bottom-full mb-1" : "top-full mt-1"
+                                }`}
+                                onMouseDown={(e) => e.stopPropagation()}
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                {(() => {
+                                  // Always show full list of dispositions
+                                  const options = [
+                                    { key: "all", label: "All" },
+                                    { key: "vvi", label: "Very Very Interested" },
+                                    { key: "maybe", label: "Maybe" },
+                                    { key: "enrolled", label: "Enrolled" },
+                                    { key: "junk_lead", label: "Junk Lead" },
+                                    { key: "not_required", label: "Not Required" },
+                                    { key: "enrolled_other", label: "Enrolled Other" },
+                                    { key: "decline", label: "Decline" },
+                                    { key: "not_eligible", label: "Not Eligible" },
+                                    { key: "wrong_number", label: "Wrong Number" },
+                                    { key: "hot_followup", label: "Hot Followup" },
+                                    { key: "cold_followup", label: "Cold Followup" },
+                                    { key: "schedule", label: "Schedule" },
+                                    { key: "not_connected", label: "Not Connected" },
+                                  ];
+                                  return (
+                                    <div className="py-1">
+                                      {options.map((opt) => (
+                                        <button
+                                          key={opt.key}
+                                          className={`w-full text-left px-3 py-1.5 text-sm hover:bg-gray-50 ${
+                                            opt.key === dispositionFilter ? "bg-blue-50" : ""
+                                          }`}
+                                          onClick={() => {
+                                            setDispositionFilter(opt.key);
+                                            setDispMenuOpen(false);
+                                          }}
+                                        >
+                                          {opt.label}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  );
+                                })()}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </th>
                       <th className="py-2 px-3">Action</th>
                       <th className="py-2 px-3">Redial</th>
                     </tr>
@@ -5178,7 +6068,26 @@ function CampaignDetails({ campaignId, onBack }) {
                             : callFilter === "connected"
                             ? connectedStatuses.includes(status)
                             : missedStatuses.includes(status);
-                        return byData && byStatus;
+                        // Flag filter
+                        const rowId = `${run.instanceNumber || run._id || index}-${
+                          lead.documentId || lead.contactId || `${idx}`
+                        }`;
+                        const selectedFlag = rowDisposition[rowId];
+                        const byFlag =
+                          flagFilter === "all"
+                            ? true
+                            : flagFilter === "unlabeled"
+                            ? !selectedFlag
+                            : selectedFlag === flagFilter;
+                        // Disposition filter
+                        const leadDisposition = (
+                          lead.leadStatus || lead.disposition || ""
+                        ).toLowerCase();
+                        const byDisposition =
+                          dispositionFilter === "all"
+                            ? true
+                            : leadDisposition === dispositionFilter;
+                        return byData && byStatus && byFlag && byDisposition;
                       })
                       .sort((a, b) => {
                         if (durationSort === "none") return 0;
@@ -5279,8 +6188,10 @@ function CampaignDetails({ campaignId, onBack }) {
                                   ? "bg-red-200 text-red-900 border-red-300"
                                   : selected === "maybe"
                                   ? "bg-yellow-200 text-yellow-900 border-yellow-300"
+                                  : selected === "do not call"
+                                  ? "bg-gray-200 text-gray-800 border-gray-300"
                                   : "bg-gray-50 text-gray-700 border-gray-200";
-                              const label = selected ? selected : "Default";
+                              const label = selected ? selected : "Select";
                               return (
                                 <div
                                   className="relative inline-block text-left"
@@ -5324,6 +6235,11 @@ function CampaignDetails({ campaignId, onBack }) {
                                     >
                                       {[
                                         {
+                                          key: undefined,
+                                          label: "Select",
+                                          cls: "text-gray-700",
+                                        },
+                                        {
                                           key: "interested",
                                           label: "Interested",
                                           cls: "text-green-700",
@@ -5339,8 +6255,8 @@ function CampaignDetails({ campaignId, onBack }) {
                                           cls: "text-yellow-700",
                                         },
                                         {
-                                          key: undefined,
-                                          label: "Default",
+                                          key: "do not call",
+                                          label: "Do Not Call",
                                           cls: "text-gray-700",
                                         },
                                       ].map((opt) => (
@@ -5702,7 +6618,6 @@ function CampaignDetails({ campaignId, onBack }) {
     setIsPolling(false);
     setCallConnectionStatus("connected");
   };
-
   // Terminate current live call
   const terminateCurrentCall = async () => {
     try {
@@ -5896,7 +6811,6 @@ function CampaignDetails({ campaignId, onBack }) {
       </div>
     );
   }
-
   return (
     <div className="h-screen flex flex-col bg-gradient-to-br from-gray-50 to-gray-100">
       {/* Fixed Header Section */}
@@ -6363,9 +7277,7 @@ function CampaignDetails({ campaignId, onBack }) {
                 </div>
               )}
           </div>
-
           {/* Campaign Progress Section - Always Visible */}
-
           {/* Group Range Modal */}
           {showGroupRangeModal && rangeModalGroup && (
             <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -6715,7 +7627,146 @@ function CampaignDetails({ campaignId, onBack }) {
                               <FiClock />
                             </th>
                             <th className="py-2 px-3">Conversation</th>
-                            <th className="py-2 px-3">Flag</th>
+                            <th className="py-2 px-3">
+                              <div className="flex items-center gap-2">
+                                <span>Flag</span>
+                                <div className="relative">
+                                  <button
+                                    type="button"
+                                    className={`p-1 rounded border ${
+                                      flagFilter !== "all"
+                                        ? "bg-yellow-100 border-yellow-300"
+                                        : "bg-white border-gray-300 hover:bg-gray-50"
+                                    }`}
+                                    title="Filter by flag"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const newState = !flagMenuOpen;
+                                if (newState) {
+                                  const position = calculateDropdownPosition(e.target.closest('button'));
+                                  console.log('Setting flag menu position to:', position);
+                                  setFlagMenuPosition(position);
+                                }
+                                setFlagMenuOpen(newState);
+                                    }}
+                                  >
+                                    {/* small flag icon */}
+                                    <svg
+                                      xmlns="http://www.w3.org/2000/svg"
+                                      className="h-4 w-4 text-gray-700"
+                                      fill="none"
+                                      viewBox="0 0 24 24"
+                                      stroke="currentColor"
+                                    >
+                                      <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        strokeWidth={2}
+                                        d="M4 6v14M4 6h12l-3 4 3 4H4"
+                                      />
+                                    </svg>
+                                  </button>
+                                  {flagMenuOpen && (
+                                    <div
+                                      className="absolute right-0 mt-1 w-44 bg-white border border-gray-200 rounded shadow-lg z-[100] p-2"
+                                      onMouseDown={(e) => e.stopPropagation()}
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      {(() => {
+                                        // compute visible rows' flag options
+                                        const visible = (run.contacts || []).filter((lead, idx) => {
+                                          const name = (lead.name || "").toString().trim();
+                                          const number = (lead.number || lead.phone || "")
+                                            .toString()
+                                            .trim();
+                                          const hasRealName = name && name !== "-";
+                                          const hasRealNumber = number && number !== "-" && /\d/.test(number);
+                                          const byData = hasRealName || hasRealNumber;
+                                          const status = (lead.status || "").toLowerCase();
+                                          const connectedStatuses = ["connected", "completed", "ongoing"];
+                                          const missedStatuses = ["missed", "not_connected", "failed"];
+                                          if (agentConfigMode !== "serial") {
+                                            const isLive = status === "ringing" || status === "ongoing";
+                                            if (isLive) return false;
+                                          }
+                                          const byStatus =
+                                            callFilter === "all"
+                                              ? true
+                                              : callFilter === "connected"
+                                              ? connectedStatuses.includes(status)
+                                              : missedStatuses.includes(status);
+                                          // Flag filter (use current filter to not hide current selection list)
+                                          const rowId = `${run.instanceNumber || run._id || index}-${
+                                            lead.documentId || lead.contactId || `${idx}`
+                                          }`;
+                                          const selectedFlag = rowDisposition[rowId];
+                                          const byFlag =
+                                            flagFilter === "all"
+                                              ? true
+                                              : flagFilter === "unlabeled"
+                                              ? !selectedFlag
+                                              : selectedFlag === flagFilter;
+                                          // Disposition filter
+                                          const leadDisposition = (lead.leadStatus || lead.disposition || "").toLowerCase();
+                                          const byDisposition =
+                                            dispositionFilter === "all" ? true : leadDisposition === dispositionFilter;
+                                          return byData && byStatus && byFlag && byDisposition;
+                                        });
+                                        const set = new Set();
+                                        for (let i = 0; i < visible.length; i++) {
+                                          const lead = visible[i];
+                                          const rowId = `${run.instanceNumber || run._id || index}-${
+                                            lead.documentId || lead.contactId || `${i}`
+                                          }`;
+                                          const val = rowDisposition[rowId];
+                                          set.add(val || "unlabeled");
+                                        }
+                                        const options = Array.from(set);
+                                        return (
+                                          <div className="py-1">
+                                            {options.length === 0 ? (
+                                              <div className="px-3 py-2 text-sm text-gray-500">No flags</div>
+                                            ) : (
+                                              options.map((opt) => (
+                                                <button
+                                                  key={opt}
+                                                  data-filter-button
+                                                  className={`w-full text-left px-3 py-1.5 text-sm hover:bg-gray-50 ${
+                                                    (opt === "unlabeled" ? "unlabeled" : opt) === flagFilter ? "bg-yellow-50" : ""
+                                                  }`}
+                                                  onClick={(e) => {
+                                                    e.preventDefault();
+                                                    e.stopPropagation();
+                                                    const next = (opt === "unlabeled" ? "unlabeled" : opt) === flagFilter ? "all" : (opt === "unlabeled" ? "unlabeled" : opt);
+                                                    setFlagFilter(next);
+                                                    setFlagMenuOpen(false);
+                                                  }}
+                                                >
+                                                  {opt === "unlabeled" ? "Unlabeled" : opt}
+                                                </button>
+                                              ))
+                                            )}
+                                            <div className="border-t border-gray-100 my-1" />
+                                            <button
+                                              data-filter-button
+                                              className="w-full text-left px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+                                              onClick={(e) => {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                setFlagFilter("all");
+                                                setFlagMenuOpen(false);
+                                              }}
+                                            >
+                                              Clear
+                                            </button>
+                                          </div>
+                                        );
+                                      })()}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </th>
                             <th className="py-2 px-3">Disposition</th>
                             <th className="py-2 px-3">Action</th>
                             <th className="py-2 px-3">Redial</th>
@@ -7034,7 +8085,7 @@ function CampaignDetails({ campaignId, onBack }) {
                               <td className="py-2 px-3"></td>
                               <td className="py-2 px-3">
                                 <button
-                                  className="inline-flex items-center px-3 py-1 text-xs bg-green-50 text-green-700 border border-green-200 rounded hover:bg-green-100 disabled:opacity-50"
+                                  className="inline-flex items-center px-3 py-1 text-xs bg-green-50 text-green-700 border border-green-200 rounded hover:bg-green-100 disabled:opacity-50 disabled:cursor-not-allowed"
                                   title={
                                     !lead.number
                                       ? "No phone number available"
@@ -7209,12 +8260,17 @@ function CampaignDetails({ campaignId, onBack }) {
             {apiMergedCallsLoading ? (
               <div className="text-center py-10">Loading call logs...</div>
             ) : apiMergedCalls.length === 0 ? (
-              <div className="text-center py-10 text-gray-500">
-                No call logs found
+              <div className="text-center py-16 px-8 bg-gray-50 rounded-lg border border-gray-200 mx-4 my-6">
+                <div className="text-gray-500 text-lg font-medium mb-2">
+                  No call logs found
+                </div>
+                <div className="text-gray-400 text-sm">
+                  Call logs will appear here once calls are made
+                </div>
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="min-w-full text-sm border border-gray-200 rounded-lg overflow-hidden">
+              <div className="">
+                <table className="min-w-full text-sm border border-gray-200 rounded-lg mb-5 z-10">
                   <thead className="bg-gray-50 sticky top-0 z-10">
                     <tr className="text-left text-gray-700">
                       <th className="py-2 px-3">
@@ -7234,15 +8290,160 @@ function CampaignDetails({ campaignId, onBack }) {
                         <FiClock />
                       </th>
                       <th className="py-2 px-3">Conversation</th>
-                      <th className="py-2 px-3">Flag</th>
+                      <th className="py-2 px-3">
+                        <div className="flex items-center gap-2">
+                          <span>Flag</span>
+                          <div className="relative">
+                            <button
+                              type="button"
+                              className={`p-1 rounded border ${
+                                flagFilter !== "all"
+                                  ? "bg-yellow-100 border-yellow-300"
+                                  : "bg-white border-gray-300 hover:bg-gray-50"
+                              }`}
+                              title="Filter by flag"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const newState = !flagMenuOpen;
+                                if (newState) {
+                                  const position = calculateDropdownPosition(e.target.closest('button'));
+                                  console.log('Setting flag menu position to:', position);
+                                  setFlagMenuPosition(position);
+                                }
+                                setFlagMenuOpen(newState);
+                              }}
+                            >
+                              {/* small flag icon */}
+                              <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                className="h-4 w-4 text-gray-700"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M4 6v14M4 6h12l-3 4 3 4H4"
+                                />
+                              </svg>
+                            </button>
+                            {flagMenuOpen && (
+                              <div
+                                className={`absolute right-0 w-44 bg-white border border-gray-200 rounded shadow-lg z-[100] p-2 min-h-[100px] ${
+                                  flagMenuPosition === "top" ? "bottom-full mb-1" : "top-full mt-1"
+                                }`}
+                                onMouseDown={(e) => e.stopPropagation()}
+                                onClick={(e) => e.stopPropagation()}
+                                style={{ 
+                                  backgroundColor: flagMenuPosition === "top" ? "#fef3c7" : "#ffffff",
+                                  border: flagMenuPosition === "top" ? "2px solid #f59e0b" : "1px solid #e5e7eb"
+                                }}
+                              >
+                                {(() => {
+                                  // compute visible rows' flag options
+                                  const visible = (run.contacts || []).filter((lead, idx) => {
+                                    const name = (lead.name || "").toString().trim();
+                                    const number = (lead.number || lead.phone || "")
+                                      .toString()
+                                      .trim();
+                                    const hasRealName = name && name !== "-";
+                                    const hasRealNumber = number && number !== "-" && /\d/.test(number);
+                                    const byData = hasRealName || hasRealNumber;
+                                    const status = (lead.status || "").toLowerCase();
+                                    const connectedStatuses = ["connected", "completed", "ongoing"];
+                                    const missedStatuses = ["missed", "not_connected", "failed"];
+                                    if (agentConfigMode !== "serial") {
+                                      const isLive = status === "ringing" || status === "ongoing";
+                                      if (isLive) return false;
+                                    }
+                                    const byStatus =
+                                      callFilter === "all"
+                                        ? true
+                                        : callFilter === "connected"
+                                        ? connectedStatuses.includes(status)
+                                        : missedStatuses.includes(status);
+                                    // Flag filter (use current filter to not hide current selection list)
+                                    const rowId = `${run.instanceNumber || run._id || index}-${
+                                      lead.documentId || lead.contactId || `${idx}`
+                                    }`;
+                                    const selectedFlag = rowDisposition[rowId];
+                                    const byFlag =
+                                      flagFilter === "all"
+                                        ? true
+                                        : flagFilter === "unlabeled"
+                                        ? !selectedFlag
+                                        : selectedFlag === flagFilter;
+                                    // Disposition filter
+                                    const leadDisposition = (lead.leadStatus || lead.disposition || "").toLowerCase();
+                                    const byDisposition =
+                                      dispositionFilter === "all" ? true : leadDisposition === dispositionFilter;
+                                    return byData && byStatus && byFlag && byDisposition;
+                                  });
+                                  const set = new Set();
+                                  for (let i = 0; i < visible.length; i++) {
+                                    const lead = visible[i];
+                                    const rowId = `${run.instanceNumber || run._id || index}-${
+                                      lead.documentId || lead.contactId || `${i}`
+                                    }`;
+                                    const val = rowDisposition[rowId];
+                                    set.add(val || "unlabeled");
+                                  }
+                                  const options = Array.from(set);
+                                  return (
+                                    <div className="py-1">
+                                      {options.length === 0 ? (
+                                        <div className="px-3 py-2 text-sm text-gray-500">No flags</div>
+                                      ) : (
+                                        options.map((opt) => (
+                                          <button
+                                            key={opt}
+                                            data-filter-button
+                                            className={`w-full text-left px-3 py-1.5 text-sm hover:bg-gray-50 ${
+                                              (opt === "unlabeled" ? "unlabeled" : opt) === flagFilter ? "bg-yellow-50" : ""
+                                            }`}
+                                            onClick={(e) => {
+                                              e.preventDefault();
+                                              e.stopPropagation();
+                                              const next = (opt === "unlabeled" ? "unlabeled" : opt) === flagFilter ? "all" : (opt === "unlabeled" ? "unlabeled" : opt);
+                                              setFlagFilter(next);
+                                              setFlagMenuOpen(false);
+                                            }}
+                                          >
+                                            {opt === "unlabeled" ? "Unlabeled" : opt}
+                                          </button>
+                                        ))
+                                      )}
+                                      <div className="border-t border-gray-100 my-1" />
+                                      <button
+                                        data-filter-button
+                                        className="w-full text-left px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+                                        onClick={(e) => {
+                                          e.preventDefault();
+                                          e.stopPropagation();
+                                          setFlagFilter("all");
+                                          setFlagMenuOpen(false);
+                                        }}
+                                      >
+                                        Clear
+                                      </button>
+                                    </div>
+                                  );
+                                })()}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </th>
                       <th className="py-2 px-3">Disposition</th>
                       <th className="py-2 px-3">Action</th>
                       <th className="py-2 px-3">Redial</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {apiMergedCalls
-                      .filter((lead) => {
+                    {(() => {
+                      const filteredCalls = apiMergedCalls.filter((lead) => {
                         const name = (lead.name || "").toString().trim();
                         const number = (lead.number || "").toString().trim();
                         const hasRealName = name && name !== "-";
@@ -7268,8 +8469,27 @@ function CampaignDetails({ campaignId, onBack }) {
                             ? connectedStatuses.includes(status)
                             : missedStatuses.includes(status);
                         return byData && byStatus && notLive;
-                      })
-                      .sort((a, b) => {
+                      });
+
+                      if (filteredCalls.length === 0) {
+                        return (
+                          <tr>
+                            <td colSpan="12" className="text-center py-16 px-8">
+                              <div className="bg-gray-50 rounded-lg border border-gray-200 mx-4 my-6 py-8">
+                                <div className="text-gray-500 text-lg font-medium mb-2">
+                                  No results found
+                                </div>
+                                <div className="text-gray-400 text-sm">
+                                  Try adjusting your filters to see more results
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      }
+
+                      return filteredCalls
+                        .sort((a, b) => {
                         if (durationSort === "none") return 0;
 
                         // Convert duration to seconds for comparison
@@ -7677,7 +8897,7 @@ function CampaignDetails({ campaignId, onBack }) {
                           </td>
                           <td className="py-2 px-3">
                             <button
-                              className="inline-flex items-center px-3 py-1 text-xs bg-green-50 text-green-700 border border-green-200 rounded hover:bg-green-100 disabled:opacity-50"
+                              className="inline-flex items-center px-3 py-1 text-xs bg-green-50 text-green-700 border border-green-200 rounded hover:bg-green-100 disabled:opacity-50 disabled:cursor-not-allowed"
                               title={
                                 !lead.number
                                   ? "No phone number available"
@@ -7700,7 +8920,8 @@ function CampaignDetails({ campaignId, onBack }) {
                             </button>
                           </td>
                         </tr>
-                      ))}
+                      ));
+                    })()}
                   </tbody>
                 </table>
                 <div className="flex items-center justify-between mt-4">
@@ -7809,7 +9030,14 @@ function CampaignDetails({ campaignId, onBack }) {
                     />
                   ))
               ) : (
-                <div className="text-sm text-gray-500">No runs yet.</div>
+                <div className="text-center py-12 px-6 bg-gray-50 rounded-lg border border-gray-200 mx-2 my-4">
+                  <div className="text-gray-500 text-base font-medium mb-2">
+                    No campaign runs yet
+                  </div>
+                  <div className="text-gray-400 text-sm">
+                    Campaign runs will appear here once the campaign is executed
+                  </div>
+                </div>
               )}
             </div>
           </div>
@@ -7844,7 +9072,23 @@ function CampaignDetails({ campaignId, onBack }) {
                   className="px-3 py-1.5 text-xs font-medium bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-50"
                   disabled={reportSelectedIds.size === 0}
                 >
-                  Download Report (PDF)
+                  Download PDF
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDownloadSelectedReportTXT}
+                  className="px-3 py-1.5 text-xs font-medium bg-gray-700 text-white rounded hover:bg-gray-800 disabled:opacity-50"
+                  disabled={reportSelectedIds.size === 0}
+                >
+                  Download TXT
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDownloadSelectedReportCSV}
+                  className="px-3 py-1.5 text-xs font-medium bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+                  disabled={reportSelectedIds.size === 0}
+                >
+                  Download Excel
                 </button>
               </div>
             </div>
@@ -7885,8 +9129,8 @@ function CampaignDetails({ campaignId, onBack }) {
                     }
                   };
                   return (
-                    <div className="overflow-auto">
-                      <table className="min-w-full text-sm border border-gray-200 rounded-lg overflow-hidden">
+                    <div className="overflow-auto mb-5">
+                      <table className="min-w-full text-sm border border-gray-200 rounded-lg mb-5">
                         <thead className="bg-gray-50 sticky top-0 z-10">
                           <tr className="text-left text-gray-700">
                             <th className="py-2 px-3">
@@ -8967,7 +10211,6 @@ function CampaignDetails({ campaignId, onBack }) {
           </div>
         </div>
       )}
-
       {/* Call Details Modal */}
       {showCallDetailsModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
@@ -9566,7 +10809,6 @@ function CampaignDetails({ campaignId, onBack }) {
           </div>
         </div>
       )}
-
       {/* Add Agent Modal */}
       {showAddAgentModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
