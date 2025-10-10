@@ -189,12 +189,14 @@ const LoginForm = ({ userType, onLogin, switchToRegister }) => {
                 logo_alignment="center"
               />
             </div>
-          </div>
+        </div>
+        {userType !== "client" && (
           <div className="w-full flex items-center justify-center my-4">
             <div className="flex-1 border-t border-gray-300"></div>
-            <span className="px-4 text-gray-500 text-sm">OR</span>
+            {/* <span className="px-4 text-gray-500 text-sm">OR</span> */}
             <div className="flex-1 border-t border-gray-300"></div>
           </div>
+        )}
         </div>
       ) : (
         <div className="flex flex-col items-center mb-6">
@@ -218,113 +220,115 @@ const LoginForm = ({ userType, onLogin, switchToRegister }) => {
             </div>
           </div>
           <div className="w-full flex items-center justify-center my-4">
-            <div className="flex-1 border-t border-gray-300"></div>
-            <span className="px-4 text-gray-500 text-sm">OR</span>
-            <div className="flex-1 border-t border-gray-300"></div>
+            
           </div>
         </div>
       )}
 
-      {/* Regular Login Form */}
-      <form onSubmit={handleSubmit}>
-        <div className="mb-4">
-          <label className="block text-gray-700 text-sm font-bold mb-2 flex items-center">
-            <FaEnvelope className="mr-2" /> Email
-          </label>
-          <input
-            type="email"
-            name="email"
-            value={formData.email}
-            onChange={handleChange}
-            required
-            className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-          />
-        </div>
-
-        {userType === "HumanAgent" && (
+      {/* Regular Login Form - hide for client; keep for user/HumanAgent */}
+      {userType !== "client" && (
+        <form onSubmit={handleSubmit}>
           <div className="mb-4">
             <label className="block text-gray-700 text-sm font-bold mb-2 flex items-center">
-              <FaEnvelope className="mr-2" /> Client Email
+              <FaEnvelope className="mr-2" /> Email
             </label>
             <input
               type="email"
-              name="clientEmail"
-              value={formData.clientEmail}
-              onChange={handleChange}
-              required
-              placeholder="Enter your Client's Email"
-              className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-            />
-          </div>
-        )}
-
-        {userType !== "HumanAgent" && (
-          <div className="mb-6">
-            <label className="block text-gray-700 text-sm font-bold mb-2 flex items-center">
-              <FaLock className="mr-2" /> Password
-            </label>
-            <input
-              type="password"
-              name="password"
-              value={formData.password}
+              name="email"
+              value={formData.email}
               onChange={handleChange}
               required
               className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
             />
           </div>
-        )}
 
-        {error && (
-          <div className="mb-4 p-2 bg-red-100 border border-red-400 text-red-700 rounded">
-            {error}
-          </div>
-        )}
+          {userType === "HumanAgent" && (
+            <div className="mb-4">
+              <label className="block text-gray-700 text-sm font-bold mb-2 flex items-center">
+                <FaEnvelope className="mr-2" /> Client Email
+              </label>
+              <input
+                type="email"
+                name="clientEmail"
+                value={formData.clientEmail}
+                onChange={handleChange}
+                required
+                placeholder="Enter your Client's Email"
+                className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+              />
+            </div>
+          )}
 
-        <div className="flex items-center justify-between">
-          <button
-            type="submit"
-            disabled={loading}
-            className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline flex items-center"
-          >
-            {loading ? (
-              <span className="flex items-center">
-                <svg
-                  className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                >
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                  ></circle>
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  ></path>
-                </svg>
-                Logging in...
-              </span>
-            ) : (
-              "Log In"
+          {userType !== "HumanAgent" && (
+            <div className="mb-6">
+              <label className="block text-gray-700 text-sm font-bold mb-2 flex items-center">
+                <FaLock className="mr-2" /> Password
+              </label>
+              <input
+                type="password"
+                name="password"
+                value={formData.password}
+                onChange={handleChange}
+                required
+                className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+              />
+            </div>
+          )}
+
+          {error && (
+            <div className="mb-4 p-2 bg-red-100 border border-red-400 text-red-700 rounded">
+              {error}
+            </div>
+          )}
+
+          <div className="flex items-center justify-between">
+            <button
+              type="submit"
+              disabled={loading}
+              className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline flex items-center"
+            >
+              {loading ? (
+                <span className="flex items-center">
+                  <svg
+                    className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    ></circle>
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    ></path>
+                  </svg>
+                  Logging in...
+                </span>
+              ) : (
+                "Log In"
+              )}
+            </button>
+            {switchToRegister && (
+              <button
+                type="button"
+                onClick={switchToRegister}
+                className="inline-block align-baseline font-bold text-sm text-blue-500 hover:text-blue-800"
+              >
+                {userType === "HumanAgent"
+                  ? "Contact your administrator to register your email"
+                  : "Don't have an account? Register"}
+              </button>
             )}
-          </button>
-          <button
-            type="button"
-            onClick={switchToRegister}
-            className="inline-block align-baseline font-bold text-sm text-blue-500 hover:text-blue-800"
-          >
-            {userType === "HumanAgent"
-              ? "Contact your administrator to register your email"
-              : "Don't have an account? Register"}
-          </button>
-        </div>
-      </form>
+          </div>
+        </form>
+      )}
     </div>
   );
 };

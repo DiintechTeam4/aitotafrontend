@@ -70,8 +70,8 @@ export default function CreditsOverview() {
   const plans = [
     {
       name: "Basic",
-      priceINR: 1000,
-      credits: 1000,
+      priceINR: 5000,
+      credits: 5000,
       bonus: 0,
       popular: false,
       features: [
@@ -83,8 +83,8 @@ export default function CreditsOverview() {
     },
     {
       name: "Professional",
-      priceINR: 5000,
-      credits: 5000,
+      priceINR: 15000,
+      credits: 15000,
       bonus: 500,
       popular: true,
       features: [
@@ -97,8 +97,8 @@ export default function CreditsOverview() {
     },
     {
       name: "Enterprise",
-      priceINR: 10000,
-      credits: 10000,
+      priceINR: 25000,
+      credits: 25000,
       bonus: 1000,
       popular: false,
       features: [
