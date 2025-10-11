@@ -229,6 +229,21 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
       localStorage.setItem("clientDashboard_activeTab", "list");
     }
 
+    // If navigating away from Outbound, clear campaign/group URL params
+    if (section !== "outbound") {
+      try {
+        const url = new URL(window.location.href);
+        const params = url.searchParams;
+        const hadParams = params.has('campaignId') || params.has('groupId');
+        if (hadParams) {
+          params.delete('campaignId');
+          params.delete('groupId');
+          url.search = params.toString();
+          window.history.replaceState({}, document.title, url.toString());
+        }
+      } catch (_) {}
+    }
+
     setEditingAgent(null);
   };
 
