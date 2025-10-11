@@ -5025,13 +5025,16 @@ function CampaignDetails({ campaignId, onBack }) {
         if (!resp.ok || data.error) {
           throw new Error(data.error || "Failed to start series campaign");
         }
+        
+        let newRunId = null;
         try {
-          const newRunId = data?.status?.runId;
+          newRunId = data?.status?.runId;
           if (newRunId) {
             setCurrentRunId(newRunId);
             setCampaignStartTime(new Date());
           }
         } catch (_) {}
+        
         setCampaign((prev) => (prev ? { ...prev, isRunning: true } : prev));
         setLastUpdated(new Date());
         // Begin polling series status to reflect progress in UI
@@ -7007,36 +7010,39 @@ function CampaignDetails({ campaignId, onBack }) {
             <div className="flex items-center justify-between">
               {/* Run / Stop toggle (small) */}
               <div className="flex items-center gap-2">
-                {!campaign?.isRunning && (
                 <button
                   onClick={handleToggleCampaignCalling}
                   disabled={
                     isTogglingCampaign ||
-                    !campaignGroups ||
-                    campaignGroups.length === 0 ||
-                    !Array.isArray(campaign?.agent) ||
-                    campaign.agent.length === 0
+                    (!campaign?.isRunning && (
+                      !campaignGroups ||
+                      campaignGroups.length === 0 ||
+                      !Array.isArray(campaign?.agent) ||
+                      campaign.agent.length === 0
+                    ))
                   }
                   title={
-                    !campaignGroups || campaignGroups.length === 0
+                    campaign?.isRunning
+                      ? "Stop campaign"
+                      : !campaignGroups || campaignGroups.length === 0
                       ? "Cannot start: No groups assigned"
                       : !Array.isArray(campaign?.agent) ||
                         campaign.agent.length === 0
                       ? "Cannot start: No agent assigned"
-                      : campaign?.isRunning
-                      ? "Stop campaign"
                       : "Start campaign"
                   }
                   className={`inline-flex items-center justify-center h-9 p-2 border rounded-md border-gray-200 transition-colors ${
                     isTogglingCampaign ||
-                    !campaignGroups ||
-                    campaignGroups.length === 0 ||
-                    !Array.isArray(campaign?.agent) ||
-                    campaign.agent.length === 0
+                    (!campaign?.isRunning && (
+                      !campaignGroups ||
+                      campaignGroups.length === 0 ||
+                      !Array.isArray(campaign?.agent) ||
+                      campaign.agent.length === 0
+                    ))
                       ? "bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed"
                       : campaign?.isRunning
-                      ? "bg-red-100 border-red-600 text-red-800 hover:bg-red-100"
-                      : "bg-green-100 border-green-600 text-green-800 hover:bg-green-100"
+                      ? "bg-red-100 border-red-600 text-red-800 hover:bg-red-200"
+                      : "bg-green-100 border-green-600 text-green-800 hover:bg-green-200"
                   }`}
                 >
                   {isTogglingCampaign ? (
@@ -7059,7 +7065,6 @@ function CampaignDetails({ campaignId, onBack }) {
                     </>
                   )}
                 </button>
-                )}
               </div>
 
               {/* Add buttons */}
