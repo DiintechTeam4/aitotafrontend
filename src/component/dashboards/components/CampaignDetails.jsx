@@ -52,6 +52,9 @@ function CampaignDetails({ campaignId, onBack }) {
   const [waChatDeadline, setWaChatDeadline] = useState(null);
   const [waChatRemaining, setWaChatRemaining] = useState("24:00:00");
   const [showDownloadMenu, setShowDownloadMenu] = useState(false);
+  // New: unified download dropdowns for History and Report
+  const [showHistoryDownloadMenu, setShowHistoryDownloadMenu] = useState(false);
+  const [showReportDownloadMenu, setShowReportDownloadMenu] = useState(false);
   const downloadMenuRef = useRef(null);
 
   useEffect(() => {
@@ -318,7 +321,18 @@ function CampaignDetails({ campaignId, onBack }) {
         toast.warn("Nothing selected");
         return;
       }
-      const headers = ["Name", "Number"]; // Restrict to Name and Number only
+      // Extended headers per requirement
+      const headers = [
+        "Name",
+        "Number",
+        "Transcripts",
+        "DurationSeconds",
+        "DurationFormatted",
+        "Disposition",
+        "CampaignName",
+        "ClientName",
+        "AgentName",
+      ];
       const escapeCsv = (val) => {
         const s = (val == null ? "" : String(val));
         if (/[",\n]/.test(s)) {
@@ -329,11 +343,41 @@ function CampaignDetails({ campaignId, onBack }) {
       const normalizeDigits = (v) => String(v || "").replace(/[^\d+]/g, "");
       const excelTextNumber = (v) => `="${normalizeDigits(v)}"`;
       const rows = [headers.join(",")];
+      // Resolve agent and client names once
+      let agentName = "";
+      try {
+        const primaryId = getPrimaryAgentId();
+        if (primaryId) {
+          agentName = (await getAgentNameById(primaryId)) || "";
+        }
+      } catch (_) {}
+      const campaignName = campaign?.name || "";
+      const clientName = clientData?.name || "";
       for (const r of flatRows) {
+        let msgCount = (typeof r.transcriptCount === "number" ? r.transcriptCount : getTranscriptMessageCount(r)) || 0;
+        // If count is still zero but we have a documentId, fetch transcript and count messages
+        if (msgCount === 0 && r.documentId) {
+          try {
+            const transcript = await fetchTranscriptTextByDocument(r.documentId);
+            if (transcript) {
+              msgCount = countMessagesInTranscript(transcript) || 0;
+            }
+          } catch (_) {}
+        }
+        const durationSec = Number(r.duration || r.durationSeconds || 0) || 0;
+        const durationFmt = formatHMSCompact(durationSec);
+        const disposition = r.leadStatus || r.disposition || r.status || "";
         rows.push([
           escapeCsv(r.name || "-"),
           // Force Excel to treat as text to avoid scientific notation
           excelTextNumber(r.number || r.phone || "-"),
+          String(msgCount),
+          String(durationSec),
+          escapeCsv(durationFmt),
+          escapeCsv(disposition),
+          escapeCsv(campaignName),
+          escapeCsv(clientName),
+          escapeCsv(agentName),
         ].join(","));
       }
       const blob = new Blob([rows.join("\n")], { type: "text/csv;charset=utf-8" });
@@ -441,7 +485,18 @@ function CampaignDetails({ campaignId, onBack }) {
         toast.warn("Select at least one item");
         return;
       }
-      const headers = ["Name", "Number"]; // Restrict to Name and Number only
+      // Extended headers per requirement
+      const headers = [
+        "Name",
+        "Number",
+        "Transcripts",
+        "DurationSeconds",
+        "DurationFormatted",
+        "Disposition",
+        "CampaignName",
+        "ClientName",
+        "AgentName",
+      ];
       const escapeCsv = (val) => {
         const s = (val == null ? "" : String(val));
         if (/[",\n]/.test(s)) { return '"' + s.replace(/"/g, '""') + '"'; }
@@ -450,11 +505,41 @@ function CampaignDetails({ campaignId, onBack }) {
       const normalizeDigits = (v) => String(v || "").replace(/[^\d+]/g, "");
       const excelTextNumber = (v) => `="${normalizeDigits(v)}"`;
       const lines = [headers.join(",")];
+      // Resolve agent and client names once
+      let agentName = "";
+      try {
+        const primaryId = getPrimaryAgentId();
+        if (primaryId) {
+          agentName = (await getAgentNameById(primaryId)) || "";
+        }
+      } catch (_) {}
+      const campaignName = campaign?.name || "";
+      const clientName = clientData?.name || "";
       for (const r of rows) {
+        let msgCount = (typeof r.transcriptCount === "number" ? r.transcriptCount : getTranscriptMessageCount(r)) || 0;
+        // If count is still zero but we have a documentId, fetch transcript and count messages
+        if (msgCount === 0 && r.documentId) {
+          try {
+            const transcript = await fetchTranscriptTextByDocument(r.documentId);
+            if (transcript) {
+              msgCount = countMessagesInTranscript(transcript) || 0;
+            }
+          } catch (_) {}
+        }
+        const durationSec = Number(r.duration || r.durationSeconds || 0) || 0;
+        const durationFmt = formatHMSCompact(durationSec);
+        const disposition = r.leadStatus || r.disposition || r.status || "";
         lines.push([
           escapeCsv(r.name || "-"),
           // Force Excel to treat as text to avoid scientific notation
           excelTextNumber(r.number || r.phone || "-"),
+          String(msgCount),
+          String(durationSec),
+          escapeCsv(durationFmt),
+          escapeCsv(disposition),
+          escapeCsv(campaignName),
+          escapeCsv(clientName),
+          escapeCsv(agentName),
         ].join(","));
       }
       const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
@@ -1268,6 +1353,29 @@ function CampaignDetails({ campaignId, onBack }) {
     localStorage.setItem(getStorageKey("filterStates"), JSON.stringify(filterStates));
   };
 
+  // Persist selected ranges display so refresh retains last selection label
+  useEffect(() => {
+    try {
+      const key = getStorageKey("selectedRangesDisplay");
+      localStorage.setItem(key, JSON.stringify(selectedRangesDisplay || []));
+    } catch (_) {}
+  }, [campaignId, selectedRangesDisplay]);
+
+  // Load selected ranges display on mount
+  useEffect(() => {
+    try {
+      const key = getStorageKey("selectedRangesDisplay");
+      const saved = localStorage.getItem(key);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setSelectedRangesDisplay(parsed);
+          setShowRestoreNotification(true);
+        }
+      }
+    } catch (_) {}
+  }, [campaignId]);
+
   // Load filter states from localStorage
   const loadFilterStates = () => {
     try {
@@ -1387,6 +1495,8 @@ function CampaignDetails({ campaignId, onBack }) {
       }
     } catch (_) {}
   }, [campaignId, campaign?.isRunning]);
+
+  // Note: URL cleanup is handled by parent views (Outbound/ClientDashboard)
 
   // Utility function to safely format timestamps
   const safeFormatTimestamp = (timestamp) => {
@@ -2522,7 +2632,7 @@ function CampaignDetails({ campaignId, onBack }) {
         const grp = result.data;
         setRangeModalGroup(grp);
         const total = Array.isArray(grp.contacts) ? grp.contacts.length : 0;
-        setRangeStartIndex(0);
+        setRangeStartIndex(1);
         setRangeEndIndex(total);
         setSelectedContactIndices(Array.from({ length: total }, (_, i) => i));
         setShowGroupRangeModal(true);
@@ -5108,9 +5218,7 @@ function CampaignDetails({ campaignId, onBack }) {
               try {
                 const humanIndex = lastIndex + 1;
                 if (isRunning) {
-                  toast.info(`Series dialing ${humanIndex}/${total}...`, {
-                    autoClose: 2000,
-                  });
+                  
                 }
               } catch {}
             }
@@ -5651,31 +5759,35 @@ function CampaignDetails({ campaignId, onBack }) {
                   >
                     Call Selected
                   </button>
-                  {/* Bulk download for selected history */}
+                {/* Bulk download unified dropdown for selected history */}
+                <div className="relative">
                   <button
-                    className="text-sm px-3 py-1 bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-50"
-                    onClick={handleDownloadSelectedHistoryPDF}
+                    className="text-sm px-4 py-2 bg-black text-white rounded hover:bg-gray-800 disabled:opacity-50 flex items-center gap-2"
+                    onClick={() => setShowHistoryDownloadMenu((v)=>!v)}
                     disabled={selectedCallLogs.length === 0}
-                    title="Download selected transcripts as one PDF"
+                    title="Download selected"
                   >
-                    Download PDF
+                    <FiDownload />
+                    Download
+                    <span className="inline-block border-l border-white/20 pl-2">▾</span>
                   </button>
-                  <button
-                    className="text-sm px-3 py-1 bg-gray-700 text-white rounded hover:bg-gray-800 disabled:opacity-50"
-                    onClick={handleDownloadSelectedHistoryTXT}
-                    disabled={selectedCallLogs.length === 0}
-                    title="Download selected transcripts as TXT"
-                  >
-                    Download TXT
-                  </button>
-                  <button
-                    className="text-sm px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
-                    onClick={handleDownloadSelectedHistoryCSV}
-                    disabled={selectedCallLogs.length === 0}
-                    title="Download selected names and numbers to Excel (CSV)"
-                  >
-                    Download Excel
-                  </button>
+                  {showHistoryDownloadMenu && (
+                    <div className="absolute right-0 mt-2 w-40 bg-white rounded-md shadow-lg z-50 overflow-hidden ring-1 ring-black/5">
+                      <button
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50"
+                        onClick={() => { setShowHistoryDownloadMenu(false); handleDownloadSelectedHistoryCSV(); }}
+                      >Excel (CSV)</button>
+                      <button
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50"
+                        onClick={() => { setShowHistoryDownloadMenu(false); handleDownloadSelectedHistoryPDF(); }}
+                      >PDF</button>
+                      <button
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50"
+                        onClick={() => { setShowHistoryDownloadMenu(false); handleDownloadSelectedHistoryTXT(); }}
+                      >Text (TXT)</button>
+                    </div>
+                  )}
+                </div>
                 </div>
               </div>
               <div className="overflow-x-auto">
@@ -6895,6 +7007,7 @@ function CampaignDetails({ campaignId, onBack }) {
             <div className="flex items-center justify-between">
               {/* Run / Stop toggle (small) */}
               <div className="flex items-center gap-2">
+                {!campaign?.isRunning && (
                 <button
                   onClick={handleToggleCampaignCalling}
                   disabled={
@@ -6946,6 +7059,7 @@ function CampaignDetails({ campaignId, onBack }) {
                     </>
                   )}
                 </button>
+                )}
               </div>
 
               {/* Add buttons */}
@@ -7422,7 +7536,7 @@ function CampaignDetails({ campaignId, onBack }) {
                                       Array.from({ length: total }, (_, i) => i)
                                     );
                                     if (groupModalTab === "range") {
-                                      setRangeStartIndex(0);
+                                      setRangeStartIndex(1);
                                       setRangeEndIndex(total);
                                     }
                                   } else {
@@ -9107,32 +9221,34 @@ function CampaignDetails({ campaignId, onBack }) {
               <div className="text-sm text-gray-600">
                 Selected: {reportSelectedIds.size}
               </div>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={handleDownloadSelectedReportPDF}
-                  className="px-3 py-1.5 text-xs font-medium bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-50"
-                  disabled={reportSelectedIds.size === 0}
-                >
-                  Download PDF
-                </button>
-                <button
-                  type="button"
-                  onClick={handleDownloadSelectedReportTXT}
-                  className="px-3 py-1.5 text-xs font-medium bg-gray-700 text-white rounded hover:bg-gray-800 disabled:opacity-50"
-                  disabled={reportSelectedIds.size === 0}
-                >
-                  Download TXT
-                </button>
-                <button
-                  type="button"
-                  onClick={handleDownloadSelectedReportCSV}
-                  className="px-3 py-1.5 text-xs font-medium bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
-                  disabled={reportSelectedIds.size === 0}
-                >
-                  Download Excel
-                </button>
-              </div>
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setShowReportDownloadMenu((v)=>!v)}
+                    className="px-3 py-1.5 text-xs font-medium bg-black text-white rounded hover:bg-gray-800 disabled:opacity-50 flex items-center gap-2"
+                    disabled={reportSelectedIds.size === 0}
+                  >
+                    <FiDownload />
+                    Download
+                    <span className="inline-block border-l border-white/20 pl-2">▾</span>
+                  </button>
+                  {showReportDownloadMenu && (
+                    <div className="absolute right-0 mt-2 w-40 bg-white rounded-md shadow-lg z-50 overflow-hidden ring-1 ring-black/5">
+                      <button
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50"
+                        onClick={() => { setShowReportDownloadMenu(false); handleDownloadSelectedReportCSV(); }}
+                      >Excel (CSV)</button>
+                      <button
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50"
+                        onClick={() => { setShowReportDownloadMenu(false); handleDownloadSelectedReportPDF(); }}
+                      >PDF</button>
+                      <button
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50"
+                        onClick={() => { setShowReportDownloadMenu(false); handleDownloadSelectedReportTXT(); }}
+                      >Text (TXT)</button>
+                    </div>
+                  )}
+                </div>
             </div>
             <div className="p-4 pt-0 space-y-4">
               {reportRuns.length === 0 ? (

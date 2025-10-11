@@ -89,16 +89,8 @@ function OutboundSection({ tenantId }) {
   const [loading, setLoading] = useState(false);
 
   // Navigation state
-  const [selectedGroupId, setSelectedGroupId] = useState(() => {
-    // Initialize from URL params
-    const urlParams = new URLSearchParams(window.location.search);
-    return urlParams.get('groupId') || null;
-  });
-  const [selectedCampaignId, setSelectedCampaignId] = useState(() => {
-    // Initialize from URL params
-    const urlParams = new URLSearchParams(window.location.search);
-    return urlParams.get('campaignId') || null;
-  });
+  const [selectedGroupId, setSelectedGroupId] = useState(null);
+  const [selectedCampaignId, setSelectedCampaignId] = useState(null);
   const [viewMode, setViewMode] = useState("grid");
   const [campaignViewMode, setCampaignViewMode] = useState("grid");
   const [selectedCategory, setSelectedCategory] = useState("all");
@@ -108,24 +100,18 @@ function OutboundSection({ tenantId }) {
     setSelectedCategory("all");
   }, [activeTab]);
 
-  // Update URL when selected IDs change
+  // Check URL parameters on mount and set selected campaign/group accordingly
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
+    const campaignId = urlParams.get('campaignId');
+    const groupId = urlParams.get('groupId');
     
-    if (selectedGroupId) {
-      urlParams.set('groupId', selectedGroupId);
-      urlParams.delete('campaignId'); // Remove campaignId if group is selected
-    } else if (selectedCampaignId) {
-      urlParams.set('campaignId', selectedCampaignId);
-      urlParams.delete('groupId'); // Remove groupId if campaign is selected
-    } else {
-      urlParams.delete('groupId');
-      urlParams.delete('campaignId');
+    if (campaignId) {
+      setSelectedCampaignId(campaignId);
+    } else if (groupId) {
+      setSelectedGroupId(groupId);
     }
-    
-    const newUrl = `${window.location.pathname}?${urlParams.toString()}`;
-    window.history.replaceState({}, '', newUrl);
-  }, [selectedGroupId, selectedCampaignId]);
+  }, []); // Run only on mount
 
   // Group editing UI state
   const [openMenuGroupId, setOpenMenuGroupId] = useState(null);
@@ -549,7 +535,13 @@ function OutboundSection({ tenantId }) {
     return (
       <GroupDetails
         groupId={selectedGroupId}
-        onBack={() => setSelectedGroupId(null)}
+        onBack={() => {
+          setSelectedGroupId(null);
+          // Clear URL parameters when going back
+          const url = new URL(window.location.href);
+          url.searchParams.delete('groupId');
+          window.history.replaceState({}, document.title, url.toString());
+        }}
       />
     );
   }
@@ -559,7 +551,13 @@ function OutboundSection({ tenantId }) {
     return (
       <CampaignDetails
         campaignId={selectedCampaignId}
-        onBack={() => setSelectedCampaignId(null)}
+        onBack={() => {
+          setSelectedCampaignId(null);
+          // Clear URL parameters when going back
+          const url = new URL(window.location.href);
+          url.searchParams.delete('campaignId');
+          window.history.replaceState({}, document.title, url.toString());
+        }}
       />
     );
   }
@@ -760,11 +758,18 @@ function OutboundSection({ tenantId }) {
             ) : viewMode === "grid" ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
                 {filteredGroups.map((group) => (
-                  <div
-                    key={group._id}
-                    className="group bg-white border border-gray-200 rounded-2xl p-5 hover:shadow-lg hover:border-blue-300 transition-all duration-200 h-48 flex flex-col cursor-pointer relative hover:-translate-y-0.5"
-                    onClick={() => setSelectedGroupId(group._id)}
-                  >
+                    <div
+                      key={group._id}
+                      className="group bg-white border border-gray-200 rounded-2xl p-5 hover:shadow-lg hover:border-blue-300 transition-all duration-200 h-48 flex flex-col cursor-pointer relative hover:-translate-y-0.5"
+                      onClick={() => {
+                        setSelectedGroupId(group._id);
+                        // Add URL parameter when navigating to group details
+                        const url = new URL(window.location.href);
+                        url.searchParams.set('groupId', group._id);
+                        url.searchParams.delete('campaignId'); // Clear campaign param if present
+                        window.history.replaceState({}, document.title, url.toString());
+                      }}
+                    >
                     <div className="flex justify-between items-start mb-3">
                       <h3 className="text-sm font-bold text-gray-900 m-0 group-hover:text-blue-600 transition-colors line-clamp-1">
                         {group.name}
@@ -851,7 +856,14 @@ function OutboundSection({ tenantId }) {
                   >
                     <div
                       className="flex-1 min-w-0 cursor-pointer"
-                      onClick={() => setSelectedGroupId(group._id)}
+                      onClick={() => {
+                        setSelectedGroupId(group._id);
+                        // Add URL parameter when navigating to group details
+                        const url = new URL(window.location.href);
+                        url.searchParams.set('groupId', group._id);
+                        url.searchParams.delete('campaignId'); // Clear campaign param if present
+                        window.history.replaceState({}, document.title, url.toString());
+                      }}
                     >
                       <div className="text-sm font-semibold text-gray-900 truncate">
                         {group.name}
@@ -960,12 +972,11 @@ function OutboundSection({ tenantId }) {
                       className="group bg-white border border-gray-200 rounded-2xl p-5 hover:shadow-lg hover:border-blue-300 transition-all duration-200 h-48 flex flex-col cursor-pointer relative hover:-translate-y-0.5"
                       onClick={() => {
                         setSelectedCampaignId(campaign._id);
-                        // Update URL immediately
-                        const urlParams = new URLSearchParams(window.location.search);
-                        urlParams.set('campaignId', campaign._id);
-                        urlParams.delete('groupId');
-                        const newUrl = `${window.location.pathname}?${urlParams.toString()}`;
-                        window.history.replaceState({}, '', newUrl);
+                        // Add URL parameter when navigating to campaign details
+                        const url = new URL(window.location.href);
+                        url.searchParams.set('campaignId', campaign._id);
+                        url.searchParams.delete('groupId'); // Clear group param if present
+                        window.history.replaceState({}, document.title, url.toString());
                       }}
                     >
                       <div className="flex justify-between items-start mb-3">
@@ -1050,12 +1061,11 @@ function OutboundSection({ tenantId }) {
                         className="flex-1 min-w-0 cursor-pointer"
                         onClick={() => {
                           setSelectedCampaignId(campaign._id);
-                          // Update URL immediately
-                          const urlParams = new URLSearchParams(window.location.search);
-                          urlParams.set('campaignId', campaign._id);
-                          urlParams.delete('groupId');
-                          const newUrl = `${window.location.pathname}?${urlParams.toString()}`;
-                          window.history.replaceState({}, '', newUrl);
+                          // Add URL parameter when navigating to campaign details
+                          const url = new URL(window.location.href);
+                          url.searchParams.set('campaignId', campaign._id);
+                          url.searchParams.delete('groupId'); // Clear group param if present
+                          window.history.replaceState({}, document.title, url.toString());
                         }}
                       >
                         <div className="text-sm font-semibold text-gray-900 truncate">
