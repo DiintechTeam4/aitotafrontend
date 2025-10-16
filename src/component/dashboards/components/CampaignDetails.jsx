@@ -961,8 +961,9 @@ function CampaignDetails({ campaignId, onBack }) {
   const [showGroupRangeModal, setShowGroupRangeModal] = useState(false);
   const [rangeModalLoading, setRangeModalLoading] = useState(false);
   const [rangeModalGroup, setRangeModalGroup] = useState(null);
-  const [rangeStartIndex, setRangeStartIndex] = useState(1); // 1-based default
-  const [rangeEndIndex, setRangeEndIndex] = useState(1);
+  // Allow empty input; treat empty as undefined and validate on save
+  const [rangeStartIndex, setRangeStartIndex] = useState("");
+  const [rangeEndIndex, setRangeEndIndex] = useState("");
   const [selectedRangesDisplay, setSelectedRangesDisplay] = useState([]); // [{groupName,start,end}]
   const [selectedContactIndices, setSelectedContactIndices] = useState([]);
   const [groupModalTab, setGroupModalTab] = useState("range"); // 'range' | 'select'
@@ -1323,6 +1324,17 @@ function CampaignDetails({ campaignId, onBack }) {
       }
     } catch (_) {}
   }, [campaignId, campaign?.isRunning]);
+
+  // Ensure UI is hydrated with latest merged calls (transcriptCount, groupSelections)
+  // even when campaign is not running – do one initial fetch on mount / campaignId change.
+  useEffect(() => {
+    (async () => {
+      try {
+        await fetchApiMergedCalls(1, false, false);
+      } catch (_) {}
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [campaignId]);
   const safeFormatTimestamp = (timestamp) => {
     if (!timestamp) return "";
     try {
@@ -1555,17 +1567,14 @@ function CampaignDetails({ campaignId, onBack }) {
     }
   }, [campaign?._id]); // Only fetch when campaign ID changes, not when campaign object updates
   // Load calling state when campaign contacts are available
+  // Guard: only restore from local storage if backend reports campaign is running.
+  // This prevents showing "running" after a manual stop followed by a refresh.
   useEffect(() => {
-    if (campaignContacts.length > 0 && campaignId) {
+    if (campaignContacts.length > 0 && campaignId && campaign?.isRunning) {
       const hasRestoredState = loadCallingState();
-      if (hasRestoredState && callingStatus === "calling") {
-        // If we restored a calling state, show a notification
-        setShowRestoreNotification(true);
-        // Auto-hide notification after 5 seconds
-        setTimeout(() => setShowRestoreNotification(false), 5000);
-      }
+      // Do not show any popup/banners on load
     }
-  }, [campaignContacts, campaignId]);
+  }, [campaignContacts, campaignId, campaign?.isRunning]);
   // Auto-resume calling ONLY if restored from storage (not on manual start)
   useEffect(() => {
     if (
@@ -1578,11 +1587,11 @@ function CampaignDetails({ campaignId, onBack }) {
       const timer = setTimeout(() => {
         // Reset the flag so this runs only once after restore
         restoredFromStorageRef.current = false;
+        // Do not show popup or auto-resume on load
         if (callingStatus === "calling") {
-          console.log("Auto-resuming calling session after restore...");
-          resumeCalling();
+          setCallingStatus("idle");
         }
-      }, 2000);
+      }, 500);
       return () => clearTimeout(timer);
     }
   }, [callingStatus, campaignContacts, selectedAgent, isStartingCall]);
@@ -2399,8 +2408,22 @@ function CampaignDetails({ campaignId, onBack }) {
         body.selectedIndices = selectedContactIndices;
       } else {
         // Convert 1-based UI to 0-based backend; end is exclusive already
-        body.startIndex = Math.max(0, (Number(rangeStartIndex) || 1) - 1);
-        body.endIndex = Math.max(0, Number(rangeEndIndex) || 1);
+        const startParsed = Number(rangeStartIndex);
+        const endParsed = Number(rangeEndIndex);
+        if (!Number.isFinite(startParsed) || !Number.isFinite(endParsed)) {
+          toast.warn("Please enter both start and end indices.");
+          return;
+        }
+        if (startParsed < 1) {
+          toast.warn("Start index must be at least 1.");
+          return;
+        }
+        if (endParsed <= startParsed) {
+          toast.warn("End (exclusive) must be greater than start.");
+          return;
+        }
+        body.startIndex = Math.max(0, startParsed - 1);
+        body.endIndex = Math.max(0, endParsed);
       }
       if (currentRunId) body.runId = currentRunId;
       const resp = await fetch(
@@ -2419,6 +2442,10 @@ function CampaignDetails({ campaignId, onBack }) {
         toast.success(
           `Added ${result.data.added} of ${result.data.totalSelected} contacts from range ${body.startIndex + 1}-${body.endIndex}`
         );
+        // Also sync campaign.groupSelections if backend returned it
+        if (result?.data?.groupSelections && Array.isArray(result.data.groupSelections)) {
+          setCampaign((prev) => prev ? { ...prev, groupSelections: result.data.groupSelections } : { groupSelections: result.data.groupSelections });
+        }
         setSelectedRangesDisplay((prev) => ([
           ...prev,
           {
@@ -2449,9 +2476,8 @@ function CampaignDetails({ campaignId, onBack }) {
       // Only fetch when campaign is running
       const running =
         (campaign && campaign.isRunning) || callingStatus === "calling";
-      if (!running) {
-        return;
-      }
+      // Always allow a fetch on demand to hydrate UI (ranges, transcript counts),
+      // regardless of running state. Live auto-refresh can still be gated elsewhere.
       setCallDetailsLoading(true);
       const token = sessionStorage.getItem("clienttoken");
       const params = new URLSearchParams({
@@ -2570,6 +2596,7 @@ function CampaignDetails({ campaignId, onBack }) {
       }
       // Only update state if there are actual changes
       const newData = result.data || [];
+      const newCampaignMeta = result.campaign || {};
       const newTotals = result.totals || {
         totalItems: 0,
         totalConnected: 0,
@@ -2613,6 +2640,13 @@ function CampaignDetails({ campaignId, onBack }) {
         setApiMergedCallsTotalPages(newTotalPages);
         setApiMergedCallsTotalItems(newTotalItems);
       }
+      // Update campaign meta (e.g., groupSelections) if provided
+      try {
+        if (newCampaignMeta && Array.isArray(newCampaignMeta.groupSelections)) {
+          setCampaign((prev) => prev ? { ...prev, groupSelections: newCampaignMeta.groupSelections } : { groupSelections: newCampaignMeta.groupSelections });
+        }
+      } catch (_) {}
+
       // Mark initial load as complete
       if (apiMergedCallsInitialLoad) {
         setApiMergedCallsInitialLoad(false);
@@ -4655,6 +4689,12 @@ function CampaignDetails({ campaignId, onBack }) {
         }
       }
       setCampaign((prev) => (prev ? { ...prev, isRunning: false } : prev));
+      // Clear calling state from localStorage to prevent auto-restart
+      clearCallingState();
+      // Reset calling status to idle to prevent auto-resume
+      setCallingStatus("idle");
+      // Reset the restored from storage flag to prevent auto-resume
+      restoredFromStorageRef.current = false;
       // Mark UI as ready for next run and stop any live polling
       setReadyFlag(true);
       stopLiveCallPolling();
@@ -4917,6 +4957,12 @@ function CampaignDetails({ campaignId, onBack }) {
         setRunStartTime(null);
         setCurrentRunCallLogs([]);
         setIsLiveCallActive(false);
+        // Clear calling state to prevent auto-restart
+        clearCallingState();
+        // Reset calling status to idle
+        setCallingStatus("idle");
+        // Reset the restored from storage flag
+        restoredFromStorageRef.current = false;
         // Refresh call logs to show the final state
         await fetchApiMergedCalls(1, false, false);
         // Broadcast status change to other tabs
@@ -6717,22 +6763,31 @@ function CampaignDetails({ campaignId, onBack }) {
                         {group.name}
                       </div>
                       <div className=" cursor-pointer text-xs text-gray-500 leading-4">
-                        {typeof group.contactsCount === "number"
-                          ? group.contactsCount
-                          : group.contacts?.length || 0}{" "}
-                        contacts
-                        {campaignContacts.length > 0 && (
-                          (() => {
-                            const totalFromGroups = campaignGroups.reduce(
-                              (sum, g) => sum + (g.contactsCount || g.contacts?.length || 0),
-                              0
-                            );
-                            const total = campaignContacts.length;
-                            // Show a numeric range instead of removed count, e.g., 1-9
-                            const range = total > 0 ? ` ${1}-${total}` : "";
-                            return <span className="ml-1 text-gray-600">{range}</span>;
-                          })()
-                        )}
+                        {(() => {
+                          const total = (typeof group.contactsCount === "number" ? group.contactsCount : (group.contacts?.length || 0));
+                          const sel = Array.isArray(campaign?.groupSelections)
+                            ? campaign.groupSelections.find((gs) => String(gs.groupId) === String(group._id))
+                            : null;
+                          let bracket = "";
+                          if (sel) {
+                            if (Array.isArray(sel.selectedIndices) && sel.selectedIndices.length > 0) {
+                              const minIdx = Math.min(...sel.selectedIndices);
+                              const maxIdx = Math.max(...sel.selectedIndices);
+                              const humanStart = (Number.isFinite(minIdx) ? minIdx + 1 : 1);
+                              const humanEnd = (Number.isFinite(maxIdx) ? maxIdx + 1 : 0);
+                              bracket = humanEnd > 0 ? ` (${humanStart}-${humanEnd})` : "";
+                            } else if (Number.isFinite(sel.startIndex) && Number.isFinite(sel.endIndex) && sel.endIndex > sel.startIndex) {
+                              const humanStart = sel.startIndex + 1;
+                              const humanEnd = sel.endIndex;
+                              bracket = ` (${humanStart}-${humanEnd})`;
+                            }
+                          }
+                          return (
+                            <>
+                              {total} contacts{bracket}
+                            </>
+                          );
+                        })()}
                       </div>
                     </button>
                     <button
@@ -7057,9 +7112,7 @@ function CampaignDetails({ campaignId, onBack }) {
                             rangeModalGroup.contacts?.length || 0
                           )}
                           value={rangeStartIndex}
-                          onChange={(e) =>
-                            setRangeStartIndex(parseInt(e.target.value || 1))
-                          }
+                          onChange={(e) => setRangeStartIndex(e.target.value)}
                           className="w-full border border-gray-300 rounded-md px-2 py-1"
                         />
                       </div>
@@ -7075,9 +7128,7 @@ function CampaignDetails({ campaignId, onBack }) {
                             rangeModalGroup.contacts?.length || 0
                           )}
                           value={rangeEndIndex}
-                          onChange={(e) =>
-                            setRangeEndIndex(parseInt(e.target.value || 1))
-                          }
+                          onChange={(e) => setRangeEndIndex(e.target.value)}
                           className="w-full border border-gray-300 rounded-md px-2 py-1"
                         />
                       </div>
