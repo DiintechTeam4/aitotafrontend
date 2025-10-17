@@ -995,6 +995,9 @@ function CampaignDetails({ campaignId, onBack }) {
   const [dispMenuOpen, setDispMenuOpen] = useState(false);
   const [dispositionMenuOpen, setDispositionMenuOpen] = useState(false);
   const [flagMenuPosition, setFlagMenuPosition] = useState("bottom");
+  const [bookmarkedOnly, setBookmarkedOnly] = useState(() => {
+    try { return localStorage.getItem(getStorageKey('filterBookmarkedOnly')) === 'true'; } catch (_) { return false; }
+  });
   const [dispMenuPosition, setDispMenuPosition] = useState("bottom");
   // Function to calculate dropdown position
   const calculateDropdownPosition = (buttonElement) => {
@@ -1170,6 +1173,52 @@ function CampaignDetails({ campaignId, onBack }) {
   const API_BASE = `${API_BASE_URL}/client`;
   // State persistence functions
   const getStorageKey = (key) => `campaign_${campaignId}_${key}`;
+  // Lightweight bookmark helpers (local-only fallback)
+  const isContactBookmarked = (contact) => {
+    try {
+      const raw = localStorage.getItem(getStorageKey('contactBookmarks')) || '[]';
+      const arr = JSON.parse(raw);
+      const id = contact?._id || contact?.contactId || contact?.documentId || contact?.phone || contact?.number;
+      return id ? (arr || []).includes(id) : false;
+    } catch (_) { return false; }
+  };
+  const toggleBookmarkForContact = (contact) => {
+    try {
+      const id = contact?._id || contact?.contactId || contact?.documentId || contact?.phone || contact?.number;
+      const phone = String(contact?.phone || contact?.number || '').replace(/\D/g, '');
+      if (!id && !phone) return;
+      // Local optimistic toggle
+      const raw = localStorage.getItem(getStorageKey('contactBookmarks')) || '[]';
+      const arr = Array.isArray(JSON.parse(raw)) ? JSON.parse(raw) : [];
+      const set = new Set(arr);
+      if (set.has(id || phone)) set.delete(id || phone); else set.add(id || phone);
+      localStorage.setItem(getStorageKey('contactBookmarks'), JSON.stringify(Array.from(set)));
+      // Persist to backend when we have campaign and phone
+      if (campaign?._id && phone) {
+        (async () => {
+          try {
+            const token = sessionStorage.getItem('clienttoken');
+            const willBe = set.has(id || phone);
+            const resp = await fetch(`${API_BASE}/campaigns/${campaign._id}/contacts/bookmark-by-phone`, {
+              method: 'PATCH',
+              headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ phone, bookmarked: willBe })
+            });
+            if (!resp.ok) throw new Error('bookmark-by-phone failed');
+            const result = await resp.json();
+            if (!result.success) throw new Error('bookmark-by-phone failed');
+          } catch (e) {
+            // Revert local
+            const raw2 = localStorage.getItem(getStorageKey('contactBookmarks')) || '[]';
+            const arr2 = Array.isArray(JSON.parse(raw2)) ? JSON.parse(raw2) : [];
+            const set2 = new Set(arr2);
+            if (set2.has(id || phone)) set2.delete(id || phone); else set2.add(id || phone);
+            localStorage.setItem(getStorageKey('contactBookmarks'), JSON.stringify(Array.from(set2)));
+          }
+        })();
+      }
+    } catch (_) {}
+  };
   const saveCallingState = () => {
     const state = {
       showCallModal,
@@ -5241,6 +5290,24 @@ function CampaignDetails({ campaignId, onBack }) {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
+                  {/* Bookmark-only toggle for Call Logs filter bar */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBookmarkedOnly((prev) => {
+                        const next = !prev;
+                        try { localStorage.setItem(getStorageKey('filterBookmarkedOnly'), String(next)); } catch (_) {}
+                        return next;
+                      });
+                    }}
+                    className={`inline-flex items-center gap-1 text-sm px-2 py-1 rounded border ${bookmarkedOnly ? 'bg-yellow-100 border-yellow-300' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
+                    title={bookmarkedOnly ? 'Show all' : 'Show bookmarked only'}
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="w-4 h-4 text-yellow-500" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21 12 17.77 5.82 21 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                    </svg>
+                    {bookmarkedOnly ? 'Bookmarked' : 'Star'}
+                  </button>
                   {callFilter === "missed" && (
                     <button
                       className="text-sm px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
@@ -5292,6 +5359,14 @@ function CampaignDetails({ campaignId, onBack }) {
                             : callFilter === "connected"
                             ? connectedStatuses.includes(status)
                             : missedStatuses.includes(status);
+                        // Bookmark-only filter persisted in localStorage (from Star button)
+                        const bookmarkedOnly = Boolean(
+                          (typeof window !== 'undefined') && localStorage.getItem(getStorageKey('filterBookmarkedOnly')) === 'true'
+                        ) || Boolean(bookmarkedOnly);
+                        const idCandidate = lead.contactId || lead.documentId || lead._id || (lead.phone || lead.number);
+                        const isBk = idCandidate && (typeof isContactBookmarked === 'function')
+                          ? isContactBookmarked({ _id: idCandidate, phone: lead.phone, number: lead.number })
+                          : false;
                         // Apply flag filter using local rowDisposition (row id resolution mirrors below rendering)
                         const rowId = `${run.instanceNumber || run._id || index}-${
                           lead.documentId || lead.contactId || `${idx}`
@@ -5310,7 +5385,7 @@ function CampaignDetails({ campaignId, onBack }) {
                           dispositionFilter === "all"
                             ? true
                             : leadDisposition === dispositionFilter;
-                        return byData && byStatus && byFlag && byDisposition;
+                        return byData && byStatus && byFlag && byDisposition && (bookmarkedOnly ? isBk : true);
                       });
                       if (filtered.length === 0) {
                         toast.warn("No logs to call for the selected filter");
@@ -5844,7 +5919,26 @@ function CampaignDetails({ campaignId, onBack }) {
                           dispositionFilter === "all"
                             ? true
                             : leadDisposition === dispositionFilter;
-                        return byData && byStatus && byFlag && byDisposition;
+                        // Bookmark-only filter (persisted in localStorage and state)
+                        const idCandidate =
+                          lead.contactId ||
+                          lead.documentId ||
+                          lead._id ||
+                          (lead.phone || lead.number);
+                        const isBk = idCandidate
+                          ? isContactBookmarked({
+                              _id: idCandidate,
+                              phone: lead.phone,
+                              number: lead.number,
+                            })
+                          : false;
+                        return (
+                          byData &&
+                          byStatus &&
+                          byFlag &&
+                          byDisposition &&
+                          (bookmarkedOnly ? isBk : true)
+                        );
                       })
                       .sort((a, b) => {
                         if (durationSort === "none") return 0;
@@ -6152,8 +6246,55 @@ function CampaignDetails({ campaignId, onBack }) {
                             })()}
                           </td>
                           <td className="py-2 px-3">{lead.leadStatus}</td>
-                          {/* Action: Assign dropdown only */}
+                          {/* Action: Bookmark toggle + Assign dropdown */}
                           <td className="py-2 px-3">
+                            <div className="flex items-center gap-2">
+                              {(() => {
+                                const idCandidate =
+                                  lead.contactId ||
+                                  lead.documentId ||
+                                  lead._id ||
+                                  (lead.phone || lead.number);
+                                const isBk = idCandidate
+                                  ? isContactBookmarked({
+                                      _id: idCandidate,
+                                      phone: lead.phone,
+                                      number: lead.number,
+                                    })
+                                  : false;
+                                return (
+                                  <button
+                                    type="button"
+                                    className={`p-1 rounded border ${
+                                      isBk
+                                        ? "bg-yellow-100 border-yellow-300"
+                                        : "bg-white border-gray-300 hover:bg-gray-50"
+                                    }`}
+                                    title={isBk ? "Remove bookmark" : "Add bookmark"}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      toggleBookmarkForContact({
+                                        _id: idCandidate,
+                                        phone: lead.phone,
+                                        number: lead.number,
+                                      });
+                                    }}
+                                  >
+                                    {/* star icon */}
+                                    <svg
+                                      viewBox="0 0 24 24"
+                                      fill={isBk ? "currentColor" : "none"}
+                                      stroke="currentColor"
+                                      className="w-4 h-4 text-yellow-500"
+                                      strokeWidth="2"
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                    >
+                                      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21 12 17.77 5.82 21 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                                    </svg>
+                                  </button>
+                                );
+                              })()}
                               {(() => {
                                 const rowId = (lead.documentId || lead.contactId || `${idx}`);
                                 const key = `assign-${rowId}`;
@@ -6184,6 +6325,7 @@ function CampaignDetails({ campaignId, onBack }) {
                                   </div>
                                 );
                               })()}
+                            </div>
                           </td>
                           {/* Redial button in its own column */}
                           <td className="py-2 px-3">
@@ -9047,7 +9189,7 @@ function CampaignDetails({ campaignId, onBack }) {
               {/* WhatsApp redirect button */}
               <button
                 className="ml-3 bg-green-500 text-white text-sm px-3 py-2 rounded-lg hover:bg-green-600 transition-colors flex items-center gap-2 disabled:opacity-60"
-                onClick={() => {
+                onClick={async () => {
                   try {
                     const raw =
                       (selectedCall &&
@@ -9073,8 +9215,21 @@ function CampaignDetails({ campaignId, onBack }) {
                       } catch {}
                       return;
                     }
-                    // Explicitly open WhatsApp Web
-                    const url = `https://web.whatsapp.com/send?phone=${phone}`;
+                    // Explicitly open WhatsApp Web with default prefilled text from agent first message (public endpoint)
+                    let agentMsg = '';
+                    try {
+                      const primaryAgentId = getPrimaryAgentId();
+                      if (primaryAgentId) {
+                        const resp = await fetch(`${API_BASE}/agents/${primaryAgentId}/public`);
+                        const result = await resp.json();
+                        if (resp.ok && result?.data) {
+                          const ag = result.data;
+                          agentMsg = ag.firstMessage || (Array.isArray(ag.startingMessages) && ag.startingMessages[0]?.text) || '';
+                        }
+                      }
+                    } catch (_) {}
+                    const text = agentMsg ? `&text=${encodeURIComponent(agentMsg)}` : '';
+                    const url = `https://web.whatsapp.com/send?phone=${phone}${text}`;
                     window.open(url, "_blank", "noopener,noreferrer");
                   } catch (_) {}
                 }}
