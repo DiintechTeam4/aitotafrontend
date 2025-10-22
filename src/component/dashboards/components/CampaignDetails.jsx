@@ -578,7 +578,6 @@ function CampaignDetails({ campaignId, onBack }) {
       return "Error";
     }
   };
-  // Helper function to render messages with date separators
   const renderMessagesWithDateSeparators = () => {
     if (!waChatMessages || waChatMessages.length === 0) return null;
     const elements = [];
