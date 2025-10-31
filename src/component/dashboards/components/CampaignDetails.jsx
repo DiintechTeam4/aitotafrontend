@@ -17,10 +17,11 @@ import {
   FiUserPlus,
   FiFolder,
   FiDownload,
-  FiLoader,
+  FiLoader
 } from "react-icons/fi";
-import { FaWhatsapp } from "react-icons/fa";
+import { FaWhatsapp, FaPlay, FaPause } from "react-icons/fa";
 import { API_BASE_URL } from "../../../config";
+const API_BASE = `${API_BASE_URL}/client`;
 function CampaignDetails({ campaignId, onBack }) {
   const [campaign, setCampaign] = useState(null);
   const [availableGroups, setAvailableGroups] = useState([]);
@@ -53,6 +54,22 @@ function CampaignDetails({ campaignId, onBack }) {
   const [showHistoryDownloadMenu, setShowHistoryDownloadMenu] = useState(false);
   const [showReportDownloadMenu, setShowReportDownloadMenu] = useState(false);
   const downloadMenuRef = useRef(null);
+  const token = sessionStorage.getItem("clienttoken");
+  console.log("token", token);
+  
+
+  const handlePlayPause = () => {
+    if (!audioUrl || !audioRef.current) {
+      try { toast?.warn?.('No recording available'); } catch {}
+      return;
+    }
+    if (isPlaying) {
+      audioRef.current.pause();
+      setIsPlaying(false);
+    } else {
+      audioRef.current.play().then(() => setIsPlaying(true)).catch(() => {});
+    }
+  };
   useEffect(() => {
     const handleDocClick = (e) => {
       try {
@@ -1067,6 +1084,30 @@ function CampaignDetails({ campaignId, onBack }) {
   // Collapsible Campaign Runs section
   const [campaignRunsCollapsed, setCampaignRunsCollapsed] = useState(false);
   // Auto-refresh recent call logs (toggleable). When enabled, refresh every 2 seconds
+  const audioRef = useRef(null);
+const [isPlaying, setIsPlaying] = useState(false);
+const audioUrl = React.useMemo(() => {
+  const raw = selectedCall?.audioUrl;
+  const docId = selectedCall?.documentId;
+  if (raw && /\/call-audio(\?|$)/.test(String(raw))) return raw;
+  if (raw && /https?:\/\/[^\s]*s3[^\s]*amazonaws\.com\//i.test(String(raw)) && docId && campaignId) {
+    return `${API_BASE}/campaigns/${campaignId}/call-audio?documentId=${encodeURIComponent(docId)}`;
+  }
+  if ((!raw || String(raw).trim() === '') && docId && campaignId) {
+    return `${API_BASE}/campaigns/${campaignId}/call-audio?documentId=${encodeURIComponent(docId)}`;
+  }
+  if (!raw || String(raw).trim() === '') return undefined;
+  return raw;
+}, [selectedCall?._id, selectedCall?.audioUrl, selectedCall?.documentId, campaignId]);
+useEffect(() => {
+  setIsPlaying(false);
+  if (audioRef.current) {
+    try {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    } catch {}
+  }
+}, [selectedCall?._id]);
   useEffect(() => {
     if (!autoRefreshCalls) return;
     // Immediate fetch on enabling
@@ -1168,8 +1209,7 @@ function CampaignDetails({ campaignId, onBack }) {
   // Backend API now handles all merging, deduplication, and pagination
   // Tracks whether calling state was restored from storage to gate auto-resume
   const restoredFromStorageRef = useRef(false);
-  // API base URL
-  const API_BASE = `${API_BASE_URL}/client`;
+  
   // State persistence functions
   const getStorageKey = (key) => `campaign_${campaignId}_${key}`;
   // Lightweight bookmark helpers (local-only fallback)
@@ -9185,6 +9225,21 @@ function CampaignDetails({ campaignId, onBack }) {
                   </div>
                 )}
               </div>
+
+              {/* Hidden audio element bound to the selected call */}
+              {audioUrl ? (
+  <audio
+    key={selectedCall?._id || 'call-audio'}
+    ref={audioRef}
+    src={audioUrl}
+    preload="none"
+    crossOrigin="anonymous"
+    onEnded={() => setIsPlaying(false)}
+    onPause={() => setIsPlaying(false)}
+    onPlay={() => setIsPlaying(true)}
+  />
+) : null}
+
               {/* WhatsApp redirect button */}
               <button
                 className="ml-3 bg-green-500 text-white text-sm px-3 py-2 rounded-lg hover:bg-green-600 transition-colors flex items-center gap-2 disabled:opacity-60"
@@ -9237,6 +9292,17 @@ function CampaignDetails({ campaignId, onBack }) {
               >
                 <FaWhatsapp />
               </button>
+
+              {/* Play/Pause recording button */}
+              <button
+                className="ml-3 bg-white text-gray-800 text-sm px-3 py-2 rounded-lg border hover:bg-gray-50 transition-colors flex items-center gap-2 disabled:opacity-60"
+                onClick={handlePlayPause}
+                title={isPlaying ? 'Pause recording' : 'Play recording'}
+                disabled={!audioUrl}
+              >
+                {isPlaying ? <FaPause /> : <FaPlay />}
+              </button>
+
               {/* End Call (shown when call appears active) */}
               {selectedCall?.metadata?.isActive !== false && (
                 <button
