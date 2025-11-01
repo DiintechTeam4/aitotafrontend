@@ -9148,428 +9148,403 @@ useEffect(() => {
       )}
       {/* Transcript Modal */}
       {showTranscriptModal && (
-  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[90] p-4">
-    <div className="relative bg-white rounded-3xl w-11/12 max-w-5xl max-h-[92vh] overflow-hidden shadow-2xl ring-1 ring-black/5 flex flex-col">
-      {/* Close button */}
-      <button
-        className="absolute top-4 right-4 z-10 bg-white/90 backdrop-blur-sm border border-gray-200 text-gray-600 hover:text-gray-900 hover:bg-white p-2.5 w-10 h-10 flex items-center justify-center rounded-xl hover:shadow-md transition-all duration-200 hover:scale-105"
-        onClick={() => setShowTranscriptModal(false)}
-        title="Close"
-      >
-        <FiX className="w-5 h-5" />
-      </button>
-
-      {/* Header Section */}
-      <div className="flex-shrink-0 border-b border-gray-100 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
-        <div className="p-6">
-          <h3 className="text-2xl font-bold text-gray-900 flex items-center mb-4">
-            <div className="bg-gradient-to-br from-blue-600 to-indigo-600 p-2.5 rounded-xl mr-3 shadow-lg shadow-blue-200">
-              <svg
-                className="w-6 h-6 text-white"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M8 16h8M8 12h8M8 8h8M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H7l-2 2H3v12a2 2 0 002 2z"
-                />
-              </svg>
-            </div>
-            <span className="bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">Call Transcript</span>
-            {selectedCall && (
-              <span className="ml-4 text-xs font-medium text-gray-500 bg-white/60 backdrop-blur-sm px-3 py-1.5 rounded-full border border-gray-200">
-                {formatDateTimeCompact(
-                  selectedCall.time ||
-                    selectedCall.createdAt ||
-                    (selectedCall.metadata &&
-                      (selectedCall.metadata.startTime ||
-                        selectedCall.metadata.callStartTime)) ||
-                    (selectedCall.externalResponse &&
-                      selectedCall.externalResponse.startTime)
-                )}
-              </span>
-            )}
-          </h3>
-
-          {/* Call Details */}
-          {selectedCall && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-white/70 backdrop-blur-sm rounded-xl p-4 border border-white/50 shadow-sm hover:shadow-md transition-shadow">
-                <div className="text-xs font-medium text-gray-500 mb-2 uppercase tracking-wide">
-                  Contact Name
-                </div>
-                <div className="font-semibold text-gray-900 text-lg truncate">
-                  {getContactDisplayNameBlank(selectedCall)}
-                </div>
-              </div>
-              <div className="bg-white/70 backdrop-blur-sm rounded-xl p-4 border border-white/50 shadow-sm hover:shadow-md transition-shadow">
-                <div className="text-xs font-medium text-gray-500 mb-2 uppercase tracking-wide">
-                  Phone Number
-                </div>
-                <div className="font-semibold text-gray-900 text-lg font-mono">
-                  {selectedCall.number || selectedCall.phone || "—"}
-                </div>
-              </div>
-              <div className="bg-white/70 backdrop-blur-sm rounded-xl p-4 border border-white/50 shadow-sm hover:shadow-md transition-shadow">
-                <div className="text-xs font-medium text-gray-500 mb-2 uppercase tracking-wide">
-                  Call Duration
-                </div>
-                <div className="font-semibold text-gray-900 text-lg font-mono">
-                  {formatDuration(selectedCall.duration || 0)}
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-        
-        {/* Action buttons bar */}
-        <div className="flex items-center gap-2 px-6 pb-4 flex-wrap">
-          {/* Download button */}
-          <div className="relative" ref={downloadMenuRef}>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[90]">
+          <div className="relative bg-white rounded-2xl w-11/12 max-w-4xl max-h-[90vh] overflow-y-auto shadow-2xl">
+            {/* Top-right close button */}
             <button
-              className={`text-sm px-4 py-2.5 rounded-xl transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed font-medium shadow-sm ${
-                showDownloadMenu
-                  ? "bg-gray-900 text-white shadow-lg scale-95"
-                  : "bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 hover:shadow-md hover:border-gray-300"
-              }`}
-              onClick={() => setShowDownloadMenu((v) => !v)}
-              title="Download"
-              disabled={isDownloadingPdf}
+              className="absolute top-2 right-2 bg-none border-none text-2xl cursor-pointer text-gray-500 hover:text-gray-700 p-2 w-10 h-10 flex items-center justify-center rounded-lg hover:bg-gray-200 transition-colors duration-200"
+              onClick={() => setShowTranscriptModal(false)}
+              title="Close"
             >
-              {isDownloadingPdf ? (
-                <>
-                  <FiLoader className="animate-spin w-4 h-4" />
-                  <span>Downloading...</span>
-                </>
-              ) : (
-                <>
-                  <FiDownload className="w-4 h-4" />
-                  <span>Download</span>
-                </>
-              )}
+              <FiX />
             </button>
-            {showDownloadMenu && (
-              <div className="absolute left-0 mt-2 w-48 bg-white rounded-xl shadow-2xl z-10 overflow-hidden ring-1 ring-black/5 border border-gray-100">
-                <button
-                  className="w-full text-left px-4 py-3 text-sm flex items-center gap-3 transition-colors hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 group"
-                  onClick={() => {
-                    setShowDownloadMenu(false);
-                    handleDownloadTranscriptPDF();
-                  }}
-                >
-                  <div className="w-8 h-8 rounded-lg bg-red-100 flex items-center justify-center group-hover:bg-red-200 transition-colors">
-                    <span className="text-red-600 font-bold text-xs">PDF</span>
-                  </div>
-                  <span className="font-medium text-gray-700 group-hover:text-gray-900">Download as PDF</span>
-                </button>
-                <div className="h-px bg-gray-100"></div>
-                <button
-                  className="w-full text-left px-4 py-3 text-sm flex items-center gap-3 transition-colors hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 group"
-                  onClick={() => {
-                    setShowDownloadMenu(false);
-                    handleDownloadTranscriptTXT();
-                  }}
-                >
-                  <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center group-hover:bg-gray-200 transition-colors">
-                    <span className="text-gray-600 font-bold text-xs">TXT</span>
-                  </div>
-                  <span className="font-medium text-gray-700 group-hover:text-gray-900">Download as Text</span>
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Hidden audio element */}
-          {audioUrl ? (
-            <audio
-              key={selectedCall?._id || 'call-audio'}
-              ref={audioRef}
-              src={audioUrl}
-              preload="none"
-              crossOrigin="anonymous"
-              onEnded={() => setIsPlaying(false)}
-              onPause={() => setIsPlaying(false)}
-              onPlay={() => setIsPlaying(true)}
-            />
-          ) : null}
-
-          {/* WhatsApp button */}
-          <button
-            className="bg-gradient-to-r from-green-500 to-emerald-600 text-white text-sm px-4 py-2.5 rounded-xl hover:from-green-600 hover:to-emerald-700 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed font-medium shadow-lg shadow-green-200 hover:shadow-xl hover:shadow-green-300 hover:scale-105"
-            onClick={async () => {
-              try {
-                const raw =
-                  (selectedCall &&
-                    (selectedCall.number ||
-                      selectedCall.phone ||
-                      selectedCall.mobile ||
-                      (selectedCall.metadata &&
-                        selectedCall.metadata.customParams &&
-                        selectedCall.metadata.customParams.phone))) ||
-                  "";
-                const digits = String(raw || "").replace(/\D/g, "");
-                const normalized = digits.replace(/^0+/, "");
-                const phone = normalized.startsWith("91")
-                  ? normalized
-                  : normalized
-                  ? `91${normalized}`
-                  : "";
-                if (!phone) {
-                  try {
-                    toast.warn("No phone number found");
-                  } catch {}
-                  return;
-                }
-                let agentMsg = '';
-                try {
-                  const primaryAgentId = getPrimaryAgentId();
-                  if (primaryAgentId) {
-                    const resp = await fetch(`${API_BASE}/agents/${primaryAgentId}/public`);
-                    const result = await resp.json();
-                    if (resp.ok && result?.data) {
-                      const ag = result.data;
-                      agentMsg = ag.firstMessage || (Array.isArray(ag.startingMessages) && ag.startingMessages[0]?.text) || '';
-                    }
-                  }
-                } catch (_) {}
-                const text = agentMsg ? `&text=${encodeURIComponent(agentMsg)}` : '';
-                const url = `https://web.whatsapp.com/send?phone=${phone}${text}`;
-                window.open(url, "_blank", "noopener,noreferrer");
-              } catch (_) {}
-            }}
-            title="Open WhatsApp"
-            disabled={!selectedCall}
-          >
-            <FaWhatsapp className="w-4 h-4" />
-            <span>WhatsApp</span>
-          </button>
-
-          {/* Play/Pause button */}
-          <button
-            className="bg-white text-gray-700 text-sm px-4 py-2.5 rounded-xl border border-gray-200 hover:bg-gray-50 hover:border-gray-300 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed font-medium shadow-sm hover:shadow-md"
-            onClick={handlePlayPause}
-            title={isPlaying ? 'Pause recording' : 'Play recording'}
-            disabled={!audioUrl}
-          >
-            {isPlaying ? (
-              <>
-                <FaPause className="w-4 h-4" />
-                <span>Pause</span>
-              </>
-            ) : (
-              <>
-                <FaPlay className="w-4 h-4" />
-                <span>Play</span>
-              </>
-            )}
-          </button>
-
-          {/* Bookmark toggle button */}
-          {selectedCall && (() => {
-            const idCandidate = selectedCall.contactId || selectedCall.documentId || selectedCall._id || (selectedCall.phone || selectedCall.number);
-            const isBookmarked = idCandidate ? isContactBookmarked({ _id: idCandidate, phone: selectedCall.phone, number: selectedCall.number }) : false;
-            return (
-              <button
-                className={`text-sm px-4 py-2.5 rounded-xl transition-all flex items-center gap-2 font-medium shadow-sm hover:shadow-md ${
-                  isBookmarked
-                    ? 'bg-gradient-to-r from-yellow-400 to-amber-500 text-white shadow-lg shadow-yellow-200 hover:scale-105'
-                    : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 hover:border-gray-300'
-                }`}
-                onClick={() => toggleBookmarkForContact({ _id: idCandidate, phone: selectedCall.phone, number: selectedCall.number })}
-                title={isBookmarked ? 'Remove bookmark' : 'Add bookmark'}
-              >
-                <svg viewBox="0 0 24 24" fill="currentColor" className={`w-4 h-4 ${isBookmarked ? 'text-white' : 'text-gray-600'}`}>
-                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21 12 17.77 5.82 21 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
-                </svg>
-                <span>{isBookmarked ? 'Bookmarked' : 'Bookmark'}</span>
-              </button>
-            );
-          })()}
-
-          {/* Assign dropdown */}
-          <div className="relative">
-            <button
-              className="text-sm px-4 py-2.5 rounded-xl border border-gray-200 hover:bg-gray-50 hover:border-gray-300 transition-all flex items-center gap-2 font-medium shadow-sm hover:shadow-md bg-white text-gray-700"
-              onClick={() => setOpenAssignFor(openAssignFor === 'transcript' ? null : 'transcript')}
-              title="Assign"
-            >
-              <span>Assign</span>
-              <svg className={`w-4 h-4 transition-transform ${openAssignFor === 'transcript' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
-            {openAssignFor === 'transcript' && (
-              <div className="absolute right-0 mt-2 w-36 bg-white border border-gray-100 rounded-xl shadow-2xl z-10 overflow-hidden ring-1 ring-black/5">
-                {["t1","t2","t3","t4","t5"].map((tag) => (
-                  <button
-                    key={tag}
-                    type="button"
-                    className="w-full text-left px-4 py-2.5 text-sm hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 font-medium text-gray-700 hover:text-gray-900 transition-colors"
-                    onClick={() => { setRowAssignments((prev)=>({ ...prev, transcript: tag })); setOpenAssignFor(null); }}
+            <div className="flex justify-between items-center p-3 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-blue-100">
+              <div className="flex-1">
+                <h3 className="text-lg font-bold text-gray-800 flex items-center">
+                  <svg
+                    className="w-6 h-6 mr-2 text-blue-600"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
                   >
-                    {tag.toUpperCase()}
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M8 16h8M8 12h8M8 8h8M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H7l-2 2H3v12a2 2 0 002 2z"
+                    />
+                  </svg>
+                  Call Transcript
+                  {selectedCall && (
+                    <span className="ml-3 text-xs font-normal text-gray-600 whitespace-nowrap">
+                      {formatDateTimeCompact(
+                        selectedCall.time ||
+                          selectedCall.createdAt ||
+                          (selectedCall.metadata &&
+                            (selectedCall.metadata.startTime ||
+                              selectedCall.metadata.callStartTime)) ||
+                          (selectedCall.externalResponse &&
+                            selectedCall.externalResponse.startTime)
+                      )}
+                    </span>
+                  )}
+                </h3>
+                {/* Call Details */}
+                {selectedCall && (
+                  <div className="mt-1 grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="p-3">
+                      <div className="text-sm text-gray-500 mb-1">
+                        Contact Name
+                      </div>
+                      <div className="font-semibold text-gray-800">
+                        {getContactDisplayNameBlank(selectedCall)}
+                      </div>
+                    </div>
+                    <div className="p-3">
+                      <div className="text-sm text-gray-500 mb-1">
+                        Phone Number
+                      </div>
+                      <div className="font-semibold text-gray-800">
+                        {selectedCall.number || selectedCall.phone || ""}
+                      </div>
+                    </div>
+                    <div className="p-3">
+                      <div className="text-sm text-gray-500 mb-1">
+                        Call Duration
+                      </div>
+                      <div className="font-semibold text-gray-800">
+                        {formatDuration(selectedCall.duration || 0)}
+                      </div>
+                    </div>
+                    {/* Removed large Call Started block to save space */}
+                  </div>
+                )}
+              </div>
+              {/* Action buttons */}
+              <div className="relative ml-3" ref={downloadMenuRef}>
+                <button
+                  className={`text-sm px-3 py-2 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-60 border focus:outline-none focus:ring-2 focus:ring-blue-300 ${
+                    showDownloadMenu
+                      ? "bg-gray-900 text-white border-gray-900"
+                      : "bg-black text-white border-transparent hover:bg-gray-800"
+                  }`}
+                  onClick={() => setShowDownloadMenu((v) => !v)}
+                  title="Download"
+                  disabled={isDownloadingPdf}
+                >
+                  {isDownloadingPdf ? (
+                    <>
+                      <FiLoader className="animate-spin" />
+                      
+                    </>
+                  ) : (
+                    <>
+                      <FiDownload />
+                      
+                    </>
+                  )}
+                </button>
+                {showDownloadMenu && (
+                  <div className="absolute right-0 mt-2 w-44 bg-white rounded-lg shadow-xl z-10 overflow-hidden ring-1 ring-black/5">
+                    <button
+                      className="w-full text-left px-3 py-2 text-sm flex items-center gap-2 transition-colors hover:bg-blue-50 hover:text-blue-700"
+                      onClick={() => {
+                        setShowDownloadMenu(false);
+                        handleDownloadTranscriptPDF();
+                      }}
+                    >
+                      <span className="inline-block w-2 h-2 rounded-full bg-gray-800"></span>
+                      <span>PDF</span>
+                    </button>
+                    <button
+                      className="w-full text-left px-3 py-2 text-sm flex items-center gap-2 transition-colors hover:bg-blue-50 hover:text-blue-700"
+                      onClick={() => {
+                        setShowDownloadMenu(false);
+                        handleDownloadTranscriptTXT();
+                      }}
+                    >
+                      <span className="inline-block w-2 h-2 rounded-full bg-gray-400"></span>
+                      <span>TXT</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Hidden audio element bound to the selected call */}
+              {audioUrl ? (
+  <audio
+    key={selectedCall?._id || 'call-audio'}
+    ref={audioRef}
+    src={audioUrl}
+    preload="none"
+    crossOrigin="anonymous"
+    onEnded={() => setIsPlaying(false)}
+    onPause={() => setIsPlaying(false)}
+    onPlay={() => setIsPlaying(true)}
+  />
+) : null}
+
+              {/* WhatsApp redirect button */}
+              <button
+                className="ml-3 bg-green-500 text-white text-sm px-3 py-2 rounded-lg hover:bg-green-600 transition-colors flex items-center gap-2 disabled:opacity-60"
+                onClick={async () => {
+                  try {
+                    const raw =
+                      (selectedCall &&
+                        (selectedCall.number ||
+                          selectedCall.phone ||
+                          selectedCall.mobile ||
+                          (selectedCall.metadata &&
+                            selectedCall.metadata.customParams &&
+                            selectedCall.metadata.customParams.phone))) ||
+                      "";
+                    const digits = String(raw || "").replace(/\D/g, "");
+                    // Remove any leading zeros (e.g., 09546423919 -> 9546423919)
+                    const normalized = digits.replace(/^0+/, "");
+                    // Ensure Indian country code is prefixed (WhatsApp expects country code without +)
+                    const phone = normalized.startsWith("91")
+                      ? normalized
+                      : normalized
+                      ? `91${normalized}`
+                      : "";
+                    if (!phone) {
+                      try {
+                        toast.warn("No phone number found");
+                      } catch {}
+                      return;
+                    }
+                    // Explicitly open WhatsApp Web with default prefilled text from agent first message (public endpoint)
+                    let agentMsg = '';
+                    try {
+                      const primaryAgentId = getPrimaryAgentId();
+                      if (primaryAgentId) {
+                        const resp = await fetch(`${API_BASE}/agents/${primaryAgentId}/public`);
+                        const result = await resp.json();
+                        if (resp.ok && result?.data) {
+                          const ag = result.data;
+                          agentMsg = ag.firstMessage || (Array.isArray(ag.startingMessages) && ag.startingMessages[0]?.text) || '';
+                        }
+                      }
+                    } catch (_) {}
+                    const text = agentMsg ? `&text=${encodeURIComponent(agentMsg)}` : '';
+                    const url = `https://web.whatsapp.com/send?phone=${phone}${text}`;
+                    window.open(url, "_blank", "noopener,noreferrer");
+                  } catch (_) {}
+                }}
+                title="Open WhatsApp"
+                disabled={!selectedCall}
+              >
+                <FaWhatsapp />
+              </button>
+
+              {/* Play/Pause recording button */}
+              <button
+                className="ml-3 bg-white text-gray-800 text-sm px-3 py-2 rounded-lg border hover:bg-gray-50 transition-colors flex items-center gap-2 disabled:opacity-60"
+                onClick={handlePlayPause}
+                title={isPlaying ? 'Pause recording' : 'Play recording'}
+                disabled={!audioUrl}
+              >
+                {isPlaying ? <FaPause /> : <FaPlay />}
+              </button>
+
+              {/* Bookmark star button */}
+              {selectedCall && (() => {
+                const idCandidate = selectedCall.contactId || selectedCall.documentId || selectedCall._id || (selectedCall.phone || selectedCall.number);
+                const isBookmarked = idCandidate ? isContactBookmarked({ _id: idCandidate, phone: selectedCall.phone, number: selectedCall.number }) : false;
+                return (
+                  <button
+                    className={`ml-3 text-sm px-3 py-2 rounded-lg transition-colors flex items-center gap-2 ${
+                      isBookmarked
+                        ? "bg-yellow-500 text-white hover:bg-yellow-600"
+                        : "bg-white text-gray-800 border border-gray-300 hover:bg-gray-50"
+                    }`}
+                    onClick={() => {
+                      toggleBookmarkForContact({
+                        _id: idCandidate,
+                        phone: selectedCall.phone,
+                        number: selectedCall.number,
+                      });
+                    }}
+                    title={isBookmarked ? "Remove bookmark" : "Add bookmark"}
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill={isBookmarked ? "currentColor" : "none"}
+                      stroke="currentColor"
+                      className="w-4 h-4"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21 12 17.77 5.82 21 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                    </svg>
                   </button>
-                ))}
+                );
+              })()}
+              {/* Assign button in transcript header */}
+              <div className="relative ml-3">
+                <button
+                  className="text-sm px-3 py-2 rounded-lg border hover:bg-gray-50"
+                  onClick={() => setOpenAssignFor(openAssignFor === 'transcript' ? null : 'transcript')}
+                  title="Assign"
+                >
+                  Assign ▾
+                </button>
+                {openAssignFor === 'transcript' && (
+                  <div className="absolute right-0 mt-2 w-28 bg-white border border-gray-200 rounded shadow z-10">
+                    {["t1","t2","t3","t4","t5"].map((tag) => (
+                      <button
+                        key={tag}
+                        type="button"
+                        className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50"
+                        onClick={() => { setRowAssignments((prev)=>({ ...prev, transcript: tag })); setOpenAssignFor(null); }}
+                      >
+                        {tag.toUpperCase()}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+            
+            {/* Audio Timeline */}
+            {audioUrl && audioDuration > 0 && (
+              <div className="px-6 pb-2 border-b border-gray-200">
+                <div className="flex items-center gap-3 mb-2">
+                  <button
+                    className="bg-blue-600 text-white text-sm px-3 py-1.5 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                    onClick={handlePlayPause}
+                    disabled={!audioUrl}
+                    title={isPlaying ? 'Pause' : 'Play'}
+                  >
+                    {isPlaying ? <FaPause className="w-3 h-3" /> : <FaPlay className="w-3 h-3" />}
+                  </button>
+                  <div className="flex-1">
+                    <input
+                      type="range"
+                      min="0"
+                      max={audioDuration || 0}
+                      value={audioCurrentTime || 0}
+                      onChange={(e) => {
+                        const newTime = parseFloat(e.target.value);
+                        if (audioRef.current) {
+                          audioRef.current.currentTime = newTime;
+                          setAudioCurrentTime(newTime);
+                        }
+                      }}
+                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                      style={{
+                        background: `linear-gradient(to right, #2563eb 0%, #2563eb ${((audioCurrentTime || 0) / (audioDuration || 1)) * 100}%, #e5e7eb ${((audioCurrentTime || 0) / (audioDuration || 1)) * 100}%, #e5e7eb 100%)`
+                      }}
+                    />
+                  </div>
+                  <div className="text-xs text-gray-600 font-mono whitespace-nowrap">
+                    {formatDuration(audioCurrentTime)} / {formatDuration(audioDuration)}
+                  </div>
+                </div>
               </div>
             )}
-          </div>
-        </div>
-      </div>
-
-      {/* Audio Timeline */}
-      {audioUrl && audioDuration > 0 && (
-        <div className="flex-shrink-0 px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-slate-50">
-          <div className="flex items-center gap-4">
-            <button
-              className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm p-3 rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-blue-200 hover:shadow-xl hover:shadow-blue-300 hover:scale-105"
-              onClick={handlePlayPause}
-              disabled={!audioUrl}
-              title={isPlaying ? 'Pause' : 'Play'}
-            >
-              {isPlaying ? <FaPause className="w-4 h-4" /> : <FaPlay className="w-4 h-4" />}
-            </button>
-            <div className="flex-1 flex items-center gap-3">
-              <div className="flex-1 relative">
-                <input
-                  type="range"
-                  min="0"
-                  max={audioDuration || 0}
-                  value={audioCurrentTime || 0}
-                  onChange={(e) => {
-                    const newTime = parseFloat(e.target.value);
-                    if (audioRef.current) {
-                      audioRef.current.currentTime = newTime;
-                      setAudioCurrentTime(newTime);
-                    }
-                  }}
-                  className="w-full h-2 bg-gray-200 rounded-full appearance-none cursor-pointer"
-                  style={{
-                    background: `linear-gradient(to right, rgb(59, 130, 246) 0%, rgb(79, 70, 229) ${((audioCurrentTime || 0) / (audioDuration || 1)) * 100}%, rgb(229, 231, 235) ${((audioCurrentTime || 0) / (audioDuration || 1)) * 100}%, rgb(229, 231, 235) 100%)`
-                  }}
-                />
-                <div 
-                  className="absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-white rounded-full shadow-lg border-2 border-blue-600 pointer-events-none transition-all"
-                  style={{
-                    left: `calc(${((audioCurrentTime || 0) / (audioDuration || 1)) * 100}% - 8px)`
-                  }}
-                ></div>
-              </div>
-              <div className="text-sm text-gray-700 font-mono font-semibold whitespace-nowrap bg-white px-3 py-1.5 rounded-lg border border-gray-200 shadow-sm">
-                {formatDuration(audioCurrentTime)} / {formatDuration(audioDuration)}
-              </div>
+            
+            <div className="p-6">
+              {transcriptLoading ? (
+                <div className="text-center py-10">
+                  <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                  </div>
+                  <p className="text-gray-500 mt-4 text-xl">
+                    Loading transcript...
+                  </p>
+                </div>
+              ) : transcriptContent ? (
+                <div className="bg-gray-50 rounded-lg p-4 max-h-96 overflow-y-auto">
+                  {parseTranscriptToChat(transcriptContent).map(
+                    (message, index) => (
+                      <div key={index} className="mb-4 last:mb-0">
+                        {message.isAI ? (
+                          <div className="flex justify-start">
+                            <div className="flex items-end space-x-2 max-w-xs lg:max-w-md">
+                              <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
+                                <svg
+                                  className="w-4 h-4 text-white"
+                                  fill="currentColor"
+                                  viewBox="0 0 20 20"
+                                >
+                                  <path
+                                    fillRule="evenodd"
+                                    d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-6-3a2 2 0 11-4 0 2 2 0 014 0zm-2 4a5 5 0 00-4.546 2.916A5.986 5.986 0 0010 16a5.986 5.986 0 004.546-2.084A5 5 0 0010 11z"
+                                    clipRule="evenodd"
+                                  />
+                                </svg>
+                              </div>
+                              <div className="bg-blue-500 text-white rounded-lg px-4 py-2 shadow-sm">
+                                <div className="text-lg">{message.text}</div>
+                                {message.timestamp && (
+                                  <div className="text-xs text-blue-100 mt-1">
+                                    {message.timestamp}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ) : message.isUser ? (
+                          <div className="flex justify-end">
+                            <div className="flex items-end space-x-2 max-w-xs lg:max-w-md">
+                              <div className="bg-gray-200 text-gray-800 rounded-lg px-4 py-2 shadow-sm">
+                                <div className="text-sm">{message.text}</div>
+                                {message.timestamp && (
+                                  <div className="text-xs text-gray-500 mt-1">
+                                    {message.timestamp}
+                                  </div>
+                                )}
+                              </div>
+                              <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center flex-shrink-0">
+                                <svg
+                                  className="w-4 h-4 text-white"
+                                  fill="currentColor"
+                                  viewBox="0 0 20 20"
+                                >
+                                  <path
+                                    fillRule="evenodd"
+                                    d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z"
+                                    clipRule="evenodd"
+                                  />
+                                </svg>
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex justify-center">
+                            <div className="bg-gray-100 text-gray-600 rounded-lg px-3 py-1 text-xs">
+                              {message.text}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  )}
+                </div>
+              ) : (
+                <div className="text-center py-10 text-gray-500">
+                  <svg
+                    className="w-8 h-8 mx-auto mb-2 text-gray-400"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+                    />
+                  </svg>
+                  No transcript available
+                </div>
+              )}
             </div>
           </div>
         </div>
       )}
-      
-      {/* Transcript Content */}
-      <div className="flex-1 overflow-y-auto p-6 bg-gradient-to-b from-gray-50 to-white">
-        {transcriptLoading ? (
-          <div className="text-center py-16">
-            <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-2xl shadow-lg mb-6">
-              <div className="animate-spin rounded-full h-10 w-10 border-4 border-blue-600 border-t-transparent"></div>
-            </div>
-            <p className="text-gray-600 text-lg font-medium">
-              Loading transcript...
-            </p>
-          </div>
-        ) : transcriptContent ? (
-          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 max-h-full overflow-y-auto">
-            <div className="space-y-4">
-              {parseTranscriptToChat(transcriptContent).map(
-                (message, index) => (
-                  <div key={index}>
-                    {message.isAI ? (
-                      <div className="flex justify-start animate-fadeIn">
-                        <div className="flex items-end space-x-3 max-w-xl">
-                          <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-lg shadow-blue-200">
-                            <svg
-                              className="w-5 h-5 text-white"
-                              fill="currentColor"
-                              viewBox="0 0 20 20"
-                            >
-                              <path
-                                fillRule="evenodd"
-                                d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-6-3a2 2 0 11-4 0 2 2 0 014 0zm-2 4a5 5 0 00-4.546 2.916A5.986 5.986 0 0010 16a5.986 5.986 0 004.546-2.084A5 5 0 0010 11z"
-                                clipRule="evenodd"
-                              />
-                            </svg>
-                          </div>
-                          <div className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white rounded-2xl rounded-bl-md px-5 py-3 shadow-lg shadow-blue-200">
-                            <div className="text-base leading-relaxed">{message.text}</div>
-                            {message.timestamp && (
-                              <div className="text-xs text-blue-100 mt-2 font-medium">
-                                {message.timestamp}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ) : message.isUser ? (
-                      <div className="flex justify-end animate-fadeIn">
-                        <div className="flex items-end space-x-3 max-w-xl">
-                          <div className="bg-gradient-to-br from-gray-100 to-gray-200 text-gray-900 rounded-2xl rounded-br-md px-5 py-3 shadow-md">
-                            <div className="text-base leading-relaxed">{message.text}</div>
-                            {message.timestamp && (
-                              <div className="text-xs text-gray-500 mt-2 font-medium">
-                                {message.timestamp}
-                              </div>
-                            )}
-                          </div>
-                          <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-lg shadow-green-200">
-                            <svg
-                              className="w-5 h-5 text-white"
-                              fill="currentColor"
-                              viewBox="0 0 20 20"
-                            >
-                              <path
-                                fillRule="evenodd"
-                                d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z"
-                                clipRule="evenodd"
-                              />
-                            </svg>
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex justify-center animate-fadeIn">
-                        <div className="bg-white text-gray-600 rounded-xl px-4 py-2 text-xs font-medium border border-gray-200 shadow-sm">
-                          {message.text}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )
-              )}
-            </div>
-          </div>
-        ) : (
-          <div className="text-center py-16">
-            <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-gray-100 to-gray-200 rounded-2xl shadow-lg mb-6">
-              <svg
-                className="w-10 h-10 text-gray-400"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-                />
-              </svg>
-            </div>
-            <p className="text-gray-500 text-lg font-medium">No transcript available</p>
-          </div>
-        )}
-      </div>
-    </div>
-  </div>
-)}
       {/* Insufficient Credits Modal */}
       {showCreditsModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
