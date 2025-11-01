@@ -9409,41 +9409,42 @@ useEffect(() => {
             
             {/* Audio Timeline */}
             {audioUrl && audioDuration > 0 && (
-              <div className="px-6 pb-2 border-b border-gray-200">
-                <div className="flex items-center gap-3 mb-2">
-                  <button
-                    className="bg-blue-600 text-white text-sm px-3 py-1.5 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
-                    onClick={handlePlayPause}
-                    disabled={!audioUrl}
-                    title={isPlaying ? 'Pause' : 'Play'}
-                  >
-                    {isPlaying ? <FaPause className="w-3 h-3" /> : <FaPlay className="w-3 h-3" />}
-                  </button>
-                  <div className="flex-1">
-                    <input
-                      type="range"
-                      min="0"
-                      max={audioDuration || 0}
-                      value={audioCurrentTime || 0}
-                      onChange={(e) => {
-                        const newTime = parseFloat(e.target.value);
-                        if (audioRef.current) {
-                          audioRef.current.currentTime = newTime;
-                          setAudioCurrentTime(newTime);
-                        }
-                      }}
-                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
-                      style={{
-                        background: `linear-gradient(to right, #2563eb 0%, #2563eb ${((audioCurrentTime || 0) / (audioDuration || 1)) * 100}%, #e5e7eb ${((audioCurrentTime || 0) / (audioDuration || 1)) * 100}%, #e5e7eb 100%)`
-                      }}
-                    />
-                  </div>
-                  <div className="text-xs text-gray-600 font-mono whitespace-nowrap">
-                    {formatDuration(audioCurrentTime)} / {formatDuration(audioDuration)}
-                  </div>
-                </div>
-              </div>
-            )}
+  <div className="px-6 pb-2 border-b border-gray-200">
+    <div className="flex items-center gap-3 mb-2">
+      <button
+        className="bg-blue-600 text-white text-sm px-3 py-1.5 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+        onClick={handlePlayPause}
+        disabled={!audioUrl}
+        title={isPlaying ? 'Pause' : 'Play'}
+      >
+        {isPlaying ? <FaPause className="w-3 h-3" /> : <FaPlay className="w-3 h-3" />}
+      </button>
+      <div className="flex-1">
+        <input
+          type="range"
+          min="0"
+          max={audioDuration || 0}
+          step="0.1"
+          value={audioCurrentTime || 0}
+          onChange={(e) => {
+            const newTime = parseFloat(e.target.value);
+            if (audioRef.current) {
+              audioRef.current.currentTime = newTime;
+              setAudioCurrentTime(newTime);
+            }
+          }}
+          className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+          style={{
+            background: `linear-gradient(to right, #2563eb 0%, #2563eb ${((audioCurrentTime || 0) / (audioDuration || 1)) * 100}%, #e5e7eb ${((audioCurrentTime || 0) / (audioDuration || 1)) * 100}%, #e5e7eb 100%)`
+          }}
+        />
+      </div>
+      <div className="text-xs text-gray-600 font-mono whitespace-nowrap">
+        {formatDuration(audioCurrentTime)} / {formatDuration(audioDuration)}
+      </div>
+    </div>
+  </div>
+)}
             
             <div className="p-6">
               {transcriptLoading ? (
