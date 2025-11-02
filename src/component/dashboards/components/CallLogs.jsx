@@ -88,23 +88,12 @@ const CallLogs = ({ agentId, clientId }) => {
       return raw;
     }
     
-    if (raw && /https?:\/\/[^\s]*s3[^\s]*amazonaws\.com\//i.test(String(raw)) && selectedCall._id && agentId) {
-      const url = `${API_BASE}/agents/${agentId}/call-audio?callLogId=${encodeURIComponent(selectedCall._id)}${tokenParam}`;
-      console.log("Audio URL (S3 detected):", url);
-      return url;
+    // If raw URL is S3 URL or empty, convert to proxy URL
+    if ((raw && /https?:\/\/[^\s]*s3[^\s]*amazonaws\.com\//i.test(String(raw)) || (!raw || String(raw).trim() === '')) && selectedCall._id && agentId) {
+      return `${API_BASE}/agents/${agentId}/call-audio?callLogId=${encodeURIComponent(selectedCall._id)}${tokenParam}`;
     }
-    if ((!raw || String(raw).trim() === '') && selectedCall._id && agentId) {
-      const url = `${API_BASE}/agents/${agentId}/call-audio?callLogId=${encodeURIComponent(selectedCall._id)}${tokenParam}`;
-      console.log("Audio URL (empty/undefined):", url);
-      return url;
-    }
-    if (raw && /\/call-audio(\?|$)/.test(String(raw))) {
-      const url = token && !raw.includes('token=') ? `${raw}${raw.includes('?') ? '&' : '?'}token=${encodeURIComponent(token)}` : raw;
-      console.log("Audio URL (call-audio found):", url);
-      return url;
-    }
-    console.log("Audio URL (fallback - raw):", raw);
-    return raw;
+    
+    // Fallback: return raw URL
     return raw;
   }, [selectedCall?._id, selectedCall?.audioUrl, agentId]);
 
@@ -748,7 +737,16 @@ const CallLogs = ({ agentId, clientId }) => {
   }
 
   return (
-    <div className="space-y-6 px-16 py-6">
+    <>
+      <style>{`
+        .no-thumb::-webkit-slider-thumb {
+          display: none !important;
+        }
+        .no-thumb::-moz-range-thumb {
+          display: none !important;
+        }
+      `}</style>
+      <div className="space-y-6 px-16 py-6">
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
@@ -1106,14 +1104,6 @@ const CallLogs = ({ agentId, clientId }) => {
             {audioUrl && audioAvailable && audioDuration > 0 && (
               <div className="px-6 pb-4 border-b border-gray-200">
                 <div className="flex items-center gap-3 mb-2">
-                  <button
-                    className="bg-blue-600 text-white text-sm px-3 py-1.5 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
-                    onClick={handlePlayPause}
-                    disabled={!audioUrl}
-                    title={isPlaying ? 'Pause' : 'Play'}
-                  >
-                    {isPlaying ? <FaPause className="w-3 h-3" /> : <FaPlay className="w-3 h-3" />}
-                  </button>
                   <div className="flex-1">
                     <input
                       type="range"
@@ -1128,7 +1118,7 @@ const CallLogs = ({ agentId, clientId }) => {
                           setAudioCurrentTime(newTime);
                         }
                       }}
-                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer no-thumb"
                       style={{
                         background: `linear-gradient(to right, #2563eb 0%, #2563eb ${((audioCurrentTime || 0) / (audioDuration || 1)) * 100}%, #e5e7eb ${((audioCurrentTime || 0) / (audioDuration || 1)) * 100}%, #e5e7eb 100%)`
                       }}
@@ -1272,7 +1262,8 @@ const CallLogs = ({ agentId, clientId }) => {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 };
 
