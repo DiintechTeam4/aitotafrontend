@@ -59,15 +59,36 @@ function CampaignDetails({ campaignId, onBack }) {
   
 
   const handlePlayPause = () => {
-    if (!audioUrl || !audioRef.current) {
+    if (!audioUrl || !audioRef.current || !audioAvailable) {
       try { toast?.warn?.('No recording available'); } catch {}
       return;
     }
+    const audio = audioRef.current;
     if (isPlaying) {
-      audioRef.current.pause();
-      setIsPlaying(false);
+      // Pause playback
+      try {
+        audio.pause();
+        // State will be updated by the pause event listener
+      } catch (err) {
+        setIsPlaying(false);
+      }
     } else {
-      audioRef.current.play().then(() => setIsPlaying(true)).catch(() => {});
+      // Play audio with proper promise handling
+      const playPromise = audio.play();
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => {
+            // Playback started successfully
+            // State will be updated by the play event listener
+          })
+          .catch((error) => {
+            // Autoplay was prevented or playback failed
+            setIsPlaying(false);
+            try {
+              toast?.warn?.('Failed to play audio');
+            } catch {}
+          });
+      }
     }
   };
   useEffect(() => {
@@ -1089,6 +1110,8 @@ function CampaignDetails({ campaignId, onBack }) {
 const [isPlaying, setIsPlaying] = useState(false);
 const [audioCurrentTime, setAudioCurrentTime] = useState(0);
 const [audioDuration, setAudioDuration] = useState(0);
+const [audioAvailable, setAudioAvailable] = useState(true);
+const rafIdRef = useRef(null);
 const audioUrl = React.useMemo(() => {
   const raw = selectedCall?.audioUrl;
   const docId = selectedCall?.documentId;
@@ -1106,6 +1129,7 @@ useEffect(() => {
   setIsPlaying(false);
   setAudioCurrentTime(0);
   setAudioDuration(0);
+  setAudioAvailable(true); // Reset availability when call changes
   if (audioRef.current) {
     try {
       audioRef.current.pause();
@@ -1114,40 +1138,113 @@ useEffect(() => {
   }
 }, [selectedCall?._id]);
 
-// Update audio timeline during playback
+// Update audio timeline during playback with requestAnimationFrame for smooth playback
 useEffect(() => {
   if (!audioRef.current) return;
   
   const audio = audioRef.current;
   
-  const handleTimeUpdate = () => {
-    if (audio) {
-      setAudioCurrentTime(audio.currentTime);
+  // Use requestAnimationFrame for smooth visual updates at 60fps
+  const updateTime = () => {
+    if (audio && !audio.paused) {
+      const currentTime = audio.currentTime;
+      setAudioCurrentTime(currentTime);
+      // Continue the animation loop while playing
+      rafIdRef.current = requestAnimationFrame(updateTime);
     }
   };
   
   const handleLoadedMetadata = () => {
     if (audio) {
-      setAudioDuration(audio.duration || 0);
+      const duration = audio.duration || 0;
+      setAudioDuration(duration);
+      setAudioCurrentTime(audio.currentTime || 0);
     }
   };
   
   const handleDurationChange = () => {
     if (audio) {
-      setAudioDuration(audio.duration || 0);
+      const duration = audio.duration || 0;
+      setAudioDuration(duration);
     }
   };
   
-  audio.addEventListener('timeupdate', handleTimeUpdate);
+  const handlePlay = () => {
+    setIsPlaying(true);
+    // Start requestAnimationFrame loop when playing
+    if (rafIdRef.current) {
+      cancelAnimationFrame(rafIdRef.current);
+    }
+    rafIdRef.current = requestAnimationFrame(updateTime);
+  };
+  
+  const handlePause = () => {
+    setIsPlaying(false);
+    // Stop requestAnimationFrame loop when paused
+    if (rafIdRef.current) {
+      cancelAnimationFrame(rafIdRef.current);
+      rafIdRef.current = null;
+    }
+    if (audio) {
+      setAudioCurrentTime(audio.currentTime);
+    }
+  };
+  
+  const handleEnded = () => {
+    setIsPlaying(false);
+    setAudioCurrentTime(0);
+    if (rafIdRef.current) {
+      cancelAnimationFrame(rafIdRef.current);
+      rafIdRef.current = null;
+    }
+  };
+  
+  const handleWaiting = () => {
+    // Audio is buffering - could show loading indicator if needed
+    // Don't interrupt playback, just wait for buffer
+  };
+  
+  const handleCanPlay = () => {
+    // Audio is ready to play - ensure smooth playback
+    // Browser will handle buffering automatically
+  };
+  
+  const handleCanPlayThrough = () => {
+    // Audio can play through without stopping for buffering
+    // This helps ensure smooth playback
+  };
+  
+  // Attach event listeners
   audio.addEventListener('loadedmetadata', handleLoadedMetadata);
   audio.addEventListener('durationchange', handleDurationChange);
+  audio.addEventListener('play', handlePlay);
+  audio.addEventListener('pause', handlePause);
+  audio.addEventListener('ended', handleEnded);
+  audio.addEventListener('waiting', handleWaiting);
+  audio.addEventListener('canplay', handleCanPlay);
+  audio.addEventListener('canplaythrough', handleCanPlayThrough);
+  
+  // Initialize RAF if already playing
+  if (!audio.paused) {
+    rafIdRef.current = requestAnimationFrame(updateTime);
+  }
   
   return () => {
-    audio.removeEventListener('timeupdate', handleTimeUpdate);
+    // Cleanup
+    if (rafIdRef.current) {
+      cancelAnimationFrame(rafIdRef.current);
+      rafIdRef.current = null;
+    }
     audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
     audio.removeEventListener('durationchange', handleDurationChange);
+    audio.removeEventListener('play', handlePlay);
+    audio.removeEventListener('pause', handlePause);
+    audio.removeEventListener('ended', handleEnded);
+    audio.removeEventListener('waiting', handleWaiting);
+    audio.removeEventListener('canplay', handleCanPlay);
+    audio.removeEventListener('canplaythrough', handleCanPlayThrough);
   };
-}, [audioUrl]);
+}, [audioUrl, selectedCall?._id]);
   useEffect(() => {
     if (!autoRefreshCalls) return;
     // Immediate fetch on enabling
@@ -6806,7 +6903,16 @@ useEffect(() => {
     );
   }
   return (
-    <div className="h-screen flex flex-col bg-gradient-to-br from-gray-50 to-gray-100">
+    <>
+      <style>{`
+        .no-thumb::-webkit-slider-thumb {
+          display: none !important;
+        }
+        .no-thumb::-moz-range-thumb {
+          display: none !important;
+        }
+      `}</style>
+      <div className="h-screen flex flex-col bg-gradient-to-br from-gray-50 to-gray-100">
       {/* Fixed Header Section */}
       <div className="flex-shrink-0 bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -9276,11 +9382,28 @@ useEffect(() => {
     key={selectedCall?._id || 'call-audio'}
     ref={audioRef}
     src={audioUrl}
-    preload="none"
+    preload="metadata"
     crossOrigin="anonymous"
     onEnded={() => setIsPlaying(false)}
     onPause={() => setIsPlaying(false)}
     onPlay={() => setIsPlaying(true)}
+    onError={(e) => {
+      // Mark audio as unavailable when it fails to load (e.g., 404)
+      setAudioAvailable(false);
+      setIsPlaying(false);
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+      }
+    }}
+    onLoadedMetadata={() => {
+      // Mark audio as available when metadata successfully loads
+      setAudioAvailable(true);
+    }}
+    onLoadedData={() => {
+      // Mark audio as available when it successfully loads
+      setAudioAvailable(true);
+    }}
   />
 ) : null}
 
@@ -9338,14 +9461,16 @@ useEffect(() => {
               </button>
 
               {/* Play/Pause recording button */}
-              <button
-                className="ml-3 bg-white text-gray-800 text-sm px-3 py-2 rounded-lg border hover:bg-gray-50 transition-colors flex items-center gap-2 disabled:opacity-60"
-                onClick={handlePlayPause}
-                title={isPlaying ? 'Pause recording' : 'Play recording'}
-                disabled={!audioUrl}
-              >
-                {isPlaying ? <FaPause /> : <FaPlay />}
-              </button>
+              {audioUrl && audioAvailable && (
+                <button
+                  className="ml-3 bg-white text-gray-800 text-sm px-3 py-2 rounded-lg border hover:bg-gray-50 transition-colors flex items-center gap-2 disabled:opacity-60"
+                  onClick={handlePlayPause}
+                  title={isPlaying ? 'Pause recording' : 'Play recording'}
+                  disabled={!audioUrl}
+                >
+                  {isPlaying ? <FaPause /> : <FaPlay />}
+                </button>
+              )}
 
               {/* Bookmark star button */}
               {selectedCall && (() => {
@@ -9408,7 +9533,7 @@ useEffect(() => {
             </div>
             
             {/* Audio Timeline */}
-            {audioUrl && audioDuration > 0 && (
+            {audioUrl && audioAvailable && audioDuration > 0 && (
   <div className="px-6 pb-2 border-b border-gray-200">
     <div className="flex items-center gap-3 mb-2">
       <button
@@ -9433,7 +9558,7 @@ useEffect(() => {
               setAudioCurrentTime(newTime);
             }
           }}
-          className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+          className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer no-thumb"
           style={{
             background: `linear-gradient(to right, #2563eb 0%, #2563eb ${((audioCurrentTime || 0) / (audioDuration || 1)) * 100}%, #e5e7eb ${((audioCurrentTime || 0) / (audioDuration || 1)) * 100}%, #e5e7eb 100%)`
           }}
@@ -11427,6 +11552,7 @@ useEffect(() => {
         </div>
       )}
     </div>
+    </>
   );
 }
 export default CampaignDetails;
