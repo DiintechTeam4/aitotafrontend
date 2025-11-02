@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import {
   FiCalendar,
   FiClock,
@@ -21,6 +21,7 @@ import {
   FiDownload,
   FiX,
 } from "react-icons/fi";
+import { FaPlay, FaPause } from "react-icons/fa";
 import { API_BASE_URL } from "../../../config";
 
 const CallLogs = ({ agentId, clientId }) => {
@@ -38,6 +39,13 @@ const CallLogs = ({ agentId, clientId }) => {
   const [selectedTranscript, setSelectedTranscript] = useState(null);
   const [showTranscriptPopup, setShowTranscriptPopup] = useState(false);
   const [downloadingId, setDownloadingId] = useState(null);
+  const [selectedCall, setSelectedCall] = useState(null);
+  const audioRef = useRef(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [audioCurrentTime, setAudioCurrentTime] = useState(0);
+  const [audioDuration, setAudioDuration] = useState(0);
+  const [audioAvailable, setAudioAvailable] = useState(true);
+  const rafIdRef = useRef(null);
 
   const formatTime = (seconds) => {
     if (!seconds) return "0:00";
@@ -48,6 +56,108 @@ const CallLogs = ({ agentId, clientId }) => {
     const mins = Math.floor(roundedSeconds / 60);
     const secs = roundedSeconds % 60;
     return `${mins}:${secs.toString().padStart(2, "0")}`;
+  };
+
+  const formatDuration = (seconds) => {
+    if (!seconds || isNaN(seconds)) return "0:00";
+    const total = Math.round(seconds);
+    const mins = Math.floor(total / 60);
+    const secs = total % 60;
+    return `${String(mins).padStart(2, "0")}:${secs
+      .toString()
+      .padStart(2, "0")}`;
+  };
+
+  const API_BASE = `${API_BASE_URL}/client`;
+  
+  const audioUrl = useMemo(() => {
+    if (!selectedCall?.audioUrl) return undefined;
+    const raw = selectedCall.audioUrl;
+    
+    // Add token to query parameter for audio element compatibility
+    const token = sessionStorage.getItem("clienttoken");
+    const tokenParam = token ? `&token=${encodeURIComponent(token)}` : '';
+    
+    // If URL already includes /call-audio, add token parameter if not present
+    if (raw && /\/call-audio(\?|$)/.test(String(raw))) {
+      if (token && !raw.includes('token=')) {
+        // Add token to existing query string
+        const separator = raw.includes('?') ? '&' : '?';
+        return `${raw}${separator}token=${encodeURIComponent(token)}`;
+      }
+      return raw;
+    }
+    
+    if (raw && /https?:\/\/[^\s]*s3[^\s]*amazonaws\.com\//i.test(String(raw)) && selectedCall._id && agentId) {
+      const url = `${API_BASE}/agents/${agentId}/call-audio?callLogId=${encodeURIComponent(selectedCall._id)}${tokenParam}`;
+      console.log("Audio URL (S3 detected):", url);
+      return url;
+    }
+    if ((!raw || String(raw).trim() === '') && selectedCall._id && agentId) {
+      const url = `${API_BASE}/agents/${agentId}/call-audio?callLogId=${encodeURIComponent(selectedCall._id)}${tokenParam}`;
+      console.log("Audio URL (empty/undefined):", url);
+      return url;
+    }
+    if (raw && /\/call-audio(\?|$)/.test(String(raw))) {
+      const url = token && !raw.includes('token=') ? `${raw}${raw.includes('?') ? '&' : '?'}token=${encodeURIComponent(token)}` : raw;
+      console.log("Audio URL (call-audio found):", url);
+      return url;
+    }
+    console.log("Audio URL (fallback - raw):", raw);
+    return raw;
+    return raw;
+  }, [selectedCall?._id, selectedCall?.audioUrl, agentId]);
+
+  const handlePlayPause = () => {
+    if (!audioUrl || !audioRef.current || !audioAvailable) {
+      return;
+    }
+    const audio = audioRef.current;
+    if (isPlaying) {
+      try {
+        audio.pause();
+      } catch (err) {
+        setIsPlaying(false);
+      }
+    } else {
+      const playPromise = audio.play();
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => {})
+          .catch((error) => {
+            setIsPlaying(false);
+          });
+      }
+    }
+  };
+
+  const handleDownloadAudio = async () => {
+    if (!audioUrl || !selectedCall) return;
+    try {
+      const token = sessionStorage.getItem("clienttoken");
+      const response = await fetch(audioUrl, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (!response.ok) throw new Error("Failed to download audio");
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const safePhone = String(selectedCall?.mobile || "").replace(/\D/g, "") || "call";
+      const dateStr = selectedCall?.time 
+        ? new Date(selectedCall.time).toISOString().split('T')[0]
+        : new Date().toISOString().split('T')[0];
+      a.download = `call_recording_${safePhone}_${dateStr}.wav`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Failed to download audio:", error);
+      alert("Failed to download audio recording");
+    }
   };
 
   const formatDate = (dateString) => {
@@ -183,6 +293,119 @@ const CallLogs = ({ agentId, clientId }) => {
     }
   }, [agentId, clientId, filter, startDate, endDate, currentPage]);
 
+  // Reset audio state when selected call changes
+  useEffect(() => {
+    setIsPlaying(false);
+    setAudioCurrentTime(0);
+    setAudioDuration(0);
+    setAudioAvailable(true);
+    if (audioRef.current) {
+      try {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+      } catch {}
+    }
+  }, [selectedCall?._id]);
+
+  // Update audio timeline during playback
+  useEffect(() => {
+    if (!audioRef.current) return;
+    
+    const audio = audioRef.current;
+    
+    const updateTime = () => {
+      if (audio && !audio.paused) {
+        const currentTime = audio.currentTime;
+        setAudioCurrentTime(currentTime);
+        rafIdRef.current = requestAnimationFrame(updateTime);
+      }
+    };
+    
+    const handleLoadedMetadata = () => {
+      if (audio) {
+        const duration = audio.duration || 0;
+        setAudioDuration(duration);
+        setAudioCurrentTime(audio.currentTime || 0);
+      }
+    };
+    
+    const handleDurationChange = () => {
+      if (audio) {
+        const duration = audio.duration || 0;
+        setAudioDuration(duration);
+      }
+    };
+    
+    const handlePlay = () => {
+      setIsPlaying(true);
+      if (rafIdRef.current) {
+        cancelAnimationFrame(rafIdRef.current);
+      }
+      rafIdRef.current = requestAnimationFrame(updateTime);
+    };
+    
+    const handlePause = () => {
+      setIsPlaying(false);
+      if (rafIdRef.current) {
+        cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = null;
+      }
+      if (audio) {
+        setAudioCurrentTime(audio.currentTime);
+      }
+    };
+    
+    const handleEnded = () => {
+      setIsPlaying(false);
+      setAudioCurrentTime(0);
+      if (rafIdRef.current) {
+        cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = null;
+      }
+    };
+    
+    const handleError = () => {
+      setAudioAvailable(false);
+      setIsPlaying(false);
+      if (audioRef.current) {
+        try {
+          audioRef.current.pause();
+          audioRef.current.currentTime = 0;
+        } catch {}
+      }
+    };
+    
+    const handleLoadedData = () => {
+      setAudioAvailable(true);
+    };
+    
+    audio.addEventListener('loadedmetadata', handleLoadedMetadata);
+    audio.addEventListener('durationchange', handleDurationChange);
+    audio.addEventListener('play', handlePlay);
+    audio.addEventListener('pause', handlePause);
+    audio.addEventListener('ended', handleEnded);
+    audio.addEventListener('error', handleError);
+    audio.addEventListener('loadeddata', handleLoadedData);
+    
+    if (!audio.paused) {
+      rafIdRef.current = requestAnimationFrame(updateTime);
+    }
+    
+    return () => {
+      if (rafIdRef.current) {
+        cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = null;
+      }
+      audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
+      audio.removeEventListener('durationchange', handleDurationChange);
+      audio.removeEventListener('play', handlePlay);
+      audio.removeEventListener('pause', handlePause);
+      audio.removeEventListener('ended', handleEnded);
+      audio.removeEventListener('error', handleError);
+      audio.removeEventListener('loadeddata', handleLoadedData);
+    };
+  }, [audioUrl, selectedCall?._id]);
+
   const handleFilterChange = (newFilter) => {
     setFilter(newFilter);
     setStartDate("");
@@ -201,12 +424,20 @@ const CallLogs = ({ agentId, clientId }) => {
 
   const openTranscriptPopup = (log) => {
     setSelectedTranscript(log);
+    setSelectedCall(log);
     setShowTranscriptPopup(true);
   };
 
   const closeTranscriptPopup = () => {
     setShowTranscriptPopup(false);
     setSelectedTranscript(null);
+    setSelectedCall(null);
+    if (audioRef.current) {
+      try {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+      } catch {}
+    }
   };
 
   // ===== Lightweight PDF helpers (inline, similar to AgentList/CampaignDetails) =====
@@ -823,13 +1054,92 @@ const CallLogs = ({ agentId, clientId }) => {
                   </p>
                 </div>
               </div>
-              <button
-                onClick={closeTranscriptPopup}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                <FiX className="w-5 h-5 text-gray-500" />
-              </button>
+              
+              <div className="flex items-center gap-2">
+                
+                {/* Audio Download Button */}
+                {audioUrl && audioAvailable && (
+                  <button
+                    onClick={handleDownloadAudio}
+                    className="p-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors flex items-center gap-2"
+                    title="Download Audio"
+                  >
+                    <FiDownload className="w-4 h-4" />
+                    <span className="text-sm">Download</span>
+                  </button>
+                )}
+                {/* Play/Pause Button */}
+                {audioUrl && audioAvailable && (
+                  <button
+                    onClick={handlePlayPause}
+                    className="p-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors flex items-center gap-2"
+                    title={isPlaying ? 'Pause' : 'Play'}
+                  >
+                    {isPlaying ? <FaPause className="w-4 h-4" /> : <FaPlay className="w-4 h-4" />}
+                  </button>
+                )}
+                <button
+                  onClick={closeTranscriptPopup}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <FiX className="w-5 h-5 text-gray-500" />
+                </button>
+              </div>
             </div>
+
+            {/* Hidden audio element */}
+            {audioUrl ? (
+              <audio
+                key={selectedCall?._id || 'call-audio'}
+                ref={audioRef}
+                src={audioUrl}
+                preload="metadata"
+                crossOrigin="anonymous"
+                onError={(e) => {
+                  console.error('Audio load error:', e);
+                  setAudioAvailable(false);
+                }}
+              />
+            ) : null}
+
+            {/* Audio Timeline */}
+            {audioUrl && audioAvailable && audioDuration > 0 && (
+              <div className="px-6 pb-4 border-b border-gray-200">
+                <div className="flex items-center gap-3 mb-2">
+                  <button
+                    className="bg-blue-600 text-white text-sm px-3 py-1.5 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                    onClick={handlePlayPause}
+                    disabled={!audioUrl}
+                    title={isPlaying ? 'Pause' : 'Play'}
+                  >
+                    {isPlaying ? <FaPause className="w-3 h-3" /> : <FaPlay className="w-3 h-3" />}
+                  </button>
+                  <div className="flex-1">
+                    <input
+                      type="range"
+                      min="0"
+                      max={audioDuration || 0}
+                      step="0.1"
+                      value={audioCurrentTime || 0}
+                      onChange={(e) => {
+                        const newTime = parseFloat(e.target.value);
+                        if (audioRef.current) {
+                          audioRef.current.currentTime = newTime;
+                          setAudioCurrentTime(newTime);
+                        }
+                      }}
+                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                      style={{
+                        background: `linear-gradient(to right, #2563eb 0%, #2563eb ${((audioCurrentTime || 0) / (audioDuration || 1)) * 100}%, #e5e7eb ${((audioCurrentTime || 0) / (audioDuration || 1)) * 100}%, #e5e7eb 100%)`
+                      }}
+                    />
+                  </div>
+                  <div className="text-xs text-gray-600 font-mono whitespace-nowrap">
+                    {formatDuration(audioCurrentTime)} / {formatDuration(audioDuration)}
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Content */}
             <div className="p-6 pb-4">
