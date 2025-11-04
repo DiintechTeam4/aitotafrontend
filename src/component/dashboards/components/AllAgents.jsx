@@ -659,7 +659,7 @@ const AllAgents = () => {
       return {
         serviceProvider: "snapbx",
         didNumber: "01246745649",
-        accessToken: "e4b197411fd53012607649f23a6d28f9",
+        accessToken: "a0d99aafea8fe5d75bc05270335f92f3",
         accessKey: "mob",
         appId: "3",
         callerId: "6745649", // Last 7 digits
