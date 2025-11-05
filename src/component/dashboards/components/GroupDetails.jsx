@@ -695,6 +695,17 @@ function GroupDetails({ groupId, onBack }) {
       );
       const seenInFile = new Set();
       const uniqueContacts = [];
+      // Helper function to properly capitalize names
+      const formatName = (name) => {
+        if (!name) return "";
+        return name
+          .trim()
+          .toLowerCase()
+          .split(" ")
+          .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+          .join(" ");
+      };
+
       for (const c of result.data) {
         const normalized = normalizePhoneLocal(c.phone);
         if (!normalized) continue;
@@ -704,7 +715,10 @@ function GroupDetails({ groupId, onBack }) {
           continue; // already in group
         }
         seenInFile.add(normalized);
-        uniqueContacts.push(c);
+        uniqueContacts.push({
+          ...c,
+          name: formatName(c.name),
+        });
       }
       const duplicateCount = Math.max(
         0,
