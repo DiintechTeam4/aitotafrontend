@@ -9466,7 +9466,6 @@ useEffect(() => {
                   </div>
                 )}
               </div>
-
               {/* Hidden audio element bound to the selected call */}
               {audioUrl ? (
   <audio
