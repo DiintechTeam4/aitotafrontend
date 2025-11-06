@@ -1018,6 +1018,8 @@ function CampaignDetails({ campaignId, onBack }) {
   const [transcriptContent, setTranscriptContent] = useState("");
   const [transcriptLoading, setTranscriptLoading] = useState(false);
   const [viewedTranscripts, setViewedTranscripts] = useState(new Set());
+  const [transcriptOpeningIds, setTranscriptOpeningIds] = useState(new Set());
+  const [prefetchedAudioInfo, setPrefetchedAudioInfo] = useState(null); // { documentId, ready, duration }
   // Track expanded state of history cards by a stable run key
   const [historyExpanded, setHistoryExpanded] = useState({});
   const [callFilter, setCallFilter] = useState("all");
@@ -1107,10 +1109,12 @@ function CampaignDetails({ campaignId, onBack }) {
   const [campaignRunsCollapsed, setCampaignRunsCollapsed] = useState(false);
   // Auto-refresh recent call logs (toggleable). When enabled, refresh every 2 seconds
   const audioRef = useRef(null);
+  const skipNextAudioResetRef = useRef(false);
 const [isPlaying, setIsPlaying] = useState(false);
 const [audioCurrentTime, setAudioCurrentTime] = useState(0);
 const [audioDuration, setAudioDuration] = useState(0);
-const [audioAvailable, setAudioAvailable] = useState(true);
+const [audioAvailable, setAudioAvailable] = useState(false);
+const [audioReady, setAudioReady] = useState(false);
 const rafIdRef = useRef(null);
 const audioUrl = React.useMemo(() => {
   const raw = selectedCall?.audioUrl;
@@ -1126,15 +1130,23 @@ const audioUrl = React.useMemo(() => {
   return raw;
 }, [selectedCall?._id, selectedCall?.audioUrl, selectedCall?.documentId, campaignId]);
 useEffect(() => {
-  setIsPlaying(false);
-  setAudioCurrentTime(0);
-  setAudioDuration(0);
-  setAudioAvailable(true); // Reset availability when call changes
-  if (audioRef.current) {
-    try {
-      audioRef.current.pause();
-      audioRef.current.currentTime = 0;
-    } catch {}
+  const skipReset = !!skipNextAudioResetRef.current;
+  if (skipReset) {
+    // Use prefetched values; do not wipe readiness
+    skipNextAudioResetRef.current = false;
+  } else {
+    setIsPlaying(false);
+    setAudioCurrentTime(0);
+    setAudioDuration(0);
+    setAudioAvailable(false); // Reset to false; enable after successful load
+    setAudioReady(false);
+    setPrefetchedAudioInfo(null);
+    if (audioRef.current) {
+      try {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+      } catch {}
+    }
   }
 }, [selectedCall?._id]);
 
@@ -1159,6 +1171,15 @@ useEffect(() => {
       const duration = audio.duration || 0;
       setAudioDuration(duration);
       setAudioCurrentTime(audio.currentTime || 0);
+      // If we prefetched and this matches, mark as ready immediately
+      try {
+        if (prefetchedAudioInfo && prefetchedAudioInfo.documentId === selectedCall?.documentId) {
+          if (prefetchedAudioInfo.ready && (prefetchedAudioInfo.duration || duration) > 0) {
+            setAudioReady(true);
+            if (!duration && prefetchedAudioInfo.duration) setAudioDuration(prefetchedAudioInfo.duration);
+          }
+        }
+      } catch {}
     }
   };
   
@@ -2918,44 +2939,84 @@ useEffect(() => {
       setTranscriptDocId(documentId);
       setTranscriptContent("");
       setTranscriptLoading(true);
-      setShowTranscriptModal(true);
+      setTranscriptOpeningIds((prev) => {
+        const next = new Set(prev);
+        next.add(documentId);
+        return next;
+      });
       // Mark this transcript as viewed
       setViewedTranscripts((prev) => new Set([...prev, documentId]));
-      const token = sessionStorage.getItem("clienttoken");
-      const resp = await fetch(
-        `${API_BASE}/campaigns/${campaignId}/logs/${documentId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
+      // Build audio URL for this doc/lead similar to audioUrl memo
+      const buildAudioUrlForDoc = () => {
+        const raw = leadData?.audioUrl;
+        const docId = documentId;
+        if (raw && /\/call-audio(\?|$)/.test(String(raw))) return raw;
+        if (
+          raw &&
+          /https?:\/\/[^\s]*s3[^\s]*amazonaws\.com\//i.test(String(raw)) &&
+          docId &&
+          campaignId
+        ) {
+          return `${API_BASE}/campaigns/${campaignId}/call-audio?documentId=${encodeURIComponent(docId)}`;
         }
-      );
-      const result = await resp.json();
-      if (!resp.ok || result.success === false) {
-        throw new Error(result.error || "Failed to fetch transcript");
-      }
-      const fetchedTranscript = result.transcript || "";
+        if ((!raw || String(raw).trim() === '') && docId && campaignId) {
+          return `${API_BASE}/campaigns/${campaignId}/call-audio?documentId=${encodeURIComponent(docId)}`;
+        }
+        if (!raw || String(raw).trim() === '') return undefined;
+        return raw;
+      };
+      const prospectiveAudioUrl = buildAudioUrlForDoc();
+
+      // Run transcript fetch and audio probe in parallel
+      const transcriptPromise = (async () => {
+        const token = sessionStorage.getItem("clienttoken");
+        const resp = await fetch(`${API_BASE}/campaigns/${campaignId}/logs/${documentId}`,{ headers:{ Authorization:`Bearer ${token}`, "Content-Type":"application/json" }});
+        const result = await resp.json();
+        if (!resp.ok || result.success === false) throw new Error(result.error || 'Failed to fetch transcript');
+        return result.transcript || '';
+      })();
+      const probePromise = (async () => {
+        if (!prospectiveAudioUrl) return { ready:false, duration:0 };
+        try {
+          const probe = await new Promise((resolve) => {
+            const a = new Audio();
+            a.preload = 'metadata';
+            a.src = prospectiveAudioUrl;
+            const to = setTimeout(() => resolve({ ok:false, duration:0 }), 8000);
+            a.onloadedmetadata = () => { clearTimeout(to); resolve({ ok: !!(a.duration && isFinite(a.duration) && a.duration > 0), duration: a.duration || 0 }); };
+            a.onerror = () => { clearTimeout(to); resolve({ ok:false, duration:0 }); };
+          });
+          return { ready: !!probe.ok, duration: probe.duration || 0 };
+        } catch { return { ready:false, duration:0 }; }
+      })();
+
+      const [fetchedTranscript, audioProbe] = await Promise.all([transcriptPromise, probePromise]);
       setTranscriptContent(fetchedTranscript);
-      // Cache message count for this document to display near Transcript button
       const docKey = documentId;
       if (docKey && fetchedTranscript) {
         const msgCount = countMessagesInTranscript(fetchedTranscript);
-        setTranscriptCounts((prev) => {
-          const next = new Map(prev);
-          next.set(docKey, msgCount);
-          return next;
-        });
+        setTranscriptCounts((prev) => { const next = new Map(prev); next.set(docKey, msgCount); return next; });
       }
-      // Store lead data for display in modal
+      // Seed audio state and prevent reset flicker on select
+      setPrefetchedAudioInfo({ documentId, ready: !!audioProbe.ready, duration: audioProbe.duration || 0 });
       if (leadData) {
+        skipNextAudioResetRef.current = true;
         setSelectedCall(leadData);
       }
+      setAudioReady(!!audioProbe.ready);
+      setAudioAvailable(!!audioProbe.ready);
+      if ((audioProbe.duration || 0) > 0) setAudioDuration(audioProbe.duration || 0);
+      setShowTranscriptModal(true);
     } catch (e) {
       console.error("Error fetching transcript:", e);
       setTranscriptContent("");
     } finally {
       setTranscriptLoading(false);
+      setTranscriptOpeningIds((prev) => {
+        const next = new Set(prev);
+        next.delete(documentId);
+        return next;
+      });
     }
   };
   // Parse transcript content into chat-like format
@@ -6382,9 +6443,18 @@ useEffect(() => {
                                     ? "Transcript viewed"
                                     : "View transcript"
                                 }
-                                onClick={() => openTranscriptSmart(lead)}
+                                onClick={() => {
+                                  if (lead.documentId && transcriptOpeningIds.has(lead.documentId)) return;
+                                  openTranscriptSmart(lead);
+                                }}
+                                disabled={lead.documentId ? transcriptOpeningIds.has(lead.documentId) : false}
                               >
-                                <svg
+                                {lead.documentId && transcriptOpeningIds.has(lead.documentId) ? (
+                                  <span className="inline-flex items-center mr-1">
+                                    <span className="w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"></span>
+                                  </span>
+                                ) : (
+                                  <svg
                                   className="w-4 h-4 mr-1"
                                   fill="none"
                                   stroke="currentColor"
@@ -6396,7 +6466,8 @@ useEffect(() => {
                                     strokeWidth="2"
                                     d="M8 16h8M8 12h8M8 8h8M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H7l-2 2H3v12a2 2 0 002 2z"
                                   />
-                                </svg>
+                                  </svg>
+                                )}
                                 {(() => {
                                   const baseLabel =
                                     lead.documentId &&
@@ -6408,9 +6479,10 @@ useEffect(() => {
                                       ? lead.transcriptCount
                                       : undefined) ??
                                     getTranscriptMessageCount(lead);
-                                  return count > 0
+                                  const label = count > 0
                                     ? `${baseLabel} (${count})`
                                     : baseLabel;
+                                  return (lead.documentId && transcriptOpeningIds.has(lead.documentId)) ? `Loading…` : label;
                                 })()}
                               </button>
                             )}
@@ -7950,9 +8022,16 @@ useEffect(() => {
                                       ? "Transcript viewed"
                                       : "View transcript"
                                   }
-                                  onClick={() => openTranscriptSmart(lead)}
+                                  onClick={() => { if (lead.documentId && transcriptOpeningIds.has(lead.documentId)) return; openTranscriptSmart(lead); }}
+                                  disabled={lead.documentId ? transcriptOpeningIds.has(lead.documentId) : false}
                                 >
-                                  <svg className="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 16h8M8 12h8M8 8h8M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H7l-2 2H3v12a2 2 0 002 2z"/></svg>
+                                  {lead.documentId && transcriptOpeningIds.has(lead.documentId) ? (
+                                    <span className="inline-flex items-center mr-1">
+                                      <span className="w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"></span>
+                                    </span>
+                                  ) : (
+                                    <svg className="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 16h8M8 12h8M8 8h8M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H7l-2 2H3v12a2 2 0 002 2z"/></svg>
+                                  )}
                                   {(() => {
                                     const baseLabel =
                                       lead.documentId &&
@@ -7964,9 +8043,10 @@ useEffect(() => {
                                         ? lead.transcriptCount
                                         : undefined) ??
                                       getTranscriptMessageCount(lead);
-                                    return count > 0
+                                    const label = count > 0
                                       ? `${baseLabel} (${count})`
                                       : baseLabel;
+                                    return (lead.documentId && transcriptOpeningIds.has(lead.documentId)) ? `Loading…` : label;
                                   })()}
                                 </button>
                               </td>
@@ -8574,21 +8654,31 @@ useEffect(() => {
                                     ? "Transcript viewed"
                                     : "View transcript"
                                 }
-                                onClick={() => openTranscriptSmart(lead)}
+                                onClick={() => {
+                                  if (lead.documentId && transcriptOpeningIds.has(lead.documentId)) return;
+                                  openTranscriptSmart(lead);
+                                }}
+                                disabled={lead.documentId ? transcriptOpeningIds.has(lead.documentId) : false}
                               >
-                                <svg
-                                  className="w-4 h-4 mr-1"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  viewBox="0 0 24 24"
-                                >
-                                  <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth="2"
-                                    d="M8 16h8M8 12h8M8 8h8M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H7l-2 2H3v12a2 2 0 002 2z"
-                                  />
-                                </svg>
+                                {lead.documentId && transcriptOpeningIds.has(lead.documentId) ? (
+                                  <span className="inline-flex items-center mr-1">
+                                    <span className="w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"></span>
+                                  </span>
+                                ) : (
+                                  <svg
+                                    className="w-4 h-4 mr-1"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth="2"
+                                      d="M8 16h8M8 12h8M8 8h8M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H7l-2 2H3v12a2 2 0 002 2z"
+                                    />
+                                  </svg>
+                                )}
                                 {(() => {
                                   const baseLabel =
                                     lead.documentId &&
@@ -8600,9 +8690,10 @@ useEffect(() => {
                                       ? lead.transcriptCount
                                       : undefined) ??
                                     getTranscriptMessageCount(lead);
-                                  return count > 0
+                                  const label = count > 0
                                     ? `${baseLabel} (${count})`
                                     : baseLabel;
+                                  return (lead.documentId && transcriptOpeningIds.has(lead.documentId)) ? `Loading…` : label;
                                 })()}
                               </button>
                             )}
@@ -9390,6 +9481,7 @@ useEffect(() => {
     onError={(e) => {
       // Mark audio as unavailable when it fails to load (e.g., 404)
       setAudioAvailable(false);
+      setAudioReady(false);
       setIsPlaying(false);
       if (audioRef.current) {
         audioRef.current.pause();
@@ -9399,10 +9491,24 @@ useEffect(() => {
     onLoadedMetadata={() => {
       // Mark audio as available when metadata successfully loads
       setAudioAvailable(true);
+      try {
+        const d = audioRef.current?.duration || 0;
+        if (d && isFinite(d) && d > 0) {
+          setAudioDuration(d);
+          setAudioReady(true);
+        }
+      } catch {}
     }}
     onLoadedData={() => {
       // Mark audio as available when it successfully loads
       setAudioAvailable(true);
+      try {
+        const d = audioRef.current?.duration || 0;
+        if (d && isFinite(d) && d > 0) {
+          setAudioDuration(d);
+          setAudioReady(true);
+        }
+      } catch {}
     }}
   />
 ) : null}
@@ -9461,7 +9567,7 @@ useEffect(() => {
               </button>
 
               {/* Play/Pause recording button */}
-              {audioUrl && audioAvailable && (
+              {audioUrl && audioReady && (
                 <button
                   className="ml-3 bg-white text-gray-800 text-sm px-3 py-2 rounded-lg border hover:bg-gray-50 transition-colors flex items-center gap-2 disabled:opacity-60"
                   onClick={handlePlayPause}
@@ -9533,7 +9639,7 @@ useEffect(() => {
             </div>
             
             {/* Audio Timeline */}
-            {audioUrl && audioAvailable && audioDuration > 0 && (
+            {audioUrl && audioReady && audioDuration > 0 && (
   <div className="px-6 pb-2 border-b border-gray-200">
     <div className="flex items-center gap-3 mb-2">
       <button

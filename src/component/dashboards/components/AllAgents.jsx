@@ -1852,7 +1852,7 @@ const AllAgents = () => {
                             <th className="px-3 py-2 text-left text-gray-600 font-medium">DID</th>
                             <th className="px-3 py-2 text-left text-gray-600 font-medium">Status</th>
                             <th className="px-3 py-2 text-left text-gray-600 font-medium">Agent</th>
-                            <th className="px-3 py-2 text-left text-gray-600 font-medium">Client</th>
+                            <th className="px-3 py-2 text-left text-gray-600 font-medium">Business</th>
                             <th className="px-3 py-2 text-left text-gray-600 font-medium">Active</th>
                           </tr>
                         </thead>
@@ -1870,7 +1870,12 @@ const AllAgents = () => {
                               const isAssignedToThisAgent = assignedAgent && String(assignedAgent._id) === String(selectedAgentForAssign?._id);
                               let statusLabel = isAssignedToThisAgent ? 'Already Assigned' : status;
                               let agentName = assignedAgent?.agentName || '-';
-                              let clientName = assignedAgent ? getClientName(assignedAgent.clientId) : '-';
+                              let businessName = assignedAgent
+                                ? (getClientBusinessName(assignedAgent.clientId) || getClientName(assignedAgent.clientId))
+                                : '-';
+                              let businessLogoUrl = assignedAgent
+                                ? getClientBusinessLogoUrl(assignedAgent.clientId)
+                                : null;
 
                               // Determine if assigned agent is locked by running campaign
                               const lockedByCampaign = assignedAgent ? (campaignLocks.lockedAgentIds || []).includes(String(assignedAgent._id)) : false;
@@ -1883,10 +1888,11 @@ const AllAgents = () => {
                                 status = 'Available';
                                 statusLabel = 'Available';
                                 agentName = '-';
-                                clientName = '-';
+                                businessName = '-';
+                                businessLogoUrl = null;
                               }
 
-                              return { did, assignedAgent, status, statusLabel, agentName, clientName, lockedByCampaign };
+                              return { did, assignedAgent, status, statusLabel, agentName, businessName, businessLogoUrl, lockedByCampaign };
                             })
                             // Unassigned first only (do not shift based on current selection)
                             .sort((a, b) => {
@@ -1895,7 +1901,7 @@ const AllAgents = () => {
                               if (av !== bv) return av - bv;
                               return 0;
                             })
-                          ).map(({ did, assignedAgent, status, statusLabel, agentName, clientName, lockedByCampaign }) => {
+                          ).map(({ did, assignedAgent, status, statusLabel, agentName, businessName, businessLogoUrl, lockedByCampaign }) => {
                             const isSelected = assignFormData.didNumber === did;
                             const isLocked = !!assignedAgent && lockedByCampaign; // locked by running campaign
                             const isCurrentAgentLocked = (campaignLocks.lockedAgentIds || []).includes(String(selectedAgentForAssign?._id));
@@ -1922,7 +1928,24 @@ const AllAgents = () => {
                                   </span>
                                 </td>
                                 <td className="px-3 py-2 text-gray-700">{isSelected ? (selectedAgentForAssign?.agentName || '-') : agentName}</td>
-                                <td className="px-3 py-2 text-gray-700">{isSelected ? (getClientName(selectedAgentForAssign?.clientId) || '-') : clientName}</td>
+                                <td className="px-3 py-2 text-gray-700">
+                                  {(() => {
+                                    const nameToShow = isSelected
+                                      ? (getClientBusinessName(selectedAgentForAssign?.clientId) || getClientName(selectedAgentForAssign?.clientId) || '-')
+                                      : businessName;
+                                    const logoToShow = isSelected
+                                      ? getClientBusinessLogoUrl(selectedAgentForAssign?.clientId)
+                                      : businessLogoUrl;
+                                    return (
+                                      <div className="flex items-center space-x-2">
+                                        {logoToShow ? (
+                                          <img src={logoToShow} alt="logo" className="h-4 w-4 rounded-sm object-cover" />
+                                        ) : null}
+                                        <span>{nameToShow}</span>
+                                      </div>
+                                    );
+                                  })()}
+                                </td>
                                 <td className="px-3 py-2">
                                   {assignedAgent ? (
                                     <div className="flex items-center space-x-2">
