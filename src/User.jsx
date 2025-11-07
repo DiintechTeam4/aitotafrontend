@@ -13,6 +13,46 @@ const User = () => {
 
   useEffect(() => {
     const initializeAuth = async () => {
+      // Hydrate session from URL token when switching into a human agent account
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const encoded = params.get("token");
+        if (encoded) {
+          const decoded = JSON.parse(decodeURIComponent(encoded));
+          if (decoded?.token) {
+            // Set agent session
+            sessionStorage.setItem("usertoken", decoded.token);
+            if (decoded.userData) {
+              sessionStorage.setItem(
+                "userData",
+                JSON.stringify(decoded.userData)
+              );
+            }
+            // Optionally expose clienttoken if provided for cross-calls
+            if (decoded.clientToken) {
+              sessionStorage.setItem("clienttoken", decoded.clientToken);
+            }
+            // Avoid client role taking precedence if this is an agent session
+            try {
+              const parsedUser = decoded.userData || {};
+              if (
+                parsedUser.role === "humanAgent" ||
+                parsedUser.role === "HumanAgent" ||
+                parsedUser.role === "executive"
+              ) {
+                sessionStorage.removeItem("clientData");
+              }
+            } catch (_) {}
+            // Clean up URL (remove token param) without reload
+            const cleanUrl = new URL(window.location.href);
+            cleanUrl.searchParams.delete("token");
+            window.history.replaceState({}, "", cleanUrl.toString());
+          }
+        }
+      } catch (_) {
+        // ignore token hydration errors
+      }
+
       // Migrate any legacy localStorage values to sessionStorage
       try {
         const legacyUserToken = localStorage.getItem("usertoken");
@@ -55,9 +95,9 @@ const User = () => {
 
           // Check if we're already on a campaign/group page
           const urlParams = new URLSearchParams(window.location.search);
-          const campaignId = urlParams.get('campaignId');
-          const groupId = urlParams.get('groupId');
-          
+          const campaignId = urlParams.get("campaignId");
+          const groupId = urlParams.get("groupId");
+
           // Navigate based on role
           console.log("Initializing auth with role:", parsedData.role);
           if (parsedData.role === "client") {

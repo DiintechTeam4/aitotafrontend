@@ -5,7 +5,10 @@ import {
   FiUserPlus,
   FiEdit,
   FiTrash2,
+  FiMoreVertical,
 } from "react-icons/fi";
+import HumanAgentDetails from "./HumanAgentDetails";
+import { API_BASE_URL_RENDER } from "../../../config";
 import { API_BASE_URL } from "../../../config";
 
 const HumanAgents = () => {
@@ -22,6 +25,58 @@ const HumanAgents = () => {
     role: "executive",
   });
   const [availableAgents, setAvailableAgents] = useState([]);
+  const [agentStats, setAgentStats] = useState({});
+  const [openMenuId, setOpenMenuId] = useState(null);
+  const [selectedAgentId, setSelectedAgentId] = useState(null);
+  const [showDetails, setShowDetails] = useState(false);
+
+  // Switch to this human agent (client -> team impersonation via common switch API)
+  const switchToHumanAgent = async (agent) => {
+    try {
+      const token = sessionStorage.getItem("clienttoken");
+      if (!token) {
+        alert("You must be logged in as a client to switch to a team account.");
+        return;
+      }
+
+      const resp = await fetch(`${API_BASE_URL}/client/auth/switch`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ role: "humanAgent", id: agent._id }),
+      });
+      const json = await resp.json();
+      if (!resp.ok || !json?.success || !json?.token) {
+        throw new Error(json?.message || json?.error || "Failed to switch");
+      }
+
+      // Create a new tab with token in URL for session setup
+      const userData = {
+        role: "humanAgent",
+        id: json.id,
+        name: json.name || agent.humanAgentName || "",
+        email: json.email || agent.email || "",
+        clientId: json.clientId || "",
+        clientUserId: json.clientUserId || "",
+      };
+
+      // Encode the data to pass via URL
+      const encodedData = encodeURIComponent(
+        JSON.stringify({
+          token: json.token,
+          userData: userData,
+        })
+      );
+
+      // Open new tab with token data
+      window.open(`/auth/dashboard?token=${encodedData}`, "_blank");
+    } catch (e) {
+      console.error("Switch to human agent failed:", e);
+      alert(e?.message || "Failed to switch to team");
+    }
+  };
 
   // Fetch human agents for the current client
   const fetchHumanAgents = async () => {
@@ -260,10 +315,35 @@ const HumanAgents = () => {
     setShowForm(false);
   };
 
+   // Handle row click to show details
+   const handleRowClick = (agent) => {
+    setSelectedAgentId(agent._id);
+    setShowDetails(true);
+  };
+
+  // Handle back from details
+  const handleBackFromDetails = () => {
+    setShowDetails(false);
+    setSelectedAgentId(null);
+  };
+
   useEffect(() => {
     fetchHumanAgents();
     fetchAvailableAgents();
   }, []);
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (openMenuId && !event.target.closest(".relative")) {
+        setOpenMenuId(null);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [openMenuId]);
 
   if (loading && humanAgents.length === 0) {
     return (
@@ -296,6 +376,16 @@ const HumanAgents = () => {
     );
   }
 
+  // Show details view if an agent is selected
+  if (showDetails && selectedAgentId) {
+    return (
+      <HumanAgentDetails
+        agentId={selectedAgentId}
+        onBack={handleBackFromDetails}
+      />
+    );
+  }
+
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
       {/* Header */}
@@ -323,7 +413,7 @@ const HumanAgents = () => {
           </h3>
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
+              <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
                   Role *
                 </label>
@@ -475,7 +565,6 @@ const HumanAgents = () => {
                   </div>
                 )}
               </div>
-              
             </div>
 
             <div className="flex space-x-4 pt-4">
@@ -515,65 +604,67 @@ const HumanAgents = () => {
             </p>
           </div>
         ) : (
-          <div className="bg-white rounded-xl shadow-lg overflow-hidden border border-gray-200">
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
+          <div className="bg-white rounded-xl shadow-lg overflow-hidden border border-gray-200 ">
+            <div className="overflow-x-auto max-w-full pb-15">
+              <table className="w-full divide-y divide-gray-200 table-fixed">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                    <th className="px-3 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider w-32">
                       Name
                     </th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                    <th className="px-3 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider w-40">
                       Email
                     </th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                      Mobile Number
+                    <th className="px-3 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider w-32">
+                      Mobile
                     </th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                    <th className="px-3 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider w-48">
                       Selected Agents
                     </th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                    <th className="px-3 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider w-24">
                       Role
                     </th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                    <th className="px-3 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider w-24">
                       Created
                     </th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                      Actions
+                    <th className="px-2 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider w-20">
+                      Auth
                     </th>
+                    <th className="px-1 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider w-8"></th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {humanAgents.map((agent) => (
                     <tr
                       key={agent._id}
-                      className="hover:bg-gray-50 transition-colors"
+                      className="hover:bg-gray-50 transition-colors cursor-pointer"
+                      onClick={() => handleRowClick(agent)}
                     >
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-3 py-4">
                         <div className="flex items-center">
-                          <div className="flex-shrink-0 h-10 w-10">
-                            <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
-                              <span className="text-sm font-medium text-blue-600">
+                          <div className="flex-shrink-0 h-8 w-8">
+                            <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center">
+                              <span className="text-xs font-medium text-blue-600">
                                 {agent.humanAgentName.charAt(0).toUpperCase()}
                               </span>
                             </div>
                           </div>
-                          <div className="ml-4">
-                            <div className="text-sm font-semibold text-gray-900">
+                          <div className="ml-2">
+                            <div className="text-sm font-semibold text-gray-900 truncate">
                               {agent.humanAgentName}
                             </div>
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">
+                      <td className="px-3 py-4">
+                        <div className="text-sm text-gray-900 truncate">
                           {agent.email}
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <td className="px-3 py-4 text-sm text-gray-500 truncate">
                         {agent.mobileNumber || "N/A"}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <td className="px-3 py-4 text-sm text-gray-500">
                         {(() => {
                           if (agent.agentIds && agent.agentIds.length > 0) {
                             const names = agent.agentIds.map((agentId) => {
@@ -609,31 +700,70 @@ const HumanAgents = () => {
                             : agent.selectAgent || "N/A";
                         })()}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <td className="px-3 py-4 text-sm text-gray-500 truncate">
                         <span className="capitalize">
-                          {agent.role || "N/A"}
+                          {agent.type || "N/A"}
                         </span>
                       </td>
-
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <td className="px-3 py-4 text-sm text-gray-500 truncate">
                         {new Date(agent.createdAt).toLocaleDateString()}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <div className="flex space-x-3">
+                      <td className="px-2 py-4 text-sm font-medium">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            switchToHumanAgent(agent);
+                          }}
+                          className="px-2 py-1 text-xs rounded-md bg-black text-white hover:bg-gray-800 transition-colors"
+                          title="Authenticate into this team account"
+                          aria-label="Authenticate into team account"
+                        >
+                          Login
+                        </button>
+                      </td>
+                      <td className="px-1 py-4 text-sm font-medium">
+                        <div className="relative">
                           <button
-                            onClick={() => handleEdit(agent)}
-                            className="text-blue-600 hover:text-blue-900 font-semibold transition-colors flex items-center"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpenMenuId(
+                                openMenuId === agent._id ? null : agent._id
+                              );
+                            }}
+                            className="p-1 rounded-full hover:bg-gray-100 transition-colors"
+                            title="More actions"
                           >
-                            <FiEdit className="w-4 h-4 mr-1" />
-                            Edit
+                            <FiMoreVertical className="w-4 h-4 text-gray-600" />
                           </button>
-                          <button
-                            onClick={() => handleDelete(agent._id)}
-                            className="text-red-600 hover:text-red-900 font-semibold transition-colors flex items-center"
-                          >
-                            <FiTrash2 className="w-4 h-4 mr-1" />
-                            Delete
-                          </button>
+
+                          {openMenuId === agent._id && (
+                            <div className="absolute right-0 mt-1 w-40 bg-white rounded-md shadow-lg z-10 border border-gray-200">
+                              <div className="py-1">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleEdit(agent);
+                                    setOpenMenuId(null);
+                                  }}
+                                  className="flex items-center w-full px-3 py-2 text-xs text-gray-700 hover:bg-gray-100 transition-colors"
+                                >
+                                  <FiEdit className="w-3 h-3 mr-2" />
+                                  Edit
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDelete(agent._id);
+                                    setOpenMenuId(null);
+                                  }}
+                                  className="flex items-center w-full px-3 py-2 text-xs text-red-600 hover:bg-gray-100 transition-colors"
+                                >
+                                  <FiTrash2 className="w-3 h-3 mr-2" />
+                                  Delete
+                                </button>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </td>
                     </tr>

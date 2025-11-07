@@ -23,6 +23,7 @@ import PerformanceKPIs from "./components/PerformanceKPIs";
 import InBoundSection from "./components/InBoundSection";
 import OutboundSection from "./components/OutboundSection";
 import StaffAgents from "./components/StaffAgents";
+import HumanAgentMyDials from "./components/HumanAgentMyDials";
 
 const HumanAgentDashboard = ({ userData, onLogout }) => {
   const [humanAgent, setHumanAgent] = useState(null);
@@ -175,41 +176,7 @@ const HumanAgentDashboard = ({ userData, onLogout }) => {
         );
 
       case "my-dials":
-        return (
-          <div className="h-full flex flex-col">
-            <div className="bg-white border-b border-gray-200 px-8 py-6">
-              <h2 className="text-3xl font-bold text-gray-900 mb-4">
-                My Dials
-              </h2>
-              <p className="text-gray-600 text-lg">
-                Track your calling history and performance
-              </p>
-            </div>
-            <div className="flex-1 p-8 overflow-y-auto">
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <h3 className="text-xl font-semibold text-gray-900 mb-4">
-                  Call History
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div className="text-center p-6 bg-blue-50 rounded-lg">
-                    <FiPhone className="w-8 h-8 text-blue-600 mx-auto mb-2" />
-                    <div className="text-2xl font-bold text-blue-600">0</div>
-                    <div className="text-sm text-gray-600">Total Calls</div>
-                  </div>
-                  <div className="text-center p-6 bg-green-50 rounded-lg">
-                    <FiHeadphones className="w-8 h-8 text-green-600 mx-auto mb-2" />
-                    <div className="text-2xl font-bold text-green-600">0</div>
-                    <div className="text-sm text-gray-600">Connected</div>
-                  </div>
-                  <div className="text-center p-6 bg-orange-50 rounded-lg">
-                    <FiBarChart2 className="w-8 h-8 text-orange-600 mx-auto mb-2" />
-                    <div className="text-2xl font-bold text-orange-600">0%</div>
-                    <div className="text-sm text-gray-600">Success Rate</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+        return (<HumanAgentMyDials />
         );
 
       case "my-sales":
