@@ -249,7 +249,7 @@ const HumanAgentDetails = ({ agentId, onBack }) => {
       const clientToken = sessionStorage.getItem("clienttoken");
       // Get human agent token
       const tokenResponse = await fetch(
-        `$https://aitotabackend-sih2.onrender.com/client/auth/human-agent-token/${agentId}`,
+        `https://aitotabackend-sih2.onrender.com/client/auth/human-agent-token/${agentId}`,
         {
           headers: { Authorization: `Bearer ${clientToken}` },
         }
@@ -258,7 +258,7 @@ const HumanAgentDetails = ({ agentId, onBack }) => {
       if (tokenData.success && tokenData.token) {
         // Use token to fetch contacts in this group
         const response = await fetch(
-          `$https://aitotabackend-sih2.onrender.com/human-agent/groups/${group._id}/contacts`,
+          `https://aitotabackend-sih2.onrender.com/human-agent/groups/${group._id}/contacts`,
           {
             headers: { Authorization: `Bearer ${tokenData.token}` },
           }
@@ -281,7 +281,7 @@ const HumanAgentDetails = ({ agentId, onBack }) => {
       const clientToken = sessionStorage.getItem("clienttoken");
       // First get human agent token
       const tokenResponse = await fetch(
-        `$https://aitotabackend-sih2.onrender.com/client/auth/human-agent-token/${agentId}`,
+        `https://aitotabackend-sih2.onrender.com/client/auth/human-agent-token/${agentId}`,
         {
           headers: { Authorization: `Bearer ${clientToken}` },
         }
@@ -291,7 +291,7 @@ const HumanAgentDetails = ({ agentId, onBack }) => {
       if (tokenData.success && tokenData.token) {
         // Now use human agent token to fetch assigned groups
         const response = await fetch(
-          `$https://aitotabackend-sih2.onrender.com/human-agent/groups?owner=assign`,
+          `https://aitotabackend-sih2.onrender.com/human-agent/groups?owner=assign`,
           {
             headers: { Authorization: `Bearer ${tokenData.token}` },
           }
@@ -325,7 +325,7 @@ const HumanAgentDetails = ({ agentId, onBack }) => {
       }
 
       const response = await fetch(
-        `$https://aitotabackend-sih2.onrender.com/client/human-agents/${agentId}`,
+        `https://aitotabackend-sih2.onrender.com/client/human-agents/${agentId}`,
         {
           method: "GET",
           headers: {
@@ -355,7 +355,7 @@ const HumanAgentDetails = ({ agentId, onBack }) => {
       const clientToken = sessionStorage.getItem("clienttoken");
       // First get human agent token
       const tokenResponse = await fetch(
-        `$https://aitotabackend-sih2.onrender.com/client/auth/human-agent-token/${agentId}`,
+        `https://aitotabackend-sih2.onrender.com/client/auth/human-agent-token/${agentId}`,
         {
           headers: { Authorization: `Bearer ${clientToken}` },
         }
@@ -365,7 +365,7 @@ const HumanAgentDetails = ({ agentId, onBack }) => {
       if (tokenData.success && tokenData.token) {
         // Now use human agent token to fetch stats
         const response = await fetch(
-          `$https://aitotabackend-sih2.onrender.com/human-agent/agent-dispo-stats?humanAgentId=${agentId}`,
+          `https://aitotabackend-sih2.onrender.com/human-agent/agent-dispo-stats?humanAgentId=${agentId}`,
           {
             headers: { Authorization: `Bearer ${tokenData.token}` },
           }
@@ -385,7 +385,7 @@ const HumanAgentDetails = ({ agentId, onBack }) => {
       const clientToken = sessionStorage.getItem("clienttoken");
       // First get human agent token
       const tokenResponse = await fetch(
-        `$https://aitotabackend-sih2.onrender.com/client/auth/human-agent-token/${agentId}`,
+        `https://aitotabackend-sih2.onrender.com/client/auth/human-agent-token/${agentId}`,
         {
           headers: { Authorization: `Bearer ${clientToken}` },
         }
@@ -396,7 +396,7 @@ const HumanAgentDetails = ({ agentId, onBack }) => {
         // Now use human agent token to fetch dials report
         const q = buildDateQuery();
         const response = await fetch(
-          `$https://aitotabackend-sih2.onrender.com/human-agent/dials/report${q ? `?${q}` : ""}`,
+          `https://aitotabackend-sih2.onrender.com/human-agent/dials/report${q ? `?${q}` : ""}`,
           {
             headers: { Authorization: `Bearer ${tokenData.token}` },
           }
@@ -416,7 +416,7 @@ const HumanAgentDetails = ({ agentId, onBack }) => {
       const clientToken = sessionStorage.getItem("clienttoken");
       // First get human agent token
       const tokenResponse = await fetch(
-        `$https://aitotabackend-sih2.onrender.com/client/auth/human-agent-token/${agentId}`,
+        `https://aitotabackend-sih2.onrender.com/client/auth/human-agent-token/${agentId}`,
         {
           headers: { Authorization: `Bearer ${clientToken}` },
         }
@@ -427,7 +427,7 @@ const HumanAgentDetails = ({ agentId, onBack }) => {
         // Now use human agent token to fetch dials leads
         const q = buildDateQuery();
         const response = await fetch(
-          `$https://aitotabackend-sih2.onrender.com/human-agent/dials/leads${q ? `?${q}` : ""}`,
+          `https://aitotabackend-sih2.onrender.com/human-agent/dials/leads${q ? `?${q}` : ""}`,
           {
             headers: { Authorization: `Bearer ${tokenData.token}` },
           }
@@ -447,7 +447,7 @@ const HumanAgentDetails = ({ agentId, onBack }) => {
       const clientToken = sessionStorage.getItem("clienttoken");
       // First get human agent token
       const tokenResponse = await fetch(
-        `$https://aitotabackend-sih2.onrender.com/client/auth/human-agent-token/${agentId}`,
+        `https://aitotabackend-sih2.onrender.com/client/auth/human-agent-token/${agentId}`,
         {
           headers: { Authorization: `Bearer ${clientToken}` },
         }
@@ -458,7 +458,7 @@ const HumanAgentDetails = ({ agentId, onBack }) => {
         // Now use human agent token to fetch dials done
         const q = buildDateQuery();
         const response = await fetch(
-          `$https://aitotabackend-sih2.onrender.com/human-agent/dials/done${q ? `?${q}` : ""}`,
+          `https://aitotabackend-sih2.onrender.com/human-agent/dials/done${q ? `?${q}` : ""}`,
           {
             headers: { Authorization: `Bearer ${tokenData.token}` },
           }
@@ -480,7 +480,7 @@ const HumanAgentDetails = ({ agentId, onBack }) => {
 
       // First get human agent token
       const tokenResponse = await fetch(
-        `$https://aitotabackend-sih2.onrender.com/client/auth/human-agent-token/${agentId}`,
+        `https://aitotabackend-sih2.onrender.com/client/auth/human-agent-token/${agentId}`,
         {
           headers: { Authorization: `Bearer ${clientToken}` },
         }
@@ -491,7 +491,7 @@ const HumanAgentDetails = ({ agentId, onBack }) => {
         // Fetch leads data
         const q = buildDateQuery();
         const response = await fetch(
-          `$https://aitotabackend-sih2.onrender.com/human-agent/dials/leads${q ? `?${q}` : ""}`,
+          `https://aitotabackend-sih2.onrender.com/human-agent/dials/leads${q ? `?${q}` : ""}`,
           {
             headers: { Authorization: `Bearer ${tokenData.token}` },
           }
@@ -636,7 +636,7 @@ const HumanAgentDetails = ({ agentId, onBack }) => {
       const token = sessionStorage.getItem("clienttoken");
       // agent.groupId must exist
       const resp = await fetch(
-        `$https://aitotabackend-sih2.onrender.com/client/groups/${agent.groupId}/contacts`,
+        `https://aitotabackend-sih2.onrender.com/client/groups/${agent.groupId}/contacts`,
         {
           headers: { Authorization: `Bearer ${token}` },
         }
@@ -652,7 +652,7 @@ const HumanAgentDetails = ({ agentId, onBack }) => {
 
   const fetchAvailableGroups = async () => {
     const token = sessionStorage.getItem("clienttoken");
-    const resp = await fetch(`$https://aitotabackend-sih2.onrender.com/client/groups`, {
+    const resp = await fetch(`https://aitotabackend-sih2.onrender.com/client/groups`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     const res = await resp.json();
@@ -668,7 +668,7 @@ const HumanAgentDetails = ({ agentId, onBack }) => {
     setAssignLoading(true);
     const token = sessionStorage.getItem("clienttoken");
     const resp = await fetch(
-      `$https://aitotabackend-sih2.onrender.com/client/groups/${groupId}/contacts`,
+      `https://aitotabackend-sih2.onrender.com/client/groups/${groupId}/contacts`,
       {
         headers: { Authorization: `Bearer ${token}` },
       }
@@ -680,7 +680,7 @@ const HumanAgentDetails = ({ agentId, onBack }) => {
 
   const fetchAllGroups = async () => {
     const token = sessionStorage.getItem("clienttoken");
-    const resp = await fetch(`$https://aitotabackend-sih2.onrender.com/client/groups`, {
+    const resp = await fetch(`https://aitotabackend-sih2.onrender.com/client/groups`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     const res = await resp.json();
@@ -708,7 +708,7 @@ const HumanAgentDetails = ({ agentId, onBack }) => {
       const clientToken = sessionStorage.getItem("clienttoken");
       // 2. Human agent token API call
       const tokenResponse = await fetch(
-        `$https://aitotabackend-sih2.onrender.com/client/auth/human-agent-token/${agentId}`,
+        `https://aitotabackend-sih2.onrender.com/client/auth/human-agent-token/${agentId}`,
         {
           headers: { Authorization: `Bearer ${clientToken}` },
         }
@@ -718,7 +718,7 @@ const HumanAgentDetails = ({ agentId, onBack }) => {
       if (tokenData.success && tokenData.token) {
         // 3. Now use this new token to fetch contacts for group
         const response = await fetch(
-          `$https://aitotabackend-sih2.onrender.com/human-agent/groups/${group._id}/contacts`,
+          `https://aitotabackend-sih2.onrender.com/human-agent/groups/${group._id}/contacts`,
           {
             headers: { Authorization: `Bearer ${tokenData.token}` },
           }
@@ -743,7 +743,7 @@ const HumanAgentDetails = ({ agentId, onBack }) => {
       setSuperSearch("");
       setLoadingContacts(true);
       const token = sessionStorage.getItem("clienttoken");
-      const resp = await fetch(`$https://aitotabackend-sih2.onrender.com/client/groups/${group._id}`, {
+      const resp = await fetch(`https://aitotabackend-sih2.onrender.com/client/groups/${group._id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const result = await resp.json();
@@ -1536,7 +1536,7 @@ const HumanAgentDetails = ({ agentId, onBack }) => {
                   setAssignLoading(true);
                   const token = sessionStorage.getItem("clienttoken");
                   await fetch(
-                    `$https://aitotabackend-sih2.onrender.com/client/groups/${selectedGroupId}/assign-contacts`,
+                    `https://aitotabackend-sih2.onrender.com/client/groups/${selectedGroupId}/assign-contacts`,
                     {
                       method: "POST",
                       headers: {
@@ -1639,7 +1639,7 @@ const HumanAgentDetails = ({ agentId, onBack }) => {
                               const token =
                                 sessionStorage.getItem("clienttoken");
                               const resp = await fetch(
-                                `$https://aitotabackend-sih2.onrender.com/client/groups`,
+                                `https://aitotabackend-sih2.onrender.com/client/groups`,
                                 {
                                   method: "POST",
                                   headers: {
@@ -1776,7 +1776,7 @@ const HumanAgentDetails = ({ agentId, onBack }) => {
                             // Send to bulk-add API
                             const token = sessionStorage.getItem("clienttoken");
                             const resp = await fetch(
-                              `$https://aitotabackend-sih2.onrender.com/client/groups/${selectedGroup._id}/contacts/bulk-add`,
+                              `https://aitotabackend-sih2.onrender.com/client/groups/${selectedGroup._id}/contacts/bulk-add`,
                               {
                                 method: "POST",
                                 headers: {
@@ -2013,7 +2013,7 @@ const HumanAgentDetails = ({ agentId, onBack }) => {
                           try {
                             const token = sessionStorage.getItem("clienttoken");
                             const response = await fetch(
-                              `$https://aitotabackend-sih2.onrender.com/client/groups/${selectedGroup._id}/assign?owner=assign`,
+                              `https://aitotabackend-sih2.onrender.com/client/groups/${selectedGroup._id}/assign?owner=assign`,
                               {
                                 method: "POST",
                                 headers: {
