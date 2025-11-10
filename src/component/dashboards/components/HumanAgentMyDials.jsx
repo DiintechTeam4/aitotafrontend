@@ -132,7 +132,7 @@ function HumanAgentMyDials() {
     try {
       setLoading(true);
       setError("");
-      const url = new URL(`${API_BASE_URL}/human-agent/assigned-campaigns`);
+      const url = new URL(`https://aitotabackend-sih2.onrender.com/human-agent/assigned-campaigns`);
       if (filter) url.searchParams.set("filter", filter);
       const res = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` },
@@ -162,10 +162,10 @@ function HumanAgentMyDials() {
       const q = buildDateQuery();
       const headers = { Authorization: `Bearer ${token}` };
       const [reportRes, doneRes] = await Promise.all([
-        fetch(`${API_BASE_URL}/human-agent/dials/report${q ? `?${q}` : ""}`, {
+        fetch(`https://aitotabackend-sih2.onrender.com/human-agent/dials/report${q ? `?${q}` : ""}`, {
           headers,
         }),
-        fetch(`${API_BASE_URL}/human-agent/dials/done${q ? `?${q}` : ""}`, {
+        fetch(`https://aitotabackend-sih2.onrender.com/human-agent/dials/done${q ? `?${q}` : ""}`, {
           headers,
         }),
       ]);
@@ -197,7 +197,7 @@ function HumanAgentMyDials() {
       const q = buildDateQuery();
       const headers = { Authorization: `Bearer ${token}` };
       const res = await fetch(
-        `${API_BASE_URL}/human-agent/dials/leads${q ? `?${q}` : ""}`,
+        `https://aitotabackend-sih2.onrender.com/human-agent/dials/leads${q ? `?${q}` : ""}`,
         { headers }
       );
       const json = await res.json();
@@ -218,7 +218,7 @@ function HumanAgentMyDials() {
       const q = buildDateQuery();
       const headers = { Authorization: `Bearer ${token}` };
       const res = await fetch(
-        `${API_BASE_URL}/human-agent/dials/leads${q ? `?${q}` : ""}`,
+        `https://aitotabackend-sih2.onrender.com/human-agent/dials/leads${q ? `?${q}` : ""}`,
         { headers }
       );
       const data = await res.json();
@@ -256,7 +256,7 @@ function HumanAgentMyDials() {
         leadStatus: selected,
         date: new Date().toISOString(),
       };
-      const res = await fetch(`${API_BASE_URL}/human-agent/dials`, {
+      const res = await fetch(`https://aitotabackend-sih2.onrender.com/human-agent/dials`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -292,7 +292,7 @@ function HumanAgentMyDials() {
     try {
       setLoading(true);
       setError("");
-      const url = new URL(`${API_BASE_URL}/human-agent/assigned-contacts`);
+      const url = new URL(`https://aitotabackend-sih2.onrender.com/human-agent/assigned-contacts`);
       url.searchParams.set("campaignId", selectedCampaignId);
       if (filter) url.searchParams.set("filter", filter);
       url.searchParams.set("page", String(page));
@@ -319,7 +319,7 @@ function HumanAgentMyDials() {
     try {
       setLoading(true);
       setError("");
-      const res = await fetch(`${API_BASE_URL}/human-agent/groups`, {
+      const res = await fetch(`https://aitotabackend-sih2.onrender.com/human-agent/groups`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const json = await res.json();
@@ -354,7 +354,7 @@ function HumanAgentMyDials() {
       setLoading(true);
       setError("");
       const res = await fetch(
-        `${API_BASE_URL}/human-agent/groups/${gid}/contacts`,
+        `https://aitotabackend-sih2.onrender.com/human-agent/groups/${gid}/contacts`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
       const json = await res.json();
@@ -379,7 +379,7 @@ function HumanAgentMyDials() {
     try {
       setLoading(true);
       setError("");
-      const url = new URL(`${API_BASE_URL}/human-agent/groups`);
+      const url = new URL(`https://aitotabackend-sih2.onrender.com/human-agent/groups`);
       url.searchParams.set("owner", "assign");
       if (filter) {
         url.searchParams.set("filter", filter);
@@ -418,7 +418,7 @@ function HumanAgentMyDials() {
     try {
       setLoading(true);
       const res = await fetch(
-        `${API_BASE_URL}/human-agent/groups/${groupId}/contacts`,
+        `https://aitotabackend-sih2.onrender.com/human-agent/groups/${groupId}/contacts`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
       const json = await res.json();
