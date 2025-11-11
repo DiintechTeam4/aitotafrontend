@@ -1038,7 +1038,7 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
             >
               <span className={`${activeSection === "human_agent" ? "absolute left-0 top-0 h-full w-1 bg-white" : "hidden"}`}></span>
               <FiUserCheck className="text-xl w-6 text-center" />
-              <span className="flex-1 font-medium">Sales Staff</span>
+              <span className="flex-1 font-medium">Team</span>
             </button>
 
             <button
