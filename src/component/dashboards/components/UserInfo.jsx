@@ -1,5 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { FaAddressBook, FaSyncAlt, FaUsers } from "react-icons/fa";
+import {
+  FaAddressBook,
+  FaSyncAlt,
+  FaUsers,
+  FaLayerGroup,
+} from "react-icons/fa";
 import { API_BASE_URL } from "../../../config";
 
 const LIMIT_OPTIONS = [10, 20, 50];
@@ -31,10 +36,13 @@ const UserInfo = () => {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [users, setUsers] = useState([]);
   const [contacts, setContacts] = useState([]);
+  const [groupContacts, setGroupContacts] = useState([]);
   const [pagination, setPagination] = useState({ total: 0, pages: 1, page: 1 });
   const [refreshSignal, setRefreshSignal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [clients, setClients] = useState([]);
+  const [clientFilter, setClientFilter] = useState("all");
 
   useEffect(() => {
     const handler = setTimeout(
@@ -45,10 +53,46 @@ const UserInfo = () => {
   }, [searchTerm]);
 
   const isAppUsers = activeSection === "app-users";
+  const isGroupContacts = activeSection === "group-contacts";
+
+  // Fetch clients list for filter (universal for all tabs)
+  useEffect(() => {
+    const fetchClients = async () => {
+      try {
+        const token = getAdminToken();
+        const response = await fetch(
+          `${API_BASE_URL}/admin/getclients?minimal=true`,
+          {
+            headers: token
+              ? {
+                  Authorization: `Bearer ${token}`,
+                }
+              : undefined,
+          }
+        );
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success) {
+            setClients(data.data || []);
+          }
+        }
+      } catch (err) {
+        console.error("Error fetching clients:", err);
+      }
+    };
+
+    fetchClients();
+  }, []);
 
   useEffect(() => {
     let isCancelled = false;
-    const endpoint = isAppUsers ? "users" : "contacts";
+    let endpoint = "contacts";
+    if (isAppUsers) {
+      endpoint = "users";
+    } else if (isGroupContacts) {
+      endpoint = "group-contacts";
+    }
 
     const fetchData = async () => {
       setLoading(true);
@@ -61,6 +105,9 @@ const UserInfo = () => {
         });
         if (debouncedSearch) {
           params.set("search", debouncedSearch);
+        }
+        if (clientFilter && clientFilter !== "all") {
+          params.set("clientId", clientFilter);
         }
         const response = await fetch(
           `${API_BASE_URL}/user-info/${endpoint}?${params.toString()}`,
@@ -87,6 +134,8 @@ const UserInfo = () => {
         if (!isCancelled) {
           if (isAppUsers) {
             setUsers(records);
+          } else if (isGroupContacts) {
+            setGroupContacts(records);
           } else {
             setContacts(records);
           }
@@ -114,38 +163,96 @@ const UserInfo = () => {
     return () => {
       isCancelled = true;
     };
-  }, [isAppUsers, limit, page, debouncedSearch, refreshSignal]);
+  }, [
+    isAppUsers,
+    isGroupContacts,
+    limit,
+    page,
+    debouncedSearch,
+    refreshSignal,
+    clientFilter,
+  ]);
 
   useEffect(() => {
     setPage(1);
-  }, [activeSection, limit, debouncedSearch]);
+  }, [activeSection, limit, debouncedSearch, clientFilter]);
 
-  const currentData = isAppUsers ? users : contacts;
+  const currentData = (() => {
+    if (isAppUsers) return users;
+    if (isGroupContacts) return groupContacts;
+    return contacts;
+  })();
 
   const columns = useMemo(() => {
     if (isAppUsers) {
       return [
         { key: "name", label: "Name", render: (row) => row.name || "—" },
+        {
+          key: "businessName",
+          label: "Business Name",
+          render: (row) => row.businessName || "—",
+        },
         { key: "email", label: "Email", render: (row) => row.email || "—" },
         {
-          key: "mobileNumber",
+          key: "mobileNo",
           label: "Phone",
-          render: (row) => row.mobileNumber || "—",
+          render: (row) => row.mobileNo || "—",
         },
         {
-          key: "clientId",
-          label: "Client ID",
-          render: (row) => row.clientId || "—",
+          key: "clientType",
+          label: "Type",
+          render: (row) => {
+            const type = row.clientType || "—";
+            const typeColors = {
+              Prime: "text-purple-600 bg-purple-50",
+              demo: "text-blue-600 bg-blue-50",
+              testing: "text-yellow-600 bg-yellow-50",
+              new: "text-gray-600 bg-gray-50",
+              owned: "text-green-600 bg-green-50",
+              rejected: "text-red-600 bg-red-50",
+            };
+            return (
+              <span
+                className={`px-2 py-1 rounded-full text-xs font-medium ${
+                  typeColors[type] || typeColors.new
+                }`}
+              >
+                {type}
+              </span>
+            );
+          },
         },
         {
-          key: "isRegistered",
-          label: "Registered",
-          render: (row) => (row.isRegistered ? "Yes" : "No"),
+          key: "isApproved",
+          label: "Approved",
+          render: (row) => (row.isApproved ? "Yes" : "No"),
         },
         {
-          key: "lastActive",
-          label: "Last Active",
-          render: (row) => formatDateTime(row.lastActive),
+          key: "createdAt",
+          label: "Created",
+          render: (row) => formatDateTime(row.createdAt),
+        },
+      ];
+    }
+    if (isGroupContacts) {
+      return [
+        { key: "name", label: "Name", render: (row) => row.name || "—" },
+        { key: "phone", label: "Phone", render: (row) => row.phone || "—" },
+        { key: "email", label: "Email", render: (row) => row.email || "—" },
+        {
+          key: "groupName",
+          label: "Group Name",
+          render: (row) => row.groupName || "—",
+        },
+        {
+          key: "clientName",
+          label: "Client Name",
+          render: (row) => row.clientName || row.clientId || "—",
+        },
+        {
+          key: "createdAt",
+          label: "Created",
+          render: (row) => formatDateTime(row.createdAt),
         },
       ];
     }
@@ -154,14 +261,9 @@ const UserInfo = () => {
       { key: "phone", label: "Phone", render: (row) => row.phone || "—" },
       { key: "email", label: "Email", render: (row) => row.email || "—" },
       {
-        key: "clientId",
-        label: "Client ID",
-        render: (row) => row.clientId || "—",
-      },
-      {
-        key: "countyCode",
-        label: "Country Code",
-        render: (row) => row.countyCode || "—",
+        key: "clientName",
+        label: "Client Name",
+        render: (row) => row.clientName || row.clientId || "—",
       },
       {
         key: "createdAt",
@@ -169,7 +271,7 @@ const UserInfo = () => {
         render: (row) => formatDateTime(row.createdAt),
       },
     ];
-  }, [isAppUsers]);
+  }, [isAppUsers, isGroupContacts]);
 
   const handleSectionChange = (section) => {
     if (section === activeSection) return;
@@ -211,7 +313,7 @@ const UserInfo = () => {
         <p className="text-sm">Fetching {activeSection.replace("-", " ")}…</p>
       </div>
     );
-  } else if (!currentData.length) {
+  } else if (currentData.length === 0) {
     tableContent = (
       <div className="py-12 text-center text-gray-500">
         No records found for the selected filters.
@@ -267,7 +369,28 @@ const UserInfo = () => {
             Review app users and contacts with quick filters and limits.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-2">
+            <label
+              htmlFor="client-filter"
+              className="text-sm text-gray-600 whitespace-nowrap"
+            >
+              Client:
+            </label>
+            <select
+              id="client-filter"
+              value={clientFilter}
+              onChange={(e) => setClientFilter(e.target.value)}
+              className="border border-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 bg-white min-w-[180px]"
+            >
+              <option value="all">All Clients</option>
+              {clients.map((client) => (
+                <option key={client._id} value={client._id}>
+                  {client.name || client.businessName || client._id}
+                </option>
+              ))}
+            </select>
+          </div>
           <input
             type="search"
             value={searchTerm}
@@ -296,10 +419,17 @@ const UserInfo = () => {
           </button>
           <button
             onClick={() => handleSectionChange("contacts")}
-            className={tabButtonClass(!isAppUsers)}
+            className={tabButtonClass(activeSection === "contacts")}
           >
             <FaAddressBook size={16} />
             Contacts
+          </button>
+          <button
+            onClick={() => handleSectionChange("group-contacts")}
+            className={tabButtonClass(isGroupContacts)}
+          >
+            <FaLayerGroup size={16} />
+            Group Contacts
           </button>
 
           <div className="ml-auto flex items-center gap-2 text-sm">
