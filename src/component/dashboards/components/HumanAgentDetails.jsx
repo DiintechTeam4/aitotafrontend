@@ -396,7 +396,9 @@ const HumanAgentDetails = ({ agentId, onBack }) => {
         // Now use human agent token to fetch dials report
         const q = buildDateQuery();
         const response = await fetch(
-          `https://aitotabackend-sih2.onrender.com/api/v1/human-agent/dials/report${q ? `?${q}` : ""}`,
+          `https://aitotabackend-sih2.onrender.com/api/v1/human-agent/dials/report${
+            q ? `?${q}` : ""
+          }`,
           {
             headers: { Authorization: `Bearer ${tokenData.token}` },
           }
@@ -427,7 +429,9 @@ const HumanAgentDetails = ({ agentId, onBack }) => {
         // Now use human agent token to fetch dials leads
         const q = buildDateQuery();
         const response = await fetch(
-          `https://aitotabackend-sih2.onrender.com/api/v1/human-agent/dials/leads${q ? `?${q}` : ""}`,
+          `https://aitotabackend-sih2.onrender.com/api/v1/human-agent/dials/leads${
+            q ? `?${q}` : ""
+          }`,
           {
             headers: { Authorization: `Bearer ${tokenData.token}` },
           }
@@ -458,7 +462,9 @@ const HumanAgentDetails = ({ agentId, onBack }) => {
         // Now use human agent token to fetch dials done
         const q = buildDateQuery();
         const response = await fetch(
-          `https://aitotabackend-sih2.onrender.com/api/v1/human-agent/dials/done${q ? `?${q}` : ""}`,
+          `https://aitotabackend-sih2.onrender.com/api/v1/human-agent/dials/done${
+            q ? `?${q}` : ""
+          }`,
           {
             headers: { Authorization: `Bearer ${tokenData.token}` },
           }
@@ -491,7 +497,9 @@ const HumanAgentDetails = ({ agentId, onBack }) => {
         // Fetch leads data
         const q = buildDateQuery();
         const response = await fetch(
-          `https://aitotabackend-sih2.onrender.com/api/v1/human-agent/dials/leads${q ? `?${q}` : ""}`,
+          `https://aitotabackend-sih2.onrender.com/api/v1/human-agent/dials/leads${
+            q ? `?${q}` : ""
+          }`,
           {
             headers: { Authorization: `Bearer ${tokenData.token}` },
           }
@@ -652,9 +660,12 @@ const HumanAgentDetails = ({ agentId, onBack }) => {
 
   const fetchAvailableGroups = async () => {
     const token = sessionStorage.getItem("clienttoken");
-    const resp = await fetch(`https://aitotabackend-sih2.onrender.com/api/v1/client/groups`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const resp = await fetch(
+      `https://aitotabackend-sih2.onrender.com/api/v1/client/groups`,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      }
+    );
     const res = await resp.json();
     setAvailableGroups(res.groups || res.data || []);
     // Auto-set if only one group
@@ -680,9 +691,12 @@ const HumanAgentDetails = ({ agentId, onBack }) => {
 
   const fetchAllGroups = async () => {
     const token = sessionStorage.getItem("clienttoken");
-    const resp = await fetch(`https://aitotabackend-sih2.onrender.com/api/v1/client/groups`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const resp = await fetch(
+      `https://aitotabackend-sih2.onrender.com/api/v1/client/groups`,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      }
+    );
     const res = await resp.json();
     let grps = res.groups || res.data || [];
     setGroups(grps);
@@ -743,9 +757,12 @@ const HumanAgentDetails = ({ agentId, onBack }) => {
       setSuperSearch("");
       setLoadingContacts(true);
       const token = sessionStorage.getItem("clienttoken");
-      const resp = await fetch(`https://aitotabackend-sih2.onrender.com/api/v1/client/groups/${group._id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const resp = await fetch(
+        `https://aitotabackend-sih2.onrender.com/api/v1/client/groups/${group._id}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
       const result = await resp.json();
       if (resp.ok && result?.success) {
         setContacts((result.data && result.data.contacts) || []);
@@ -1400,6 +1417,9 @@ const HumanAgentDetails = ({ agentId, onBack }) => {
                       Disposition
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Description
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Duration
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -1433,6 +1453,9 @@ const HumanAgentDetails = ({ agentId, onBack }) => {
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                           {lead.leadStatus || "N/A"}
                         </span>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                        {lead.explanation || "N/A"}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                         {lead.duration ? `${lead.duration}s` : "N/A"}
