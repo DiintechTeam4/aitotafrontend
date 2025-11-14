@@ -22,6 +22,7 @@ import {
   FaClipboardList,
   FaUserTie,
   FaRupeeSign,
+  FaUser,
 } from "react-icons/fa";
 import ApprovalFormDetails from "./components/ApprovalFormDetails";
 import HumanAgentManagement from "./components/HumanAgentManagement";
@@ -33,6 +34,7 @@ import PlanManagement from "./components/PlanManagement";
 import CreditManagement from "./components/CreditManagement";
 import CouponManagement from "./components/CouponManagement";
 import ToolsManagement from "./components/ToolsManagement";
+import UserInfo from "./components/UserInfo";
 
 const AdminDashboard = ({ user, onLogout }) => {
   const navigate = useNavigate();
@@ -615,8 +617,8 @@ const AdminDashboard = ({ user, onLogout }) => {
       subItems: ["Chats"],
     },
     { name: "AI Agent", icon: <FaRobot /> },
+    { name: "User", icon: <FaUser /> },
     // { name: "Tickets", icon: <FaClipboardList /> },
-    // { name: "Users", icon: <FaUsers /> },
   ];
 
   const bottomNavItems = [
@@ -711,8 +713,7 @@ const AdminDashboard = ({ user, onLogout }) => {
     } catch (error) {
       console.error("Error creating client:", error);
       alert(error.message || "Failed to create client. Please try again.");
-    }
-    finally {
+    } finally {
       setIsSubmittingClient(false);
     }
   };
@@ -1122,13 +1123,13 @@ const AdminDashboard = ({ user, onLogout }) => {
                 <button
                   className={`px-6 py-2 rounded-lg transition-colors font-medium shadow-sm ${
                     isSubmittingClient
-                      ? 'bg-gray-400 text-white cursor-not-allowed'
-                      : 'bg-red-600 text-white hover:bg-red-700'
+                      ? "bg-gray-400 text-white cursor-not-allowed"
+                      : "bg-red-600 text-white hover:bg-red-700"
                   }`}
                   onClick={handleAddClient}
                   disabled={isSubmittingClient}
                 >
-                  {isSubmittingClient ? 'Submitting...' : 'Submit'}
+                  {isSubmittingClient ? "Submitting..." : "Submit"}
                 </button>
               </div>
             </div>
@@ -1473,6 +1474,7 @@ const AdminDashboard = ({ user, onLogout }) => {
               </div>
             )}
             {/* Dashboard Content based on active tab */}
+            {activeTab === "User" && <UserInfo />}
             {activeTab === "Agents" && <AdminAgents />}
 
             {activeTab === "AI Agent" && <AllAgents />}
