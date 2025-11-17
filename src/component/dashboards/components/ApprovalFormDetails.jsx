@@ -16,11 +16,13 @@ import {
   FaCalendarAlt,
   FaEdit,
   FaTrash,
+  FaEllipsisV,
+  FaWhatsapp,
 } from "react-icons/fa";
 import { API_BASE_URL } from "../../../config";
 import { FiUserCheck } from "react-icons/fi";
 
-const ApprovalFormDetails = ({ clientId, onClose, onApprove, onEdit }) => {
+const ApprovalFormDetails = ({ clientId, onClose, onApprove, onEdit, onWhatsAppClick }) => {
   const [clientData, setClientData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -32,6 +34,7 @@ const ApprovalFormDetails = ({ clientId, onClose, onApprove, onEdit }) => {
   const [editMode, setEditMode] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
   const [editForm, setEditForm] = useState({});
+  const [showMenu, setShowMenu] = useState(false);
 
   const getClientTypeBadgeClass = (type) => {
     const t = (type || "").toString().toLowerCase();
@@ -61,6 +64,19 @@ const ApprovalFormDetails = ({ clientId, onClose, onApprove, onEdit }) => {
   useEffect(() => {
     fetchClientProfile();
   }, [clientId]);
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    if (!showMenu) return;
+    const handleClickOutside = (event) => {
+      const menuButton = event.target.closest('button[aria-label="Menu"]') || event.target.closest('.relative');
+      if (!menuButton) {
+        setShowMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showMenu]);
 
   const timedFetch = async (url, options = {}, timeoutMs = 15000) => {
     const controller = new AbortController();
@@ -490,7 +506,19 @@ const ApprovalFormDetails = ({ clientId, onClose, onApprove, onEdit }) => {
                 Client Profile Review
               </h1>
             </div>
-            <button></button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  if (onWhatsAppClick) {
+                    onWhatsAppClick(clientId);
+                  }
+                }}
+                className="px-4 py-2 rounded-full bg-green-500 text-white transition-colors flex items-center font-semibold text-xs shadow-sm hover:bg-green-600"
+              >
+                <FaWhatsapp className="mr-2 text-white" />
+                WhatsApp
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -529,15 +557,7 @@ const ApprovalFormDetails = ({ clientId, onClose, onApprove, onEdit }) => {
                   </div>
                 </div>
                 <div className="flex justify-end text-right">
-                  <div className="flex justify-end space-x-3">
-                    {/* Edit button */}
-                    <button
-                      onClick={handleDeleteClient}
-                      className="px-4 py-2 rounded-full bg-red-500 text-white transition-colors flex items-center font-semibold text-xs shadow-sm hover:bg-red-700"
-                    >
-                      <FaTrash className="mr-2 text-white" />
-                      Delete Client
-                    </button>
+                  <div className="flex justify-end items-center space-x-3">
                     <button
                       onClick={startEdit}
                       className="px-4 py-2 rounded-full bg-blue-500 text-white transition-colors flex items-center font-semibold text-xs shadow-sm hover:bg-blue-700"
@@ -547,13 +567,59 @@ const ApprovalFormDetails = ({ clientId, onClose, onApprove, onEdit }) => {
                     </button>
                     {String(clientData.clientType || "").toLowerCase() ===
                     "rejected" ? null : clientData?.isApproved ? (
-                      <button
-                        disabled
-                        className="px-4 py-2 rounded-full flex items-center cursor-not-allowed font-medium text-xs bg-green-100 text-green-700 border border-green-300"
-                      >
-                        <FiUserCheck className="mr-2" />
-                        Approved
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          disabled
+                          className="px-4 py-2 rounded-full flex items-center cursor-not-allowed font-medium text-xs bg-green-100 text-green-700 border border-green-300"
+                        >
+                          <FiUserCheck className="mr-2" />
+                          Approved
+                        </button>
+                        <div className="relative">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowMenu(!showMenu);
+                            }}
+                            className="p-2 rounded-full hover:bg-gray-100 transition-colors"
+                            aria-label="Menu"
+                          >
+                            <FaEllipsisV className="text-gray-600" />
+                          </button>
+                          {showMenu && (
+                            <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
+                              <button
+                                onClick={() => {
+                                  setClientType("prime");
+                                  handleUpdateClientType();
+                                  setShowMenu(false);
+                                }}
+                                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                              >
+                                Prime
+                              </button>
+                              <button
+                                onClick={() => {
+                                  // Shift Prime logic here
+                                  setShowMenu(false);
+                                }}
+                                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                              >
+                                Shift Prime
+                              </button>
+                              <button
+                                onClick={() => {
+                                  handleDeleteClient();
+                                  setShowMenu(false);
+                                }}
+                                className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     ) : (
                       <button
                         onClick={handleApprove}
