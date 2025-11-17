@@ -400,7 +400,7 @@ const HumanAgents = () => {
             className="bg-black hover:bg-black text-white px-4 py-3 rounded-lg font-semibold transition-all duration-200 flex items-center"
           >
             <FiUserPlus className="w-5 h-5 mr-2" />
-            Add New Team
+            Add New Team Member
           </button>
         )}
       </div>

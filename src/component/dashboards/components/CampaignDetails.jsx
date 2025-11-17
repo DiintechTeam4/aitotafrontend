@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useMemo,
+  useCallback,
+} from "react";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import {
@@ -17,7 +23,7 @@ import {
   FiUserPlus,
   FiFolder,
   FiDownload,
-  FiLoader
+  FiLoader,
 } from "react-icons/fi";
 import { FaWhatsapp, FaPlay, FaPause } from "react-icons/fa";
 import { API_BASE_URL } from "../../../config";
@@ -56,11 +62,12 @@ function CampaignDetails({ campaignId, onBack }) {
   const downloadMenuRef = useRef(null);
   const token = sessionStorage.getItem("clienttoken");
   console.log("token", token);
-  
 
   const handlePlayPause = () => {
     if (!audioUrl || !audioRef.current || !audioAvailable) {
-      try { toast?.warn?.('No recording available'); } catch {}
+      try {
+        toast?.warn?.("No recording available");
+      } catch {}
       return;
     }
     const audio = audioRef.current;
@@ -85,7 +92,7 @@ function CampaignDetails({ campaignId, onBack }) {
             // Autoplay was prevented or playback failed
             setIsPlaying(false);
             try {
-              toast?.warn?.('Failed to play audio');
+              toast?.warn?.("Failed to play audio");
             } catch {}
           });
       }
@@ -104,7 +111,7 @@ function CampaignDetails({ campaignId, onBack }) {
       } catch (_) {}
     };
     const handleClick = (e) => {
-      if (e.target.closest('[data-filter-button]')) {
+      if (e.target.closest("[data-filter-button]")) {
         return;
       }
     };
@@ -193,21 +200,20 @@ function CampaignDetails({ campaignId, onBack }) {
       const token = sessionStorage.getItem("clienttoken");
       let transcript = "";
       try {
-      const resp = await fetch(
-        `${API_BASE}/whatsapp/get-transcript-by-document/${documentId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
+        const resp = await fetch(
+          `${API_BASE}/whatsapp/get-transcript-by-document/${documentId}`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+          }
+        );
         if (resp.ok) {
-      const result = await resp.json();
+          const result = await resp.json();
           transcript = result?.transcript || "";
         }
-      } catch (_) {
-      }
+      } catch (_) {}
       if (!transcript && campaignId) {
         try {
           const resp2 = await fetch(
@@ -223,8 +229,7 @@ function CampaignDetails({ campaignId, onBack }) {
             const result2 = await resp2.json();
             transcript = result2?.transcript || "";
           }
-        } catch (_) {
-        }
+        } catch (_) {}
       }
       return transcript || "";
     } catch (_) {
@@ -239,7 +244,9 @@ function CampaignDetails({ campaignId, onBack }) {
         return;
       }
       const flatRows = (reportRuns || [])
-        .flatMap((run) => (run.contacts || []).map((c) => ({ ...c, __run: run })))
+        .flatMap((run) =>
+          (run.contacts || []).map((c) => ({ ...c, __run: run }))
+        )
         .filter((c) => reportSelectedIds.has(c.documentId));
       if (flatRows.length === 0) {
         toast.warn("Nothing selected");
@@ -273,7 +280,9 @@ function CampaignDetails({ campaignId, onBack }) {
       URL.revokeObjectURL(url);
     } catch (e) {
       console.error("TXT report download failed:", e);
-      try { toast.error("Failed to download TXT report"); } catch {}
+      try {
+        toast.error("Failed to download TXT report");
+      } catch {}
     } finally {
       setIsDownloadingReportTXT(false);
     }
@@ -286,7 +295,9 @@ function CampaignDetails({ campaignId, onBack }) {
         return;
       }
       const flatRows = (reportRuns || [])
-        .flatMap((run) => (run.contacts || []).map((c) => ({ ...c, __run: run })))
+        .flatMap((run) =>
+          (run.contacts || []).map((c) => ({ ...c, __run: run }))
+        )
         .filter((c) => reportSelectedIds.has(c.documentId));
       if (flatRows.length === 0) {
         toast.warn("Nothing selected");
@@ -304,7 +315,7 @@ function CampaignDetails({ campaignId, onBack }) {
         "AgentName",
       ];
       const escapeCsv = (val) => {
-        const s = (val == null ? "" : String(val));
+        const s = val == null ? "" : String(val);
         if (/[",\n]/.test(s)) {
           return '"' + s.replace(/"/g, '""') + '"';
         }
@@ -324,10 +335,15 @@ function CampaignDetails({ campaignId, onBack }) {
       const campaignName = campaign?.name || "";
       const clientName = clientData?.name || "";
       for (const r of flatRows) {
-        let msgCount = (typeof r.transcriptCount === "number" ? r.transcriptCount : getTranscriptMessageCount(r)) || 0;
+        let msgCount =
+          (typeof r.transcriptCount === "number"
+            ? r.transcriptCount
+            : getTranscriptMessageCount(r)) || 0;
         if (msgCount === 0 && r.documentId) {
           try {
-            const transcript = await fetchTranscriptTextByDocument(r.documentId);
+            const transcript = await fetchTranscriptTextByDocument(
+              r.documentId
+            );
             if (transcript) {
               msgCount = countMessagesInTranscript(transcript) || 0;
             }
@@ -336,19 +352,23 @@ function CampaignDetails({ campaignId, onBack }) {
         const durationSec = Number(r.duration || r.durationSeconds || 0) || 0;
         const durationFmt = formatHMSCompact(durationSec);
         const disposition = r.leadStatus || r.disposition || r.status || "";
-        rows.push([
-          excelTextNumber(r.number || r.phone || "-"),
-          escapeCsv(r.name || "-"),
-          String(msgCount),
-          String(durationSec),
-          escapeCsv(durationFmt),
-          escapeCsv(disposition),
-          escapeCsv(campaignName),
-          escapeCsv(clientName),
-          escapeCsv(agentName),
-        ].join(","));
+        rows.push(
+          [
+            excelTextNumber(r.number || r.phone || "-"),
+            escapeCsv(r.name || "-"),
+            String(msgCount),
+            String(durationSec),
+            escapeCsv(durationFmt),
+            escapeCsv(disposition),
+            escapeCsv(campaignName),
+            escapeCsv(clientName),
+            escapeCsv(agentName),
+          ].join(",")
+        );
       }
-      const blob = new Blob([rows.join("\n")], { type: "text/csv;charset=utf-8" });
+      const blob = new Blob([rows.join("\n")], {
+        type: "text/csv;charset=utf-8",
+      });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -359,7 +379,9 @@ function CampaignDetails({ campaignId, onBack }) {
       URL.revokeObjectURL(url);
     } catch (e) {
       console.error("CSV report download failed:", e);
-      try { toast.error("Failed to download Excel (CSV)"); } catch {}
+      try {
+        toast.error("Failed to download Excel (CSV)");
+      } catch {}
     } finally {
       setIsDownloadingReportCSV(false);
     }
@@ -401,7 +423,9 @@ function CampaignDetails({ campaignId, onBack }) {
       toast.success("Downloading PDF...");
     } catch (e) {
       console.error("Selected PDF download failed:", e);
-      try { toast.error("Failed to download selected PDF"); } catch {}
+      try {
+        toast.error("Failed to download selected PDF");
+      } catch {}
     } finally {
       setIsDownloadingHistoryPDF(false);
     }
@@ -442,7 +466,9 @@ function CampaignDetails({ campaignId, onBack }) {
       URL.revokeObjectURL(url);
     } catch (e) {
       console.error("Selected TXT download failed:", e);
-      try { toast.error("Failed to download selected TXT"); } catch {}
+      try {
+        toast.error("Failed to download selected TXT");
+      } catch {}
     } finally {
       setIsDownloadingHistoryTXT(false);
     }
@@ -467,8 +493,10 @@ function CampaignDetails({ campaignId, onBack }) {
         "AgentName",
       ];
       const escapeCsv = (val) => {
-        const s = (val == null ? "" : String(val));
-        if (/[",\n]/.test(s)) { return '"' + s.replace(/"/g, '""') + '"'; }
+        const s = val == null ? "" : String(val);
+        if (/[",\n]/.test(s)) {
+          return '"' + s.replace(/"/g, '""') + '"';
+        }
         return s;
       };
       const normalizeDigits = (v) => String(v || "").replace(/[^\d+]/g, "");
@@ -484,10 +512,15 @@ function CampaignDetails({ campaignId, onBack }) {
       const campaignName = campaign?.name || "";
       const clientName = clientData?.name || "";
       for (const r of rows) {
-        let msgCount = (typeof r.transcriptCount === "number" ? r.transcriptCount : getTranscriptMessageCount(r)) || 0;
+        let msgCount =
+          (typeof r.transcriptCount === "number"
+            ? r.transcriptCount
+            : getTranscriptMessageCount(r)) || 0;
         if (msgCount === 0 && r.documentId) {
           try {
-            const transcript = await fetchTranscriptTextByDocument(r.documentId);
+            const transcript = await fetchTranscriptTextByDocument(
+              r.documentId
+            );
             if (transcript) {
               msgCount = countMessagesInTranscript(transcript) || 0;
             }
@@ -496,19 +529,23 @@ function CampaignDetails({ campaignId, onBack }) {
         const durationSec = Number(r.duration || r.durationSeconds || 0) || 0;
         const durationFmt = formatHMSCompact(durationSec);
         const disposition = r.leadStatus || r.disposition || r.status || "";
-        lines.push([
-          excelTextNumber(r.number || r.phone || "-"),
-          escapeCsv(r.name || "-"),
-          String(msgCount),
-          String(durationSec),
-          escapeCsv(durationFmt),
-          escapeCsv(disposition),
-          escapeCsv(campaignName),
-          escapeCsv(clientName),
-          escapeCsv(agentName),
-        ].join(","));
+        lines.push(
+          [
+            excelTextNumber(r.number || r.phone || "-"),
+            escapeCsv(r.name || "-"),
+            String(msgCount),
+            String(durationSec),
+            escapeCsv(durationFmt),
+            escapeCsv(disposition),
+            escapeCsv(campaignName),
+            escapeCsv(clientName),
+            escapeCsv(agentName),
+          ].join(",")
+        );
       }
-      const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
+      const blob = new Blob([lines.join("\n")], {
+        type: "text/csv;charset=utf-8",
+      });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -519,7 +556,9 @@ function CampaignDetails({ campaignId, onBack }) {
       URL.revokeObjectURL(url);
     } catch (e) {
       console.error("Selected CSV download failed:", e);
-      try { toast.error("Failed to download Excel (CSV)"); } catch {}
+      try {
+        toast.error("Failed to download Excel (CSV)");
+      } catch {}
     } finally {
       setIsDownloadingHistoryCSV(false);
     }
@@ -587,6 +626,207 @@ function CampaignDetails({ campaignId, onBack }) {
       console.error("Error formatting message timestamp:", error);
       return "Error";
     }
+  };
+  const extractContactIdForAssign = (record) => {
+    if (!record) return null;
+    return ( record._id );
+  };
+  const getAgentSelectionsForRow = (rowKey) =>
+    agentSelectionsByRow[rowKey] || [];
+  const toggleAgentSelectionForRow = (rowKey, agentId, checked) => {
+    if (!rowKey || !agentId) return;
+    setAgentSelectionsByRow((prev) => {
+      const current = new Set(prev[rowKey] || []);
+      if (checked) {
+        current.add(agentId);
+      } else {
+        current.delete(agentId);
+      }
+      const values = Array.from(current);
+      if (!values.length) {
+        const clone = { ...prev };
+        delete clone[rowKey];
+        return clone;
+      }
+      return {
+        ...prev,
+        [rowKey]: values,
+      };
+    });
+  };
+  const assignContactsToHumanAgents = async ({ rowKey, contacts, runId }) => {
+    const contactArray = Array.isArray(contacts)
+      ? contacts.filter(Boolean)
+      : [contacts].filter(Boolean);
+    if (!contactArray.length) {
+      toast?.warn?.("No contact selected for assignment");
+      return;
+    }
+    const contactIds = Array.from(
+      new Set(contactArray.map(extractContactIdForAssign).filter(Boolean))
+    );
+    if (!contactIds.length) {
+      toast?.warn?.("Unable to find a contact id for assignment");
+      return;
+    }
+    const humanAgentIds = getAgentSelectionsForRow(rowKey).filter(Boolean);
+    if (!humanAgentIds.length) {
+      toast?.warn?.("Select at least one human agent");
+      return;
+    }
+    if (!campaignId) {
+      toast?.error?.("Missing campaign id");
+      return;
+    }
+    if (!runId) {
+      toast?.warn?.("Run id missing; please refresh run data");
+      return;
+    }
+    const authToken =
+      sessionStorage.getItem("clienttoken") ||
+      localStorage.getItem("admintoken");
+    if (!authToken) {
+      toast?.error?.("Authentication token not found");
+      return;
+    }
+    setAssigningRows((prev) => ({ ...prev, [rowKey]: true }));
+    try {
+      const response = await fetch(
+        `${API_BASE}/campaigns/${campaignId}/history/${runId}/assign-contacts`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${authToken}`,
+          },
+          body: JSON.stringify({
+            contactIds,
+            humanAgentIds,
+          }),
+        }
+      );
+      if (!response.ok) {
+        let errorPayload = null;
+        try {
+          errorPayload = await response.json();
+        } catch (_) {}
+        const message =
+          errorPayload?.message ||
+          errorPayload?.error ||
+          `Failed to assign contacts (${response.status})`;
+        throw new Error(message);
+      }
+      toast?.success?.("Contacts assigned successfully");
+      setAgentSelectionsByRow((prev) => ({ ...prev, [rowKey]: [] }));
+      setOpenAssignFor(null);
+    } catch (error) {
+      console.error("Error assigning contacts:", error);
+      toast?.error?.(error?.message || "Failed to assign contacts");
+    } finally {
+      setAssigningRows((prev) => {
+        const clone = { ...prev };
+        delete clone[rowKey];
+        return clone;
+      });
+    }
+  };
+  const renderAssignMenu = ({ rowKey, contacts, runId }) => {
+    if (openAssignFor !== rowKey) return null;
+    const selectedAgents = getAgentSelectionsForRow(rowKey);
+    const isAssigning = !!assigningRows[rowKey];
+    return (
+      <div
+        className="absolute right-0 mt-1 w-64 bg-white border border-gray-200 rounded shadow-lg z-20"
+        onClick={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <div className="px-3 py-2 border-b border-gray-100">
+          <p className="text-xs font-semibold text-gray-700">
+            Assign to human agent
+          </p>
+          <p className="text-[11px] text-gray-500">
+            Select one or more agents, then click assign.
+          </p>
+        </div>
+        <div className="max-h-60 overflow-y-auto">
+          {humanAgentsLoading ? (
+            <div className="flex items-center justify-center py-6 text-xs text-gray-500 gap-2">
+              <span className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></span>
+              Loading agents...
+            </div>
+          ) : humanAgentsError ? (
+            <div className="px-3 py-4 text-xs text-red-600 space-y-2">
+              <p>{humanAgentsError}</p>
+              <button
+                type="button"
+                className="text-blue-600 hover:text-blue-800 underline"
+                onClick={loadHumanAgents}
+              >
+                Retry
+              </button>
+            </div>
+          ) : humanAgents.length === 0 ? (
+            <div className="px-3 py-4 text-xs text-gray-500">
+              No human agents found.
+            </div>
+          ) : (
+            humanAgents.map((agent) => {
+              const agentId = agent?._id || agent?.id;
+              return (
+                <label
+                  key={agentId || agent?.agentName}
+                  className="flex items-start gap-2 px-3 py-2 text-xs hover:bg-gray-50 cursor-pointer"
+                >
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 h-4 w-4"
+                    checked={selectedAgents.includes(agentId)}
+                    onChange={(e) =>
+                      toggleAgentSelectionForRow(
+                        rowKey,
+                        agentId,
+                        e.target.checked
+                      )
+                    }
+                  />
+                  <div className="flex-1">
+                    <div className="font-semibold text-gray-900">
+                      {agent?.humanAgentName}
+                    </div>
+                    {(agent?.email || agent?.phone) && (
+                      <div className="text-[11px] text-gray-500">
+                        {[agent?.email, agent?.phone]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </div>
+                    )}
+                  </div>
+                </label>
+              );
+            })
+          )}
+        </div>
+        <div className="flex items-center justify-between gap-2 px-3 py-2 border-t border-gray-100">
+          <button
+            type="button"
+            className="text-xs text-gray-500 hover:text-gray-700"
+            onClick={() => setOpenAssignFor(null)}
+          >
+            Close
+          </button>
+          <button
+            type="button"
+            className="px-3 py-1.5 text-xs rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
+            disabled={isAssigning || !selectedAgents.length}
+            onClick={() =>
+              assignContactsToHumanAgents({ rowKey, contacts, runId })
+            }
+          >
+            {isAssigning ? "Assigning..." : "Assign"}
+          </button>
+        </div>
+      </div>
+    );
   };
   // Helper function to get date label for separators
   const getDateLabel = (timestamp) => {
@@ -1035,7 +1275,13 @@ function CampaignDetails({ campaignId, onBack }) {
   const [dispositionMenuOpen, setDispositionMenuOpen] = useState(false);
   const [flagMenuPosition, setFlagMenuPosition] = useState("bottom");
   const [bookmarkedOnly, setBookmarkedOnly] = useState(() => {
-    try { return localStorage.getItem(getStorageKey('filterBookmarkedOnly')) === 'true'; } catch (_) { return false; }
+    try {
+      return (
+        localStorage.getItem(getStorageKey("filterBookmarkedOnly")) === "true"
+      );
+    } catch (_) {
+      return false;
+    }
   });
   const [bookmarkToggleCounter, setBookmarkToggleCounter] = useState(0); // Force re-render on bookmark toggle
   const [dispMenuPosition, setDispMenuPosition] = useState("bottom");
@@ -1048,12 +1294,12 @@ function CampaignDetails({ campaignId, onBack }) {
     const spaceAbove = rect.top;
     const dropdownHeight = 150;
     const shouldOpenUpward = spaceBelow < 200;
-    console.log('Dropdown position calculation:', {
+    console.log("Dropdown position calculation:", {
       spaceBelow,
       spaceAbove,
       viewportHeight,
       rectBottom: rect.bottom,
-      shouldOpenUpward
+      shouldOpenUpward,
     });
     return shouldOpenUpward ? "top" : "bottom";
   };
@@ -1094,7 +1340,11 @@ function CampaignDetails({ campaignId, onBack }) {
   const [liveCallDetails, setLiveCallDetails] = useState(null);
   const [transcriptCounts, setTranscriptCounts] = useState(new Map());
   const [openAssignFor, setOpenAssignFor] = useState(null);
-  const [rowAssignments, setRowAssignments] = useState({});
+  const [humanAgents, setHumanAgents] = useState([]);
+  const [humanAgentsLoading, setHumanAgentsLoading] = useState(false);
+  const [humanAgentsError, setHumanAgentsError] = useState("");
+  const [agentSelectionsByRow, setAgentSelectionsByRow] = useState({});
+  const [assigningRows, setAssigningRows] = useState({});
   const [callConnectionStatus, setCallConnectionStatus] = useState("connected"); // connected, not_connected
   const [callResultsConnectionStatus, setCallResultsConnectionStatus] =
     useState({}); // Track connection status for each call result
@@ -1110,162 +1360,226 @@ function CampaignDetails({ campaignId, onBack }) {
   // Auto-refresh recent call logs (toggleable). When enabled, refresh every 2 seconds
   const audioRef = useRef(null);
   const skipNextAudioResetRef = useRef(false);
-const [isPlaying, setIsPlaying] = useState(false);
-const [audioCurrentTime, setAudioCurrentTime] = useState(0);
-const [audioDuration, setAudioDuration] = useState(0);
-const [audioAvailable, setAudioAvailable] = useState(false);
-const [audioReady, setAudioReady] = useState(false);
-const rafIdRef = useRef(null);
-const audioUrl = React.useMemo(() => {
-  const raw = selectedCall?.audioUrl;
-  const docId = selectedCall?.documentId;
-  if (raw && /\/call-audio(\?|$)/.test(String(raw))) return raw;
-  if (raw && /https?:\/\/[^\s]*s3[^\s]*amazonaws\.com\//i.test(String(raw)) && docId && campaignId) {
-    return `${API_BASE}/campaigns/${campaignId}/call-audio?documentId=${encodeURIComponent(docId)}`;
-  }
-  if ((!raw || String(raw).trim() === '') && docId && campaignId) {
-    return `${API_BASE}/campaigns/${campaignId}/call-audio?documentId=${encodeURIComponent(docId)}`;
-  }
-  if (!raw || String(raw).trim() === '') return undefined;
-  return raw;
-}, [selectedCall?._id, selectedCall?.audioUrl, selectedCall?.documentId, campaignId]);
-useEffect(() => {
-  const skipReset = !!skipNextAudioResetRef.current;
-  if (skipReset) {
-    // Use prefetched values; do not wipe readiness
-    skipNextAudioResetRef.current = false;
-  } else {
-    setIsPlaying(false);
-    setAudioCurrentTime(0);
-    setAudioDuration(0);
-    setAudioAvailable(false); // Reset to false; enable after successful load
-    setAudioReady(false);
-    setPrefetchedAudioInfo(null);
-    if (audioRef.current) {
-      try {
-        audioRef.current.pause();
-        audioRef.current.currentTime = 0;
-      } catch {}
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [audioCurrentTime, setAudioCurrentTime] = useState(0);
+  const [audioDuration, setAudioDuration] = useState(0);
+  const [audioAvailable, setAudioAvailable] = useState(false);
+  const [audioReady, setAudioReady] = useState(false);
+  const rafIdRef = useRef(null);
+  const audioUrl = React.useMemo(() => {
+    const raw = selectedCall?.audioUrl;
+    const docId = selectedCall?.documentId;
+    if (raw && /\/call-audio(\?|$)/.test(String(raw))) return raw;
+    if (
+      raw &&
+      /https?:\/\/[^\s]*s3[^\s]*amazonaws\.com\//i.test(String(raw)) &&
+      docId &&
+      campaignId
+    ) {
+      return `${API_BASE}/campaigns/${campaignId}/call-audio?documentId=${encodeURIComponent(
+        docId
+      )}`;
     }
-  }
-}, [selectedCall?._id]);
+    if ((!raw || String(raw).trim() === "") && docId && campaignId) {
+      return `${API_BASE}/campaigns/${campaignId}/call-audio?documentId=${encodeURIComponent(
+        docId
+      )}`;
+    }
+    if (!raw || String(raw).trim() === "") return undefined;
+    return raw;
+  }, [
+    selectedCall?._id,
+    selectedCall?.audioUrl,
+    selectedCall?.documentId,
+    campaignId,
+  ]);
+  const loadHumanAgents = useCallback(async () => {
+    setHumanAgentsLoading(true);
+    setHumanAgentsError("");
+    try {
+      const authToken =
+        sessionStorage.getItem("clienttoken") ||
+        localStorage.getItem("admintoken");
+      if (!authToken) {
+        throw new Error("Missing authentication token");
+      }
+      const response = await fetch(`${API_BASE}/human-agents`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+          "Content-Type": "application/json",
+        },
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        const message =
+          data?.message || data?.error || "Failed to fetch human agents";
+        throw new Error(message);
+      }
+      const parsedAgents = Array.isArray(data?.data)
+        ? data.data
+        : Array.isArray(data)
+        ? data
+        : Array.isArray(data?.agents)
+        ? data.agents
+        : [];
+      setHumanAgents(parsedAgents);
+    } catch (error) {
+      if (error?.name === "AbortError") return;
+      console.error("Error loading human agents:", error);
+      setHumanAgents([]);
+      setHumanAgentsError(error?.message || "Failed to fetch human agents");
+    } finally {
+      setHumanAgentsLoading(false);
+    }
+  }, []);
+  useEffect(() => {
+    loadHumanAgents();
+  }, [loadHumanAgents]);
+  useEffect(() => {
+    const skipReset = !!skipNextAudioResetRef.current;
+    if (skipReset) {
+      // Use prefetched values; do not wipe readiness
+      skipNextAudioResetRef.current = false;
+    } else {
+      setIsPlaying(false);
+      setAudioCurrentTime(0);
+      setAudioDuration(0);
+      setAudioAvailable(false); // Reset to false; enable after successful load
+      setAudioReady(false);
+      setPrefetchedAudioInfo(null);
+      if (audioRef.current) {
+        try {
+          audioRef.current.pause();
+          audioRef.current.currentTime = 0;
+        } catch {}
+      }
+    }
+  }, [selectedCall?._id]);
 
-// Update audio timeline during playback with requestAnimationFrame for smooth playback
-useEffect(() => {
-  if (!audioRef.current) return;
-  
-  const audio = audioRef.current;
-  
-  // Use requestAnimationFrame for smooth visual updates at 60fps
-  const updateTime = () => {
-    if (audio && !audio.paused) {
-      const currentTime = audio.currentTime;
-      setAudioCurrentTime(currentTime);
-      // Continue the animation loop while playing
+  // Update audio timeline during playback with requestAnimationFrame for smooth playback
+  useEffect(() => {
+    if (!audioRef.current) return;
+
+    const audio = audioRef.current;
+
+    // Use requestAnimationFrame for smooth visual updates at 60fps
+    const updateTime = () => {
+      if (audio && !audio.paused) {
+        const currentTime = audio.currentTime;
+        setAudioCurrentTime(currentTime);
+        // Continue the animation loop while playing
+        rafIdRef.current = requestAnimationFrame(updateTime);
+      }
+    };
+
+    const handleLoadedMetadata = () => {
+      if (audio) {
+        const duration = audio.duration || 0;
+        setAudioDuration(duration);
+        setAudioCurrentTime(audio.currentTime || 0);
+        // If we prefetched and this matches, mark as ready immediately
+        try {
+          if (
+            prefetchedAudioInfo &&
+            prefetchedAudioInfo.documentId === selectedCall?.documentId
+          ) {
+            if (
+              prefetchedAudioInfo.ready &&
+              (prefetchedAudioInfo.duration || duration) > 0
+            ) {
+              setAudioReady(true);
+              if (!duration && prefetchedAudioInfo.duration)
+                setAudioDuration(prefetchedAudioInfo.duration);
+            }
+          }
+        } catch {}
+      }
+    };
+
+    const handleDurationChange = () => {
+      if (audio) {
+        const duration = audio.duration || 0;
+        setAudioDuration(duration);
+      }
+    };
+
+    const handlePlay = () => {
+      setIsPlaying(true);
+      // Start requestAnimationFrame loop when playing
+      if (rafIdRef.current) {
+        cancelAnimationFrame(rafIdRef.current);
+      }
+      rafIdRef.current = requestAnimationFrame(updateTime);
+    };
+
+    const handlePause = () => {
+      setIsPlaying(false);
+      // Stop requestAnimationFrame loop when paused
+      if (rafIdRef.current) {
+        cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = null;
+      }
+      if (audio) {
+        setAudioCurrentTime(audio.currentTime);
+      }
+    };
+
+    const handleEnded = () => {
+      setIsPlaying(false);
+      setAudioCurrentTime(0);
+      if (rafIdRef.current) {
+        cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = null;
+      }
+    };
+
+    const handleWaiting = () => {
+      // Audio is buffering - could show loading indicator if needed
+      // Don't interrupt playback, just wait for buffer
+    };
+
+    const handleCanPlay = () => {
+      // Audio is ready to play - ensure smooth playback
+      // Browser will handle buffering automatically
+    };
+
+    const handleCanPlayThrough = () => {
+      // Audio can play through without stopping for buffering
+      // This helps ensure smooth playback
+    };
+
+    // Attach event listeners
+    audio.addEventListener("loadedmetadata", handleLoadedMetadata);
+    audio.addEventListener("durationchange", handleDurationChange);
+    audio.addEventListener("play", handlePlay);
+    audio.addEventListener("pause", handlePause);
+    audio.addEventListener("ended", handleEnded);
+    audio.addEventListener("waiting", handleWaiting);
+    audio.addEventListener("canplay", handleCanPlay);
+    audio.addEventListener("canplaythrough", handleCanPlayThrough);
+
+    // Initialize RAF if already playing
+    if (!audio.paused) {
       rafIdRef.current = requestAnimationFrame(updateTime);
     }
-  };
-  
-  const handleLoadedMetadata = () => {
-    if (audio) {
-      const duration = audio.duration || 0;
-      setAudioDuration(duration);
-      setAudioCurrentTime(audio.currentTime || 0);
-      // If we prefetched and this matches, mark as ready immediately
-      try {
-        if (prefetchedAudioInfo && prefetchedAudioInfo.documentId === selectedCall?.documentId) {
-          if (prefetchedAudioInfo.ready && (prefetchedAudioInfo.duration || duration) > 0) {
-            setAudioReady(true);
-            if (!duration && prefetchedAudioInfo.duration) setAudioDuration(prefetchedAudioInfo.duration);
-          }
-        }
-      } catch {}
-    }
-  };
-  
-  const handleDurationChange = () => {
-    if (audio) {
-      const duration = audio.duration || 0;
-      setAudioDuration(duration);
-    }
-  };
-  
-  const handlePlay = () => {
-    setIsPlaying(true);
-    // Start requestAnimationFrame loop when playing
-    if (rafIdRef.current) {
-      cancelAnimationFrame(rafIdRef.current);
-    }
-    rafIdRef.current = requestAnimationFrame(updateTime);
-  };
-  
-  const handlePause = () => {
-    setIsPlaying(false);
-    // Stop requestAnimationFrame loop when paused
-    if (rafIdRef.current) {
-      cancelAnimationFrame(rafIdRef.current);
-      rafIdRef.current = null;
-    }
-    if (audio) {
-      setAudioCurrentTime(audio.currentTime);
-    }
-  };
-  
-  const handleEnded = () => {
-    setIsPlaying(false);
-    setAudioCurrentTime(0);
-    if (rafIdRef.current) {
-      cancelAnimationFrame(rafIdRef.current);
-      rafIdRef.current = null;
-    }
-  };
-  
-  const handleWaiting = () => {
-    // Audio is buffering - could show loading indicator if needed
-    // Don't interrupt playback, just wait for buffer
-  };
-  
-  const handleCanPlay = () => {
-    // Audio is ready to play - ensure smooth playback
-    // Browser will handle buffering automatically
-  };
-  
-  const handleCanPlayThrough = () => {
-    // Audio can play through without stopping for buffering
-    // This helps ensure smooth playback
-  };
-  
-  // Attach event listeners
-  audio.addEventListener('loadedmetadata', handleLoadedMetadata);
-  audio.addEventListener('durationchange', handleDurationChange);
-  audio.addEventListener('play', handlePlay);
-  audio.addEventListener('pause', handlePause);
-  audio.addEventListener('ended', handleEnded);
-  audio.addEventListener('waiting', handleWaiting);
-  audio.addEventListener('canplay', handleCanPlay);
-  audio.addEventListener('canplaythrough', handleCanPlayThrough);
-  
-  // Initialize RAF if already playing
-  if (!audio.paused) {
-    rafIdRef.current = requestAnimationFrame(updateTime);
-  }
-  
-  return () => {
-    // Cleanup
-    if (rafIdRef.current) {
-      cancelAnimationFrame(rafIdRef.current);
-      rafIdRef.current = null;
-    }
-    audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
-    audio.removeEventListener('durationchange', handleDurationChange);
-    audio.removeEventListener('play', handlePlay);
-    audio.removeEventListener('pause', handlePause);
-    audio.removeEventListener('ended', handleEnded);
-    audio.removeEventListener('waiting', handleWaiting);
-    audio.removeEventListener('canplay', handleCanPlay);
-    audio.removeEventListener('canplaythrough', handleCanPlayThrough);
-  };
-}, [audioUrl, selectedCall?._id]);
+
+    return () => {
+      // Cleanup
+      if (rafIdRef.current) {
+        cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = null;
+      }
+      audio.removeEventListener("loadedmetadata", handleLoadedMetadata);
+      audio.removeEventListener("durationchange", handleDurationChange);
+      audio.removeEventListener("play", handlePlay);
+      audio.removeEventListener("pause", handlePause);
+      audio.removeEventListener("ended", handleEnded);
+      audio.removeEventListener("waiting", handleWaiting);
+      audio.removeEventListener("canplay", handleCanPlay);
+      audio.removeEventListener("canplaythrough", handleCanPlayThrough);
+    };
+  }, [audioUrl, selectedCall?._id]);
   useEffect(() => {
     if (!autoRefreshCalls) return;
     // Immediate fetch on enabling
@@ -1367,54 +1681,88 @@ useEffect(() => {
   // Backend API now handles all merging, deduplication, and pagination
   // Tracks whether calling state was restored from storage to gate auto-resume
   const restoredFromStorageRef = useRef(false);
-  
+
   // State persistence functions
   const getStorageKey = (key) => `campaign_${campaignId}_${key}`;
   // Lightweight bookmark helpers (local-only fallback)
   const isContactBookmarked = (contact) => {
     try {
-      const raw = localStorage.getItem(getStorageKey('contactBookmarks')) || '[]';
+      const raw =
+        localStorage.getItem(getStorageKey("contactBookmarks")) || "[]";
       const arr = JSON.parse(raw);
-      const id = contact?._id || contact?.contactId || contact?.documentId || contact?.phone || contact?.number;
+      const id =
+        contact?._id ||
+        contact?.contactId ||
+        contact?.documentId ||
+        contact?.phone ||
+        contact?.number;
       return id ? (arr || []).includes(id) : false;
-    } catch (_) { return false; }
+    } catch (_) {
+      return false;
+    }
   };
   const toggleBookmarkForContact = (contact) => {
     try {
-      const id = contact?._id || contact?.contactId || contact?.documentId || contact?.phone || contact?.number;
-      const phone = String(contact?.phone || contact?.number || '').replace(/\D/g, '');
+      const id =
+        contact?._id ||
+        contact?.contactId ||
+        contact?.documentId ||
+        contact?.phone ||
+        contact?.number;
+      const phone = String(contact?.phone || contact?.number || "").replace(
+        /\D/g,
+        ""
+      );
       if (!id && !phone) return;
       // Local optimistic toggle
-      const raw = localStorage.getItem(getStorageKey('contactBookmarks')) || '[]';
+      const raw =
+        localStorage.getItem(getStorageKey("contactBookmarks")) || "[]";
       const arr = Array.isArray(JSON.parse(raw)) ? JSON.parse(raw) : [];
       const set = new Set(arr);
-      if (set.has(id || phone)) set.delete(id || phone); else set.add(id || phone);
-      localStorage.setItem(getStorageKey('contactBookmarks'), JSON.stringify(Array.from(set)));
+      if (set.has(id || phone)) set.delete(id || phone);
+      else set.add(id || phone);
+      localStorage.setItem(
+        getStorageKey("contactBookmarks"),
+        JSON.stringify(Array.from(set))
+      );
       // Force re-render by updating counter
-      setBookmarkToggleCounter(prev => prev + 1);
+      setBookmarkToggleCounter((prev) => prev + 1);
       // Persist to backend when we have campaign and phone
       if (campaign?._id && phone) {
         (async () => {
           try {
-            const token = sessionStorage.getItem('clienttoken');
+            const token = sessionStorage.getItem("clienttoken");
             const willBe = set.has(id || phone);
-            const resp = await fetch(`${API_BASE}/campaigns/${campaign._id}/contacts/bookmark-by-phone`, {
-              method: 'PATCH',
-              headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-              body: JSON.stringify({ phone, bookmarked: willBe })
-            });
-            if (!resp.ok) throw new Error('bookmark-by-phone failed');
+            const resp = await fetch(
+              `${API_BASE}/campaigns/${campaign._id}/contacts/bookmark-by-phone`,
+              {
+                method: "PATCH",
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ phone, bookmarked: willBe }),
+              }
+            );
+            if (!resp.ok) throw new Error("bookmark-by-phone failed");
             const result = await resp.json();
-            if (!result.success) throw new Error('bookmark-by-phone failed');
+            if (!result.success) throw new Error("bookmark-by-phone failed");
           } catch (e) {
             // Revert local
-            const raw2 = localStorage.getItem(getStorageKey('contactBookmarks')) || '[]';
-            const arr2 = Array.isArray(JSON.parse(raw2)) ? JSON.parse(raw2) : [];
+            const raw2 =
+              localStorage.getItem(getStorageKey("contactBookmarks")) || "[]";
+            const arr2 = Array.isArray(JSON.parse(raw2))
+              ? JSON.parse(raw2)
+              : [];
             const set2 = new Set(arr2);
-            if (set2.has(id || phone)) set2.delete(id || phone); else set2.add(id || phone);
-            localStorage.setItem(getStorageKey('contactBookmarks'), JSON.stringify(Array.from(set2)));
+            if (set2.has(id || phone)) set2.delete(id || phone);
+            else set2.add(id || phone);
+            localStorage.setItem(
+              getStorageKey("contactBookmarks"),
+              JSON.stringify(Array.from(set2))
+            );
             // Update counter again to reflect the revert
-            setBookmarkToggleCounter(prev => prev + 1);
+            setBookmarkToggleCounter((prev) => prev + 1);
           }
         })();
       }
@@ -1442,7 +1790,10 @@ useEffect(() => {
       timestamp: Date.now(),
     };
     console.log("Saving filter states:", filterStates);
-    localStorage.setItem(getStorageKey("filterStates"), JSON.stringify(filterStates));
+    localStorage.setItem(
+      getStorageKey("filterStates"),
+      JSON.stringify(filterStates)
+    );
   };
   // Persist selected ranges display so refresh retains last selection label
   useEffect(() => {
@@ -1483,7 +1834,10 @@ useEffect(() => {
           }
           if (states.dispositionFilter) {
             setDispositionFilter(states.dispositionFilter);
-            console.log("Restored dispositionFilter:", states.dispositionFilter);
+            console.log(
+              "Restored dispositionFilter:",
+              states.dispositionFilter
+            );
           }
           if (states.rowDisposition) {
             setRowDisposition(states.rowDisposition);
@@ -1746,7 +2100,7 @@ useEffect(() => {
           fetchClientData(),
           fetchCampaignGroups(),
           fetchCampaignHistory(campaignId),
-          fetchCampaignCallingStatus()
+          fetchCampaignCallingStatus(),
         ]);
       } catch (error) {
         console.error("Error loading campaign data:", error);
@@ -1990,12 +2344,15 @@ useEffect(() => {
     }
     try {
       const token = sessionStorage.getItem("clienttoken");
-      const response = await fetch(`${API_BASE}/../dispositions/agent/${agentId}/dispositions`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      });
+      const response = await fetch(
+        `${API_BASE}/../dispositions/agent/${agentId}/dispositions`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
       if (!response.ok) {
         throw new Error("Failed to fetch agent dispositions");
       }
@@ -2013,7 +2370,10 @@ useEffect(() => {
         );
         console.log(
           `🔧 CAMPAIGN: Disposition structure:`,
-          dispositions.map(d => ({ title: d.title, subCount: d.sub?.length || 0 }))
+          dispositions.map((d) => ({
+            title: d.title,
+            subCount: d.sub?.length || 0,
+          }))
         );
       } else {
         setAgentDispositions([]);
@@ -2690,13 +3050,22 @@ useEffect(() => {
       const result = await resp.json();
       if (result.success) {
         toast.success(
-          `Added ${result.data.added} of ${result.data.totalSelected} contacts from range ${body.startIndex + 1}-${body.endIndex}`
+          `Added ${result.data.added} of ${
+            result.data.totalSelected
+          } contacts from range ${body.startIndex + 1}-${body.endIndex}`
         );
         // Also sync campaign.groupSelections if backend returned it
-        if (result?.data?.groupSelections && Array.isArray(result.data.groupSelections)) {
-          setCampaign((prev) => prev ? { ...prev, groupSelections: result.data.groupSelections } : { groupSelections: result.data.groupSelections });
+        if (
+          result?.data?.groupSelections &&
+          Array.isArray(result.data.groupSelections)
+        ) {
+          setCampaign((prev) =>
+            prev
+              ? { ...prev, groupSelections: result.data.groupSelections }
+              : { groupSelections: result.data.groupSelections }
+          );
         }
-        setSelectedRangesDisplay((prev) => ([
+        setSelectedRangesDisplay((prev) => [
           ...prev,
           {
             groupId: String(rangeModalGroup._id),
@@ -2705,7 +3074,7 @@ useEffect(() => {
             end: body.endIndex,
             selectedAt: Date.now(),
           },
-        ]));
+        ]);
         setShowGroupRangeModal(false);
         setRangeModalGroup(null);
         await fetchCampaignContacts();
@@ -2893,7 +3262,11 @@ useEffect(() => {
       // Update campaign meta (e.g., groupSelections) if provided
       try {
         if (newCampaignMeta && Array.isArray(newCampaignMeta.groupSelections)) {
-          setCampaign((prev) => prev ? { ...prev, groupSelections: newCampaignMeta.groupSelections } : { groupSelections: newCampaignMeta.groupSelections });
+          setCampaign((prev) =>
+            prev
+              ? { ...prev, groupSelections: newCampaignMeta.groupSelections }
+              : { groupSelections: newCampaignMeta.groupSelections }
+          );
         }
       } catch (_) {}
 
@@ -2957,12 +3330,16 @@ useEffect(() => {
           docId &&
           campaignId
         ) {
-          return `${API_BASE}/campaigns/${campaignId}/call-audio?documentId=${encodeURIComponent(docId)}`;
+          return `${API_BASE}/campaigns/${campaignId}/call-audio?documentId=${encodeURIComponent(
+            docId
+          )}`;
         }
-        if ((!raw || String(raw).trim() === '') && docId && campaignId) {
-          return `${API_BASE}/campaigns/${campaignId}/call-audio?documentId=${encodeURIComponent(docId)}`;
+        if ((!raw || String(raw).trim() === "") && docId && campaignId) {
+          return `${API_BASE}/campaigns/${campaignId}/call-audio?documentId=${encodeURIComponent(
+            docId
+          )}`;
         }
-        if (!raw || String(raw).trim() === '') return undefined;
+        if (!raw || String(raw).trim() === "") return undefined;
         return raw;
       };
       const prospectiveAudioUrl = buildAudioUrlForDoc();
@@ -2970,42 +3347,77 @@ useEffect(() => {
       // Run transcript fetch and audio probe in parallel
       const transcriptPromise = (async () => {
         const token = sessionStorage.getItem("clienttoken");
-        const resp = await fetch(`${API_BASE}/campaigns/${campaignId}/logs/${documentId}`,{ headers:{ Authorization:`Bearer ${token}`, "Content-Type":"application/json" }});
+        const resp = await fetch(
+          `${API_BASE}/campaigns/${campaignId}/logs/${documentId}`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+          }
+        );
         const result = await resp.json();
-        if (!resp.ok || result.success === false) throw new Error(result.error || 'Failed to fetch transcript');
-        return result.transcript || '';
+        if (!resp.ok || result.success === false)
+          throw new Error(result.error || "Failed to fetch transcript");
+        return result.transcript || "";
       })();
       const probePromise = (async () => {
-        if (!prospectiveAudioUrl) return { ready:false, duration:0 };
+        if (!prospectiveAudioUrl) return { ready: false, duration: 0 };
         try {
           const probe = await new Promise((resolve) => {
             const a = new Audio();
-            a.preload = 'metadata';
+            a.preload = "metadata";
             a.src = prospectiveAudioUrl;
-            const to = setTimeout(() => resolve({ ok:false, duration:0 }), 8000);
-            a.onloadedmetadata = () => { clearTimeout(to); resolve({ ok: !!(a.duration && isFinite(a.duration) && a.duration > 0), duration: a.duration || 0 }); };
-            a.onerror = () => { clearTimeout(to); resolve({ ok:false, duration:0 }); };
+            const to = setTimeout(
+              () => resolve({ ok: false, duration: 0 }),
+              8000
+            );
+            a.onloadedmetadata = () => {
+              clearTimeout(to);
+              resolve({
+                ok: !!(a.duration && isFinite(a.duration) && a.duration > 0),
+                duration: a.duration || 0,
+              });
+            };
+            a.onerror = () => {
+              clearTimeout(to);
+              resolve({ ok: false, duration: 0 });
+            };
           });
           return { ready: !!probe.ok, duration: probe.duration || 0 };
-        } catch { return { ready:false, duration:0 }; }
+        } catch {
+          return { ready: false, duration: 0 };
+        }
       })();
 
-      const [fetchedTranscript, audioProbe] = await Promise.all([transcriptPromise, probePromise]);
+      const [fetchedTranscript, audioProbe] = await Promise.all([
+        transcriptPromise,
+        probePromise,
+      ]);
       setTranscriptContent(fetchedTranscript);
       const docKey = documentId;
       if (docKey && fetchedTranscript) {
         const msgCount = countMessagesInTranscript(fetchedTranscript);
-        setTranscriptCounts((prev) => { const next = new Map(prev); next.set(docKey, msgCount); return next; });
+        setTranscriptCounts((prev) => {
+          const next = new Map(prev);
+          next.set(docKey, msgCount);
+          return next;
+        });
       }
       // Seed audio state and prevent reset flicker on select
-      setPrefetchedAudioInfo({ documentId, ready: !!audioProbe.ready, duration: audioProbe.duration || 0 });
+      setPrefetchedAudioInfo({
+        documentId,
+        ready: !!audioProbe.ready,
+        duration: audioProbe.duration || 0,
+      });
       if (leadData) {
         skipNextAudioResetRef.current = true;
         setSelectedCall(leadData);
       }
       setAudioReady(!!audioProbe.ready);
       setAudioAvailable(!!audioProbe.ready);
-      if ((audioProbe.duration || 0) > 0) setAudioDuration(audioProbe.duration || 0);
+      if ((audioProbe.duration || 0) > 0)
+        setAudioDuration(audioProbe.duration || 0);
       setShowTranscriptModal(true);
     } catch (e) {
       console.error("Error fetching transcript:", e);
@@ -3351,7 +3763,11 @@ useEffect(() => {
         doc.setFont("helvetica", "italic");
         doc.setFontSize(10);
         const footerY = doc.internal.pageSize.getHeight() - 30;
-        doc.text(footer, pageWidth - marginX - doc.getTextWidth(footer), footerY);
+        doc.text(
+          footer,
+          pageWidth - marginX - doc.getTextWidth(footer),
+          footerY
+        );
       } catch {}
     } catch {}
     // Return as ArrayBuffer for merging
@@ -3686,16 +4102,20 @@ useEffect(() => {
             const wasRunning = campaign?.isRunning;
             const effectiveRunId = currentRunId || result?.data?.latestRunId;
             // More robust completion detection
-            const shouldAutoSave = (
+            const shouldAutoSave =
               // Campaign was running and now stopped
-              (wasRunning && !nextIsRunning) ||
-              // All calls are finalized (regardless of isRunning state)
-              backendAllFinalized ||
-              // Campaign is not actually running despite being marked as running
-              (!isActuallyRunning && wasRunning)
-            ) && effectiveRunId && !autoSavingRef.current && lastSavedRunIdRef.current !== effectiveRunId;
+              ((wasRunning && !nextIsRunning) ||
+                // All calls are finalized (regardless of isRunning state)
+                backendAllFinalized ||
+                // Campaign is not actually running despite being marked as running
+                (!isActuallyRunning && wasRunning)) &&
+              effectiveRunId &&
+              !autoSavingRef.current &&
+              lastSavedRunIdRef.current !== effectiveRunId;
             if (shouldAutoSave) {
-              console.log(`💾 FRONTEND: Auto-saving campaign run ${effectiveRunId}`);
+              console.log(
+                `💾 FRONTEND: Auto-saving campaign run ${effectiveRunId}`
+              );
               autoSavingRef.current = true;
               const endTime = new Date();
               const inferredStart = result?.data?.runStartTime
@@ -3739,12 +4159,14 @@ useEffect(() => {
               prev ? { ...prev, isRunning: nextIsRunning } : null
             );
             // Broadcast status change to other tabs
-            const channel = new BroadcastChannel(`campaign-status-${campaignId}`);
+            const channel = new BroadcastChannel(
+              `campaign-status-${campaignId}`
+            );
             channel.postMessage({
-              type: 'campaign-status-update',
+              type: "campaign-status-update",
               isRunning: nextIsRunning,
               runId: currentRunId,
-              timestamp: Date.now()
+              timestamp: Date.now(),
             });
             channel.close();
           }
@@ -3781,11 +4203,11 @@ useEffect(() => {
     if (!campaignId) return;
     const channel = new BroadcastChannel(`campaign-status-${campaignId}`);
     const handleMessage = (event) => {
-      if (event.data.type === 'campaign-status-update') {
+      if (event.data.type === "campaign-status-update") {
         const { isRunning, runId, timestamp } = event.data;
         // Update campaign status if it's different
         if (campaign?.isRunning !== isRunning) {
-          setCampaign((prev) => prev ? { ...prev, isRunning } : prev);
+          setCampaign((prev) => (prev ? { ...prev, isRunning } : prev));
           // Update runId if provided
           if (runId && runId !== currentRunId) {
             setCurrentRunId(runId);
@@ -3799,9 +4221,9 @@ useEffect(() => {
         }
       }
     };
-    channel.addEventListener('message', handleMessage);
+    channel.addEventListener("message", handleMessage);
     return () => {
-      channel.removeEventListener('message', handleMessage);
+      channel.removeEventListener("message", handleMessage);
       channel.close();
     };
   }, [campaignId, campaign?.isRunning, currentRunId]);
@@ -3811,7 +4233,7 @@ useEffect(() => {
     let intervalId = null;
     let visibilityIntervalId = null;
     const poll = () => {
-        fetchCampaignCallingStatus();
+      fetchCampaignCallingStatus();
     };
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
@@ -3821,10 +4243,10 @@ useEffect(() => {
         if (campaign?.isRunning !== undefined) {
           const channel = new BroadcastChannel(`campaign-status-${campaignId}`);
           channel.postMessage({
-            type: 'campaign-status-update',
+            type: "campaign-status-update",
             isRunning: campaign.isRunning,
             runId: currentRunId,
-            timestamp: Date.now()
+            timestamp: Date.now(),
           });
           channel.close();
         }
@@ -3841,11 +4263,11 @@ useEffect(() => {
       intervalId = setInterval(poll, 10000);
     }
     // Listen for visibility changes
-    document.addEventListener('visibilitychange', handleVisibilityChange);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => {
       if (intervalId) clearInterval(intervalId);
       if (visibilityIntervalId) clearInterval(visibilityIntervalId);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [campaignId, campaign?.isRunning, isSeriesMode, currentRunId]);
   // Universal calling function that handles all calling scenarios
@@ -4141,7 +4563,9 @@ useEffect(() => {
           setCallingStatus("calling");
           if (showToast)
             toast.warn(
-              `Calling ${result.count || 0} not connected contact(s) has started.`
+              `Calling ${
+                result.count || 0
+              } not connected contact(s) has started.`
             );
           // Kick a status refresh shortly after
           setTimeout(() => {
@@ -4412,7 +4836,9 @@ useEffect(() => {
             : selectedFlag === flagFilter;
         // Disposition filter
         const leadDisposition = (
-          lead.leadStatus || lead.disposition || ""
+          lead.leadStatus ||
+          lead.disposition ||
+          ""
         ).toLowerCase();
         const byDisposition =
           dispositionFilter === "all"
@@ -4890,10 +5316,10 @@ useEffect(() => {
         // Broadcast status change to other tabs
         const channel = new BroadcastChannel(`campaign-status-${campaign._id}`);
         channel.postMessage({
-          type: 'campaign-status-update',
+          type: "campaign-status-update",
           isRunning: true,
           runId: newRunId,
-          timestamp: Date.now()
+          timestamp: Date.now(),
         });
         channel.close();
       } else {
@@ -4994,10 +5420,10 @@ useEffect(() => {
       // Broadcast status change to other tabs
       const channel = new BroadcastChannel(`campaign-status-${campaign._id}`);
       channel.postMessage({
-        type: 'campaign-status-update',
+        type: "campaign-status-update",
         isRunning: false,
         runId: null,
-        timestamp: Date.now()
+        timestamp: Date.now(),
       });
       channel.close();
     } catch (e) {
@@ -5045,10 +5471,10 @@ useEffect(() => {
               // Broadcast status change to other tabs
               const channel = new BroadcastChannel(`campaign-status-${cid}`);
               channel.postMessage({
-                type: 'campaign-status-update',
+                type: "campaign-status-update",
                 isRunning: isRunning,
                 runId: currentRunId,
-                timestamp: Date.now()
+                timestamp: Date.now(),
               });
               channel.close();
             }
@@ -5258,13 +5684,15 @@ useEffect(() => {
         // Broadcast status change to other tabs
         const channel = new BroadcastChannel(`campaign-status-${campaignId}`);
         channel.postMessage({
-          type: 'campaign-status-update',
+          type: "campaign-status-update",
           isRunning: false,
           runId: null,
-          timestamp: Date.now()
+          timestamp: Date.now(),
         });
         channel.close();
-        toast.success("Campaign stopped - ongoing calls will complete naturally");
+        toast.success(
+          "Campaign stopped - ongoing calls will complete naturally"
+        );
       } else {
         const confirmStart = window.confirm("Start the campaign now?");
         if (!confirmStart) return;
@@ -5275,10 +5703,10 @@ useEffect(() => {
         // Broadcast status change to other tabs
         const channel = new BroadcastChannel(`campaign-status-${campaignId}`);
         channel.postMessage({
-          type: 'campaign-status-update',
+          type: "campaign-status-update",
           isRunning: true,
           runId: currentRunId,
-          timestamp: Date.now()
+          timestamp: Date.now(),
         });
         channel.close();
       }
@@ -5344,31 +5772,54 @@ useEffect(() => {
                       return isNaN(d.getTime()) ? null : d;
                     };
                     const dateObj =
-                      parseDate(run.createdAt) || parseDate(run.startTime) || new Date();
+                      parseDate(run.createdAt) ||
+                      parseDate(run.startTime) ||
+                      new Date();
                     const startObj =
                       parseDate(run.startTime) || parseDate(run.createdAt);
                     const endObj =
-                      parseDate(run.endTime) || parseDate(run.updatedAt) || startObj;
+                      parseDate(run.endTime) ||
+                      parseDate(run.updatedAt) ||
+                      startObj;
                     const dateStr = dateObj
-                      ? dateObj.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" })
+                      ? dateObj.toLocaleDateString("en-GB", {
+                          day: "2-digit",
+                          month: "2-digit",
+                          year: "numeric",
+                        })
                       : "-";
                     const startStr = startObj
-                      ? startObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+                      ? startObj.toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                          second: "2-digit",
+                        })
                       : "-";
                     const endStr = endObj
-                      ? endObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+                      ? endObj.toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                          second: "2-digit",
+                        })
                       : "-";
                     return (
                       <>
-                        <span><strong>Date:</strong> {dateStr}</span>
-                        <span><strong>Start:</strong> {startStr}</span>
-                        <span><strong>End:</strong> {endStr}</span>
+                        <span>
+                          <strong>Date:</strong> {dateStr}
+                        </span>
+                        <span>
+                          <strong>Start:</strong> {startStr}
+                        </span>
+                        <span>
+                          <strong>End:</strong> {endStr}
+                        </span>
                       </>
                     );
                   })()}
                   <span className="inline-flex items-center gap-1">
                     <FiClock />
-                    <strong>Duration:</strong> {formatHMSCompact(
+                    <strong>Duration:</strong>{" "}
+                    {formatHMSCompact(
                       (run.runTime?.hours || 0) * 3600 +
                         (run.runTime?.minutes || 0) * 60 +
                         (run.runTime?.seconds || 0)
@@ -5376,20 +5827,41 @@ useEffect(() => {
                   </span>
                   {(() => {
                     // Resolve agentName, groupName, and numeric contact range if present in run
-                    const agentName = run.agentName || (Array.isArray(run.agent) ? run.agent[0] : run.agentName);
-                    const groupName = run.groupName || run.group || run.groupTitle;
+                    const agentName =
+                      run.agentName ||
+                      (Array.isArray(run.agent) ? run.agent[0] : run.agentName);
+                    const groupName =
+                      run.groupName || run.group || run.groupTitle;
                     // Prefer explicit start/end indexes if available; else fallback to contacts length
-                    const hasExplicitRange = Number.isInteger(run.startIndex) && Number.isInteger(run.endIndex);
-                    const startNum = hasExplicitRange ? (Number(run.startIndex) + 1) : 1;
+                    const hasExplicitRange =
+                      Number.isInteger(run.startIndex) &&
+                      Number.isInteger(run.endIndex);
+                    const startNum = hasExplicitRange
+                      ? Number(run.startIndex) + 1
+                      : 1;
                     const endNum = hasExplicitRange
                       ? Number(run.endIndex)
-                      : (Array.isArray(run.contacts) ? run.contacts.length : undefined);
+                      : Array.isArray(run.contacts)
+                      ? run.contacts.length
+                      : undefined;
                     const range = endNum ? `${startNum}-${endNum}` : undefined;
                     return (
                       <>
-                        {agentName ? <span><strong>Agent:</strong> {agentName}</span> : null}
-                        {groupName ? <span><strong>Group:</strong> {groupName}</span> : null}
-                        {range ? <span><strong>Range:</strong> {range}</span> : null}
+                        {agentName ? (
+                          <span>
+                            <strong>Agent:</strong> {agentName}
+                          </span>
+                        ) : null}
+                        {groupName ? (
+                          <span>
+                            <strong>Group:</strong> {groupName}
+                          </span>
+                        ) : null}
+                        {range ? (
+                          <span>
+                            <strong>Range:</strong> {range}
+                          </span>
+                        ) : null}
                       </>
                     );
                   })()}
@@ -5537,17 +6009,34 @@ useEffect(() => {
                     onClick={() => {
                       setBookmarkedOnly((prev) => {
                         const next = !prev;
-                        try { localStorage.setItem(getStorageKey('filterBookmarkedOnly'), String(next)); } catch (_) {}
+                        try {
+                          localStorage.setItem(
+                            getStorageKey("filterBookmarkedOnly"),
+                            String(next)
+                          );
+                        } catch (_) {}
                         return next;
                       });
                     }}
-                    className={`inline-flex items-center gap-1 text-sm px-2 py-1 rounded border ${bookmarkedOnly ? 'bg-yellow-100 border-yellow-300' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
-                    title={bookmarkedOnly ? 'Show all' : 'Show bookmarked only'}
+                    className={`inline-flex items-center gap-1 text-sm px-2 py-1 rounded border ${
+                      bookmarkedOnly
+                        ? "bg-yellow-100 border-yellow-300"
+                        : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                    }`}
+                    title={bookmarkedOnly ? "Show all" : "Show bookmarked only"}
                   >
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="w-4 h-4 text-yellow-500" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      className="w-4 h-4 text-yellow-500"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
                       <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21 12 17.77 5.82 21 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
                     </svg>
-                    {bookmarkedOnly ? 'Bookmarked' : 'Star'}
+                    {bookmarkedOnly ? "Bookmarked" : "Star"}
                   </button>
                   {callFilter === "missed" && (
                     <button
@@ -5601,17 +6090,32 @@ useEffect(() => {
                             ? connectedStatuses.includes(status)
                             : missedStatuses.includes(status);
                         // Bookmark-only filter persisted in localStorage (from Star button)
-                        const bookmarkedOnly = Boolean(
-                          (typeof window !== 'undefined') && localStorage.getItem(getStorageKey('filterBookmarkedOnly')) === 'true'
-                        ) || Boolean(bookmarkedOnly);
-                        const idCandidate = lead.contactId || lead.documentId || lead._id || (lead.phone || lead.number);
-                        const isBk = idCandidate && (typeof isContactBookmarked === 'function')
-                          ? isContactBookmarked({ _id: idCandidate, phone: lead.phone, number: lead.number })
-                          : false;
+                        const bookmarkedOnly =
+                          Boolean(
+                            typeof window !== "undefined" &&
+                              localStorage.getItem(
+                                getStorageKey("filterBookmarkedOnly")
+                              ) === "true"
+                          ) || Boolean(bookmarkedOnly);
+                        const idCandidate =
+                          lead.contactId ||
+                          lead.documentId ||
+                          lead._id ||
+                          lead.phone ||
+                          lead.number;
+                        const isBk =
+                          idCandidate &&
+                          typeof isContactBookmarked === "function"
+                            ? isContactBookmarked({
+                                _id: idCandidate,
+                                phone: lead.phone,
+                                number: lead.number,
+                              })
+                            : false;
                         // Apply flag filter using local rowDisposition (row id resolution mirrors below rendering)
-                        const rowId = `${run.instanceNumber || run._id || index}-${
-                          lead.documentId || lead.contactId || `${idx}`
-                        }`;
+                        const rowId = `${
+                          run.instanceNumber || run._id || index
+                        }-${lead.documentId || lead.contactId || `${idx}`}`;
                         const selectedFlag = rowDisposition[rowId];
                         const byFlag =
                           flagFilter === "all"
@@ -5620,13 +6124,22 @@ useEffect(() => {
                             ? !selectedFlag
                             : selectedFlag === flagFilter;
                         // Apply disposition filter using backend fields
-                        const leadDisposition =
-                          (lead.leadStatus || lead.disposition || "").toLowerCase();
+                        const leadDisposition = (
+                          lead.leadStatus ||
+                          lead.disposition ||
+                          ""
+                        ).toLowerCase();
                         const byDisposition =
                           dispositionFilter === "all"
                             ? true
                             : leadDisposition === dispositionFilter;
-                        return byData && byStatus && byFlag && byDisposition && (bookmarkedOnly ? isBk : true);
+                        return (
+                          byData &&
+                          byStatus &&
+                          byFlag &&
+                          byDisposition &&
+                          (bookmarkedOnly ? isBk : true)
+                        );
                       });
                       if (filtered.length === 0) {
                         toast.warn("No logs to call for the selected filter");
@@ -5643,47 +6156,64 @@ useEffect(() => {
                   >
                     Call Selected
                   </button>
-                {/* Bulk download unified dropdown for selected history */}
-                <div className="relative">
-                  <button
-                    className="text-sm px-4 py-2 bg-black text-white rounded hover:bg-gray-800 disabled:opacity-50 flex items-center gap-2"
-                    onClick={() => setShowHistoryDownloadMenu((v)=>!v)}
-                    disabled={selectedCallLogs.length === 0}
-                    title="Download selected"
-                  >
-                    <FiDownload />
-                    Download
-                    <span className="inline-block border-l border-white/20 pl-2">▾</span>
-                  </button>
-                  {showHistoryDownloadMenu && (
-                    <div className="absolute right-0 mt-2 w-40 bg-white rounded-md shadow-lg z-50 overflow-hidden ring-1 ring-black/5">
-                      <button
-                        className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2"
-                        onClick={() => { setShowHistoryDownloadMenu(false); handleDownloadSelectedHistoryCSV(); }}
-                        disabled={isDownloadingHistoryCSV}
-                      >
-                        {isDownloadingHistoryCSV && <div className="animate-spin h-3 w-3 border border-gray-300 border-t-blue-600 rounded-full"></div>}
-                        Excel (CSV)
-                      </button>
-                      <button
-                        className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2"
-                        onClick={() => { setShowHistoryDownloadMenu(false); handleDownloadSelectedHistoryPDF(); }}
-                        disabled={isDownloadingHistoryPDF}
-                      >
-                        {isDownloadingHistoryPDF && <div className="animate-spin h-3 w-3 border border-gray-300 border-t-blue-600 rounded-full"></div>}
-                        PDF
-                      </button>
-                      <button
-                        className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2"
-                        onClick={() => { setShowHistoryDownloadMenu(false); handleDownloadSelectedHistoryTXT(); }}
-                        disabled={isDownloadingHistoryTXT}
-                      >
-                        {isDownloadingHistoryTXT && <div className="animate-spin h-3 w-3 border border-gray-300 border-t-blue-600 rounded-full"></div>}
-                        Text (TXT)
-                      </button>
-                    </div>
-                  )}
-                </div>
+                  {/* Bulk download unified dropdown for selected history */}
+                  <div className="relative">
+                    <button
+                      className="text-sm px-4 py-2 bg-black text-white rounded hover:bg-gray-800 disabled:opacity-50 flex items-center gap-2"
+                      onClick={() => setShowHistoryDownloadMenu((v) => !v)}
+                      disabled={selectedCallLogs.length === 0}
+                      title="Download selected"
+                    >
+                      <FiDownload />
+                      Download
+                      <span className="inline-block border-l border-white/20 pl-2">
+                        ▾
+                      </span>
+                    </button>
+                    {showHistoryDownloadMenu && (
+                      <div className="absolute right-0 mt-2 w-40 bg-white rounded-md shadow-lg z-50 overflow-hidden ring-1 ring-black/5">
+                        <button
+                          className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2"
+                          onClick={() => {
+                            setShowHistoryDownloadMenu(false);
+                            handleDownloadSelectedHistoryCSV();
+                          }}
+                          disabled={isDownloadingHistoryCSV}
+                        >
+                          {isDownloadingHistoryCSV && (
+                            <div className="animate-spin h-3 w-3 border border-gray-300 border-t-blue-600 rounded-full"></div>
+                          )}
+                          Excel (CSV)
+                        </button>
+                        <button
+                          className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2"
+                          onClick={() => {
+                            setShowHistoryDownloadMenu(false);
+                            handleDownloadSelectedHistoryPDF();
+                          }}
+                          disabled={isDownloadingHistoryPDF}
+                        >
+                          {isDownloadingHistoryPDF && (
+                            <div className="animate-spin h-3 w-3 border border-gray-300 border-t-blue-600 rounded-full"></div>
+                          )}
+                          PDF
+                        </button>
+                        <button
+                          className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2"
+                          onClick={() => {
+                            setShowHistoryDownloadMenu(false);
+                            handleDownloadSelectedHistoryTXT();
+                          }}
+                          disabled={isDownloadingHistoryTXT}
+                        >
+                          {isDownloadingHistoryTXT && (
+                            <div className="animate-spin h-3 w-3 border border-gray-300 border-t-blue-600 rounded-full"></div>
+                          )}
+                          Text (TXT)
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
               <div className="overflow-x-auto">
@@ -5726,7 +6256,9 @@ useEffect(() => {
                                     ? connectedStatuses.includes(status)
                                     : missedStatuses.includes(status);
                                 // Apply flag filter using local rowDisposition (row id resolution mirrors below rendering)
-                                const rowId = `${run.instanceNumber || run._id || index}-${
+                                const rowId = `${
+                                  run.instanceNumber || run._id || index
+                                }-${
                                   lead.documentId || lead.contactId || `${idx}`
                                 }`;
                                 const selectedFlag = rowDisposition[rowId];
@@ -5737,13 +6269,18 @@ useEffect(() => {
                                     ? !selectedFlag
                                     : selectedFlag === flagFilter;
                                 // Apply disposition filter using backend fields
-                                const leadDisposition =
-                                  (lead.leadStatus || lead.disposition || "").toLowerCase();
+                                const leadDisposition = (
+                                  lead.leadStatus ||
+                                  lead.disposition ||
+                                  ""
+                                ).toLowerCase();
                                 const byDisposition =
                                   dispositionFilter === "all"
                                     ? true
                                     : leadDisposition === dispositionFilter;
-                                return byData && byStatus && byFlag && byDisposition;
+                                return (
+                                  byData && byStatus && byFlag && byDisposition
+                                );
                               }
                             );
                             return (
@@ -5784,7 +6321,9 @@ useEffect(() => {
                                     ? connectedStatuses.includes(status)
                                     : missedStatuses.includes(status);
                                 // Flag filter
-                                const rowId = `${run.instanceNumber || run._id || index}-${
+                                const rowId = `${
+                                  run.instanceNumber || run._id || index
+                                }-${
                                   lead.documentId || lead.contactId || `${idx}`
                                 }`;
                                 const selectedFlag = rowDisposition[rowId];
@@ -5796,13 +6335,17 @@ useEffect(() => {
                                     : selectedFlag === flagFilter;
                                 // Disposition filter
                                 const leadDisposition = (
-                                  lead.leadStatus || lead.disposition || ""
+                                  lead.leadStatus ||
+                                  lead.disposition ||
+                                  ""
                                 ).toLowerCase();
                                 const byDisposition =
                                   dispositionFilter === "all"
                                     ? true
                                     : leadDisposition === dispositionFilter;
-                                return byData && byStatus && byFlag && byDisposition;
+                                return (
+                                  byData && byStatus && byFlag && byDisposition
+                                );
                               }
                             );
                             const allSelected =
@@ -5868,7 +6411,9 @@ useEffect(() => {
                               e.stopPropagation();
                               const newState = !flagMenuOpen;
                               if (newState) {
-                                const position = calculateDropdownPosition(e.target.closest('button'));
+                                const position = calculateDropdownPosition(
+                                  e.target.closest("button")
+                                );
                                 setFlagMenuPosition(position);
                               }
                               setFlagMenuOpen(newState);
@@ -5890,8 +6435,13 @@ useEffect(() => {
                                 e.stopPropagation();
                                 const newState = !flagMenuOpen;
                                 if (newState) {
-                                  const position = calculateDropdownPosition(e.target.closest('button'));
-                                  console.log('Setting flag menu position to:', position);
+                                  const position = calculateDropdownPosition(
+                                    e.target.closest("button")
+                                  );
+                                  console.log(
+                                    "Setting flag menu position to:",
+                                    position
+                                  );
                                   setFlagMenuPosition(position);
                                 }
                                 setFlagMenuOpen(newState);
@@ -5916,45 +6466,68 @@ useEffect(() => {
                             {flagMenuOpen && (
                               <div
                                 className={`absolute right-0 w-44 bg-white border border-gray-200 rounded shadow-lg z-[100] p-2 min-h-[100px] ${
-                                  flagMenuPosition === "top" ? "bottom-full mb-1" : "top-full mt-1"
+                                  flagMenuPosition === "top"
+                                    ? "bottom-full mb-1"
+                                    : "top-full mt-1"
                                 }`}
                                 onMouseDown={(e) => e.stopPropagation()}
                                 onClick={(e) => e.stopPropagation()}
                                 style={{
-                                  backgroundColor: flagMenuPosition === "top" ? "#fef3c7" : "#ffffff",
-                                  border: flagMenuPosition === "top" ? "2px solid #f59e0b" : "1px solid #e5e7eb"
+                                  backgroundColor:
+                                    flagMenuPosition === "top"
+                                      ? "#fef3c7"
+                                      : "#ffffff",
+                                  border:
+                                    flagMenuPosition === "top"
+                                      ? "2px solid #f59e0b"
+                                      : "1px solid #e5e7eb",
                                 }}
                               >
                                 {(() => {
                                   // Default flag options
                                   const defaultFlagOptions = [
                                     { key: "interested", label: "Interested" },
-                                    { key: "not interested", label: "Not Interested" },
+                                    {
+                                      key: "not interested",
+                                      label: "Not Interested",
+                                    },
                                     { key: "maybe", label: "Maybe" },
-                                    { key: "do not call", label: "Do Not Call" },
+                                    {
+                                      key: "do not call",
+                                      label: "Do Not Call",
+                                    },
                                   ];
-                                  const flagOptions = agentDispositions.length > 0
-                                    ? agentDispositions.map(disp => {
-                                        if (disp.title) {
-                                          return {
-                                            key: disp.title.toLowerCase().replace(/\s+/g, '_'),
-                                            label: disp.title
-                                          };
-                                        } else if (typeof disp === 'string') {
-                                          return {
-                                            key: disp.toLowerCase().replace(/\s+/g, '_'),
-                                            label: disp
-                                          };
-                                        } else if (disp.key && disp.label) {
-                                          return disp;
-                                        }
-                                        return null;
-                                      }).filter(Boolean)
-                                    : defaultFlagOptions;
+                                  const flagOptions =
+                                    agentDispositions.length > 0
+                                      ? agentDispositions
+                                          .map((disp) => {
+                                            if (disp.title) {
+                                              return {
+                                                key: disp.title
+                                                  .toLowerCase()
+                                                  .replace(/\s+/g, "_"),
+                                                label: disp.title,
+                                              };
+                                            } else if (
+                                              typeof disp === "string"
+                                            ) {
+                                              return {
+                                                key: disp
+                                                  .toLowerCase()
+                                                  .replace(/\s+/g, "_"),
+                                                label: disp,
+                                              };
+                                            } else if (disp.key && disp.label) {
+                                              return disp;
+                                            }
+                                            return null;
+                                          })
+                                          .filter(Boolean)
+                                      : defaultFlagOptions;
                                   const options = [
                                     { key: "all", label: "All" },
                                     { key: "unlabeled", label: "Unlabeled" },
-                                    ...flagOptions
+                                    ...flagOptions,
                                   ];
                                   return (
                                     <div className="py-1">
@@ -5963,7 +6536,9 @@ useEffect(() => {
                                           key={opt.key}
                                           data-filter-button
                                           className={`w-full text-left px-3 py-1.5 text-sm hover:bg-gray-50 ${
-                                            opt.key === flagFilter ? "bg-yellow-50" : ""
+                                            opt.key === flagFilter
+                                              ? "bg-yellow-50"
+                                              : ""
                                           }`}
                                           onClick={(e) => {
                                             // Allow normal click behavior for filter selection
@@ -5993,14 +6568,18 @@ useEffect(() => {
                               e.stopPropagation();
                               const newState = !dispMenuOpen;
                               if (newState) {
-                                const position = calculateDropdownPosition(e.target.closest('button'));
+                                const position = calculateDropdownPosition(
+                                  e.target.closest("button")
+                                );
                                 setDispMenuPosition(position);
                               }
                               setDispMenuOpen(newState);
                             }}
                             title="Filter by disposition"
                           >
-                            {agentDispositions.length > 0 ? "Disposition" : "Disposition"}
+                            {agentDispositions.length > 0
+                              ? "Disposition"
+                              : "Disposition"}
                           </button>
                           <div className="relative">
                             <button
@@ -6035,7 +6614,9 @@ useEffect(() => {
                             {dispMenuOpen && (
                               <div
                                 className={`absolute right-0 w-56 max-h-64 overflow-auto bg-white border border-gray-200 rounded shadow-lg z-[100] p-2 min-h-[100px] ${
-                                  dispMenuPosition === "top" ? "bottom-full mb-1" : "top-full mt-1"
+                                  dispMenuPosition === "top"
+                                    ? "bottom-full mb-1"
+                                    : "top-full mt-1"
                                 }`}
                                 onMouseDown={(e) => e.stopPropagation()}
                                 onClick={(e) => e.stopPropagation()}
@@ -6043,41 +6624,74 @@ useEffect(() => {
                                 {(() => {
                                   // Default dispositions
                                   const defaultDispositions = [
-                                    { key: "vvi", label: "Very Very Interested" },
+                                    {
+                                      key: "vvi",
+                                      label: "Very Very Interested",
+                                    },
                                     { key: "maybe", label: "Maybe" },
                                     { key: "enrolled", label: "Enrolled" },
                                     { key: "junk_lead", label: "Junk Lead" },
-                                    { key: "not_required", label: "Not Required" },
-                                    { key: "enrolled_other", label: "Enrolled Other" },
+                                    {
+                                      key: "not_required",
+                                      label: "Not Required",
+                                    },
+                                    {
+                                      key: "enrolled_other",
+                                      label: "Enrolled Other",
+                                    },
                                     { key: "decline", label: "Decline" },
-                                    { key: "not_eligible", label: "Not Eligible" },
-                                    { key: "wrong_number", label: "Wrong Number" },
-                                    { key: "hot_followup", label: "Hot Followup" },
-                                    { key: "cold_followup", label: "Cold Followup" },
+                                    {
+                                      key: "not_eligible",
+                                      label: "Not Eligible",
+                                    },
+                                    {
+                                      key: "wrong_number",
+                                      label: "Wrong Number",
+                                    },
+                                    {
+                                      key: "hot_followup",
+                                      label: "Hot Followup",
+                                    },
+                                    {
+                                      key: "cold_followup",
+                                      label: "Cold Followup",
+                                    },
                                     { key: "schedule", label: "Schedule" },
-                                    { key: "not_connected", label: "Not Connected" },
+                                    {
+                                      key: "not_connected",
+                                      label: "Not Connected",
+                                    },
                                   ];
-                                  const dispositionOptions = agentDispositions.length > 0
-                                    ? agentDispositions.map(disp => {
-                                        if (disp.title) {
-                                          return {
-                                            key: disp.title.toLowerCase().replace(/\s+/g, '_'),
-                                            label: disp.title
-                                          };
-                                        } else if (typeof disp === 'string') {
-                                          return {
-                                            key: disp.toLowerCase().replace(/\s+/g, '_'),
-                                            label: disp
-                                          };
-                                        } else if (disp.key && disp.label) {
-                                          return disp;
-                                        }
-                                        return null;
-                                      }).filter(Boolean)
-                                    : defaultDispositions;
+                                  const dispositionOptions =
+                                    agentDispositions.length > 0
+                                      ? agentDispositions
+                                          .map((disp) => {
+                                            if (disp.title) {
+                                              return {
+                                                key: disp.title
+                                                  .toLowerCase()
+                                                  .replace(/\s+/g, "_"),
+                                                label: disp.title,
+                                              };
+                                            } else if (
+                                              typeof disp === "string"
+                                            ) {
+                                              return {
+                                                key: disp
+                                                  .toLowerCase()
+                                                  .replace(/\s+/g, "_"),
+                                                label: disp,
+                                              };
+                                            } else if (disp.key && disp.label) {
+                                              return disp;
+                                            }
+                                            return null;
+                                          })
+                                          .filter(Boolean)
+                                      : defaultDispositions;
                                   const options = [
                                     { key: "all", label: "All" },
-                                    ...dispositionOptions
+                                    ...dispositionOptions,
                                   ];
                                   return (
                                     <div className="py-1">
@@ -6085,7 +6699,9 @@ useEffect(() => {
                                         <button
                                           key={opt.key}
                                           className={`w-full text-left px-3 py-1.5 text-sm hover:bg-gray-50 ${
-                                            opt.key === dispositionFilter ? "bg-blue-50" : ""
+                                            opt.key === dispositionFilter
+                                              ? "bg-blue-50"
+                                              : ""
                                           }`}
                                           onClick={() => {
                                             setDispositionFilter(opt.key);
@@ -6142,9 +6758,9 @@ useEffect(() => {
                             ? connectedStatuses.includes(status)
                             : missedStatuses.includes(status);
                         // Flag filter
-                        const rowId = `${run.instanceNumber || run._id || index}-${
-                          lead.documentId || lead.contactId || `${idx}`
-                        }`;
+                        const rowId = `${
+                          run.instanceNumber || run._id || index
+                        }-${lead.documentId || lead.contactId || `${idx}`}`;
                         const selectedFlag = rowDisposition[rowId];
                         const byFlag =
                           flagFilter === "all"
@@ -6154,7 +6770,9 @@ useEffect(() => {
                             : selectedFlag === flagFilter;
                         // Disposition filter
                         const leadDisposition = (
-                          lead.leadStatus || lead.disposition || ""
+                          lead.leadStatus ||
+                          lead.disposition ||
+                          ""
                         ).toLowerCase();
                         const byDisposition =
                           dispositionFilter === "all"
@@ -6165,7 +6783,8 @@ useEffect(() => {
                           lead.contactId ||
                           lead.documentId ||
                           lead._id ||
-                          (lead.phone || lead.number);
+                          lead.phone ||
+                          lead.number;
                         const isBk = idCandidate
                           ? isContactBookmarked({
                               _id: idCandidate,
@@ -6297,8 +6916,14 @@ useEffect(() => {
                                       e.stopPropagation();
                                       // Ensure the history card remains open while interacting
                                       setIsExpanded(true);
-                                      const direction = calculateDropdownPosition(e.currentTarget);
-                                      setRowDispositionPosition((prev) => ({ ...prev, [rowId]: direction }));
+                                      const direction =
+                                        calculateDropdownPosition(
+                                          e.currentTarget
+                                        );
+                                      setRowDispositionPosition((prev) => ({
+                                        ...prev,
+                                        [rowId]: direction,
+                                      }));
                                       setOpenDispositionFor(
                                         openDispositionFor === rowId
                                           ? null
@@ -6324,53 +6949,64 @@ useEffect(() => {
                                   {openDispositionFor === rowId && (
                                     <div
                                       className={`absolute z-10 w-40 bg-white border border-gray-200 rounded shadow ${
-                                        (rowDispositionPosition && rowDispositionPosition[rowId]) === "top"
+                                        (rowDispositionPosition &&
+                                          rowDispositionPosition[rowId]) ===
+                                        "top"
                                           ? "bottom-full mb-1"
                                           : "mt-1"
                                       }`}
                                       onClick={(e) => e.stopPropagation()}
                                       onMouseDown={(e) => e.stopPropagation()}
                                     >
-                                      {(agentDispositions.length > 0 ?
-                                        agentDispositions.map(disp => {
-                                          if (disp.title) {
-                                            // Return only main disposition titles, not sub-dispositions
-                                            return {
-                                              key: disp.title.toLowerCase().replace(/\s+/g, '_'),
-                                              label: disp.title,
-                                              cls: "text-blue-700",
-                                            };
-                                          } else if (typeof disp === 'string') {
-                                            return {
-                                              key: disp.toLowerCase().replace(/\s+/g, '_'),
-                                              label: disp,
-                                              cls: "text-blue-700",
-                                            };
-                                          }
-                                          return null;
-                                        }).filter(Boolean)
-                                      : [
-                                        {
-                                          key: "interested",
-                                          label: "Interested",
-                                          cls: "text-green-700",
-                                        },
-                                        {
-                                          key: "not interested",
-                                          label: "Not Interested",
-                                          cls: "text-red-700",
-                                        },
-                                        {
-                                          key: "maybe",
-                                          label: "Maybe",
-                                          cls: "text-yellow-700",
-                                        },
-                                        {
-                                          key: "do not call",
-                                          label: "Do Not Call",
-                                          cls: "text-gray-700",
-                                        },
-                                      ]).map((opt) => (
+                                      {(agentDispositions.length > 0
+                                        ? agentDispositions
+                                            .map((disp) => {
+                                              if (disp.title) {
+                                                // Return only main disposition titles, not sub-dispositions
+                                                return {
+                                                  key: disp.title
+                                                    .toLowerCase()
+                                                    .replace(/\s+/g, "_"),
+                                                  label: disp.title,
+                                                  cls: "text-blue-700",
+                                                };
+                                              } else if (
+                                                typeof disp === "string"
+                                              ) {
+                                                return {
+                                                  key: disp
+                                                    .toLowerCase()
+                                                    .replace(/\s+/g, "_"),
+                                                  label: disp,
+                                                  cls: "text-blue-700",
+                                                };
+                                              }
+                                              return null;
+                                            })
+                                            .filter(Boolean)
+                                        : [
+                                            {
+                                              key: "interested",
+                                              label: "Interested",
+                                              cls: "text-green-700",
+                                            },
+                                            {
+                                              key: "not interested",
+                                              label: "Not Interested",
+                                              cls: "text-red-700",
+                                            },
+                                            {
+                                              key: "maybe",
+                                              label: "Maybe",
+                                              cls: "text-yellow-700",
+                                            },
+                                            {
+                                              key: "do not call",
+                                              label: "Do Not Call",
+                                              cls: "text-gray-700",
+                                            },
+                                          ]
+                                      ).map((opt) => (
                                         <button
                                           key={`${rowId}-${opt.label}`}
                                           type="button"
@@ -6444,28 +7080,37 @@ useEffect(() => {
                                     : "View transcript"
                                 }
                                 onClick={() => {
-                                  if (lead.documentId && transcriptOpeningIds.has(lead.documentId)) return;
+                                  if (
+                                    lead.documentId &&
+                                    transcriptOpeningIds.has(lead.documentId)
+                                  )
+                                    return;
                                   openTranscriptSmart(lead);
                                 }}
-                                disabled={lead.documentId ? transcriptOpeningIds.has(lead.documentId) : false}
+                                disabled={
+                                  lead.documentId
+                                    ? transcriptOpeningIds.has(lead.documentId)
+                                    : false
+                                }
                               >
-                                {lead.documentId && transcriptOpeningIds.has(lead.documentId) ? (
+                                {lead.documentId &&
+                                transcriptOpeningIds.has(lead.documentId) ? (
                                   <span className="inline-flex items-center mr-1">
                                     <span className="w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"></span>
                                   </span>
                                 ) : (
                                   <svg
-                                  className="w-4 h-4 mr-1"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  viewBox="0 0 24 24"
-                                >
-                                  <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth="2"
-                                    d="M8 16h8M8 12h8M8 8h8M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H7l-2 2H3v12a2 2 0 002 2z"
-                                  />
+                                    className="w-4 h-4 mr-1"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth="2"
+                                      d="M8 16h8M8 12h8M8 8h8M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H7l-2 2H3v12a2 2 0 002 2z"
+                                    />
                                   </svg>
                                 )}
                                 {(() => {
@@ -6479,10 +7124,14 @@ useEffect(() => {
                                       ? lead.transcriptCount
                                       : undefined) ??
                                     getTranscriptMessageCount(lead);
-                                  const label = count > 0
-                                    ? `${baseLabel} (${count})`
-                                    : baseLabel;
-                                  return (lead.documentId && transcriptOpeningIds.has(lead.documentId)) ? `Loading…` : label;
+                                  const label =
+                                    count > 0
+                                      ? `${baseLabel} (${count})`
+                                      : baseLabel;
+                                  return lead.documentId &&
+                                    transcriptOpeningIds.has(lead.documentId)
+                                    ? `Loading…`
+                                    : label;
                                 })()}
                               </button>
                             )}
@@ -6493,7 +7142,8 @@ useEffect(() => {
                               const count =
                                 (typeof lead.transcriptCount === "number"
                                   ? lead.transcriptCount
-                                  : undefined) ?? getTranscriptMessageCount(lead);
+                                  : undefined) ??
+                                getTranscriptMessageCount(lead);
                               return Number(count) || 0;
                             })()}
                           </td>
@@ -6506,7 +7156,8 @@ useEffect(() => {
                                   lead.contactId ||
                                   lead.documentId ||
                                   lead._id ||
-                                  (lead.phone || lead.number);
+                                  lead.phone ||
+                                  lead.number;
                                 const isBk = idCandidate
                                   ? isContactBookmarked({
                                       _id: idCandidate,
@@ -6522,7 +7173,9 @@ useEffect(() => {
                                         ? "bg-yellow-100 border-yellow-300"
                                         : "bg-white border-gray-300 hover:bg-gray-50"
                                     }`}
-                                    title={isBk ? "Remove bookmark" : "Add bookmark"}
+                                    title={
+                                      isBk ? "Remove bookmark" : "Add bookmark"
+                                    }
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       toggleBookmarkForContact({
@@ -6548,7 +7201,8 @@ useEffect(() => {
                                 );
                               })()}
                               {(() => {
-                                const rowId = (lead.documentId || lead.contactId || `${idx}`);
+                                const rowId =
+                                  lead.documentId || lead.contactId || `${idx}`;
                                 const key = `assign-${rowId}`;
                                 return (
                                   <div className="relative">
@@ -6556,24 +7210,23 @@ useEffect(() => {
                                       type="button"
                                       className="inline-flex items-center px-2 py-1 text-xs border rounded hover:bg-gray-50"
                                       title="Assign"
-                                      onClick={(e) => { e.stopPropagation(); setOpenAssignFor(openAssignFor === key ? null : key); }}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setOpenAssignFor(
+                                          openAssignFor === key ? null : key
+                                        );
+                                      }}
                                     >
                                       Assign ▾
                                     </button>
-                                    {openAssignFor === key && (
-                                      <div className="absolute right-0 mt-1 w-28 bg-white border border-gray-200 rounded shadow z-10">
-                                        {["t1","t2","t3","t4","t5"].map((tag) => (
-                                          <button
-                                            key={tag}
-                                            type="button"
-                                            className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50"
-                                            onClick={(e) => { e.stopPropagation(); setRowAssignments((prev) => ({ ...prev, [rowId]: tag })); setOpenAssignFor(null); }}
-                                          >
-                                            {tag.toUpperCase()}
-                                          </button>
-                                        ))}
-                                      </div>
-                                    )}
+                                    {renderAssignMenu({
+                                      rowKey: key,
+                                      contacts: lead,
+                                      runId:
+                                        lead?.runId ||
+                                        run?.runId ||
+                                        currentRunId,
+                                    })}
                                   </div>
                                 );
                               })()}
@@ -6985,680 +7638,1357 @@ useEffect(() => {
         }
       `}</style>
       <div className="h-screen flex flex-col bg-gradient-to-br from-gray-50 to-gray-100">
-      {/* Fixed Header Section */}
-      <div className="flex-shrink-0 bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <button
-                onClick={onBack}
-                className="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-all duration-200 shadow-sm"
-              >
-                <svg
-                  className="w-4 h-4 mr-2"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
+        {/* Fixed Header Section */}
+        <div className="flex-shrink-0 bg-white shadow-sm border-b border-gray-200">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-4">
+                <button
+                  onClick={onBack}
+                  className="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:text-gray-800 transition-all duration-200 shadow-sm"
                 >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M15 19l-7-7 7-7"
-                  />
-                </svg>
-                Back to Campaigns
-              </button>
-              <div className="h-6 w-px bg-gray-300"></div>
-              <div>
-                <h1 className="text-3xl font-bold text-gray-900">
-                  {campaign.name}
-                </h1>
-                <p className="text-gray-600 mt-1">{campaign.description}</p>
-                {/* Calling Mode compact badge (P/S) */}
-                <div className="mt-2 flex items-center"></div>
+                  <svg
+                    className="w-4 h-4 mr-2"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M15 19l-7-7 7-7"
+                    />
+                  </svg>
+                  Back to Campaigns
+                </button>
+                <div className="h-6 w-px bg-gray-300"></div>
+                <div>
+                  <h1 className="text-3xl font-bold text-gray-900">
+                    {campaign.name}
+                  </h1>
+                  <p className="text-gray-600 mt-1">{campaign.description}</p>
+                  {/* Calling Mode compact badge (P/S) */}
+                  <div className="mt-2 flex items-center"></div>
+                </div>
               </div>
-            </div>
-            <button></button>
-            <div className="text-right">
-              <div className="text-sm text-gray-500 mb-1">
-                Created{" "}
-                {new Date(campaign.createdAt).toLocaleDateString("en-US", {
-                  year: "numeric",
-                  month: "long",
-                  day: "numeric",
-                })}
+              <button></button>
+              <div className="text-right">
+                <div className="text-sm text-gray-500 mb-1">
+                  Created{" "}
+                  {new Date(campaign.createdAt).toLocaleDateString("en-US", {
+                    year: "numeric",
+                    month: "long",
+                    day: "numeric",
+                  })}
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
-      {/* Scrollable Content Area */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          {/* Minimal Controls */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
-            <div className="flex items-center justify-between">
-              {/* Run / Stop toggle (small) */}
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={handleToggleCampaignCalling}
-                  disabled={
-                    isTogglingCampaign ||
-                    (!campaign?.isRunning && (
-                      !campaignGroups ||
-                      campaignGroups.length === 0 ||
-                      !Array.isArray(campaign?.agent) ||
-                      campaign.agent.length === 0
-                    ))
-                  }
-                  title={
-                    campaign?.isRunning
-                      ? "Stop campaign"
-                      : !campaignGroups || campaignGroups.length === 0
-                      ? "Cannot start: No groups assigned"
-                      : !Array.isArray(campaign?.agent) ||
-                        campaign.agent.length === 0
-                      ? "Cannot start: No agent assigned"
-                      : "Start campaign"
-                  }
-                  className={`inline-flex items-center justify-center h-9 p-2 border rounded-md border-gray-200 transition-colors ${
-                    isTogglingCampaign ||
-                    (!campaign?.isRunning && (
-                      !campaignGroups ||
-                      campaignGroups.length === 0 ||
-                      !Array.isArray(campaign?.agent) ||
-                      campaign.agent.length === 0
-                    ))
-                      ? "bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed"
-                      : campaign?.isRunning
-                      ? "bg-red-100 border-red-600 text-red-800 hover:bg-red-200"
-                      : "bg-green-100 border-green-600 text-green-800 hover:bg-green-200"
-                  }`}
-                >
-                  {isTogglingCampaign ? (
-                    <>
-                      <span className="inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                      <span className="mx-2 text-lg text-gray-600">
-                        {campaign?.isRunning ? "Stopping..." : "Starting..."}
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      {campaign?.isRunning ? (
-                        <FiPause className="w-4 h-4" />
-                      ) : (
-                        <FiPlay className="w-4 h-4" />
-                      )}
-                      <span className="mx-2 text-lg text-gray-600">
-                        {campaign?.isRunning ? "Stop" : "Run"}
-                      </span>
-                    </>
-                  )}
-                </button>
-              </div>
-              {/* Add buttons */}
-              <div className="flex items-center gap-2">
-                {Array.isArray(selectedRangesDisplay) && selectedRangesDisplay.length > 0 && (
-                  <div className="mr-4 text-right">
-                    <div className="text-xs text-gray-500">Selected range</div>
-                    <div className="text-sm font-semibold text-gray-800">
-                      {selectedRangesDisplay[selectedRangesDisplay.length - 1].groupName}: {selectedRangesDisplay[selectedRangesDisplay.length - 1].start}-{selectedRangesDisplay[selectedRangesDisplay.length - 1].end}
-                    </div>
-                  </div>
-                )}
-                <div className="mb-2 text-sm text-gray-700 flex items-center gap-4">
-                  {Array.isArray(campaign?.agent) &&
-                    campaign.agent.length > 0 && (
-                      <span className="items-center gap-1">
-                        <span className="font-medium">
-                          {(() => {
-                            const agentId = getPrimaryAgentId();
-                            return agentId
-                              ? agentMap[agentId] || "Loading..."
-                              : "";
-                          })()}
-                        </span>
-                      </span>
-                    )}
-                </div>
-                <button
-                  onClick={() => {
-                    setShowAddAgentModal(true);
-                    if (!agents || agents.length === 0) {
-                      fetchAgents();
+        {/* Scrollable Content Area */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            {/* Minimal Controls */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
+              <div className="flex items-center justify-between">
+                {/* Run / Stop toggle (small) */}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleToggleCampaignCalling}
+                    disabled={
+                      isTogglingCampaign ||
+                      (!campaign?.isRunning &&
+                        (!campaignGroups ||
+                          campaignGroups.length === 0 ||
+                          !Array.isArray(campaign?.agent) ||
+                          campaign.agent.length === 0))
                     }
-                  }}
+                    title={
+                      campaign?.isRunning
+                        ? "Stop campaign"
+                        : !campaignGroups || campaignGroups.length === 0
+                        ? "Cannot start: No groups assigned"
+                        : !Array.isArray(campaign?.agent) ||
+                          campaign.agent.length === 0
+                        ? "Cannot start: No agent assigned"
+                        : "Start campaign"
+                    }
+                    className={`inline-flex items-center justify-center h-9 p-2 border rounded-md border-gray-200 transition-colors ${
+                      isTogglingCampaign ||
+                      (!campaign?.isRunning &&
+                        (!campaignGroups ||
+                          campaignGroups.length === 0 ||
+                          !Array.isArray(campaign?.agent) ||
+                          campaign.agent.length === 0))
+                        ? "bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed"
+                        : campaign?.isRunning
+                        ? "bg-red-100 border-red-600 text-red-800 hover:bg-red-200"
+                        : "bg-green-100 border-green-600 text-green-800 hover:bg-green-200"
+                    }`}
+                  >
+                    {isTogglingCampaign ? (
+                      <>
+                        <span className="inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                        <span className="mx-2 text-lg text-gray-600">
+                          {campaign?.isRunning ? "Stopping..." : "Starting..."}
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        {campaign?.isRunning ? (
+                          <FiPause className="w-4 h-4" />
+                        ) : (
+                          <FiPlay className="w-4 h-4" />
+                        )}
+                        <span className="mx-2 text-lg text-gray-600">
+                          {campaign?.isRunning ? "Stop" : "Run"}
+                        </span>
+                      </>
+                    )}
+                  </button>
+                </div>
+                {/* Add buttons */}
+                <div className="flex items-center gap-2">
+                  {Array.isArray(selectedRangesDisplay) &&
+                    selectedRangesDisplay.length > 0 && (
+                      <div className="mr-4 text-right">
+                        <div className="text-xs text-gray-500">
+                          Selected range
+                        </div>
+                        <div className="text-sm font-semibold text-gray-800">
+                          {
+                            selectedRangesDisplay[
+                              selectedRangesDisplay.length - 1
+                            ].groupName
+                          }
+                          :{" "}
+                          {
+                            selectedRangesDisplay[
+                              selectedRangesDisplay.length - 1
+                            ].start
+                          }
+                          -
+                          {
+                            selectedRangesDisplay[
+                              selectedRangesDisplay.length - 1
+                            ].end
+                          }
+                        </div>
+                      </div>
+                    )}
+                  <div className="mb-2 text-sm text-gray-700 flex items-center gap-4">
+                    {Array.isArray(campaign?.agent) &&
+                      campaign.agent.length > 0 && (
+                        <span className="items-center gap-1">
+                          <span className="font-medium">
+                            {(() => {
+                              const agentId = getPrimaryAgentId();
+                              return agentId
+                                ? agentMap[agentId] || "Loading..."
+                                : "";
+                            })()}
+                          </span>
+                        </span>
+                      )}
+                  </div>
+                  <button
+                    onClick={() => {
+                      setShowAddAgentModal(true);
+                      if (!agents || agents.length === 0) {
+                        fetchAgents();
+                      }
+                    }}
+                    className="inline-flex items-center px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+                  >
+                    <FiUserPlus className="w-4 h-4 mr-1.5" /> Add AI Agent
+                  </button>
+                </div>
+              </div>
+            </div>
+            {/* Small cards for current groups */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-base font-medium text-gray-900">
+                  Contact Groups
+                </h2>
+                <button
+                  onClick={() => setShowAddGroupsModal(true)}
                   className="inline-flex items-center px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50"
                 >
-                  <FiUserPlus className="w-4 h-4 mr-1.5" /> Add AI Agent
+                  <FiPlus className="w-4 h-4 mr-1.5" /> Add Group
                 </button>
               </div>
-            </div>
-          </div>
-          {/* Small cards for current groups */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-base font-medium text-gray-900">
-                Contact Groups
-              </h2>
-              <button
-                onClick={() => setShowAddGroupsModal(true)}
-                className="inline-flex items-center px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50"
-              >
-                <FiPlus className="w-4 h-4 mr-1.5" /> Add Group
-              </button>
-            </div>
-            {campaignGroups && campaignGroups.length > 0 && (
-              <div className="flex items-center gap-3 flex-wrap">
-                {campaignGroups.map((group) => (
-                  <div
-                    key={`status-chip-${group._id}`}
-                    className="cursor-pointer inline-flex items-start justify-between gap-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2"
-                  >
-                    <button
-                      type="button"
-                      onClick={() => openGroupRangeModal(group._id)}
-                      className="text-left cursor-pointer"
-                      title="View contacts and select range"
+              {campaignGroups && campaignGroups.length > 0 && (
+                <div className="flex items-center gap-3 flex-wrap">
+                  {campaignGroups.map((group) => (
+                    <div
+                      key={`status-chip-${group._id}`}
+                      className="cursor-pointer inline-flex items-start justify-between gap-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2"
                     >
-                      <div className="cursor-pointer text-sm font-semibold text-gray-800 leading-5">
-                        {group.name}
-                      </div>
-                      <div className=" cursor-pointer text-xs text-gray-500 leading-4">
-                        {(() => {
-                          const total = (typeof group.contactsCount === "number" ? group.contactsCount : (group.contacts?.length || 0));
-                          const sel = Array.isArray(campaign?.groupSelections)
-                            ? campaign.groupSelections.find((gs) => String(gs.groupId) === String(group._id))
-                            : null;
-                          let bracket = "";
-                          if (sel) {
-                            if (Array.isArray(sel.selectedIndices) && sel.selectedIndices.length > 0) {
-                              const minIdx = Math.min(...sel.selectedIndices);
-                              const maxIdx = Math.max(...sel.selectedIndices);
-                              const humanStart = (Number.isFinite(minIdx) ? minIdx + 1 : 1);
-                              const humanEnd = (Number.isFinite(maxIdx) ? maxIdx + 1 : 0);
-                              bracket = humanEnd > 0 ? ` (${humanStart}-${humanEnd})` : "";
-                            } else if (Number.isFinite(sel.startIndex) && Number.isFinite(sel.endIndex) && sel.endIndex > sel.startIndex) {
-                              const humanStart = sel.startIndex + 1;
-                              const humanEnd = sel.endIndex;
-                              bracket = ` (${humanStart}-${humanEnd})`;
+                      <button
+                        type="button"
+                        onClick={() => openGroupRangeModal(group._id)}
+                        className="text-left cursor-pointer"
+                        title="View contacts and select range"
+                      >
+                        <div className="cursor-pointer text-sm font-semibold text-gray-800 leading-5">
+                          {group.name}
+                        </div>
+                        <div className=" cursor-pointer text-xs text-gray-500 leading-4">
+                          {(() => {
+                            const total =
+                              typeof group.contactsCount === "number"
+                                ? group.contactsCount
+                                : group.contacts?.length || 0;
+                            const sel = Array.isArray(campaign?.groupSelections)
+                              ? campaign.groupSelections.find(
+                                  (gs) =>
+                                    String(gs.groupId) === String(group._id)
+                                )
+                              : null;
+                            let bracket = "";
+                            if (sel) {
+                              if (
+                                Array.isArray(sel.selectedIndices) &&
+                                sel.selectedIndices.length > 0
+                              ) {
+                                const minIdx = Math.min(...sel.selectedIndices);
+                                const maxIdx = Math.max(...sel.selectedIndices);
+                                const humanStart = Number.isFinite(minIdx)
+                                  ? minIdx + 1
+                                  : 1;
+                                const humanEnd = Number.isFinite(maxIdx)
+                                  ? maxIdx + 1
+                                  : 0;
+                                bracket =
+                                  humanEnd > 0
+                                    ? ` (${humanStart}-${humanEnd})`
+                                    : "";
+                              } else if (
+                                Number.isFinite(sel.startIndex) &&
+                                Number.isFinite(sel.endIndex) &&
+                                sel.endIndex > sel.startIndex
+                              ) {
+                                const humanStart = sel.startIndex + 1;
+                                const humanEnd = sel.endIndex;
+                                bracket = ` (${humanStart}-${humanEnd})`;
+                              }
                             }
-                          }
-                          return (
-                            <>
-                              {total} contacts{bracket}
-                            </>
-                          );
-                        })()}
-                      </div>
-                    </button>
-                    <button
-                      type="button"
-                      title="Remove group"
-                      className="text-red-600 hover:text-red-700"
-                      onClick={() => handleRemoveGroup(group._id)}
-                    >
-                      <FiTrash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-          {/* Campaign Progress Section - Always Visible */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center space-x-3">
-                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                <h3 className="text-base font-medium text-gray-900">
-                  Campaign Summary
-                </h3>
-                <span
-                  className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                    campaign?.isRunning
-                      ? "bg-green-50 text-green-700 border border-green-200"
-                      : "bg-gray-50 text-gray-600 border border-gray-200"
-                  }`}
-                >
-                  {campaign?.isRunning ? "🟢 Running" : "⚪ Not Running"}
-                </span>
-                {campaign?.isRunning && campaignStartTime && (
-                  <div className="ml-3 flex items-center space-x-3 text-xs text-gray-600">
-                    <span>
-                      <strong>Start:</strong>{" "}
-                      {new Date(campaignStartTime).toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                        second: "2-digit",
-                      })}
-                    </span>
-                    <span>
-                      <strong>Duration:</strong> {formatHMSCompact(runSeconds)}
-                    </span>
-                  </div>
-                )}
-              </div>
-              <div className="flex items-center justify-between space-x-2">
-                <button
-                  onClick={() => setStatusLogsCollapsed((v) => !v)}
-                  className="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-md border border-gray-200"
-                  title={statusLogsCollapsed ? "Expand" : "Collapse"}
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className={`h-4 w-4 transition-transform ${
-                      statusLogsCollapsed ? "transform rotate-180" : ""
+                            return (
+                              <>
+                                {total} contacts{bracket}
+                              </>
+                            );
+                          })()}
+                        </div>
+                      </button>
+                      <button
+                        type="button"
+                        title="Remove group"
+                        className="text-red-600 hover:text-red-700"
+                        onClick={() => handleRemoveGroup(group._id)}
+                      >
+                        <FiTrash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            {/* Campaign Progress Section - Always Visible */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center space-x-3">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                  <h3 className="text-base font-medium text-gray-900">
+                    Campaign Summary
+                  </h3>
+                  <span
+                    className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                      campaign?.isRunning
+                        ? "bg-green-50 text-green-700 border border-green-200"
+                        : "bg-gray-50 text-gray-600 border border-gray-200"
                     }`}
-                    viewBox="0 0 20 20"
-                    fill="currentColor"
                   >
-                    <path
-                      fillRule="evenodd"
-                      d="M5.23 7.21a.75.75 0 011.06.02L10 11.094l3.71-3.864a.75.75 0 011.08 1.04l-4.24 4.41a.75.75 0 01-1.08 0l-4.24-4.41a.75.75 0 01.02-1.06z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                </button>
-                {/* Compact calling mode badge next to arrow */}
-                <span
-                  className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold ${
-                    agentConfigMode === "serial"
-                      ? "bg-blue-100 text-blue-800"
-                      : "bg-green-100 text-green-800"
-                  }`}
-                  title={agentConfigMode === "serial" ? "Serial" : "Parallel"}
-                >
-                  {agentConfigMode === "serial" ? "S" : "P"}
-                </span>
-              </div>
-            </div>
-            {/* Metrics Grid */}
-            <div
-              className={`grid grid-cols-6 gap-4 mb-4 ${
-                statusLogsCollapsed ? "hidden" : ""
-              }`}
-            >
-              <div className="text-center">
-                <div className="text-lg font-semibold text-gray-900">
-                  {apiMergedCallsLoading && apiMergedCallsInitialLoad ? (
-                    <div className="flex justify-center">
-                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-gray-900"></div>
+                    {campaign?.isRunning ? "🟢 Running" : "⚪ Not Running"}
+                  </span>
+                  {campaign?.isRunning && campaignStartTime && (
+                    <div className="ml-3 flex items-center space-x-3 text-xs text-gray-600">
+                      <span>
+                        <strong>Start:</strong>{" "}
+                        {new Date(campaignStartTime).toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                          second: "2-digit",
+                        })}
+                      </span>
+                      <span>
+                        <strong>Duration:</strong>{" "}
+                        {formatHMSCompact(runSeconds)}
+                      </span>
                     </div>
-                  ) : (
-                    (() => {
-                      const total = Array.isArray(campaignContacts)
-                        ? campaignContacts.length
-                        : 0;
-                      const callsMade = Math.min(
-                        total,
-                        apiMergedCallsTotals.totalItems
-                      );
-                      return `${callsMade || 0} / ${total || 0}`;
-                    })()
                   )}
                 </div>
-                <div className="text-xs text-gray-500">Progress</div>
-              </div>
-              <div className="text-center">
-                <div className="text-lg font-semibold text-amber-600">
-                  {apiMergedCallsLoading && apiMergedCallsInitialLoad ? (
-                    <div className="flex justify-center">
-                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-amber-600"></div>
-                    </div>
-                  ) : (
-                    apiMergedCallsTotals.totalRinging || 0
-                  )}
+                <div className="flex items-center justify-between space-x-2">
+                  <button
+                    onClick={() => setStatusLogsCollapsed((v) => !v)}
+                    className="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-md border border-gray-200"
+                    title={statusLogsCollapsed ? "Expand" : "Collapse"}
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className={`h-4 w-4 transition-transform ${
+                        statusLogsCollapsed ? "transform rotate-180" : ""
+                      }`}
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M5.23 7.21a.75.75 0 011.06.02L10 11.094l3.71-3.864a.75.75 0 011.08 1.04l-4.24 4.41a.75.75 0 01-1.08 0l-4.24-4.41a.75.75 0 01.02-1.06z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                  </button>
+                  {/* Compact calling mode badge next to arrow */}
+                  <span
+                    className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold ${
+                      agentConfigMode === "serial"
+                        ? "bg-blue-100 text-blue-800"
+                        : "bg-green-100 text-green-800"
+                    }`}
+                    title={agentConfigMode === "serial" ? "Serial" : "Parallel"}
+                  >
+                    {agentConfigMode === "serial" ? "S" : "P"}
+                  </span>
                 </div>
-                <div className="text-xs text-gray-500">Ringing</div>
               </div>
-              <div className="text-center">
-                <div className="text-lg font-semibold text-green-600">
-                  {apiMergedCallsLoading && apiMergedCallsInitialLoad ? (
-                    <div className="flex justify-center">
-                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-green-600"></div>
-                    </div>
-                  ) : (
-                    apiMergedCallsTotals.totalOngoing || 0
-                  )}
+              {/* Metrics Grid */}
+              <div
+                className={`grid grid-cols-6 gap-4 mb-4 ${
+                  statusLogsCollapsed ? "hidden" : ""
+                }`}
+              >
+                <div className="text-center">
+                  <div className="text-lg font-semibold text-gray-900">
+                    {apiMergedCallsLoading && apiMergedCallsInitialLoad ? (
+                      <div className="flex justify-center">
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-gray-900"></div>
+                      </div>
+                    ) : (
+                      (() => {
+                        const total = Array.isArray(campaignContacts)
+                          ? campaignContacts.length
+                          : 0;
+                        const callsMade = Math.min(
+                          total,
+                          apiMergedCallsTotals.totalItems
+                        );
+                        return `${callsMade || 0} / ${total || 0}`;
+                      })()
+                    )}
+                  </div>
+                  <div className="text-xs text-gray-500">Progress</div>
                 </div>
-                <div className="text-xs text-gray-500">Ongoing</div>
-              </div>
-              <div className="text-center">
-                <div className="text-lg font-semibold text-blue-600">
-                  {apiMergedCallsLoading && apiMergedCallsInitialLoad ? (
-                    <div className="flex justify-center">
-                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
-                    </div>
-                  ) : (
-                    apiMergedCallsTotals.totalConnected
-                  )}
+                <div className="text-center">
+                  <div className="text-lg font-semibold text-amber-600">
+                    {apiMergedCallsLoading && apiMergedCallsInitialLoad ? (
+                      <div className="flex justify-center">
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-amber-600"></div>
+                      </div>
+                    ) : (
+                      apiMergedCallsTotals.totalRinging || 0
+                    )}
+                  </div>
+                  <div className="text-xs text-gray-500">Ringing</div>
                 </div>
-                <div className="text-xs text-gray-500">Connected</div>
-              </div>
-              <div className="text-center">
-                <div className="text-lg font-semibold text-orange-600">
-                  {apiMergedCallsLoading && apiMergedCallsInitialLoad ? (
-                    <div className="flex justify-center">
-                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-orange-600"></div>
-                    </div>
-                  ) : (
-                    apiMergedCallsTotals.totalMissed
-                  )}
+                <div className="text-center">
+                  <div className="text-lg font-semibold text-green-600">
+                    {apiMergedCallsLoading && apiMergedCallsInitialLoad ? (
+                      <div className="flex justify-center">
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-green-600"></div>
+                      </div>
+                    ) : (
+                      apiMergedCallsTotals.totalOngoing || 0
+                    )}
+                  </div>
+                  <div className="text-xs text-gray-500">Ongoing</div>
                 </div>
-                <div className="text-xs text-gray-500">Not Connected</div>
-              </div>
-              <div className="text-center">
-                <div className="text-lg font-semibold text-purple-600">
-                  {apiMergedCallsLoading && apiMergedCallsInitialLoad ? (
-                    <div className="flex justify-center">
-                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-purple-600"></div>
-                    </div>
-                  ) : (
-                    formatHMSCompact(apiMergedCallsTotals.totalDuration)
-                  )}
+                <div className="text-center">
+                  <div className="text-lg font-semibold text-blue-600">
+                    {apiMergedCallsLoading && apiMergedCallsInitialLoad ? (
+                      <div className="flex justify-center">
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+                      </div>
+                    ) : (
+                      apiMergedCallsTotals.totalConnected
+                    )}
+                  </div>
+                  <div className="text-xs text-gray-500">Connected</div>
                 </div>
-                <div className="text-xs text-gray-500">Total Duration</div>
+                <div className="text-center">
+                  <div className="text-lg font-semibold text-orange-600">
+                    {apiMergedCallsLoading && apiMergedCallsInitialLoad ? (
+                      <div className="flex justify-center">
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-orange-600"></div>
+                      </div>
+                    ) : (
+                      apiMergedCallsTotals.totalMissed
+                    )}
+                  </div>
+                  <div className="text-xs text-gray-500">Not Connected</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-lg font-semibold text-purple-600">
+                    {apiMergedCallsLoading && apiMergedCallsInitialLoad ? (
+                      <div className="flex justify-center">
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-purple-600"></div>
+                      </div>
+                    ) : (
+                      formatHMSCompact(apiMergedCallsTotals.totalDuration)
+                    )}
+                  </div>
+                  <div className="text-xs text-gray-500">Total Duration</div>
+                </div>
               </div>
-            </div>
-            {/* Progress Bar */}
-            <div className={`mb-3 ${statusLogsCollapsed ? "hidden" : ""}`}>
-              <div className="flex justify-between items-center mb-2">
-                <span className="text-xs font-medium text-gray-700">
-                  Progress Bar
-                </span>
-                <span className="text-xs text-gray-500">
-                  {apiMergedCallsLoading && apiMergedCallsInitialLoad ? (
-                    <div className="flex items-center">
-                      <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-gray-500 mr-2"></div>
-                      Loading stats...
-                    </div>
-                  ) : (
-                    (() => {
-                      const total = Array.isArray(campaignContacts)
-                        ? campaignContacts.length
-                        : 0;
-                      return `${apiMergedCallsTotals.totalConnected} Connected, ${apiMergedCallsTotals.totalMissed} Not Connected of ${total} total`;
-                    })()
-                  )}
-                </span>
+              {/* Progress Bar */}
+              <div className={`mb-3 ${statusLogsCollapsed ? "hidden" : ""}`}>
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-xs font-medium text-gray-700">
+                    Progress Bar
+                  </span>
+                  <span className="text-xs text-gray-500">
+                    {apiMergedCallsLoading && apiMergedCallsInitialLoad ? (
+                      <div className="flex items-center">
+                        <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-gray-500 mr-2"></div>
+                        Loading stats...
+                      </div>
+                    ) : (
+                      (() => {
+                        const total = Array.isArray(campaignContacts)
+                          ? campaignContacts.length
+                          : 0;
+                        return `${apiMergedCallsTotals.totalConnected} Connected, ${apiMergedCallsTotals.totalMissed} Not Connected of ${total} total`;
+                      })()
+                    )}
+                  </span>
+                </div>
+                <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
+                  <div
+                    className={`h-2 rounded-full transition-all duration-500 ${
+                      (() => {
+                        const total = Array.isArray(campaignContacts)
+                          ? campaignContacts.length
+                          : 0;
+                        const callsMade = Math.min(
+                          total,
+                          apiMergedCallsTotals.totalItems
+                        );
+                        return total > 0 && callsMade > 0;
+                      })()
+                        ? "bg-gradient-to-r from-green-400 to-green-500"
+                        : "bg-gray-300"
+                    }`}
+                    style={{
+                      width: (() => {
+                        const total = Array.isArray(campaignContacts)
+                          ? campaignContacts.length
+                          : 0;
+                        if (total === 0) return "0%";
+                        const callsMade = Math.min(
+                          total,
+                          apiMergedCallsTotals.totalItems
+                        );
+                        const pct = Math.max((callsMade / total) * 100, 0);
+                        return `${pct}%`;
+                      })(),
+                    }}
+                  ></div>
+                </div>
               </div>
-              <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
-                <div
-                  className={`h-2 rounded-full transition-all duration-500 ${
-                    (() => {
-                      const total = Array.isArray(campaignContacts)
-                        ? campaignContacts.length
-                        : 0;
-                      const callsMade = Math.min(
-                        total,
-                        apiMergedCallsTotals.totalItems
-                      );
-                      return total > 0 && callsMade > 0;
-                    })()
-                      ? "bg-gradient-to-r from-green-400 to-green-500"
-                      : "bg-gray-300"
-                  }`}
-                  style={{
-                    width: (() => {
-                      const total = Array.isArray(campaignContacts)
-                        ? campaignContacts.length
-                        : 0;
-                      if (total === 0) return "0%";
-                      const callsMade = Math.min(
-                        total,
-                        apiMergedCallsTotals.totalItems
-                      );
-                      const pct = Math.max((callsMade / total) * 100, 0);
-                      return `${pct}%`;
-                    })(),
-                  }}
-                ></div>
-              </div>
-            </div>
-            {callingStatus === "paused" && (
-              <div className="text-xs text-yellow-700 text-center py-2 bg-yellow-50 rounded-md border border-yellow-200">
-                Calling paused - resume anytime
-              </div>
-            )}
-            {callingStatus === "completed" && (
-              <div className="text-xs text-blue-700 text-center py-2 bg-blue-50 rounded-md border border-blue-200">
-                All calls completed successfully
-              </div>
-            )}
-            {/* Campaign Requirements Check */}
-            {(!campaignGroups || campaignGroups.length === 0) && (
-              <div className="text-xs text-red-700 text-center py-2 bg-red-50 rounded-md border border-red-200">
-                ⚠️ Campaign cannot run: No groups assigned. Please add groups
-                first.
-              </div>
-            )}
-            {campaignGroups &&
-              campaignGroups.length > 0 &&
-              (!Array.isArray(campaign?.agent) ||
-                campaign.agent.length === 0) && (
+              {callingStatus === "paused" && (
+                <div className="text-xs text-yellow-700 text-center py-2 bg-yellow-50 rounded-md border border-yellow-200">
+                  Calling paused - resume anytime
+                </div>
+              )}
+              {callingStatus === "completed" && (
+                <div className="text-xs text-blue-700 text-center py-2 bg-blue-50 rounded-md border border-blue-200">
+                  All calls completed successfully
+                </div>
+              )}
+              {/* Campaign Requirements Check */}
+              {(!campaignGroups || campaignGroups.length === 0) && (
                 <div className="text-xs text-red-700 text-center py-2 bg-red-50 rounded-md border border-red-200">
-                  ⚠️ Campaign cannot run: No agent assigned. Please add an agent
+                  ⚠️ Campaign cannot run: No groups assigned. Please add groups
                   first.
                 </div>
               )}
-            {campaignGroups &&
-              campaignGroups.length > 0 &&
-              Array.isArray(campaign?.agent) &&
-              campaign.agent.length > 0 &&
-              (!campaignContacts || campaignContacts.length === 0) && (
-                <div className="text-xs text-orange-700 text-center py-2 bg-orange-50 rounded-md border border-orange-200">
-                  ⚠️ Campaign cannot run: No contacts available. Please sync
-                  contacts from groups first.
-                </div>
-              )}
-          </div>
-          {/* Campaign Progress Section - Always Visible */}
-          {/* Group Range Modal */}
-          {showGroupRangeModal && rangeModalGroup && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center">
-              <div
-                className="absolute inset-0 bg-black/40"
-                onClick={() => setShowGroupRangeModal(false)}
-              ></div>
-              <div className="relative bg-white rounded-lg shadow-xl border border-gray-200 w-full max-w-2xl mx-4 p-5">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-lg font-semibold text-gray-900">
-                    {rangeModalGroup.name} —{" "}
-                    {typeof rangeModalGroup.contactsCount === "number"
-                      ? rangeModalGroup.contactsCount
-                      : rangeModalGroup.contacts?.length || 0}{" "}
-                    contacts
-                  </h3>
-                  <button
-                    className="text-gray-500 hover:text-gray-700"
-                    onClick={() => setShowGroupRangeModal(false)}
-                    title="Close"
-                  >
-                    ✕
-                  </button>
-                </div>
-                <div className="space-y-4">
-                  <div className="flex items-center gap-2 border-b border-gray-200">
+              {campaignGroups &&
+                campaignGroups.length > 0 &&
+                (!Array.isArray(campaign?.agent) ||
+                  campaign.agent.length === 0) && (
+                  <div className="text-xs text-red-700 text-center py-2 bg-red-50 rounded-md border border-red-200">
+                    ⚠️ Campaign cannot run: No agent assigned. Please add an
+                    agent first.
+                  </div>
+                )}
+              {campaignGroups &&
+                campaignGroups.length > 0 &&
+                Array.isArray(campaign?.agent) &&
+                campaign.agent.length > 0 &&
+                (!campaignContacts || campaignContacts.length === 0) && (
+                  <div className="text-xs text-orange-700 text-center py-2 bg-orange-50 rounded-md border border-orange-200">
+                    ⚠️ Campaign cannot run: No contacts available. Please sync
+                    contacts from groups first.
+                  </div>
+                )}
+            </div>
+            {/* Campaign Progress Section - Always Visible */}
+            {/* Group Range Modal */}
+            {showGroupRangeModal && rangeModalGroup && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center">
+                <div
+                  className="absolute inset-0 bg-black/40"
+                  onClick={() => setShowGroupRangeModal(false)}
+                ></div>
+                <div className="relative bg-white rounded-lg shadow-xl border border-gray-200 w-full max-w-2xl mx-4 p-5">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-lg font-semibold text-gray-900">
+                      {rangeModalGroup.name} —{" "}
+                      {typeof rangeModalGroup.contactsCount === "number"
+                        ? rangeModalGroup.contactsCount
+                        : rangeModalGroup.contacts?.length || 0}{" "}
+                      contacts
+                    </h3>
                     <button
-                      className={`px-3 py-2 text-sm ${
-                        groupModalTab === "range"
-                          ? "border-b-2 border-blue-600 text-blue-700"
-                          : "text-gray-600"
-                      }`}
-                      onClick={() => setGroupModalTab("range")}
+                      className="text-gray-500 hover:text-gray-700"
+                      onClick={() => setShowGroupRangeModal(false)}
+                      title="Close"
                     >
-                      Range
-                    </button>
-                    <button
-                      className={`px-3 py-2 text-sm ${
-                        groupModalTab === "select"
-                          ? "border-b-2 border-blue-600 text-blue-700"
-                          : "text-gray-600"
-                      }`}
-                      onClick={() => setGroupModalTab("select")}
-                    >
-                      Select & Call
+                      ✕
                     </button>
                   </div>
-                  {groupModalTab === "range" && (
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm text-gray-700 mb-1">
-                          Start from
-                        </label>
-                        <input
-                          type="number"
-                          min={1}
-                          max={Math.max(
-                            0,
-                            rangeModalGroup.contacts?.length || 0
-                          )}
-                          value={rangeStartIndex}
-                          onChange={(e) => setRangeStartIndex(e.target.value)}
-                          className="w-full border border-gray-300 rounded-md px-2 py-1"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm text-gray-700 mb-1">
-                          End at (exclusive)
-                        </label>
-                        <input
-                          type="number"
-                          min={1}
-                          max={Math.max(
-                            0,
-                            rangeModalGroup.contacts?.length || 0
-                          )}
-                          value={rangeEndIndex}
-                          onChange={(e) => setRangeEndIndex(e.target.value)}
-                          className="w-full border border-gray-300 rounded-md px-2 py-1"
-                        />
-                      </div>
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2 border-b border-gray-200">
+                      <button
+                        className={`px-3 py-2 text-sm ${
+                          groupModalTab === "range"
+                            ? "border-b-2 border-blue-600 text-blue-700"
+                            : "text-gray-600"
+                        }`}
+                        onClick={() => setGroupModalTab("range")}
+                      >
+                        Range
+                      </button>
+                      <button
+                        className={`px-3 py-2 text-sm ${
+                          groupModalTab === "select"
+                            ? "border-b-2 border-blue-600 text-blue-700"
+                            : "text-gray-600"
+                        }`}
+                        onClick={() => setGroupModalTab("select")}
+                      >
+                        Select & Call
+                      </button>
                     </div>
-                  )}
-                  {groupModalTab === "select" && (
-                    <div className="max-h-60 overflow-auto border rounded-md">
-                      <table className="min-w-full text-sm">
-                        <thead className="bg-gray-50">
-                          <tr>
-                            <th className="text-left px-3 py-2 font-medium text-gray-700">
-                              <input
-                                type="checkbox"
-                                className="w-4 h-4"
-                                checked={
-                                  Array.isArray(selectedContactIndices) &&
-                                  rangeModalGroup.contacts &&
-                                  selectedContactIndices.length ===
-                                    rangeModalGroup.contacts.length
-                                }
-                                onChange={(e) => {
-                                  if (e.target.checked) {
-                                    const total =
-                                      rangeModalGroup.contacts?.length || 0;
-                                    setSelectedContactIndices(
-                                      Array.from({ length: total }, (_, i) => i)
-                                    );
-                                    if (groupModalTab === "range") {
-                                      setRangeStartIndex(1);
-                                      setRangeEndIndex(total);
-                                    }
-                                  } else {
-                                    setSelectedContactIndices([]);
-                                  }
-                                }}
-                                title="Select All"
-                              />
-                            </th>
-                            <th className="text-left px-3 py-2 font-medium text-gray-700">
-                              #
-                            </th>
-                            <th className="text-left px-3 py-2 font-medium text-gray-700">
-                              Name
-                            </th>
-                            <th className="text-left px-3 py-2 font-medium text-gray-700">
-                              Phone
-                            </th>
-                            <th className="text-left px-3 py-2 font-medium text-gray-700">
-                              Email
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {(rangeModalGroup.contacts || []).map((c, idx) => (
-                            <tr
-                              key={idx}
-                              className={`${
-                                groupModalTab === "range" &&
-                                idx >= rangeStartIndex &&
-                                idx < rangeEndIndex
-                                  ? "bg-green-50"
-                                  : ""
-                              }`}
-                            >
-                              <td className="px-3 py-1">
+                    {groupModalTab === "range" && (
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm text-gray-700 mb-1">
+                            Start from
+                          </label>
+                          <input
+                            type="number"
+                            min={1}
+                            max={Math.max(
+                              0,
+                              rangeModalGroup.contacts?.length || 0
+                            )}
+                            value={rangeStartIndex}
+                            onChange={(e) => setRangeStartIndex(e.target.value)}
+                            className="w-full border border-gray-300 rounded-md px-2 py-1"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm text-gray-700 mb-1">
+                            End at (exclusive)
+                          </label>
+                          <input
+                            type="number"
+                            min={1}
+                            max={Math.max(
+                              0,
+                              rangeModalGroup.contacts?.length || 0
+                            )}
+                            value={rangeEndIndex}
+                            onChange={(e) => setRangeEndIndex(e.target.value)}
+                            className="w-full border border-gray-300 rounded-md px-2 py-1"
+                          />
+                        </div>
+                      </div>
+                    )}
+                    {groupModalTab === "select" && (
+                      <div className="max-h-60 overflow-auto border rounded-md">
+                        <table className="min-w-full text-sm">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="text-left px-3 py-2 font-medium text-gray-700">
                                 <input
                                   type="checkbox"
                                   className="w-4 h-4"
-                                  checked={selectedContactIndices.includes(idx)}
+                                  checked={
+                                    Array.isArray(selectedContactIndices) &&
+                                    rangeModalGroup.contacts &&
+                                    selectedContactIndices.length ===
+                                      rangeModalGroup.contacts.length
+                                  }
                                   onChange={(e) => {
-                                    setSelectedContactIndices((prev) => {
-                                      const set = new Set(prev);
-                                      if (e.target.checked) set.add(idx);
-                                      else set.delete(idx);
-                                      return Array.from(set);
-                                    });
+                                    if (e.target.checked) {
+                                      const total =
+                                        rangeModalGroup.contacts?.length || 0;
+                                      setSelectedContactIndices(
+                                        Array.from(
+                                          { length: total },
+                                          (_, i) => i
+                                        )
+                                      );
+                                      if (groupModalTab === "range") {
+                                        setRangeStartIndex(1);
+                                        setRangeEndIndex(total);
+                                      }
+                                    } else {
+                                      setSelectedContactIndices([]);
+                                    }
                                   }}
-                                  title="Select contact"
+                                  title="Select All"
                                 />
-                              </td>
-                              <td className="px-3 py-1 text-gray-600">{idx}</td>
-                              <td className="px-3 py-1">{c.name || ""}</td>
-                              <td className="px-3 py-1">{c.phone}</td>
-                              <td className="px-3 py-1">{c.email || ""}</td>
+                              </th>
+                              <th className="text-left px-3 py-2 font-medium text-gray-700">
+                                #
+                              </th>
+                              <th className="text-left px-3 py-2 font-medium text-gray-700">
+                                Name
+                              </th>
+                              <th className="text-left px-3 py-2 font-medium text-gray-700">
+                                Phone
+                              </th>
+                              <th className="text-left px-3 py-2 font-medium text-gray-700">
+                                Email
+                              </th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
-                <div className="mt-4 flex items-center justify-end gap-2">
-                  <button
-                    className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-white hover:bg-gray-50"
-                    onClick={() => setShowGroupRangeModal(false)}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    className="px-3 py-1.5 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
-                    disabled={rangeModalLoading}
-                    onClick={saveGroupRangeToCampaign}
-                  >
-                    {rangeModalLoading
-                      ? "Saving..."
-                      : groupModalTab === "select"
-                      ? "Add to Campaign"
-                      : "Add to Campaign"}
-                  </button>
+                          </thead>
+                          <tbody>
+                            {(rangeModalGroup.contacts || []).map((c, idx) => (
+                              <tr
+                                key={idx}
+                                className={`${
+                                  groupModalTab === "range" &&
+                                  idx >= rangeStartIndex &&
+                                  idx < rangeEndIndex
+                                    ? "bg-green-50"
+                                    : ""
+                                }`}
+                              >
+                                <td className="px-3 py-1">
+                                  <input
+                                    type="checkbox"
+                                    className="w-4 h-4"
+                                    checked={selectedContactIndices.includes(
+                                      idx
+                                    )}
+                                    onChange={(e) => {
+                                      setSelectedContactIndices((prev) => {
+                                        const set = new Set(prev);
+                                        if (e.target.checked) set.add(idx);
+                                        else set.delete(idx);
+                                        return Array.from(set);
+                                      });
+                                    }}
+                                    title="Select contact"
+                                  />
+                                </td>
+                                <td className="px-3 py-1 text-gray-600">
+                                  {idx}
+                                </td>
+                                <td className="px-3 py-1">{c.name || ""}</td>
+                                <td className="px-3 py-1">{c.phone}</td>
+                                <td className="px-3 py-1">{c.email || ""}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                  <div className="mt-4 flex items-center justify-end gap-2">
+                    <button
+                      className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-white hover:bg-gray-50"
+                      onClick={() => setShowGroupRangeModal(false)}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      className="px-3 py-1.5 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+                      disabled={rangeModalLoading}
+                      onClick={saveGroupRangeToCampaign}
+                    >
+                      {rangeModalLoading
+                        ? "Saving..."
+                        : groupModalTab === "select"
+                        ? "Add to Campaign"
+                        : "Add to Campaign"}
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
-          {/* Live call logs (Ringing/Ongoing) - show only in NGR/parallel mode */}
-          {true && (
+            )}
+            {/* Live call logs (Ringing/Ongoing) - show only in NGR/parallel mode */}
+            {true && (
+              <div
+                className={`bg-gradient-to-r from-blue-50 via-white to-blue-50 rounded-2xl shadow border border-blue-200 p-6 mb-8 ring-1 ring-blue-100 ${
+                  statusLogsCollapsed ? "hidden" : ""
+                }`}
+              >
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-base font-semibold text-blue-900 flex items-center gap-2">
+                    <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-700">
+                      ●
+                    </span>
+                    Live call logs
+                  </h2>
+                  <div className="flex items-center gap-3">
+                    {/* Auto refresh toggle (same visual) */}
+                    <label className="flex items-center gap-2 text-sm select-none">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4"
+                        checked={autoRefreshCalls}
+                        onChange={(e) => setAutoRefreshCalls(e.target.checked)}
+                      />
+                      {autoRefreshCalls
+                        ? "Auto-refresh: On"
+                        : "Auto-refresh: Off"}
+                    </label>
+                    <button
+                      onClick={() => fetchApiMergedCalls(1, false, false)}
+                      className="text-sm px-2 py-1 bg-gray-50 text-black rounded-md hover:bg-gray-100 transition-colors border border-gray-200 flex items-center justify-between"
+                      title="Refresh"
+                    >
+                      <svg
+                        className="w-3 h-3 mx-1"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2"
+                          d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                        />
+                      </svg>
+                      <span>Refresh</span>
+                    </button>
+                    {/* Visual parity selects (disabled for live) */}
+                    <select
+                      className="text-sm border border-gray-300 rounded-md px-2 py-1 opacity-60 cursor-not-allowed"
+                      value={callFilter}
+                      disabled
+                      onChange={() => {}}
+                    >
+                      <option>All</option>
+                    </select>
+                    <select
+                      className="text-sm border border-gray-300 rounded-md px-2 py-1 opacity-60 cursor-not-allowed"
+                      value={durationSort}
+                      disabled
+                      onChange={() => {}}
+                    >
+                      <option>Sort by</option>
+                    </select>
+                  </div>
+                </div>
+                {apiMergedCallsLoading ? (
+                  <div className="text-center py-10">Loading live calls...</div>
+                ) : (
+                  (() => {
+                    const liveCalls = (apiMergedCalls || []).filter((lead) => {
+                      const status = String(lead?.status || "").toLowerCase();
+                      return status === "ringing" || status === "ongoing";
+                    });
+                    if (liveCalls.length === 0) {
+                      return (
+                        <div className="text-center py-10 text-gray-500">
+                          No live calls
+                        </div>
+                      );
+                    }
+                    return (
+                      <div className="overflow-x-auto">
+                        {/* Select and action controls (visual parity with Recent) */}
+                        {liveCalls.length > 0 && !apiMergedCallsLoading && (
+                          <div className="mb-4 p-4 bg-gray-50 rounded-lg border">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-4">
+                                <label className="flex items-center gap-2">
+                                  <input
+                                    type="checkbox"
+                                    checked={selectAllCallLogs}
+                                    onChange={handleSelectAllCallLogs}
+                                    className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                                  />
+                                  <span className="text-sm font-medium text-gray-700">
+                                    Select All Call Logs (
+                                    {selectedCallLogs.length} selected)
+                                  </span>
+                                </label>
+                              </div>
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={callSelectedCallLogs}
+                                  disabled={selectedCallLogs.length === 0}
+                                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                                >
+                                  <svg
+                                    className="w-4 h-4"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth={2}
+                                      d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
+                                    />
+                                  </svg>
+                                  Call Selected ({selectedCallLogs.length})
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setSelectedCallLogs([]);
+                                    setSelectAllCallLogs(false);
+                                  }}
+                                  disabled={selectedCallLogs.length === 0}
+                                  className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                  Clear Selection
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                        <table className="min-w-full text-sm border border-amber-200 rounded-lg overflow-hidden">
+                          <thead className="bg-gray-50 sticky top-0 z-10">
+                            <tr className="text-left text-gray-700">
+                              <th className="py-2 px-3">
+                                <input
+                                  type="checkbox"
+                                  checked={selectAllCallLogs}
+                                  onChange={handleSelectAllCallLogs}
+                                  className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                                />
+                              </th>
+                              <th className="py-2 px-3">S. No.</th>
+                              <th className="py-2 px-3">Date & Time</th>
+                              <th className="py-2 px-3">Name</th>
+                              <th className="py-2 px-3">Number</th>
+                              <th className="py-2 px-3">Status</th>
+                              <th className="py-2 px-3">
+                                <FiClock />
+                              </th>
+                              <th className="py-2 px-3">Conversation</th>
+                              <th className="py-2 px-3">CC</th>
+                              <th className="py-2 px-3">
+                                <div className="flex items-center gap-2">
+                                  <span>Flag</span>
+                                  <div className="relative">
+                                    <button
+                                      type="button"
+                                      className={`p-1 rounded border ${
+                                        flagFilter !== "all"
+                                          ? "bg-yellow-100 border-yellow-300"
+                                          : "bg-white border-gray-300 hover:bg-gray-50"
+                                      }`}
+                                      title="Filter by flag"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        const newState = !flagMenuOpen;
+                                        if (newState) {
+                                          const position =
+                                            calculateDropdownPosition(
+                                              e.target.closest("button")
+                                            );
+                                          console.log(
+                                            "Setting flag menu position to:",
+                                            position
+                                          );
+                                          setFlagMenuPosition(position);
+                                        }
+                                        setFlagMenuOpen(newState);
+                                      }}
+                                    >
+                                      {/* small flag icon */}
+                                      <svg
+                                        xmlns="http://www.w3.org/2000/svg"
+                                        className="h-4 w-4 text-gray-700"
+                                        fill="none"
+                                        viewBox="0 0 24 24"
+                                        stroke="currentColor"
+                                      >
+                                        <path
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                          strokeWidth={2}
+                                          d="M4 6v14M4 6h12l-3 4 3 4H4"
+                                        />
+                                      </svg>
+                                    </button>
+                                    {flagMenuOpen && (
+                                      <div
+                                        className="absolute right-0 mt-1 w-44 bg-white border border-gray-200 rounded shadow-lg z-[100] p-2"
+                                        onMouseDown={(e) => e.stopPropagation()}
+                                        onClick={(e) => e.stopPropagation()}
+                                      >
+                                        {(() => {
+                                          // compute visible rows' flag options
+                                          const visible = (
+                                            run.contacts || []
+                                          ).filter((lead, idx) => {
+                                            const name = (lead.name || "")
+                                              .toString()
+                                              .trim();
+                                            const number = (
+                                              lead.number ||
+                                              lead.phone ||
+                                              ""
+                                            )
+                                              .toString()
+                                              .trim();
+                                            const hasRealName =
+                                              name && name !== "-";
+                                            const hasRealNumber =
+                                              number &&
+                                              number !== "-" &&
+                                              /\d/.test(number);
+                                            const byData =
+                                              hasRealName || hasRealNumber;
+                                            const status = (
+                                              lead.status || ""
+                                            ).toLowerCase();
+                                            const connectedStatuses = [
+                                              "connected",
+                                              "completed",
+                                              "ongoing",
+                                            ];
+                                            const missedStatuses = [
+                                              "missed",
+                                              "not_connected",
+                                              "failed",
+                                            ];
+                                            if (agentConfigMode !== "serial") {
+                                              const isLive =
+                                                status === "ringing" ||
+                                                status === "ongoing";
+                                              if (isLive) return false;
+                                            }
+                                            const byStatus =
+                                              callFilter === "all"
+                                                ? true
+                                                : callFilter === "connected"
+                                                ? connectedStatuses.includes(
+                                                    status
+                                                  )
+                                                : missedStatuses.includes(
+                                                    status
+                                                  );
+                                            const rowId = `${
+                                              run.instanceNumber ||
+                                              run._id ||
+                                              index
+                                            }-${
+                                              lead.documentId ||
+                                              lead.contactId ||
+                                              `${idx}`
+                                            }`;
+                                            const selectedFlag =
+                                              rowDisposition[rowId];
+                                            const byFlag =
+                                              flagFilter === "all"
+                                                ? true
+                                                : flagFilter === "unlabeled"
+                                                ? !selectedFlag
+                                                : selectedFlag === flagFilter;
+                                            const leadDisposition = (
+                                              lead.leadStatus ||
+                                              lead.disposition ||
+                                              ""
+                                            ).toLowerCase();
+                                            const byDisposition =
+                                              dispositionFilter === "all"
+                                                ? true
+                                                : leadDisposition ===
+                                                  dispositionFilter;
+                                            return (
+                                              byData &&
+                                              byStatus &&
+                                              byFlag &&
+                                              byDisposition
+                                            );
+                                          });
+                                          const set = new Set();
+                                          for (
+                                            let i = 0;
+                                            i < visible.length;
+                                            i++
+                                          ) {
+                                            const lead = visible[i];
+                                            const rowId = `${
+                                              run.instanceNumber ||
+                                              run._id ||
+                                              index
+                                            }-${
+                                              lead.documentId ||
+                                              lead.contactId ||
+                                              `${i}`
+                                            }`;
+                                            const val = rowDisposition[rowId];
+                                            set.add(val || "unlabeled");
+                                          }
+                                          const options = Array.from(set);
+                                          return (
+                                            <div className="py-1">
+                                              {options.length === 0 ? (
+                                                <div className="px-3 py-2 text-sm text-gray-500">
+                                                  No flags
+                                                </div>
+                                              ) : (
+                                                options.map((opt) => (
+                                                  <button
+                                                    key={opt}
+                                                    data-filter-button
+                                                    className={`w-full text-left px-3 py-1.5 text-sm hover:bg-gray-50 ${
+                                                      (opt === "unlabeled"
+                                                        ? "unlabeled"
+                                                        : opt) === flagFilter
+                                                        ? "bg-yellow-50"
+                                                        : ""
+                                                    }`}
+                                                    onClick={(e) => {
+                                                      e.preventDefault();
+                                                      e.stopPropagation();
+                                                      const next =
+                                                        (opt === "unlabeled"
+                                                          ? "unlabeled"
+                                                          : opt) === flagFilter
+                                                          ? "all"
+                                                          : opt === "unlabeled"
+                                                          ? "unlabeled"
+                                                          : opt;
+                                                      setFlagFilter(next);
+                                                      setFlagMenuOpen(false);
+                                                    }}
+                                                  >
+                                                    {opt === "unlabeled"
+                                                      ? "Unlabeled"
+                                                      : opt}
+                                                  </button>
+                                                ))
+                                              )}
+                                              <div className="border-t border-gray-100 my-1" />
+                                              <button
+                                                data-filter-button
+                                                className="w-full text-left px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+                                                onClick={(e) => {
+                                                  e.preventDefault();
+                                                  e.stopPropagation();
+                                                  setFlagFilter("all");
+                                                  setFlagMenuOpen(false);
+                                                }}
+                                              >
+                                                Clear
+                                              </button>
+                                            </div>
+                                          );
+                                        })()}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </th>
+                              <th className="py-2 px-3">Disposition</th>
+                              <th className="py-2 px-3">Action</th>
+                              <th className="py-2 px-3">Redial</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-amber-100">
+                            {liveCalls.map((lead, idx) => (
+                              <tr
+                                key={`${
+                                  lead.documentId || lead.contactId || "live"
+                                }-${idx}`}
+                                className={`transition-colors ${
+                                  String(lead.status).toLowerCase() ===
+                                  "ringing"
+                                    ? "bg-yellow-50 hover:bg-yellow-100 ring-1 ring-yellow-300"
+                                    : "bg-blue-50 hover:bg-blue-100 ring-1 ring-blue-200"
+                                } ${
+                                  isCallLogSelected(lead)
+                                    ? "ring-2 ring-blue-300"
+                                    : ""
+                                }`}
+                                style={{
+                                  borderLeft: "4px solid",
+                                  borderLeftColor:
+                                    String(lead.status).toLowerCase() ===
+                                    "ringing"
+                                      ? "#f59e0b"
+                                      : "#3b82f6",
+                                }}
+                              >
+                                <td className="py-2 px-3">
+                                  <input
+                                    type="checkbox"
+                                    checked={isCallLogSelected(lead)}
+                                    onChange={() => handleSelectCallLog(lead)}
+                                    className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                                  />
+                                </td>
+                                <td className="py-2 px-3 text-gray-700">
+                                  {idx + 1}
+                                </td>
+                                <td className="py-2 px-3 text-gray-700 flex flex-col items-center gap-2">
+                                  <span>
+                                    {lead.time
+                                      ? new Date(lead.time).toLocaleDateString()
+                                      : "-"}{" "}
+                                  </span>
+                                  <span>
+                                    {lead.time
+                                      ? new Date(lead.time).toLocaleTimeString(
+                                          [],
+                                          {
+                                            hour: "2-digit",
+                                            minute: "2-digit",
+                                          }
+                                        )
+                                      : "-"}
+                                  </span>
+                                </td>
+                                <td className="py-2 px-3 text-gray-700">
+                                  {lead.name || "-"}
+                                </td>
+                                <td className="py-2 px-3 text-gray-700">
+                                  {lead.number || "-"}
+                                </td>
+                                <td className="py-2 px-3">
+                                  <span
+                                    className={`px-2 py-1 rounded text-xs font-medium ${
+                                      String(
+                                        lead.status || ""
+                                      ).toLowerCase() === "ringing"
+                                        ? "bg-yellow-100 text-yellow-800"
+                                        : "bg-blue-100 text-blue-800"
+                                    }`}
+                                  >
+                                    {String(lead.status || "").toUpperCase()}
+                                  </span>
+                                </td>
+                                {/* Duration (⏱) */}
+                                <td className="py-2 px-3">
+                                  {formatDuration(lead.duration)}
+                                </td>
+                                {/* Conversation (Transcript) button - mirrors recent style */}
+                                <td className="py-2 px-3">
+                                  <button
+                                    className={`text-xs px-2 py-1 rounded-md border ${
+                                      lead.documentId &&
+                                      viewedTranscripts.has(lead.documentId)
+                                        ? "bg-green-50 text-fuchsia-700 border-green-200"
+                                        : "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
+                                    }`}
+                                    title={
+                                      lead.documentId &&
+                                      viewedTranscripts.has(lead.documentId)
+                                        ? "Transcript viewed"
+                                        : "View transcript"
+                                    }
+                                    onClick={() => {
+                                      if (
+                                        lead.documentId &&
+                                        transcriptOpeningIds.has(
+                                          lead.documentId
+                                        )
+                                      )
+                                        return;
+                                      openTranscriptSmart(lead);
+                                    }}
+                                    disabled={
+                                      lead.documentId
+                                        ? transcriptOpeningIds.has(
+                                            lead.documentId
+                                          )
+                                        : false
+                                    }
+                                  >
+                                    {lead.documentId &&
+                                    transcriptOpeningIds.has(
+                                      lead.documentId
+                                    ) ? (
+                                      <span className="inline-flex items-center mr-1">
+                                        <span className="w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"></span>
+                                      </span>
+                                    ) : (
+                                      <svg
+                                        className="w-4 h-4 mr-1 inline"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                      >
+                                        <path
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                          strokeWidth="2"
+                                          d="M8 16h8M8 12h8M8 8h8M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H7l-2 2H3v12a2 2 0 002 2z"
+                                        />
+                                      </svg>
+                                    )}
+                                    {(() => {
+                                      const baseLabel =
+                                        lead.documentId &&
+                                        viewedTranscripts.has(lead.documentId)
+                                          ? "Viewed"
+                                          : "Transcript";
+                                      const count =
+                                        (typeof lead.transcriptCount ===
+                                        "number"
+                                          ? lead.transcriptCount
+                                          : undefined) ??
+                                        getTranscriptMessageCount(lead);
+                                      const label =
+                                        count > 0
+                                          ? `${baseLabel} (${count})`
+                                          : baseLabel;
+                                      return lead.documentId &&
+                                        transcriptOpeningIds.has(
+                                          lead.documentId
+                                        )
+                                        ? `Loading…`
+                                        : label;
+                                    })()}
+                                  </button>
+                                </td>
+                                {/* CC: conversation count column */}
+                                <td className="py-2 px-3 text-gray-700">
+                                  {(() => {
+                                    const count =
+                                      (typeof lead.transcriptCount === "number"
+                                        ? lead.transcriptCount
+                                        : undefined) ??
+                                      getTranscriptMessageCount(lead);
+                                    return Number(count) || 0;
+                                  })()}
+                                </td>
+                                {/* Flag (WhatsApp mini chat indicator, same as Recent) */}
+                                <td className="py-2 px-3 text-gray-700">
+                                  {lead.whatsappRequested &&
+                                  lead.whatsappMessageSent ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => openWhatsAppMiniChat(lead)}
+                                      title="Open WhatsApp chat"
+                                      className="inline-flex items-center justify-center"
+                                    >
+                                      <FaWhatsapp className="w-4 h-4 text-green-600" />
+                                    </button>
+                                  ) : (
+                                    ""
+                                  )}
+                                </td>
+                                {/* Disposition disabled for live logs */}
+                                <td className="py-2 px-3"></td>
+                                {/* Action */}
+                                <td className="py-2 px-3">
+                                  {(() => {
+                                    const rowId =
+                                      lead.documentId ||
+                                      lead.contactId ||
+                                      `${idx}`;
+                                    const key = `assign-${rowId}`;
+                                    return (
+                                      <div className="relative">
+                                        <button
+                                          type="button"
+                                          className="inline-flex items-center px-2 py-1 text-xs border rounded hover:bg-gray-50"
+                                          title="Assign"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setOpenAssignFor(
+                                              openAssignFor === key ? null : key
+                                            );
+                                          }}
+                                        >
+                                          Assign ▾
+                                        </button>
+                                        {renderAssignMenu({
+                                          rowKey: key,
+                                          contacts: lead,
+                                          runId: lead?.runId || currentRunId,
+                                        })}
+                                      </div>
+                                    );
+                                  })()}
+                                </td>
+                                <td className="py-2 px-3">
+                                  <button
+                                    className="inline-flex items-center px-3 py-1 text-xs bg-green-50 text-green-700 border border-green-200 rounded hover:bg-green-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    title={
+                                      !lead.number
+                                        ? "No phone number available"
+                                        : lead.status === "ringing" ||
+                                          lead.status === "ongoing"
+                                        ? "Call already in progress"
+                                        : "Retry this contact"
+                                    }
+                                    onClick={() => handleRetryLead(lead)}
+                                    disabled={
+                                      !lead.number ||
+                                      lead.status === "ringing" ||
+                                      lead.status === "ongoing"
+                                    }
+                                  >
+                                    <FiPhone
+                                      className="w-3 h-3 text-green-700 mx-2"
+                                      style={{
+                                        minWidth: "16px",
+                                        minHeight: "16px",
+                                      }}
+                                    />
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    );
+                  })()
+                )}
+              </div>
+            )}
+            {/* Minimal Leads + Transcript Section */}
             <div
-              className={`bg-gradient-to-r from-blue-50 via-white to-blue-50 rounded-2xl shadow border border-blue-200 p-6 mb-8 ring-1 ring-blue-100 ${
+              className={`bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8 ${
                 statusLogsCollapsed ? "hidden" : ""
               }`}
             >
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-base font-semibold text-blue-900 flex items-center gap-2">
-                  <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-700">●</span>
-                  Live call logs
+                <h2 className="text-base font-medium text-gray-900">
+                  Recent call logs
                 </h2>
                 <div className="flex items-center gap-3">
-                  {/* Auto refresh toggle (same visual) */}
+                  {/* Auto refresh toggle */}
                   <label className="flex items-center gap-2 text-sm select-none">
                     <input
                       type="checkbox"
@@ -7690,271 +9020,448 @@ useEffect(() => {
                     </svg>
                     <span>Refresh</span>
                   </button>
-                  {/* Visual parity selects (disabled for live) */}
                   <select
-                    className="text-sm border border-gray-300 rounded-md px-2 py-1 opacity-60 cursor-not-allowed"
+                    className="text-sm border border-gray-300 rounded-md px-2 py-1"
                     value={callFilter}
-                    disabled
-                    onChange={() => {}}
+                    onChange={(e) => setCallFilter(e.target.value)}
                   >
-                    <option>All</option>
+                    <option value="all">All</option>
+                    <option value="connected">Connected</option>
+                    <option value="missed">Not Connected</option>
                   </select>
                   <select
-                    className="text-sm border border-gray-300 rounded-md px-2 py-1 opacity-60 cursor-not-allowed"
+                    className="text-sm border border-gray-300 rounded-md px-2 py-1"
                     value={durationSort}
-                    disabled
-                    onChange={() => {}}
+                    onChange={(e) => setDurationSort(e.target.value)}
                   >
-                    <option>Sort by</option>
+                    <option value="none">Sort by</option>
+                    <option value="longest">Longest First</option>
+                    <option value="shortest">Shortest First</option>
                   </select>
+                  {callFilter === "missed" && (
+                    <button
+                      className="text-sm px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+                      onClick={() => {
+                        callMissedCalls();
+                      }}
+                      disabled={
+                        apiMergedCallsLoading ||
+                        !campaignGroups ||
+                        campaignGroups.length === 0
+                      }
+                      title={
+                        !campaignGroups || campaignGroups.length === 0
+                          ? "No groups assigned to campaign"
+                          : "Call all not connected contacts"
+                      }
+                    >
+                      Call Again
+                    </button>
+                  )}
                 </div>
               </div>
+              {/* Select and Call Controls for Call Logs */}
+              {apiMergedCalls.length > 0 && !apiMergedCallsLoading && (
+                <div className="mb-4 p-4 bg-gray-50 rounded-lg border">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={selectAllCallLogs}
+                          onChange={handleSelectAllCallLogs}
+                          className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                        />
+                        <span className="text-sm font-medium text-gray-700">
+                          Select All Call Logs ({selectedCallLogs.length}{" "}
+                          selected)
+                        </span>
+                      </label>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={callSelectedCallLogs}
+                        disabled={selectedCallLogs.length === 0}
+                        className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                      >
+                        <svg
+                          className="w-4 h-4"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
+                          />
+                        </svg>
+                        Call Selected ({selectedCallLogs.length})
+                      </button>
+                      <button
+                        onClick={() => {
+                          setSelectedCallLogs([]);
+                          setSelectAllCallLogs(false);
+                        }}
+                        disabled={selectedCallLogs.length === 0}
+                        className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Clear Selection
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
               {apiMergedCallsLoading ? (
-                <div className="text-center py-10">Loading live calls...</div>
+                <div className="text-center py-10">Loading call logs...</div>
+              ) : apiMergedCalls.length === 0 ? (
+                <div className="text-center py-16 px-8 bg-gray-50 rounded-lg border border-gray-200 mx-4 my-6">
+                  <div className="text-gray-500 text-lg font-medium mb-2">
+                    No call logs found
+                  </div>
+                  <div className="text-gray-400 text-sm">
+                    Call logs will appear here once calls are made
+                  </div>
+                </div>
               ) : (
-                (() => {
-                  const liveCalls = (apiMergedCalls || []).filter((lead) => {
-                    const status = String(lead?.status || "").toLowerCase();
-                    return status === "ringing" || status === "ongoing";
-                  });
-                  if (liveCalls.length === 0) {
-                    return (
-                      <div className="text-center py-10 text-gray-500">
-                        No live calls
-                      </div>
-                    );
-                  }
-                  return (
-                    <div className="overflow-x-auto">
-                      {/* Select and action controls (visual parity with Recent) */}
-                      {liveCalls.length > 0 && !apiMergedCallsLoading && (
-                        <div className="mb-4 p-4 bg-gray-50 rounded-lg border">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-4">
-                              <label className="flex items-center gap-2">
-                                <input
-                                  type="checkbox"
-                                  checked={selectAllCallLogs}
-                                  onChange={handleSelectAllCallLogs}
-                                  className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-                                />
-                                <span className="text-sm font-medium text-gray-700">
-                                  Select All Call Logs (
-                                  {selectedCallLogs.length} selected)
-                                </span>
-                              </label>
-                            </div>
-                            <div className="flex gap-2">
+                <div className="">
+                  <table className="min-w-full text-sm border border-gray-200 rounded-lg mb-5 z-10">
+                    <thead className="bg-gray-50 sticky top-0 z-10">
+                      <tr className="text-left text-gray-700">
+                        <th className="py-2 px-3">
+                          <input
+                            type="checkbox"
+                            checked={selectAllCallLogs}
+                            onChange={handleSelectAllCallLogs}
+                            className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                          />
+                        </th>
+                        <th className="py-2 px-3">S. No.</th>
+                        <th className="py-2 px-3">Date & Time</th>
+                        <th className="py-2 px-3">Name</th>
+                        <th className="py-2 px-3">Number</th>
+                        <th className="py-2 px-3">Status</th>
+                        <th className="py-2 px-3">
+                          <FiClock />
+                        </th>
+                        <th className="py-2 px-3">Conversation</th>
+                        <th className="py-2 px-3">CC</th>
+                        <th className="py-2 px-3">
+                          <div className="flex items-center gap-2">
+                            <span>Flag</span>
+                            <div className="relative">
                               <button
-                                onClick={callSelectedCallLogs}
-                                disabled={selectedCallLogs.length === 0}
-                                className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                                type="button"
+                                className={`p-1 rounded border ${
+                                  flagFilter !== "all"
+                                    ? "bg-yellow-100 border-yellow-300"
+                                    : "bg-white border-gray-300 hover:bg-gray-50"
+                                }`}
+                                title="Filter by flag"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const newState = !flagMenuOpen;
+                                  if (newState) {
+                                    const position = calculateDropdownPosition(
+                                      e.target.closest("button")
+                                    );
+                                    console.log(
+                                      "Setting flag menu position to:",
+                                      position
+                                    );
+                                    setFlagMenuPosition(position);
+                                  }
+                                  setFlagMenuOpen(newState);
+                                }}
                               >
+                                {/* small flag icon */}
                                 <svg
-                                  className="w-4 h-4"
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  className="h-4 w-4 text-gray-700"
                                   fill="none"
-                                  stroke="currentColor"
                                   viewBox="0 0 24 24"
+                                  stroke="currentColor"
                                 >
                                   <path
                                     strokeLinecap="round"
                                     strokeLinejoin="round"
                                     strokeWidth={2}
-                                    d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
+                                    d="M4 6v14M4 6h12l-3 4 3 4H4"
                                   />
                                 </svg>
-                                Call Selected ({selectedCallLogs.length})
                               </button>
-                              <button
-                                onClick={() => {
-                                  setSelectedCallLogs([]);
-                                  setSelectAllCallLogs(false);
-                                }}
-                                disabled={selectedCallLogs.length === 0}
-                                className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                              >
-                                Clear Selection
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                      <table className="min-w-full text-sm border border-amber-200 rounded-lg overflow-hidden">
-                        <thead className="bg-gray-50 sticky top-0 z-10">
-                          <tr className="text-left text-gray-700">
-                            <th className="py-2 px-3">
-                              <input
-                                type="checkbox"
-                                checked={selectAllCallLogs}
-                                onChange={handleSelectAllCallLogs}
-                                className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-                              />
-                            </th>
-                            <th className="py-2 px-3">S. No.</th>
-                            <th className="py-2 px-3">Date & Time</th>
-                            <th className="py-2 px-3">Name</th>
-                            <th className="py-2 px-3">Number</th>
-                            <th className="py-2 px-3">Status</th>
-                            <th className="py-2 px-3">
-                              <FiClock />
-                            </th>
-                            <th className="py-2 px-3">Conversation</th>
-                            <th className="py-2 px-3">CC</th>
-                            <th className="py-2 px-3">
-                              <div className="flex items-center gap-2">
-                                <span>Flag</span>
-                                <div className="relative">
-                                  <button
-                                    type="button"
-                                    className={`p-1 rounded border ${
-                                      flagFilter !== "all"
-                                        ? "bg-yellow-100 border-yellow-300"
-                                        : "bg-white border-gray-300 hover:bg-gray-50"
-                                    }`}
-                                    title="Filter by flag"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      const newState = !flagMenuOpen;
-                                if (newState) {
-                                  const position = calculateDropdownPosition(e.target.closest('button'));
-                                  console.log('Setting flag menu position to:', position);
-                                  setFlagMenuPosition(position);
-                                }
-                                setFlagMenuOpen(newState);
-                                    }}
-                                  >
-                                    {/* small flag icon */}
-                                    <svg
-                                      xmlns="http://www.w3.org/2000/svg"
-                                      className="h-4 w-4 text-gray-700"
-                                      fill="none"
-                                      viewBox="0 0 24 24"
-                                      stroke="currentColor"
-                                    >
-                                      <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={2}
-                                        d="M4 6v14M4 6h12l-3 4 3 4H4"
-                                      />
-                                    </svg>
-                                  </button>
-                                  {flagMenuOpen && (
-                                    <div
-                                      className="absolute right-0 mt-1 w-44 bg-white border border-gray-200 rounded shadow-lg z-[100] p-2"
-                                      onMouseDown={(e) => e.stopPropagation()}
-                                      onClick={(e) => e.stopPropagation()}
-                                    >
-                                      {(() => {
-                                        // compute visible rows' flag options
-                                        const visible = (run.contacts || []).filter((lead, idx) => {
-                                          const name = (lead.name || "").toString().trim();
-                                          const number = (lead.number || lead.phone || "")
-                                            .toString()
-                                            .trim();
-                                          const hasRealName = name && name !== "-";
-                                          const hasRealNumber = number && number !== "-" && /\d/.test(number);
-                                          const byData = hasRealName || hasRealNumber;
-                                          const status = (lead.status || "").toLowerCase();
-                                          const connectedStatuses = ["connected", "completed", "ongoing"];
-                                          const missedStatuses = ["missed", "not_connected", "failed"];
-                                          if (agentConfigMode !== "serial") {
-                                            const isLive = status === "ringing" || status === "ongoing";
-                                            if (isLive) return false;
-                                          }
-                                          const byStatus =
-                                            callFilter === "all"
-                                              ? true
-                                              : callFilter === "connected"
-                                              ? connectedStatuses.includes(status)
-                                              : missedStatuses.includes(status);
-                                          const rowId = `${run.instanceNumber || run._id || index}-${
-                                            lead.documentId || lead.contactId || `${idx}`
-                                          }`;
-                                          const selectedFlag = rowDisposition[rowId];
-                                          const byFlag =
-                                            flagFilter === "all"
-                                              ? true
-                                              : flagFilter === "unlabeled"
-                                              ? !selectedFlag
-                                              : selectedFlag === flagFilter;
-                                          const leadDisposition = (lead.leadStatus || lead.disposition || "").toLowerCase();
-                                          const byDisposition =
-                                            dispositionFilter === "all" ? true : leadDisposition === dispositionFilter;
-                                          return byData && byStatus && byFlag && byDisposition;
-                                        });
-                                        const set = new Set();
-                                        for (let i = 0; i < visible.length; i++) {
-                                          const lead = visible[i];
-                                          const rowId = `${run.instanceNumber || run._id || index}-${
-                                            lead.documentId || lead.contactId || `${i}`
-                                          }`;
-                                          const val = rowDisposition[rowId];
-                                          set.add(val || "unlabeled");
+                              {flagMenuOpen && (
+                                <div
+                                  className={`absolute right-0 w-44 bg-white border border-gray-200 rounded shadow-lg z-[100] p-2 min-h-[100px] ${
+                                    flagMenuPosition === "top"
+                                      ? "bottom-full mb-1"
+                                      : "top-full mt-1"
+                                  }`}
+                                  onMouseDown={(e) => e.stopPropagation()}
+                                  onClick={(e) => e.stopPropagation()}
+                                  style={{
+                                    backgroundColor:
+                                      flagMenuPosition === "top"
+                                        ? "#fef3c7"
+                                        : "#ffffff",
+                                    border:
+                                      flagMenuPosition === "top"
+                                        ? "2px solid #f59e0b"
+                                        : "1px solid #e5e7eb",
+                                  }}
+                                >
+                                  {(() => {
+                                    // compute visible rows' flag options
+                                    const visible = (run.contacts || []).filter(
+                                      (lead, idx) => {
+                                        const name = (lead.name || "")
+                                          .toString()
+                                          .trim();
+                                        const number = (
+                                          lead.number ||
+                                          lead.phone ||
+                                          ""
+                                        )
+                                          .toString()
+                                          .trim();
+                                        const hasRealName =
+                                          name && name !== "-";
+                                        const hasRealNumber =
+                                          number &&
+                                          number !== "-" &&
+                                          /\d/.test(number);
+                                        const byData =
+                                          hasRealName || hasRealNumber;
+                                        const status = (
+                                          lead.status || ""
+                                        ).toLowerCase();
+                                        const connectedStatuses = [
+                                          "connected",
+                                          "completed",
+                                          "ongoing",
+                                        ];
+                                        const missedStatuses = [
+                                          "missed",
+                                          "not_connected",
+                                          "failed",
+                                        ];
+                                        if (agentConfigMode !== "serial") {
+                                          const isLive =
+                                            status === "ringing" ||
+                                            status === "ongoing";
+                                          if (isLive) return false;
                                         }
-                                        const options = Array.from(set);
+                                        const byStatus =
+                                          callFilter === "all"
+                                            ? true
+                                            : callFilter === "connected"
+                                            ? connectedStatuses.includes(status)
+                                            : missedStatuses.includes(status);
+                                        const rowId = `${
+                                          run.instanceNumber || run._id || index
+                                        }-${
+                                          lead.documentId ||
+                                          lead.contactId ||
+                                          `${idx}`
+                                        }`;
+                                        const selectedFlag =
+                                          rowDisposition[rowId];
+                                        const byFlag =
+                                          flagFilter === "all"
+                                            ? true
+                                            : flagFilter === "unlabeled"
+                                            ? !selectedFlag
+                                            : selectedFlag === flagFilter;
+                                        const leadDisposition = (
+                                          lead.leadStatus ||
+                                          lead.disposition ||
+                                          ""
+                                        ).toLowerCase();
+                                        const byDisposition =
+                                          dispositionFilter === "all"
+                                            ? true
+                                            : leadDisposition ===
+                                              dispositionFilter;
                                         return (
-                                          <div className="py-1">
-                                            {options.length === 0 ? (
-                                              <div className="px-3 py-2 text-sm text-gray-500">No flags</div>
-                                            ) : (
-                                              options.map((opt) => (
-                                                <button
-                                                  key={opt}
-                                                  data-filter-button
-                                                  className={`w-full text-left px-3 py-1.5 text-sm hover:bg-gray-50 ${
-                                                    (opt === "unlabeled" ? "unlabeled" : opt) === flagFilter ? "bg-yellow-50" : ""
-                                                  }`}
-                                                  onClick={(e) => {
-                                                    e.preventDefault();
-                                                    e.stopPropagation();
-                                                    const next = (opt === "unlabeled" ? "unlabeled" : opt) === flagFilter ? "all" : (opt === "unlabeled" ? "unlabeled" : opt);
-                                                    setFlagFilter(next);
-                                                    setFlagMenuOpen(false);
-                                                  }}
-                                                >
-                                                  {opt === "unlabeled" ? "Unlabeled" : opt}
-                                                </button>
-                                              ))
-                                            )}
-                                            <div className="border-t border-gray-100 my-1" />
+                                          byData &&
+                                          byStatus &&
+                                          byFlag &&
+                                          byDisposition
+                                        );
+                                      }
+                                    );
+                                    const set = new Set();
+                                    for (let i = 0; i < visible.length; i++) {
+                                      const lead = visible[i];
+                                      const rowId = `${
+                                        run.instanceNumber || run._id || index
+                                      }-${
+                                        lead.documentId ||
+                                        lead.contactId ||
+                                        `${i}`
+                                      }`;
+                                      const val = rowDisposition[rowId];
+                                      set.add(val || "unlabeled");
+                                    }
+                                    const options = Array.from(set);
+                                    return (
+                                      <div className="py-1">
+                                        {options.length === 0 ? (
+                                          <div className="px-3 py-2 text-sm text-gray-500">
+                                            No flags
+                                          </div>
+                                        ) : (
+                                          options.map((opt) => (
                                             <button
+                                              key={opt}
                                               data-filter-button
-                                              className="w-full text-left px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+                                              className={`w-full text-left px-3 py-1.5 text-sm hover:bg-gray-50 ${
+                                                (opt === "unlabeled"
+                                                  ? "unlabeled"
+                                                  : opt) === flagFilter
+                                                  ? "bg-yellow-50"
+                                                  : ""
+                                              }`}
                                               onClick={(e) => {
                                                 e.preventDefault();
                                                 e.stopPropagation();
-                                                setFlagFilter("all");
+                                                const next =
+                                                  (opt === "unlabeled"
+                                                    ? "unlabeled"
+                                                    : opt) === flagFilter
+                                                    ? "all"
+                                                    : opt === "unlabeled"
+                                                    ? "unlabeled"
+                                                    : opt;
+                                                setFlagFilter(next);
                                                 setFlagMenuOpen(false);
                                               }}
                                             >
-                                              Clear
+                                              {opt === "unlabeled"
+                                                ? "Unlabeled"
+                                                : opt}
                                             </button>
-                                          </div>
-                                        );
-                                      })()}
-                                    </div>
-                                  )}
+                                          ))
+                                        )}
+                                        <div className="border-t border-gray-100 my-1" />
+                                        <button
+                                          data-filter-button
+                                          className="w-full text-left px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+                                          onClick={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            setFlagFilter("all");
+                                            setFlagMenuOpen(false);
+                                          }}
+                                        >
+                                          Clear
+                                        </button>
+                                      </div>
+                                    );
+                                  })()}
                                 </div>
-                              </div>
-                            </th>
-                            <th className="py-2 px-3">Disposition</th>
-                            <th className="py-2 px-3">Action</th>
-                            <th className="py-2 px-3">Redial</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-amber-100">
-                          {liveCalls.map((lead, idx) => (
+                              )}
+                            </div>
+                          </div>
+                        </th>
+                        <th className="py-2 px-3">Disposition</th>
+                        <th className="py-2 px-3">Action</th>
+                        <th className="py-2 px-3">Redial</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {(() => {
+                        const filteredCalls = apiMergedCalls.filter((lead) => {
+                          const name = (lead.name || "").toString().trim();
+                          const number = (lead.number || "").toString().trim();
+                          const hasRealName = name && name !== "-";
+                          const hasRealNumber =
+                            number && number !== "-" && /\d/.test(number);
+                          const byData = hasRealName || hasRealNumber;
+                          const status = (lead.status || "").toLowerCase();
+                          const connectedStatuses = ["connected", "completed"];
+                          const missedStatuses = [
+                            "missed",
+                            "not_connected",
+                            "failed",
+                          ];
+                          const notLive =
+                            status !== "ringing" && status !== "ongoing";
+                          const byStatus =
+                            callFilter === "all"
+                              ? status === "completed" ||
+                                missedStatuses.includes(status)
+                              : callFilter === "connected"
+                              ? connectedStatuses.includes(status)
+                              : missedStatuses.includes(status);
+                          return byData && byStatus && notLive;
+                        });
+                        if (filteredCalls.length === 0) {
+                          return (
+                            <tr>
+                              <td
+                                colSpan="12"
+                                className="text-center py-16 px-8"
+                              >
+                                <div className="bg-gray-50 rounded-lg border border-gray-200 mx-4 my-6 py-8">
+                                  <div className="text-gray-500 text-lg font-medium mb-2">
+                                    No results found
+                                  </div>
+                                  <div className="text-gray-400 text-sm">
+                                    Try adjusting your filters to see more
+                                    results
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        }
+                        return filteredCalls
+                          .sort((a, b) => {
+                            if (durationSort === "none") return 0;
+                            // Convert duration to seconds for comparison
+                            const getDurationInSeconds = (lead) => {
+                              const duration = lead.duration;
+                              // Handle different duration formats
+                              if (!duration) return 0;
+                              // Convert to string if it's not already
+                              const durationStr = String(duration);
+                              // Handle MM:SS format
+                              if (durationStr.includes(":")) {
+                                const parts = durationStr.split(":");
+                                if (parts.length === 2) {
+                                  const minutes = parseInt(parts[0]) || 0;
+                                  const seconds = parseInt(parts[1]) || 0;
+                                  return minutes * 60 + seconds;
+                                }
+                              }
+                              // Handle pure number (assume seconds)
+                              const numDuration = parseInt(durationStr);
+                              if (!isNaN(numDuration)) {
+                                return numDuration;
+                              }
+                              return 0;
+                            };
+                            const durationA = getDurationInSeconds(a);
+                            const durationB = getDurationInSeconds(b);
+                            if (durationSort === "longest") {
+                              return durationB - durationA; // Descending order
+                            } else if (durationSort === "shortest") {
+                              return durationA - durationB; // Ascending order
+                            }
+                            return 0;
+                          })
+                          .map((lead, idx) => (
                             <tr
                               key={`${
-                                lead.documentId || lead.contactId || "live"
+                                lead.documentId || lead.contactId || "row"
                               }-${idx}`}
-                              className={`transition-colors ${
-                                String(lead.status).toLowerCase() === "ringing"
-                                  ? "bg-yellow-50 hover:bg-yellow-100 ring-1 ring-yellow-300"
-                                  : "bg-blue-50 hover:bg-blue-100 ring-1 ring-blue-200"
-                              } ${isCallLogSelected(lead) ? 'ring-2 ring-blue-300' : ''}`}
-                              style={{ borderLeft: "4px solid", borderLeftColor: String(lead.status).toLowerCase() === "ringing" ? "#f59e0b" : "#3b82f6" }}
+                              className={`hover:bg-gray-50 ${
+                                isCallLogSelected(lead)
+                                  ? "bg-blue-50 border-blue-200"
+                                  : ""
+                              }`}
                             >
                               <td className="py-2 px-3">
                                 <input
@@ -7985,70 +9492,155 @@ useEffect(() => {
                                     : "-"}
                                 </span>
                               </td>
-                              <td className="py-2 px-3 text-gray-700">
-                                {lead.name || "-"}
+                              <td className="py-2 px-3 text-gray-900">
+                                {getContactDisplayNameBlank(lead)}
                               </td>
-                              <td className="py-2 px-3 text-gray-700">
-                                {lead.number || "-"}
-                              </td>
-                              <td className="py-2 px-3">
-                                <span
-                                  className={`px-2 py-1 rounded text-xs font-medium ${
-                                    String(lead.status || "").toLowerCase() ===
-                                    "ringing"
-                                      ? "bg-yellow-100 text-yellow-800"
-                                      : "bg-blue-100 text-blue-800"
-                                  }`}
-                                >
-                                  {String(lead.status || "").toUpperCase()}
+                              <td className="py-2 px-3 text-gray-900">
+                                <span className="inline-flex items-center">
+                                  {redialingCalls.has(
+                                    lead.documentId || lead.contactId
+                                  ) ? (
+                                    <span className="inline-flex items-center text-green-600">
+                                      <svg
+                                        className="animate-spin h-4 w-4 mr-1"
+                                        viewBox="0 0 24 24"
+                                      >
+                                        <circle
+                                          className="opacity-25"
+                                          cx="12"
+                                          cy="12"
+                                          r="10"
+                                          stroke="currentColor"
+                                          strokeWidth="4"
+                                        ></circle>
+                                        <path
+                                          className="opacity-75"
+                                          fill="currentColor"
+                                          d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+                                        ></path>
+                                      </svg>
+                                      {lead.number || "-"}
+                                    </span>
+                                  ) : (
+                                    lead.number || "-"
+                                  )}
                                 </span>
                               </td>
-                              {/* Duration (⏱) */}
+                              <td className="py-2 px-3 capitalize">
+                                <span
+                                  className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
+                                    lead.status === "ringing"
+                                      ? "bg-yellow-100 text-yellow-700"
+                                      : lead.status === "ongoing"
+                                      ? "bg-blue-100 text-blue-700"
+                                      : lead.status === "missed" ||
+                                        lead.status === "not_connected" ||
+                                        lead.status === "failed"
+                                      ? "bg-red-100 text-red-700"
+                                      : "bg-green-100 text-green-700"
+                                  }`}
+                                >
+                                  {(() => {
+                                    const s = String(
+                                      lead.status || ""
+                                    ).toLowerCase();
+                                    if (s === "completed" || s === "connected")
+                                      return "Connected";
+                                    if (
+                                      s === "missed" ||
+                                      s === "not_connected" ||
+                                      s === "failed"
+                                    )
+                                      return "Not Connected";
+                                    return lead.status;
+                                  })()}
+                                </span>
+                              </td>
                               <td className="py-2 px-3">
                                 {formatDuration(lead.duration)}
                               </td>
-                              {/* Conversation (Transcript) button - mirrors recent style */}
                               <td className="py-2 px-3">
-                                <button
-                                  className={`text-xs px-2 py-1 rounded-md border ${
-                                    lead.documentId &&
-                                    viewedTranscripts.has(lead.documentId)
-                                      ? "bg-green-50 text-fuchsia-700 border-green-200"
-                                      : "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
-                                  }`}
-                                  title={
-                                    lead.documentId &&
-                                    viewedTranscripts.has(lead.documentId)
-                                      ? "Transcript viewed"
-                                      : "View transcript"
-                                  }
-                                  onClick={() => { if (lead.documentId && transcriptOpeningIds.has(lead.documentId)) return; openTranscriptSmart(lead); }}
-                                  disabled={lead.documentId ? transcriptOpeningIds.has(lead.documentId) : false}
-                                >
-                                  {lead.documentId && transcriptOpeningIds.has(lead.documentId) ? (
-                                    <span className="inline-flex items-center mr-1">
-                                      <span className="w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"></span>
-                                    </span>
-                                  ) : (
-                                    <svg className="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 16h8M8 12h8M8 8h8M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H7l-2 2H3v12a2 2 0 002 2z"/></svg>
-                                  )}
-                                  {(() => {
-                                    const baseLabel =
+                                {lead.status === "missed" ? (
+                                  <span className="text-gray-400 text-xs text-center"></span>
+                                ) : (
+                                  <button
+                                    className={`inline-flex items-center px-3 py-1 text-xs border rounded hover:opacity-80 transition-all duration-200 ${
                                       lead.documentId &&
                                       viewedTranscripts.has(lead.documentId)
-                                        ? "Viewed"
-                                        : "Transcript";
-                                    const count =
-                                      (typeof lead.transcriptCount === "number"
-                                        ? lead.transcriptCount
-                                        : undefined) ??
-                                      getTranscriptMessageCount(lead);
-                                    const label = count > 0
-                                      ? `${baseLabel} (${count})`
-                                      : baseLabel;
-                                    return (lead.documentId && transcriptOpeningIds.has(lead.documentId)) ? `Loading…` : label;
-                                  })()}
-                                </button>
+                                        ? "bg-green-50 text-fuchsia-700 border-green-200"
+                                        : "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
+                                    }`}
+                                    title={
+                                      lead.documentId &&
+                                      viewedTranscripts.has(lead.documentId)
+                                        ? "Transcript viewed"
+                                        : "View transcript"
+                                    }
+                                    onClick={() => {
+                                      if (
+                                        lead.documentId &&
+                                        transcriptOpeningIds.has(
+                                          lead.documentId
+                                        )
+                                      )
+                                        return;
+                                      openTranscriptSmart(lead);
+                                    }}
+                                    disabled={
+                                      lead.documentId
+                                        ? transcriptOpeningIds.has(
+                                            lead.documentId
+                                          )
+                                        : false
+                                    }
+                                  >
+                                    {lead.documentId &&
+                                    transcriptOpeningIds.has(
+                                      lead.documentId
+                                    ) ? (
+                                      <span className="inline-flex items-center mr-1">
+                                        <span className="w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"></span>
+                                      </span>
+                                    ) : (
+                                      <svg
+                                        className="w-4 h-4 mr-1"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                      >
+                                        <path
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                          strokeWidth="2"
+                                          d="M8 16h8M8 12h8M8 8h8M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H7l-2 2H3v12a2 2 0 002 2z"
+                                        />
+                                      </svg>
+                                    )}
+                                    {(() => {
+                                      const baseLabel =
+                                        lead.documentId &&
+                                        viewedTranscripts.has(lead.documentId)
+                                          ? "Viewed"
+                                          : "Transcript";
+                                      const count =
+                                        (typeof lead.transcriptCount ===
+                                        "number"
+                                          ? lead.transcriptCount
+                                          : undefined) ??
+                                        getTranscriptMessageCount(lead);
+                                      const label =
+                                        count > 0
+                                          ? `${baseLabel} (${count})`
+                                          : baseLabel;
+                                      return lead.documentId &&
+                                        transcriptOpeningIds.has(
+                                          lead.documentId
+                                        )
+                                        ? `Loading…`
+                                        : label;
+                                    })()}
+                                  </button>
+                                )}
                               </td>
                               {/* CC: conversation count column */}
                               <td className="py-2 px-3 text-gray-700">
@@ -8056,53 +9648,257 @@ useEffect(() => {
                                   const count =
                                     (typeof lead.transcriptCount === "number"
                                       ? lead.transcriptCount
-                                      : undefined) ?? getTranscriptMessageCount(lead);
+                                      : undefined) ??
+                                    getTranscriptMessageCount(lead);
                                   return Number(count) || 0;
                                 })()}
                               </td>
-                              {/* Flag (WhatsApp mini chat indicator, same as Recent) */}
-                              <td className="py-2 px-3 text-gray-700">
-                                {lead.whatsappRequested &&
-                                lead.whatsappMessageSent ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => openWhatsAppMiniChat(lead)}
-                                    title="Open WhatsApp chat"
-                                    className="inline-flex items-center justify-center"
-                                  >
-                                    <FaWhatsapp className="w-4 h-4 text-green-600" />
-                                  </button>
-                                ) : (
-                                  ""
-                                )}
-                              </td>
-                              {/* Disposition disabled for live logs */}
-                              <td className="py-2 px-3"></td>
-                              {/* Action */}
                               <td className="py-2 px-3">
                                 {(() => {
-                                  const rowId = (lead.documentId || lead.contactId || `${idx}`);
-                                  const key = `assign-${rowId}`;
+                                  const rowId =
+                                    lead.documentId ||
+                                    lead.contactId ||
+                                    `${idx}`;
+                                  const selected = rowDisposition[rowId];
+                                  const colorClass =
+                                    selected === "interested"
+                                      ? "bg-green-200 text-green-900 border-green-300"
+                                      : selected === "not interested"
+                                      ? "bg-red-200 text-red-900 border-red-300"
+                                      : selected === "maybe"
+                                      ? "bg-yellow-200 text-yellow-900 border-yellow-300"
+                                      : "bg-gray-50 text-gray-700 border-gray-200";
+                                  const label = selected ? selected : "Default";
+                                  const icon =
+                                    selected === "interested" ? (
+                                      <svg
+                                        className="w-4 h-4 mr-2"
+                                        fill="none"
+                                        viewBox="0 0 24 24"
+                                        stroke="currentColor"
+                                      >
+                                        <path
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                          strokeWidth="2"
+                                          d="M5 13l4 4L19 7"
+                                        />
+                                      </svg>
+                                    ) : selected === "not interested" ? (
+                                      <svg
+                                        className="w-4 h-4 mr-2"
+                                        fill="none"
+                                        viewBox="0 0 24 24"
+                                        stroke="currentColor"
+                                      >
+                                        <path
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                          strokeWidth="2"
+                                          d="M6 18L18 6M6 6l12 12"
+                                        />
+                                      </svg>
+                                    ) : selected === "maybe" ? (
+                                      <svg
+                                        className="w-4 h-4 mr-2"
+                                        fill="none"
+                                        viewBox="0 0 24 24"
+                                        stroke="currentColor"
+                                      >
+                                        <path
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                          strokeWidth="2"
+                                          d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                                        />
+                                      </svg>
+                                    ) : (
+                                      <svg
+                                        className="w-4 h-4 mr-2"
+                                        fill="none"
+                                        viewBox="0 0 24 24"
+                                        stroke="currentColor"
+                                      >
+                                        <path
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                          strokeWidth="2"
+                                          d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                                        />
+                                      </svg>
+                                    );
                                   return (
-                                    <div className="relative">
+                                    <div className="relative inline-block text-left">
                                       <button
                                         type="button"
-                                        className="inline-flex items-center px-2 py-1 text-xs border rounded hover:bg-gray-50"
-                                        title="Assign"
-                                        onClick={(e) => { e.stopPropagation(); setOpenAssignFor(openAssignFor === key ? null : key); }}
+                                        className={`inline-flex items-center px-3 py-1 text-xs border rounded ${colorClass}`}
+                                        onClick={(e) => {
+                                          const direction =
+                                            calculateDropdownPosition(
+                                              e.currentTarget
+                                            );
+                                          setRowDispositionPosition((prev) => ({
+                                            ...prev,
+                                            [rowId]: direction,
+                                          }));
+                                          setOpenDispositionFor(
+                                            openDispositionFor === rowId
+                                              ? null
+                                              : rowId
+                                          );
+                                        }}
                                       >
-                                        Assign ▾
+                                        {icon}
+                                        {label}
+                                        <svg
+                                          className="w-4 h-4 ml-2"
+                                          fill="none"
+                                          viewBox="0 0 24 24"
+                                          stroke="currentColor"
+                                        >
+                                          <path
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                            strokeWidth="2"
+                                            d="M19 9l-7 7-7-7"
+                                          />
+                                        </svg>
                                       </button>
-                                      {openAssignFor === key && (
-                                        <div className="absolute right-0 mt-1 w-28 bg-white border border-gray-200 rounded shadow z-10">
-                                          {["t1","t2","t3","t4","t5"].map((tag) => (
+                                      {openDispositionFor === rowId && (
+                                        <div
+                                          className={`absolute z-10 w-40 bg-white border border-gray-200 rounded shadow ${
+                                            (rowDispositionPosition &&
+                                              rowDispositionPosition[rowId]) ===
+                                            "top"
+                                              ? "bottom-full mb-1"
+                                              : "mt-1"
+                                          }`}
+                                        >
+                                          {(agentDispositions.length > 0
+                                            ? agentDispositions
+                                                .map((disp) => {
+                                                  if (disp.title) {
+                                                    // Return only main disposition titles, not sub-dispositions
+                                                    return {
+                                                      key: disp.title
+                                                        .toLowerCase()
+                                                        .replace(/\s+/g, "_"),
+                                                      label: disp.title,
+                                                      cls: "text-blue-700",
+                                                    };
+                                                  } else if (
+                                                    typeof disp === "string"
+                                                  ) {
+                                                    return {
+                                                      key: disp
+                                                        .toLowerCase()
+                                                        .replace(/\s+/g, "_"),
+                                                      label: disp,
+                                                      cls: "text-blue-700",
+                                                    };
+                                                  }
+                                                  return null;
+                                                })
+                                                .filter(Boolean)
+                                            : [
+                                                {
+                                                  key: "interested",
+                                                  label: "Interested",
+                                                  cls: "text-green-700",
+                                                },
+                                                {
+                                                  key: "not interested",
+                                                  label: "Not Interested",
+                                                  cls: "text-red-700",
+                                                },
+                                                {
+                                                  key: "maybe",
+                                                  label: "Maybe",
+                                                  cls: "text-yellow-700",
+                                                },
+                                                {
+                                                  key: undefined,
+                                                  label: "Default",
+                                                  cls: "text-gray-700",
+                                                },
+                                              ]
+                                          ).map((opt) => (
                                             <button
-                                              key={tag}
+                                              key={`${rowId}-${opt.label}`}
                                               type="button"
-                                              className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50"
-                                              onClick={(e) => { e.stopPropagation(); setRowAssignments((prev) => ({ ...prev, [rowId]: tag })); setOpenAssignFor(null); }}
+                                              className={`w-full text-left px-3 py-2 text-xs hover:bg-gray-50 ${opt.cls}`}
+                                              onClick={() => {
+                                                setRowDisposition((prev) => ({
+                                                  ...prev,
+                                                  [rowId]: opt.key,
+                                                }));
+                                                // Persist to backend
+                                                try {
+                                                  const authToken =
+                                                    sessionStorage.getItem(
+                                                      "clienttoken"
+                                                    ) ||
+                                                    localStorage.getItem(
+                                                      "admintoken"
+                                                    );
+                                                  const url = `${API_BASE}/groups/mark-contact-status`;
+                                                  const payload = {
+                                                    campaignId:
+                                                      campaign && campaign._id,
+                                                    phone:
+                                                      lead &&
+                                                      (lead.number ||
+                                                        lead.phone),
+                                                    status:
+                                                      opt.key || "default",
+                                                  };
+                                                  console.log(
+                                                    "Marking contact status →",
+                                                    url,
+                                                    payload
+                                                  );
+                                                  fetch(url, {
+                                                    method: "POST",
+                                                    headers: {
+                                                      "Content-Type":
+                                                        "application/json",
+                                                      ...(authToken
+                                                        ? {
+                                                            Authorization: `Bearer ${authToken}`,
+                                                          }
+                                                        : {}),
+                                                    },
+                                                    body: JSON.stringify(
+                                                      payload
+                                                    ),
+                                                  })
+                                                    .then(async (r) => {
+                                                      let body;
+                                                      try {
+                                                        body = await r.json();
+                                                      } catch (e) {}
+                                                      console.log(
+                                                        "Mark contact status response",
+                                                        r.status,
+                                                        body
+                                                      );
+                                                    })
+                                                    .catch((e) => {
+                                                      console.warn(
+                                                        "Mark contact status failed",
+                                                        e
+                                                      );
+                                                    });
+                                                } catch (e) {
+                                                  console.warn(
+                                                    "Mark contact status exception",
+                                                    e
+                                                  );
+                                                }
+                                                setOpenDispositionFor(null);
+                                              }}
                                             >
-                                              {tag.toUpperCase()}
+                                              {opt.label}
                                             </button>
                                           ))}
                                         </div>
@@ -8111,6 +9907,41 @@ useEffect(() => {
                                   );
                                 })()}
                               </td>
+                              <td className="py-2 px-3">{lead.leadStatus}</td>
+
+                              {/* Action */}
+                              <td className="py-2 px-3">
+                                {(() => {
+                                  const rowId =
+                                    lead.documentId ||
+                                    lead.contactId ||
+                                    `${idx}`;
+                                  const key = `assign-${rowId}`;
+                                  return (
+                                    <div className="relative">
+                                      <button
+                                        type="button"
+                                        className="inline-flex items-center px-2 py-1 text-xs border rounded hover:bg-gray-50"
+                                        title="Assign"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setOpenAssignFor(
+                                            openAssignFor === key ? null : key
+                                          );
+                                        }}
+                                      >
+                                        Assign ▾
+                                      </button>
+                                      {renderAssignMenu({
+                                        rowKey: key,
+                                        contacts: lead,
+                                        runId: lead?.runId || currentRunId,
+                                      })}
+                                    </div>
+                                  );
+                                })()}
+                              </td>
+                              {/* Redial */}
                               <td className="py-2 px-3">
                                 <button
                                   className="inline-flex items-center px-3 py-1 text-xs bg-green-50 text-green-700 border border-green-200 rounded hover:bg-green-100 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -8139,1729 +9970,404 @@ useEffect(() => {
                                 </button>
                               </td>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                          ));
+                      })()}
+                    </tbody>
+                  </table>
+                  <div className="flex items-center justify-between mt-4">
+                    <div className="text-sm text-gray-600">
+                      Loaded {apiMergedCalls.length} of{" "}
+                      {apiMergedCallsTotalItems} items
                     </div>
-                  );
-                })()
-              )}
-            </div>
-          )}
-          {/* Minimal Leads + Transcript Section */}
-          <div
-            className={`bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8 ${
-              statusLogsCollapsed ? "hidden" : ""
-            }`}
-          >
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-medium text-gray-900">
-                Recent call logs
-              </h2>
-              <div className="flex items-center gap-3">
-                {/* Auto refresh toggle */}
-                <label className="flex items-center gap-2 text-sm select-none">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4"
-                    checked={autoRefreshCalls}
-                    onChange={(e) => setAutoRefreshCalls(e.target.checked)}
-                  />
-                  {autoRefreshCalls ? "Auto-refresh: On" : "Auto-refresh: Off"}
-                </label>
-                <button
-                  onClick={() => fetchApiMergedCalls(1, false, false)}
-                  className="text-sm px-2 py-1 bg-gray-50 text-black rounded-md hover:bg-gray-100 transition-colors border border-gray-200 flex items-center justify-between"
-                  title="Refresh"
-                >
-                  <svg
-                    className="w-3 h-3 mx-1"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2"
-                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                    />
-                  </svg>
-                  <span>Refresh</span>
-                </button>
-                <select
-                  className="text-sm border border-gray-300 rounded-md px-2 py-1"
-                  value={callFilter}
-                  onChange={(e) => setCallFilter(e.target.value)}
-                >
-                  <option value="all">All</option>
-                  <option value="connected">Connected</option>
-                  <option value="missed">Not Connected</option>
-                </select>
-                <select
-                  className="text-sm border border-gray-300 rounded-md px-2 py-1"
-                  value={durationSort}
-                  onChange={(e) => setDurationSort(e.target.value)}
-                >
-                  <option value="none">Sort by</option>
-                  <option value="longest">Longest First</option>
-                  <option value="shortest">Shortest First</option>
-                </select>
-                {callFilter === "missed" && (
-                  <button
-                    className="text-sm px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
-                    onClick={() => {
-                      callMissedCalls();
-                    }}
-                    disabled={
-                      apiMergedCallsLoading ||
-                      !campaignGroups ||
-                      campaignGroups.length === 0
-                    }
-                    title={
-                      !campaignGroups || campaignGroups.length === 0
-                        ? "No groups assigned to campaign"
-                        : "Call all not connected contacts"
-                    }
-                  >
-                    Call Again
-                  </button>
-                )}
-              </div>
-            </div>
-            {/* Select and Call Controls for Call Logs */}
-            {apiMergedCalls.length > 0 && !apiMergedCallsLoading && (
-              <div className="mb-4 p-4 bg-gray-50 rounded-lg border">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <label className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={selectAllCallLogs}
-                        onChange={handleSelectAllCallLogs}
-                        className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-                      />
-                      <span className="text-sm font-medium text-gray-700">
-                        Select All Call Logs ({selectedCallLogs.length}{" "}
-                        selected)
-                      </span>
-                    </label>
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={callSelectedCallLogs}
-                      disabled={selectedCallLogs.length === 0}
-                      className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                    >
-                      <svg
-                        className="w-4 h-4"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
-                        />
-                      </svg>
-                      Call Selected ({selectedCallLogs.length})
-                    </button>
-                    <button
-                      onClick={() => {
-                        setSelectedCallLogs([]);
-                        setSelectAllCallLogs(false);
-                      }}
-                      disabled={selectedCallLogs.length === 0}
-                      className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      Clear Selection
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-            {apiMergedCallsLoading ? (
-              <div className="text-center py-10">Loading call logs...</div>
-            ) : apiMergedCalls.length === 0 ? (
-              <div className="text-center py-16 px-8 bg-gray-50 rounded-lg border border-gray-200 mx-4 my-6">
-                <div className="text-gray-500 text-lg font-medium mb-2">
-                  No call logs found
-                </div>
-                <div className="text-gray-400 text-sm">
-                  Call logs will appear here once calls are made
-                </div>
-              </div>
-            ) : (
-              <div className="">
-                <table className="min-w-full text-sm border border-gray-200 rounded-lg mb-5 z-10">
-                  <thead className="bg-gray-50 sticky top-0 z-10">
-                    <tr className="text-left text-gray-700">
-                      <th className="py-2 px-3">
-                        <input
-                          type="checkbox"
-                          checked={selectAllCallLogs}
-                          onChange={handleSelectAllCallLogs}
-                          className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-                        />
-                      </th>
-                      <th className="py-2 px-3">S. No.</th>
-                      <th className="py-2 px-3">Date & Time</th>
-                      <th className="py-2 px-3">Name</th>
-                      <th className="py-2 px-3">Number</th>
-                      <th className="py-2 px-3">Status</th>
-                      <th className="py-2 px-3">
-                        <FiClock />
-                      </th>
-                      <th className="py-2 px-3">Conversation</th>
-                      <th className="py-2 px-3">CC</th>
-                      <th className="py-2 px-3">
-                        <div className="flex items-center gap-2">
-                          <span>Flag</span>
-                          <div className="relative">
-                            <button
-                              type="button"
-                              className={`p-1 rounded border ${
-                                flagFilter !== "all"
-                                  ? "bg-yellow-100 border-yellow-300"
-                                  : "bg-white border-gray-300 hover:bg-gray-50"
-                              }`}
-                              title="Filter by flag"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                const newState = !flagMenuOpen;
-                                if (newState) {
-                                  const position = calculateDropdownPosition(e.target.closest('button'));
-                                  console.log('Setting flag menu position to:', position);
-                                  setFlagMenuPosition(position);
-                                }
-                                setFlagMenuOpen(newState);
-                              }}
-                            >
-                              {/* small flag icon */}
-                              <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                className="h-4 w-4 text-gray-700"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke="currentColor"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M4 6v14M4 6h12l-3 4 3 4H4"
-                                />
-                              </svg>
-                            </button>
-                            {flagMenuOpen && (
-                              <div
-                                className={`absolute right-0 w-44 bg-white border border-gray-200 rounded shadow-lg z-[100] p-2 min-h-[100px] ${
-                                  flagMenuPosition === "top" ? "bottom-full mb-1" : "top-full mt-1"
-                                }`}
-                                onMouseDown={(e) => e.stopPropagation()}
-                                onClick={(e) => e.stopPropagation()}
-                                style={{
-                                  backgroundColor: flagMenuPosition === "top" ? "#fef3c7" : "#ffffff",
-                                  border: flagMenuPosition === "top" ? "2px solid #f59e0b" : "1px solid #e5e7eb"
-                                }}
-                              >
-                                {(() => {
-                                  // compute visible rows' flag options
-                                  const visible = (run.contacts || []).filter((lead, idx) => {
-                                    const name = (lead.name || "").toString().trim();
-                                    const number = (lead.number || lead.phone || "")
-                                      .toString()
-                                      .trim();
-                                    const hasRealName = name && name !== "-";
-                                    const hasRealNumber = number && number !== "-" && /\d/.test(number);
-                                    const byData = hasRealName || hasRealNumber;
-                                    const status = (lead.status || "").toLowerCase();
-                                    const connectedStatuses = ["connected", "completed", "ongoing"];
-                                    const missedStatuses = ["missed", "not_connected", "failed"];
-                                    if (agentConfigMode !== "serial") {
-                                      const isLive = status === "ringing" || status === "ongoing";
-                                      if (isLive) return false;
-                                    }
-                                    const byStatus =
-                                      callFilter === "all"
-                                        ? true
-                                        : callFilter === "connected"
-                                        ? connectedStatuses.includes(status)
-                                        : missedStatuses.includes(status);
-                                    const rowId = `${run.instanceNumber || run._id || index}-${
-                                      lead.documentId || lead.contactId || `${idx}`
-                                    }`;
-                                    const selectedFlag = rowDisposition[rowId];
-                                    const byFlag =
-                                      flagFilter === "all"
-                                        ? true
-                                        : flagFilter === "unlabeled"
-                                        ? !selectedFlag
-                                        : selectedFlag === flagFilter;
-                                    const leadDisposition = (lead.leadStatus || lead.disposition || "").toLowerCase();
-                                    const byDisposition =
-                                      dispositionFilter === "all" ? true : leadDisposition === dispositionFilter;
-                                    return byData && byStatus && byFlag && byDisposition;
-                                  });
-                                  const set = new Set();
-                                  for (let i = 0; i < visible.length; i++) {
-                                    const lead = visible[i];
-                                    const rowId = `${run.instanceNumber || run._id || index}-${
-                                      lead.documentId || lead.contactId || `${i}`
-                                    }`;
-                                    const val = rowDisposition[rowId];
-                                    set.add(val || "unlabeled");
-                                  }
-                                  const options = Array.from(set);
-                                  return (
-                                    <div className="py-1">
-                                      {options.length === 0 ? (
-                                        <div className="px-3 py-2 text-sm text-gray-500">No flags</div>
-                                      ) : (
-                                        options.map((opt) => (
-                                          <button
-                                            key={opt}
-                                            data-filter-button
-                                            className={`w-full text-left px-3 py-1.5 text-sm hover:bg-gray-50 ${
-                                              (opt === "unlabeled" ? "unlabeled" : opt) === flagFilter ? "bg-yellow-50" : ""
-                                            }`}
-                                            onClick={(e) => {
-                                              e.preventDefault();
-                                              e.stopPropagation();
-                                              const next = (opt === "unlabeled" ? "unlabeled" : opt) === flagFilter ? "all" : (opt === "unlabeled" ? "unlabeled" : opt);
-                                              setFlagFilter(next);
-                                              setFlagMenuOpen(false);
-                                            }}
-                                          >
-                                            {opt === "unlabeled" ? "Unlabeled" : opt}
-                                          </button>
-                                        ))
-                                      )}
-                                      <div className="border-t border-gray-100 my-1" />
-                                      <button
-                                        data-filter-button
-                                        className="w-full text-left px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
-                                        onClick={(e) => {
-                                          e.preventDefault();
-                                          e.stopPropagation();
-                                          setFlagFilter("all");
-                                          setFlagMenuOpen(false);
-                                        }}
-                                      >
-                                        Clear
-                                      </button>
-                                    </div>
-                                  );
-                                })()}
-                              </div>
-                            )}
-                          </div>
+                    <div className="flex gap-2">
+                      {apiMergedCallsLoadingMore && (
+                        <div className="flex items-center text-xs text-gray-500">
+                          <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-gray-500 mr-2"></div>
+                          Loading more...
                         </div>
-                      </th>
-                      <th className="py-2 px-3">Disposition</th>
-                      <th className="py-2 px-3">Action</th>
-                      <th className="py-2 px-3">Redial</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {(() => {
-                      const filteredCalls = apiMergedCalls.filter((lead) => {
-                        const name = (lead.name || "").toString().trim();
-                        const number = (lead.number || "").toString().trim();
-                        const hasRealName = name && name !== "-";
-                        const hasRealNumber =
-                          number && number !== "-" && /\d/.test(number);
-                        const byData = hasRealName || hasRealNumber;
-                        const status = (lead.status || "").toLowerCase();
-                        const connectedStatuses = ["connected", "completed"];
-                        const missedStatuses = [
-                          "missed",
-                          "not_connected",
-                          "failed",
-                        ];
-                        const notLive =
-                          status !== "ringing" && status !== "ongoing";
-                        const byStatus =
-                          callFilter === "all"
-                            ? status === "completed" ||
-                              missedStatuses.includes(status)
-                            : callFilter === "connected"
-                            ? connectedStatuses.includes(status)
-                            : missedStatuses.includes(status);
-                        return byData && byStatus && notLive;
-                      });
-                      if (filteredCalls.length === 0) {
-                        return (
-                          <tr>
-                            <td colSpan="12" className="text-center py-16 px-8">
-                              <div className="bg-gray-50 rounded-lg border border-gray-200 mx-4 my-6 py-8">
-                                <div className="text-gray-500 text-lg font-medium mb-2">
-                                  No results found
-                                </div>
-                                <div className="text-gray-400 text-sm">
-                                  Try adjusting your filters to see more results
-                                </div>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      }
-                      return filteredCalls
-                        .sort((a, b) => {
-                        if (durationSort === "none") return 0;
-                        // Convert duration to seconds for comparison
-                        const getDurationInSeconds = (lead) => {
-                          const duration = lead.duration;
-                          // Handle different duration formats
-                          if (!duration) return 0;
-                          // Convert to string if it's not already
-                          const durationStr = String(duration);
-                          // Handle MM:SS format
-                          if (durationStr.includes(":")) {
-                            const parts = durationStr.split(":");
-                            if (parts.length === 2) {
-                              const minutes = parseInt(parts[0]) || 0;
-                              const seconds = parseInt(parts[1]) || 0;
-                              return minutes * 60 + seconds;
-                            }
-                          }
-                          // Handle pure number (assume seconds)
-                          const numDuration = parseInt(durationStr);
-                          if (!isNaN(numDuration)) {
-                            return numDuration;
-                          }
-                          return 0;
-                        };
-                        const durationA = getDurationInSeconds(a);
-                        const durationB = getDurationInSeconds(b);
-                        if (durationSort === "longest") {
-                          return durationB - durationA; // Descending order
-                        } else if (durationSort === "shortest") {
-                          return durationA - durationB; // Ascending order
+                      )}
+                      <button
+                        className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 disabled:opacity-50"
+                        onClick={() =>
+                          fetchApiMergedCalls(
+                            apiMergedCallsPage + 1,
+                            false,
+                            true
+                          )
                         }
-                        return 0;
-                      })
-                      .map((lead, idx) => (
-                        <tr
-                          key={`${
-                            lead.documentId || lead.contactId || "row"
-                          }-${idx}`}
-                          className={`hover:bg-gray-50 ${
-                            isCallLogSelected(lead)
-                              ? "bg-blue-50 border-blue-200"
-                              : ""
-                          }`}
-                        >
-                          <td className="py-2 px-3">
-                            <input
-                              type="checkbox"
-                              checked={isCallLogSelected(lead)}
-                              onChange={() => handleSelectCallLog(lead)}
-                              className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-                            />
-                          </td>
-                          <td className="py-2 px-3 text-gray-700">{idx + 1}</td>
-                          <td className="py-2 px-3 text-gray-700 flex flex-col items-center gap-2">
-                            <span>
-                              {lead.time
-                                ? new Date(lead.time).toLocaleDateString()
-                                : "-"}{" "}
-                            </span>
-                            <span>
-                              {lead.time
-                                ? new Date(lead.time).toLocaleTimeString([], {
-                                    hour: "2-digit",
-                                    minute: "2-digit",
-                                  })
-                                : "-"}
-                            </span>
-                          </td>
-                          <td className="py-2 px-3 text-gray-900">
-                            {getContactDisplayNameBlank(lead)}
-                          </td>
-                          <td className="py-2 px-3 text-gray-900">
-                            <span className="inline-flex items-center">
-                              {redialingCalls.has(
-                                lead.documentId || lead.contactId
-                              ) ? (
-                                <span className="inline-flex items-center text-green-600">
-                                  <svg
-                                    className="animate-spin h-4 w-4 mr-1"
-                                    viewBox="0 0 24 24"
-                                  >
-                                    <circle
-                                      className="opacity-25"
-                                      cx="12"
-                                      cy="12"
-                                      r="10"
-                                      stroke="currentColor"
-                                      strokeWidth="4"
-                                    ></circle>
-                                    <path
-                                      className="opacity-75"
-                                      fill="currentColor"
-                                      d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
-                                    ></path>
-                                  </svg>
-                                  {lead.number || "-"}
-                                </span>
-                              ) : (
-                                lead.number || "-"
-                              )}
-                            </span>
-                          </td>
-                          <td className="py-2 px-3 capitalize">
-                            <span
-                              className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
-                                lead.status === "ringing"
-                                  ? "bg-yellow-100 text-yellow-700"
-                                  : lead.status === "ongoing"
-                                  ? "bg-blue-100 text-blue-700"
-                                  : lead.status === "missed" ||
-                                    lead.status === "not_connected" ||
-                                    lead.status === "failed"
-                                  ? "bg-red-100 text-red-700"
-                                  : "bg-green-100 text-green-700"
-                              }`}
-                            >
-                              {(() => {
-                                const s = String(lead.status || "").toLowerCase();
-                                if (s === "completed" || s === "connected") return "Connected";
-                                if (s === "missed" || s === "not_connected" || s === "failed") return "Not Connected";
-                                return lead.status;
-                              })()}
-                            </span>
-                          </td>
-                          <td className="py-2 px-3">
-                            {formatDuration(lead.duration)}
-                          </td>
-                          <td className="py-2 px-3">
-                            {lead.status === "missed" ? (
-                              <span className="text-gray-400 text-xs text-center"></span>
-                            ) : (
-                              <button
-                                className={`inline-flex items-center px-3 py-1 text-xs border rounded hover:opacity-80 transition-all duration-200 ${
-                                  lead.documentId &&
-                                  viewedTranscripts.has(lead.documentId)
-                                    ? "bg-green-50 text-fuchsia-700 border-green-200"
-                                    : "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
-                                }`}
-                                title={
-                                  lead.documentId &&
-                                  viewedTranscripts.has(lead.documentId)
-                                    ? "Transcript viewed"
-                                    : "View transcript"
-                                }
-                                onClick={() => {
-                                  if (lead.documentId && transcriptOpeningIds.has(lead.documentId)) return;
-                                  openTranscriptSmart(lead);
-                                }}
-                                disabled={lead.documentId ? transcriptOpeningIds.has(lead.documentId) : false}
-                              >
-                                {lead.documentId && transcriptOpeningIds.has(lead.documentId) ? (
-                                  <span className="inline-flex items-center mr-1">
-                                    <span className="w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"></span>
-                                  </span>
-                                ) : (
-                                  <svg
-                                    className="w-4 h-4 mr-1"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24"
-                                  >
-                                    <path
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                      strokeWidth="2"
-                                      d="M8 16h8M8 12h8M8 8h8M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H7l-2 2H3v12a2 2 0 002 2z"
-                                    />
-                                  </svg>
-                                )}
-                                {(() => {
-                                  const baseLabel =
-                                    lead.documentId &&
-                                    viewedTranscripts.has(lead.documentId)
-                                      ? "Viewed"
-                                      : "Transcript";
-                                  const count =
-                                    (typeof lead.transcriptCount === "number"
-                                      ? lead.transcriptCount
-                                      : undefined) ??
-                                    getTranscriptMessageCount(lead);
-                                  const label = count > 0
-                                    ? `${baseLabel} (${count})`
-                                    : baseLabel;
-                                  return (lead.documentId && transcriptOpeningIds.has(lead.documentId)) ? `Loading…` : label;
-                                })()}
-                              </button>
-                            )}
-                          </td>
-                          {/* CC: conversation count column */}
-                          <td className="py-2 px-3 text-gray-700">
-                            {(() => {
-                              const count =
-                                (typeof lead.transcriptCount === "number"
-                                  ? lead.transcriptCount
-                                  : undefined) ?? getTranscriptMessageCount(lead);
-                              return Number(count) || 0;
-                            })()}
-                          </td>
-                          <td className="py-2 px-3">
-                            {(() => {
-                              const rowId =
-                                lead.documentId || lead.contactId || `${idx}`;
-                              const selected = rowDisposition[rowId];
-                              const colorClass =
-                                selected === "interested"
-                                  ? "bg-green-200 text-green-900 border-green-300"
-                                  : selected === "not interested"
-                                  ? "bg-red-200 text-red-900 border-red-300"
-                                  : selected === "maybe"
-                                  ? "bg-yellow-200 text-yellow-900 border-yellow-300"
-                                  : "bg-gray-50 text-gray-700 border-gray-200";
-                              const label = selected ? selected : "Default";
-                              const icon =
-                                selected === "interested" ? (
-                                  <svg
-                                    className="w-4 h-4 mr-2"
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                    stroke="currentColor"
-                                  >
-                                    <path
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                      strokeWidth="2"
-                                      d="M5 13l4 4L19 7"
-                                    />
-                                  </svg>
-                                ) : selected === "not interested" ? (
-                                  <svg
-                                    className="w-4 h-4 mr-2"
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                    stroke="currentColor"
-                                  >
-                                    <path
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                      strokeWidth="2"
-                                      d="M6 18L18 6M6 6l12 12"
-                                    />
-                                  </svg>
-                                ) : selected === "maybe" ? (
-                                  <svg
-                                    className="w-4 h-4 mr-2"
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                    stroke="currentColor"
-                                  >
-                                    <path
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                      strokeWidth="2"
-                                      d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                                    />
-                                  </svg>
-                                ) : (
-                                  <svg
-                                    className="w-4 h-4 mr-2"
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                    stroke="currentColor"
-                                  >
-                                    <path
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                      strokeWidth="2"
-                                      d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                                    />
-                                  </svg>
-                                );
-                              return (
-                                <div className="relative inline-block text-left">
-                                  <button
-                                    type="button"
-                                    className={`inline-flex items-center px-3 py-1 text-xs border rounded ${colorClass}`}
-                                    onClick={(e) => {
-                                      const direction = calculateDropdownPosition(e.currentTarget);
-                                      setRowDispositionPosition((prev) => ({ ...prev, [rowId]: direction }));
-                                      setOpenDispositionFor(
-                                        openDispositionFor === rowId ? null : rowId
-                                      );
-                                    }}
-                                  >
-                                    {icon}
-                                    {label}
-                                    <svg
-                                      className="w-4 h-4 ml-2"
-                                      fill="none"
-                                      viewBox="0 0 24 24"
-                                      stroke="currentColor"
-                                    >
-                                      <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth="2"
-                                        d="M19 9l-7 7-7-7"
-                                      />
-                                    </svg>
-                                  </button>
-                                  {openDispositionFor === rowId && (
-                                    <div className={`absolute z-10 w-40 bg-white border border-gray-200 rounded shadow ${
-                                      (rowDispositionPosition && rowDispositionPosition[rowId]) === "top"
-                                        ? "bottom-full mb-1"
-                                        : "mt-1"
-                                    }`}>
-                                      {(agentDispositions.length > 0 ?
-                                        agentDispositions.map(disp => {
-                                          if (disp.title) {
-                                            // Return only main disposition titles, not sub-dispositions
-                                            return {
-                                              key: disp.title.toLowerCase().replace(/\s+/g, '_'),
-                                              label: disp.title,
-                                              cls: "text-blue-700",
-                                            };
-                                          } else if (typeof disp === 'string') {
-                                            return {
-                                              key: disp.toLowerCase().replace(/\s+/g, '_'),
-                                              label: disp,
-                                              cls: "text-blue-700",
-                                            };
-                                          }
-                                          return null;
-                                        }).filter(Boolean)
-                                      : [
-                                        {
-                                          key: "interested",
-                                          label: "Interested",
-                                          cls: "text-green-700",
-                                        },
-                                        {
-                                          key: "not interested",
-                                          label: "Not Interested",
-                                          cls: "text-red-700",
-                                        },
-                                        {
-                                          key: "maybe",
-                                          label: "Maybe",
-                                          cls: "text-yellow-700",
-                                        },
-                                        {
-                                          key: undefined,
-                                          label: "Default",
-                                          cls: "text-gray-700",
-                                        },
-                                      ]).map((opt) => (
-                                        <button
-                                          key={`${rowId}-${opt.label}`}
-                                          type="button"
-                                          className={`w-full text-left px-3 py-2 text-xs hover:bg-gray-50 ${opt.cls}`}
-                                          onClick={() => {
-                                            setRowDisposition((prev) => ({
-                                              ...prev,
-                                              [rowId]: opt.key,
-                                            }));
-                                            // Persist to backend
-                                            try {
-                                              const authToken =
-                                                sessionStorage.getItem(
-                                                  "clienttoken"
-                                                ) ||
-                                                localStorage.getItem(
-                                                  "admintoken"
-                                                );
-                                              const url = `${API_BASE}/groups/mark-contact-status`;
-                                              const payload = {
-                                                campaignId:
-                                                  campaign && campaign._id,
-                                                phone:
-                                                  lead &&
-                                                  (lead.number || lead.phone),
-                                                status: opt.key || "default",
-                                              };
-                                              console.log(
-                                                "Marking contact status →",
-                                                url,
-                                                payload
-                                              );
-                                              fetch(url, {
-                                                method: "POST",
-                                                headers: {
-                                                  "Content-Type":
-                                                    "application/json",
-                                                  ...(authToken
-                                                    ? {
-                                                        Authorization: `Bearer ${authToken}`,
-                                                      }
-                                                    : {}),
-                                                },
-                                                body: JSON.stringify(payload),
-                                              })
-                                                .then(async (r) => {
-                                                  let body;
-                                                  try {
-                                                    body = await r.json();
-                                                  } catch (e) {}
-                                                  console.log(
-                                                    "Mark contact status response",
-                                                    r.status,
-                                                    body
-                                                  );
-                                                })
-                                                .catch((e) => {
-                                                  console.warn(
-                                                    "Mark contact status failed",
-                                                    e
-                                                  );
-                                                });
-                                            } catch (e) {
-                                              console.warn(
-                                                "Mark contact status exception",
-                                                e
-                                              );
-                                            }
-                                            setOpenDispositionFor(null);
-                                          }}
-                                        >
-                                          {opt.label}
-                                        </button>
-                                      ))}
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })()}
-                          </td>
-                          <td className="py-2 px-3">{lead.leadStatus}</td>
-                          
-                          {/* Action */}
-                          <td className="py-2 px-3">
-                            {(() => {
-                              const rowId = (lead.documentId || lead.contactId || `${idx}`);
-                              const key = `assign-${rowId}`;
-                              return (
-                                <div className="relative">
-                                  <button
-                                    type="button"
-                                    className="inline-flex items-center px-2 py-1 text-xs border rounded hover:bg-gray-50"
-                                    title="Assign"
-                                    onClick={(e) => { e.stopPropagation(); setOpenAssignFor(openAssignFor === key ? null : key); }}
-                                  >
-                                    Assign ▾
-                                  </button>
-                                  {openAssignFor === key && (
-                                    <div className="absolute right-0 mt-1 w-28 bg-white border border-gray-200 rounded shadow z-10">
-                                      {["t1","t2","t3","t4","t5"].map((tag) => (
-                                        <button
-                                          key={tag}
-                                          type="button"
-                                          className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50"
-                                          onClick={(e) => { e.stopPropagation(); setRowAssignments((prev) => ({ ...prev, [rowId]: tag })); setOpenAssignFor(null); }}
-                                        >
-                                          {tag.toUpperCase()}
-                                        </button>
-                                      ))}
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })()}
-                          </td>
-                          {/* Redial */}
-                          <td className="py-2 px-3">
-                            <button
-                              className="inline-flex items-center px-3 py-1 text-xs bg-green-50 text-green-700 border border-green-200 rounded hover:bg-green-100 disabled:opacity-50 disabled:cursor-not-allowed"
-                              title={
-                                !lead.number
-                                  ? "No phone number available"
-                                  : lead.status === "ringing" || lead.status === "ongoing"
-                                  ? "Call already in progress"
-                                  : "Retry this contact"
-                              }
-                              onClick={() => handleRetryLead(lead)}
-                              disabled={
-                                !lead.number ||
-                                lead.status === "ringing" ||
-                                lead.status === "ongoing"
-                              }
-                            >
-                              <FiPhone
-                                className="w-3 h-3 text-green-700 mx-2"
-                                style={{ minWidth: "16px", minHeight: "16px" }}
-                              />
-                            </button>
-                          </td>
-                        </tr>
-                      ));
-                    })()}
-                  </tbody>
-                </table>
-                <div className="flex items-center justify-between mt-4">
-                  <div className="text-sm text-gray-600">
-                    Loaded {apiMergedCalls.length} of {apiMergedCallsTotalItems}{" "}
-                    items
-                  </div>
-                  <div className="flex gap-2">
-                    {apiMergedCallsLoadingMore && (
-                      <div className="flex items-center text-xs text-gray-500">
-                        <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-gray-500 mr-2"></div>
-                        Loading more...
-                      </div>
-                    )}
-                    <button
-                      className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 disabled:opacity-50"
-                      onClick={() =>
-                        fetchApiMergedCalls(apiMergedCallsPage + 1, false, true)
-                      }
-                      disabled={
-                        apiMergedCallsLoading ||
-                        apiMergedCallsLoadingMore ||
-                        apiMergedCallsPage >=
-                          Math.max(1, apiMergedCallsTotalPages || 0)
-                      }
-                      title="Load next 50"
-                    >
-                      Load more
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-          {/* Campaign History Section (moved here after groups, before summary) */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center space-x-3">
-                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                <h3 className="text-base font-medium text-gray-900">
-                  Campaign Runs History
-                </h3>
-              </div>
-              <div className="flex items-center gap-2 text-sm text-gray-500">
-                {campaignHistoryLoading ? (
-                  <div className="flex items-center text-xs text-gray-500">
-                    <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-gray-500 mr-2"></div>
-                    Loading...
-                  </div>
-                ) : (
-                  <span>
-                    {Array.isArray(campaignHistory)
-                      ? campaignHistory.length
-                      : 0}{" "}
-                    saved run
-                    {Array.isArray(campaignHistory) &&
-                    campaignHistory.length !== 1
-                      ? "s"
-                      : ""}
-                  </span>
-                )}
-                <button
-                  onClick={() => setCampaignRunsCollapsed((v) => !v)}
-                  className="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-md border border-gray-200"
-                  title={campaignRunsCollapsed ? "Expand" : "Collapse"}
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className={`h-4 w-4 transition-transform ${
-                      campaignRunsCollapsed ? "transform rotate-180" : ""
-                    }`}
-                    viewBox="0 0 20 20"
-                    fill="currentColor"
-                  >
-                    <path
-                      fillRule="evenodd"
-                      d="M5.23 7.21a.75.75 0 011.06.02L10 11.094l3.71-3.864a.75.75 0 011.08 1.04l-4.24 4.41a.75.75 0 01-1.08 0l-4.24-4.41a.75.75 0 01.02-1.06z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                </button>
-              </div>
-            </div>
-            <div className={`${campaignRunsCollapsed ? "hidden" : ""}`}>
-              {campaignHistoryLoading ? (
-                <div className="space-y-3">
-                  {[...Array(3)].map((_, i) => (
-                    <div
-                      key={i}
-                      className="animate-pulse h-16 bg-gray-100 rounded-md border border-gray-200"
-                    />
-                  ))}
-                </div>
-              ) : Array.isArray(campaignHistory) &&
-                campaignHistory.length > 0 ? (
-                [...campaignHistory]
-                  .sort(
-                    (a, b) => (b.instanceNumber || 0) - (a.instanceNumber || 0)
-                  )
-                  .map((run, idx) => (
-                    <CampaignHistoryCard
-                      key={`${run._id || idx}`}
-                      run={run}
-                      index={idx}
-                    />
-                  ))
-              ) : (
-                <div className="text-center py-12 px-6 bg-gray-50 rounded-lg border border-gray-200 mx-2 my-4">
-                  <div className="text-gray-500 text-base font-medium mb-2">
-                    No campaign runs yet
-                  </div>
-                  <div className="text-gray-400 text-sm">
-                    Campaign runs will appear here once the campaign is executed
+                        disabled={
+                          apiMergedCallsLoading ||
+                          apiMergedCallsLoadingMore ||
+                          apiMergedCallsPage >=
+                            Math.max(1, apiMergedCallsTotalPages || 0)
+                        }
+                        title="Load next 50"
+                      >
+                        Load more
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
             </div>
-          </div>
-          {/* Missed Calls list removed; use filter + Call Again button in header */}
-        </div>
-      </div>
-      {/* Report Modal: Completed Contacts by Run */}
-      {isReportOpen && (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/40">
-          <div className="bg-white w-full max-w-5xl max-h-[80vh] overflow-auto rounded-lg shadow-lg">
-            <div className="p-4 border-b flex justify-between items-center">
-              <h3 className="font-semibold text-gray-900">
-                Completed Contacts Report
-              </h3>
-              <button
-                type="button"
-                onClick={closeReport}
-                className="text-gray-600 hover:text-gray-900"
-              >
-                ✕
-              </button>
-            </div>
-            <div className="px-4 pb-2 pt-3 flex items-center justify-between">
-              <div className="text-sm text-gray-600">
-                Selected: {reportSelectedIds.size}
+            {/* Campaign History Section (moved here after groups, before summary) */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center space-x-3">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                  <h3 className="text-base font-medium text-gray-900">
+                    Campaign Runs History
+                  </h3>
+                </div>
+                <div className="flex items-center gap-2 text-sm text-gray-500">
+                  {campaignHistoryLoading ? (
+                    <div className="flex items-center text-xs text-gray-500">
+                      <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-gray-500 mr-2"></div>
+                      Loading...
+                    </div>
+                  ) : (
+                    <span>
+                      {Array.isArray(campaignHistory)
+                        ? campaignHistory.length
+                        : 0}{" "}
+                      saved run
+                      {Array.isArray(campaignHistory) &&
+                      campaignHistory.length !== 1
+                        ? "s"
+                        : ""}
+                    </span>
+                  )}
+                  <button
+                    onClick={() => setCampaignRunsCollapsed((v) => !v)}
+                    className="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-md border border-gray-200"
+                    title={campaignRunsCollapsed ? "Expand" : "Collapse"}
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className={`h-4 w-4 transition-transform ${
+                        campaignRunsCollapsed ? "transform rotate-180" : ""
+                      }`}
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M5.23 7.21a.75.75 0 011.06.02L10 11.094l3.71-3.864a.75.75 0 011.08 1.04l-4.24 4.41a.75.75 0 01-1.08 0l-4.24-4.41a.75.75 0 01.02-1.06z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                  </button>
+                </div>
               </div>
+              <div className={`${campaignRunsCollapsed ? "hidden" : ""}`}>
+                {campaignHistoryLoading ? (
+                  <div className="space-y-3">
+                    {[...Array(3)].map((_, i) => (
+                      <div
+                        key={i}
+                        className="animate-pulse h-16 bg-gray-100 rounded-md border border-gray-200"
+                      />
+                    ))}
+                  </div>
+                ) : Array.isArray(campaignHistory) &&
+                  campaignHistory.length > 0 ? (
+                  [...campaignHistory]
+                    .sort(
+                      (a, b) =>
+                        (b.instanceNumber || 0) - (a.instanceNumber || 0)
+                    )
+                    .map((run, idx) => (
+                      <CampaignHistoryCard
+                        key={`${run._id || idx}`}
+                        run={run}
+                        index={idx}
+                      />
+                    ))
+                ) : (
+                  <div className="text-center py-12 px-6 bg-gray-50 rounded-lg border border-gray-200 mx-2 my-4">
+                    <div className="text-gray-500 text-base font-medium mb-2">
+                      No campaign runs yet
+                    </div>
+                    <div className="text-gray-400 text-sm">
+                      Campaign runs will appear here once the campaign is
+                      executed
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+            {/* Missed Calls list removed; use filter + Call Again button in header */}
+          </div>
+        </div>
+        {/* Report Modal: Completed Contacts by Run */}
+        {isReportOpen && (
+          <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/40">
+            <div className="bg-white w-full max-w-5xl max-h-[80vh] overflow-auto rounded-lg shadow-lg">
+              <div className="p-4 border-b flex justify-between items-center">
+                <h3 className="font-semibold text-gray-900">
+                  Completed Contacts Report
+                </h3>
+                <button
+                  type="button"
+                  onClick={closeReport}
+                  className="text-gray-600 hover:text-gray-900"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="px-4 pb-2 pt-3 flex items-center justify-between">
+                <div className="text-sm text-gray-600">
+                  Selected: {reportSelectedIds.size}
+                </div>
                 <div className="relative">
                   <button
                     type="button"
-                    onClick={() => setShowReportDownloadMenu((v)=>!v)}
+                    onClick={() => setShowReportDownloadMenu((v) => !v)}
                     className="px-3 py-1.5 text-xs font-medium bg-black text-white rounded hover:bg-gray-800 disabled:opacity-50 flex items-center gap-2"
                     disabled={reportSelectedIds.size === 0}
                   >
                     <FiDownload />
                     Download
-                    <span className="inline-block border-l border-white/20 pl-2">▾</span>
+                    <span className="inline-block border-l border-white/20 pl-2">
+                      ▾
+                    </span>
                   </button>
                   {showReportDownloadMenu && (
                     <div className="absolute right-0 mt-2 w-40 bg-white rounded-md shadow-lg z-50 overflow-hidden ring-1 ring-black/5">
                       <button
                         className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2"
-                        onClick={() => { setShowReportDownloadMenu(false); handleDownloadSelectedReportCSV(); }}
+                        onClick={() => {
+                          setShowReportDownloadMenu(false);
+                          handleDownloadSelectedReportCSV();
+                        }}
                         disabled={isDownloadingReportCSV}
                       >
-                        {isDownloadingReportCSV && <div className="animate-spin h-3 w-3 border border-gray-300 border-t-blue-600 rounded-full"></div>}
+                        {isDownloadingReportCSV && (
+                          <div className="animate-spin h-3 w-3 border border-gray-300 border-t-blue-600 rounded-full"></div>
+                        )}
                         Excel (CSV)
                       </button>
                       <button
                         className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2"
-                        onClick={() => { setShowReportDownloadMenu(false); handleDownloadSelectedReportPDF(); }}
+                        onClick={() => {
+                          setShowReportDownloadMenu(false);
+                          handleDownloadSelectedReportPDF();
+                        }}
                         disabled={isDownloadingReportPDF}
                       >
-                        {isDownloadingReportPDF && <div className="animate-spin h-3 w-3 border border-gray-300 border-t-blue-600 rounded-full"></div>}
+                        {isDownloadingReportPDF && (
+                          <div className="animate-spin h-3 w-3 border border-gray-300 border-t-blue-600 rounded-full"></div>
+                        )}
                         PDF
                       </button>
                       <button
                         className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2"
-                        onClick={() => { setShowReportDownloadMenu(false); handleDownloadSelectedReportTXT(); }}
+                        onClick={() => {
+                          setShowReportDownloadMenu(false);
+                          handleDownloadSelectedReportTXT();
+                        }}
                         disabled={isDownloadingReportTXT}
                       >
-                        {isDownloadingReportTXT && <div className="animate-spin h-3 w-3 border border-gray-300 border-t-blue-600 rounded-full"></div>}
+                        {isDownloadingReportTXT && (
+                          <div className="animate-spin h-3 w-3 border border-gray-300 border-t-blue-600 rounded-full"></div>
+                        )}
                         Text (TXT)
                       </button>
                     </div>
                   )}
                 </div>
-            </div>
-            <div className="p-4 pt-0 space-y-4">
-              {reportRuns.length === 0 ? (
-                <div className="text-sm text-gray-500">
-                  No completed contacts found.
-                </div>
-              ) : (
-                (() => {
-                  const flatRows = reportRuns
-                    .sort(
-                      (a, b) =>
-                        (b.instanceNumber || 0) - (a.instanceNumber || 0)
-                    )
-                    .flatMap((run) =>
-                      (run.contacts || []).map((c) => ({ ...c, __run: run }))
-                    );
-                  const two = (n) => String(n).padStart(2, "0");
-                  const fmtDur = (sec) => {
-                    const s = Math.max(0, Number(sec) || 0);
-                    const m = Math.floor(s / 60);
-                    const rs = s % 60;
-                    return `${m}:${two(rs)}`;
-                  };
-                  const fmtDate = (t) => {
-                    try {
-                      const d = new Date(t);
-                      return {
-                        date: d.toLocaleDateString(),
-                        time: d.toLocaleTimeString([], {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        }),
-                      };
-                    } catch {
-                      return { date: "-", time: "-" };
-                    }
-                  };
-                  return (
-                    <div className="overflow-auto mb-5">
-                      <table className="min-w-full text-sm border border-gray-200 rounded-lg mb-5">
-                        <thead className="bg-gray-50 sticky top-0 z-10">
-                          <tr className="text-left text-gray-700">
-                            <th className="py-2 px-3">
-                              <input
-                                type="checkbox"
-                                onChange={(e) => {
-                                  const checked = e.target.checked;
-                                  const next = new Set(reportSelectedIds);
-                                  if (checked) {
-                                    flatRows.forEach((c) =>
-                                      next.add(c.documentId)
-                                    );
-                                  } else {
-                                    flatRows.forEach((c) =>
-                                      next.delete(c.documentId)
-                                    );
-                                  }
-                                  setReportSelectedIds(next);
-                                }}
-                                checked={
-                                  flatRows.every((c) =>
-                                    reportSelectedIds.has(c.documentId)
-                                  ) && flatRows.length > 0
-                                }
-                              />
-                            </th>
-                            <th className="py-2 px-3">#</th>
-                            <th className="py-2 px-3">Date</th>
-                            <th className="py-2 px-3">Time</th>
-                            <th className="py-2 px-3">Name</th>
-                            <th className="py-2 px-3">Number</th>
-                            <th className="py-2 px-3">Status</th>
-                            <th className="py-2 px-3">Duration</th>
-                            <th className="py-2 px-3">Lead</th>
-                            <th className="py-2 px-3">Run</th>
-                            <th className="py-2 px-3">Transcript</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100">
-                          {flatRows.map((c, idx) => {
-                            const dt = fmtDate(c.time);
-                            const status = String(c.status || "").toLowerCase();
-                            const isMissed = status !== "completed";
-                            const badgeClass = isMissed
-                              ? "bg-red-100 text-red-700"
-                              : "bg-green-100 text-green-700";
-                            const badgeText = status
-                              ? status.charAt(0).toUpperCase() + status.slice(1)
-                              : "-";
-                            return (
-                              <tr
-                                key={`${c.documentId}-${idx}`}
-                                className="hover:bg-gray-50"
-                              >
-                                <td className="py-2 px-3">
-                                  <input
-                                    type="checkbox"
-                                    checked={reportSelectedIds.has(
-                                      c.documentId
-                                    )}
-                                    onChange={(e) => {
-                                      const next = new Set(reportSelectedIds);
-                                      if (e.target.checked)
-                                        next.add(c.documentId);
-                                      else next.delete(c.documentId);
-                                      setReportSelectedIds(next);
-                                    }}
-                                  />
-                                </td>
-                                <td className="py-2 px-3 text-gray-600">
-                                  {idx + 1}
-                                </td>
-                                <td className="py-2 px-3">{dt.date}</td>
-                                <td className="py-2 px-3">{dt.time}</td>
-                                <td className="py-2 px-3">{c.name || "-"}</td>
-                                <td className="py-2 px-3">{(() => { const n = String(c.number || "-"); return n === "-" ? n : `${n.slice(0,2)}******${n.slice(-2)}`; })()}</td>
-                                <td className="py-2 px-3">
-                                  <span
-                                    className={`inline-block text-xs px-2 py-0.5 rounded-full ${badgeClass}`}
-                                  >
-                                    {badgeText}
-                                  </span>
-                                </td>
-                                <td className="py-2 px-3">
-                                  {fmtDur(c.duration)}
-                                </td>
-                                <td className="py-2 px-3">
-                                  {c.leadStatus || "-"}
-                                </td>
-                                <td className="py-2 px-3">
-                                  #{c.__run?.instanceNumber || "-"}
-                                </td>
-                                <td className="py-2 px-3">
-                                  <button
-                                    type="button"
-                                    className="px-2 py-1 text-xs rounded-md border border-gray-300 text-gray-700 hover:bg-gray-100 disabled:opacity-40"
-                                    onClick={() =>
-                                      openTranscriptSmart({
-                                        documentId: c.documentId,
-                                        number: c.number,
-                                        time: c.time,
-                                        name: c.name,
-                                        duration: c.duration,
-                                        status: "completed",
-                                      })
-                                    }
-                                    disabled={!c.documentId}
-                                    title="View transcript"
-                                  >
-                                    View
-                                  </button>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  );
-                })()
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-      {/* Transcript Modal */}
-      {showTranscriptModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[90]">
-          <div className="relative bg-white rounded-2xl w-11/12 max-w-4xl max-h-[90vh] overflow-y-auto shadow-2xl">
-            {/* Top-right close button */}
-            <button
-              className="absolute top-2 right-2 bg-none border-none text-2xl cursor-pointer text-gray-500 hover:text-gray-700 p-2 w-10 h-10 flex items-center justify-center rounded-lg hover:bg-gray-200 transition-colors duration-200"
-              onClick={() => setShowTranscriptModal(false)}
-              title="Close"
-            >
-              <FiX />
-            </button>
-            <div className="flex justify-between items-center p-3 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-blue-100">
-              <div className="flex-1">
-                <h3 className="text-lg font-bold text-gray-800 flex items-center">
-                  <svg
-                    className="w-6 h-6 mr-2 text-blue-600"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M8 16h8M8 12h8M8 8h8M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H7l-2 2H3v12a2 2 0 002 2z"
-                    />
-                  </svg>
-                  Call Transcript
-                  {selectedCall && (
-                    <span className="ml-3 text-xs font-normal text-gray-600 whitespace-nowrap">
-                      {formatDateTimeCompact(
-                        selectedCall.time ||
-                          selectedCall.createdAt ||
-                          (selectedCall.metadata &&
-                            (selectedCall.metadata.startTime ||
-                              selectedCall.metadata.callStartTime)) ||
-                          (selectedCall.externalResponse &&
-                            selectedCall.externalResponse.startTime)
-                      )}
-                    </span>
-                  )}
-                </h3>
-                {/* Call Details */}
-                {selectedCall && (
-                  <div className="mt-1 grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="p-3">
-                      <div className="text-sm text-gray-500 mb-1">
-                        Contact Name
-                      </div>
-                      <div className="font-semibold text-gray-800">
-                        {getContactDisplayNameBlank(selectedCall)}
-                      </div>
-                    </div>
-                    <div className="p-3">
-                      <div className="text-sm text-gray-500 mb-1">
-                        Phone Number
-                      </div>
-                      <div className="font-semibold text-gray-800">
-                        {selectedCall.number || selectedCall.phone || ""}
-                      </div>
-                    </div>
-                    <div className="p-3">
-                      <div className="text-sm text-gray-500 mb-1">
-                        Call Duration
-                      </div>
-                      <div className="font-semibold text-gray-800">
-                        {formatDuration(selectedCall.duration || 0)}
-                      </div>
-                    </div>
-                    {/* Removed large Call Started block to save space */}
-                  </div>
-                )}
               </div>
-              {/* Action buttons */}
-              <div className="relative ml-3" ref={downloadMenuRef}>
-                <button
-                  className={`text-sm px-3 py-2 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-60 border focus:outline-none focus:ring-2 focus:ring-blue-300 ${
-                    showDownloadMenu
-                      ? "bg-gray-900 text-white border-gray-900"
-                      : "bg-black text-white border-transparent hover:bg-gray-800"
-                  }`}
-                  onClick={() => setShowDownloadMenu((v) => !v)}
-                  title="Download"
-                  disabled={isDownloadingPdf}
-                >
-                  {isDownloadingPdf ? (
-                    <>
-                      <FiLoader className="animate-spin" />
-                      
-                    </>
-                  ) : (
-                    <>
-                      <FiDownload />
-                      
-                    </>
-                  )}
-                </button>
-                {showDownloadMenu && (
-                  <div className="absolute right-0 mt-2 w-44 bg-white rounded-lg shadow-xl z-10 overflow-hidden ring-1 ring-black/5">
-                    <button
-                      className="w-full text-left px-3 py-2 text-sm flex items-center gap-2 transition-colors hover:bg-blue-50 hover:text-blue-700"
-                      onClick={() => {
-                        setShowDownloadMenu(false);
-                        handleDownloadTranscriptPDF();
-                      }}
-                    >
-                      <span className="inline-block w-2 h-2 rounded-full bg-gray-800"></span>
-                      <span>PDF</span>
-                    </button>
-                    <button
-                      className="w-full text-left px-3 py-2 text-sm flex items-center gap-2 transition-colors hover:bg-blue-50 hover:text-blue-700"
-                      onClick={() => {
-                        setShowDownloadMenu(false);
-                        handleDownloadTranscriptTXT();
-                      }}
-                    >
-                      <span className="inline-block w-2 h-2 rounded-full bg-gray-400"></span>
-                      <span>TXT</span>
-                    </button>
+              <div className="p-4 pt-0 space-y-4">
+                {reportRuns.length === 0 ? (
+                  <div className="text-sm text-gray-500">
+                    No completed contacts found.
                   </div>
-                )}
-              </div>
-              {/* Hidden audio element bound to the selected call */}
-              {audioUrl ? (
-  <audio
-    key={selectedCall?._id || 'call-audio'}
-    ref={audioRef}
-    src={audioUrl}
-    preload="metadata"
-    crossOrigin="anonymous"
-    onEnded={() => setIsPlaying(false)}
-    onPause={() => setIsPlaying(false)}
-    onPlay={() => setIsPlaying(true)}
-    onError={(e) => {
-      // Mark audio as unavailable when it fails to load (e.g., 404)
-      setAudioAvailable(false);
-      setAudioReady(false);
-      setIsPlaying(false);
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current.currentTime = 0;
-      }
-    }}
-    onLoadedMetadata={() => {
-      // Mark audio as available when metadata successfully loads
-      setAudioAvailable(true);
-      try {
-        const d = audioRef.current?.duration || 0;
-        if (d && isFinite(d) && d > 0) {
-          setAudioDuration(d);
-          setAudioReady(true);
-        }
-      } catch {}
-    }}
-    onLoadedData={() => {
-      // Mark audio as available when it successfully loads
-      setAudioAvailable(true);
-      try {
-        const d = audioRef.current?.duration || 0;
-        if (d && isFinite(d) && d > 0) {
-          setAudioDuration(d);
-          setAudioReady(true);
-        }
-      } catch {}
-    }}
-  />
-) : null}
-
-              {/* WhatsApp redirect button */}
-              <button
-                className="ml-3 bg-green-500 text-white text-sm px-3 py-2 rounded-lg hover:bg-green-600 transition-colors flex items-center gap-2 disabled:opacity-60"
-                onClick={async () => {
-                  try {
-                    const raw =
-                      (selectedCall &&
-                        (selectedCall.number ||
-                          selectedCall.phone ||
-                          selectedCall.mobile ||
-                          (selectedCall.metadata &&
-                            selectedCall.metadata.customParams &&
-                            selectedCall.metadata.customParams.phone))) ||
-                      "";
-                    const digits = String(raw || "").replace(/\D/g, "");
-                    // Remove any leading zeros (e.g., 09546423919 -> 9546423919)
-                    const normalized = digits.replace(/^0+/, "");
-                    // Ensure Indian country code is prefixed (WhatsApp expects country code without +)
-                    const phone = normalized.startsWith("91")
-                      ? normalized
-                      : normalized
-                      ? `91${normalized}`
-                      : "";
-                    if (!phone) {
+                ) : (
+                  (() => {
+                    const flatRows = reportRuns
+                      .sort(
+                        (a, b) =>
+                          (b.instanceNumber || 0) - (a.instanceNumber || 0)
+                      )
+                      .flatMap((run) =>
+                        (run.contacts || []).map((c) => ({ ...c, __run: run }))
+                      );
+                    const two = (n) => String(n).padStart(2, "0");
+                    const fmtDur = (sec) => {
+                      const s = Math.max(0, Number(sec) || 0);
+                      const m = Math.floor(s / 60);
+                      const rs = s % 60;
+                      return `${m}:${two(rs)}`;
+                    };
+                    const fmtDate = (t) => {
                       try {
-                        toast.warn("No phone number found");
-                      } catch {}
-                      return;
-                    }
-                    // Explicitly open WhatsApp Web with default prefilled text from agent first message (public endpoint)
-                    let agentMsg = '';
-                    try {
-                      const primaryAgentId = getPrimaryAgentId();
-                      if (primaryAgentId) {
-                        const resp = await fetch(`${API_BASE}/agents/${primaryAgentId}/public`);
-                        const result = await resp.json();
-                        if (resp.ok && result?.data) {
-                          const ag = result.data;
-                          agentMsg = ag.firstMessage || (Array.isArray(ag.startingMessages) && ag.startingMessages[0]?.text) || '';
-                        }
+                        const d = new Date(t);
+                        return {
+                          date: d.toLocaleDateString(),
+                          time: d.toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          }),
+                        };
+                      } catch {
+                        return { date: "-", time: "-" };
                       }
-                    } catch (_) {}
-                    const text = agentMsg ? `&text=${encodeURIComponent(agentMsg)}` : '';
-                    const url = `https://web.whatsapp.com/send?phone=${phone}${text}`;
-                    window.open(url, "_blank", "noopener,noreferrer");
-                  } catch (_) {}
-                }}
-                title="Open WhatsApp"
-                disabled={!selectedCall}
-              >
-                <FaWhatsapp />
-              </button>
-
-              {/* Play/Pause recording button */}
-              {audioUrl && audioReady && (
-                <button
-                  className="ml-3 bg-white text-gray-800 text-sm px-3 py-2 rounded-lg border hover:bg-gray-50 transition-colors flex items-center gap-2 disabled:opacity-60"
-                  onClick={handlePlayPause}
-                  title={isPlaying ? 'Pause recording' : 'Play recording'}
-                  disabled={!audioUrl}
-                >
-                  {isPlaying ? <FaPause /> : <FaPlay />}
-                </button>
-              )}
-
-              {/* Bookmark star button */}
-              {selectedCall && (() => {
-                const idCandidate = selectedCall.contactId || selectedCall.documentId || selectedCall._id || (selectedCall.phone || selectedCall.number);
-                const isBookmarked = idCandidate ? isContactBookmarked({ _id: idCandidate, phone: selectedCall.phone, number: selectedCall.number }) : false;
-                return (
-                  <button
-                    className={`ml-3 text-sm px-3 py-2 rounded-lg transition-colors flex items-center gap-2 ${
-                      isBookmarked
-                        ? "bg-yellow-500 text-white hover:bg-yellow-600"
-                        : "bg-white text-gray-800 border border-gray-300 hover:bg-gray-50"
-                    }`}
-                    onClick={() => {
-                      toggleBookmarkForContact({
-                        _id: idCandidate,
-                        phone: selectedCall.phone,
-                        number: selectedCall.number,
-                      });
-                    }}
-                    title={isBookmarked ? "Remove bookmark" : "Add bookmark"}
-                  >
-                    <svg
-                      viewBox="0 0 24 24"
-                      fill={isBookmarked ? "currentColor" : "none"}
-                      stroke="currentColor"
-                      className="w-4 h-4"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21 12 17.77 5.82 21 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
-                    </svg>
-                  </button>
-                );
-              })()}
-              {/* Assign button in transcript header */}
-              <div className="relative ml-3">
-                <button
-                  className="text-sm px-3 py-2 rounded-lg border hover:bg-gray-50"
-                  onClick={() => setOpenAssignFor(openAssignFor === 'transcript' ? null : 'transcript')}
-                  title="Assign"
-                >
-                  Assign ▾
-                </button>
-                {openAssignFor === 'transcript' && (
-                  <div className="absolute right-0 mt-2 w-28 bg-white border border-gray-200 rounded shadow z-10">
-                    {["t1","t2","t3","t4","t5"].map((tag) => (
-                      <button
-                        key={tag}
-                        type="button"
-                        className="w-full text-left px-3 py-1.5 text-xs hover:bg-gray-50"
-                        onClick={() => { setRowAssignments((prev)=>({ ...prev, transcript: tag })); setOpenAssignFor(null); }}
-                      >
-                        {tag.toUpperCase()}
-                      </button>
-                    ))}
-                  </div>
+                    };
+                    return (
+                      <div className="overflow-auto mb-5">
+                        <table className="min-w-full text-sm border border-gray-200 rounded-lg mb-5">
+                          <thead className="bg-gray-50 sticky top-0 z-10">
+                            <tr className="text-left text-gray-700">
+                              <th className="py-2 px-3">
+                                <input
+                                  type="checkbox"
+                                  onChange={(e) => {
+                                    const checked = e.target.checked;
+                                    const next = new Set(reportSelectedIds);
+                                    if (checked) {
+                                      flatRows.forEach((c) =>
+                                        next.add(c.documentId)
+                                      );
+                                    } else {
+                                      flatRows.forEach((c) =>
+                                        next.delete(c.documentId)
+                                      );
+                                    }
+                                    setReportSelectedIds(next);
+                                  }}
+                                  checked={
+                                    flatRows.every((c) =>
+                                      reportSelectedIds.has(c.documentId)
+                                    ) && flatRows.length > 0
+                                  }
+                                />
+                              </th>
+                              <th className="py-2 px-3">#</th>
+                              <th className="py-2 px-3">Date</th>
+                              <th className="py-2 px-3">Time</th>
+                              <th className="py-2 px-3">Name</th>
+                              <th className="py-2 px-3">Number</th>
+                              <th className="py-2 px-3">Status</th>
+                              <th className="py-2 px-3">Duration</th>
+                              <th className="py-2 px-3">Lead</th>
+                              <th className="py-2 px-3">Run</th>
+                              <th className="py-2 px-3">Transcript</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100">
+                            {flatRows.map((c, idx) => {
+                              const dt = fmtDate(c.time);
+                              const status = String(
+                                c.status || ""
+                              ).toLowerCase();
+                              const isMissed = status !== "completed";
+                              const badgeClass = isMissed
+                                ? "bg-red-100 text-red-700"
+                                : "bg-green-100 text-green-700";
+                              const badgeText = status
+                                ? status.charAt(0).toUpperCase() +
+                                  status.slice(1)
+                                : "-";
+                              return (
+                                <tr
+                                  key={`${c.documentId}-${idx}`}
+                                  className="hover:bg-gray-50"
+                                >
+                                  <td className="py-2 px-3">
+                                    <input
+                                      type="checkbox"
+                                      checked={reportSelectedIds.has(
+                                        c.documentId
+                                      )}
+                                      onChange={(e) => {
+                                        const next = new Set(reportSelectedIds);
+                                        if (e.target.checked)
+                                          next.add(c.documentId);
+                                        else next.delete(c.documentId);
+                                        setReportSelectedIds(next);
+                                      }}
+                                    />
+                                  </td>
+                                  <td className="py-2 px-3 text-gray-600">
+                                    {idx + 1}
+                                  </td>
+                                  <td className="py-2 px-3">{dt.date}</td>
+                                  <td className="py-2 px-3">{dt.time}</td>
+                                  <td className="py-2 px-3">{c.name || "-"}</td>
+                                  <td className="py-2 px-3">
+                                    {(() => {
+                                      const n = String(c.number || "-");
+                                      return n === "-"
+                                        ? n
+                                        : `${n.slice(0, 2)}******${n.slice(
+                                            -2
+                                          )}`;
+                                    })()}
+                                  </td>
+                                  <td className="py-2 px-3">
+                                    <span
+                                      className={`inline-block text-xs px-2 py-0.5 rounded-full ${badgeClass}`}
+                                    >
+                                      {badgeText}
+                                    </span>
+                                  </td>
+                                  <td className="py-2 px-3">
+                                    {fmtDur(c.duration)}
+                                  </td>
+                                  <td className="py-2 px-3">
+                                    {c.leadStatus || "-"}
+                                  </td>
+                                  <td className="py-2 px-3">
+                                    #{c.__run?.instanceNumber || "-"}
+                                  </td>
+                                  <td className="py-2 px-3">
+                                    <button
+                                      type="button"
+                                      className="px-2 py-1 text-xs rounded-md border border-gray-300 text-gray-700 hover:bg-gray-100 disabled:opacity-40"
+                                      onClick={() =>
+                                        openTranscriptSmart({
+                                          documentId: c.documentId,
+                                          number: c.number,
+                                          time: c.time,
+                                          name: c.name,
+                                          duration: c.duration,
+                                          status: "completed",
+                                        })
+                                      }
+                                      disabled={!c.documentId}
+                                      title="View transcript"
+                                    >
+                                      View
+                                    </button>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    );
+                  })()
                 )}
               </div>
             </div>
-            
-            {/* Audio Timeline */}
-            {audioUrl && audioReady && audioDuration > 0 && (
-  <div className="px-6 pb-2 border-b border-gray-200">
-    <div className="flex items-center gap-3 mb-2">
-      <button
-        className="bg-blue-600 text-white text-sm px-3 py-1.5 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
-        onClick={handlePlayPause}
-        disabled={!audioUrl}
-        title={isPlaying ? 'Pause' : 'Play'}
-      >
-        {isPlaying ? <FaPause className="w-3 h-3" /> : <FaPlay className="w-3 h-3" />}
-      </button>
-      <div className="flex-1">
-        <input
-          type="range"
-          min="0"
-          max={audioDuration || 0}
-          step="0.1"
-          value={audioCurrentTime || 0}
-          onChange={(e) => {
-            const newTime = parseFloat(e.target.value);
-            if (audioRef.current) {
-              audioRef.current.currentTime = newTime;
-              setAudioCurrentTime(newTime);
-            }
-          }}
-          className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer no-thumb"
-          style={{
-            background: `linear-gradient(to right, #2563eb 0%, #2563eb ${((audioCurrentTime || 0) / (audioDuration || 1)) * 100}%, #e5e7eb ${((audioCurrentTime || 0) / (audioDuration || 1)) * 100}%, #e5e7eb 100%)`
-          }}
-        />
-      </div>
-      <div className="text-xs text-gray-600 font-mono whitespace-nowrap">
-        {formatDuration(audioCurrentTime)} / {formatDuration(audioDuration)}
-      </div>
-    </div>
-  </div>
-)}
-            
-            <div className="p-6">
-              {transcriptLoading ? (
-                <div className="text-center py-10">
-                  <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                  </div>
-                  <p className="text-gray-500 mt-4 text-xl">
-                    Loading transcript...
-                  </p>
-                </div>
-              ) : transcriptContent ? (
-                <div className="bg-gray-50 rounded-lg p-4 max-h-96 overflow-y-auto">
-                  {parseTranscriptToChat(transcriptContent).map(
-                    (message, index) => (
-                      <div key={index} className="mb-4 last:mb-0">
-                        {message.isAI ? (
-                          <div className="flex justify-start">
-                            <div className="flex items-end space-x-2 max-w-xs lg:max-w-md">
-                              <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
-                                <svg
-                                  className="w-4 h-4 text-white"
-                                  fill="currentColor"
-                                  viewBox="0 0 20 20"
-                                >
-                                  <path
-                                    fillRule="evenodd"
-                                    d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-6-3a2 2 0 11-4 0 2 2 0 014 0zm-2 4a5 5 0 00-4.546 2.916A5.986 5.986 0 0010 16a5.986 5.986 0 004.546-2.084A5 5 0 0010 11z"
-                                    clipRule="evenodd"
-                                  />
-                                </svg>
-                              </div>
-                              <div className="bg-blue-500 text-white rounded-lg px-4 py-2 shadow-sm">
-                                <div className="text-lg">{message.text}</div>
-                                {message.timestamp && (
-                                  <div className="text-xs text-blue-100 mt-1">
-                                    {message.timestamp}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        ) : message.isUser ? (
-                          <div className="flex justify-end">
-                            <div className="flex items-end space-x-2 max-w-xs lg:max-w-md">
-                              <div className="bg-gray-200 text-gray-800 rounded-lg px-4 py-2 shadow-sm">
-                                <div className="text-sm">{message.text}</div>
-                                {message.timestamp && (
-                                  <div className="text-xs text-gray-500 mt-1">
-                                    {message.timestamp}
-                                  </div>
-                                )}
-                              </div>
-                              <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center flex-shrink-0">
-                                <svg
-                                  className="w-4 h-4 text-white"
-                                  fill="currentColor"
-                                  viewBox="0 0 20 20"
-                                >
-                                  <path
-                                    fillRule="evenodd"
-                                    d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z"
-                                    clipRule="evenodd"
-                                  />
-                                </svg>
-                              </div>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="flex justify-center">
-                            <div className="bg-gray-100 text-gray-600 rounded-lg px-3 py-1 text-xs">
-                              {message.text}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )
-                  )}
-                </div>
-              ) : (
-                <div className="text-center py-10 text-gray-500">
-                  <svg
-                    className="w-8 h-8 mx-auto mb-2 text-gray-400"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-                    />
-                  </svg>
-                  No transcript available
-                </div>
-              )}
-            </div>
           </div>
-        </div>
-      )}
-      {/* Insufficient Credits Modal */}
-      {showCreditsModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl w-11/12 max-w-md shadow-2xl">
-            <div className="flex justify-between items-center p-5 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900">
-                Insufficient Balance
-              </h3>
+        )}
+        {/* Transcript Modal */}
+        {showTranscriptModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[90]">
+            <div className="relative bg-white rounded-2xl w-11/12 max-w-4xl max-h-[90vh] overflow-y-auto shadow-2xl">
+              {/* Top-right close button */}
               <button
-                className="bg-none border-none text-xl cursor-pointer text-gray-500 hover:text-gray-700 p-1 rounded-md hover:bg-gray-100"
-                onClick={() => setShowCreditsModal(false)}
+                className="absolute top-2 right-2 bg-none border-none text-2xl cursor-pointer text-gray-500 hover:text-gray-700 p-2 w-10 h-10 flex items-center justify-center rounded-lg hover:bg-gray-200 transition-colors duration-200"
+                onClick={() => setShowTranscriptModal(false)}
+                title="Close"
               >
                 <FiX />
               </button>
-            </div>
-            <div className="p-6">
-              <p className="text-sm text-gray-700">
-                Not sufficient credits. Please recharge first to start calling.
-              </p>
-            </div>
-            <div className="flex justify-end gap-3 p-4 border-t border-gray-200">
-              <button
-                className="px-4 py-2 text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50"
-                onClick={() => setShowCreditsModal(false)}
-              >
-                Cancel
-              </button>
-              <button
-                className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
-                onClick={() => {
-                  setShowCreditsModal(false);
-                  // Navigate to Credits/Recharge section (adjust route if different)
-                  window.location.href = "/auth/credits";
-                }}
-              >
-                Add Credits
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      {/* Make Calls Modal */}
-      {showCallModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 call-modal">
-          <div className="bg-white rounded-2xl w-11/12 max-w-5xl max-h-[90vh] overflow-y-auto shadow-2xl">
-            <div className="flex justify-between items-center p-6 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-gray-100">
-              <div>
-                <h3 className="text-2xl font-bold text-gray-800">
-                  Make Calls to Campaign Groups
-                </h3>
-                <p className="text-gray-600 mt-1">
-                  Automate your campaign calling process
-                </p>
-                <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                  <div className="flex items-center text-sm text-blue-700">
-                    <svg
-                      className="w-4 h-4 mr-2"
-                      fill="currentColor"
-                      viewBox="0 0 20 20"
-                    >
-                      <path
-                        fillRule="evenodd"
-                        d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 9a1 1 0 000 2h6a1 1 0 100-2H7zm3 3a1 1 0 000 2H7a1 1 0 100 2h3z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
-                    <span>
-                      <strong>Auto-save enabled:</strong> Your calling progress
-                      is automatically saved and will persist across page
-                      reloads. You can continue calling from where you left off!
-                    </span>
-                  </div>
-                </div>
-              </div>
-              <button
-                className="bg-none border-none text-2xl cursor-pointer text-gray-500 hover:text-gray-700 p-2 w-10 h-10 flex items-center justify-center rounded-lg hover:bg-gray-200 transition-colors duration-200"
-                onClick={() => setShowCallModal(false)}
-              >
-                <FiX />
-              </button>
-            </div>
-            <div className="p-6">
-              {/* Agent Selection */}
-              {!selectedAgent && (
-                <div className="mb-8">
-                  <h4 className="text-xl font-semibold text-gray-800 mb-4 flex items-center">
+              <div className="flex justify-between items-center p-3 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-blue-100">
+                <div className="flex-1">
+                  <h3 className="text-lg font-bold text-gray-800 flex items-center">
                     <svg
                       className="w-6 h-6 mr-2 text-blue-600"
                       fill="none"
@@ -9872,1462 +10378,420 @@ useEffect(() => {
                         strokeLinecap="round"
                         strokeLinejoin="round"
                         strokeWidth={2}
-                        d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                        d="M8 16h8M8 12h8M8 8h8M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H7l-2 2H3v12a2 2 0 002 2z"
                       />
                     </svg>
-                    Select an Agent
-                  </h4>
-                  {loadingAgents ? (
-                    <div className="text-center py-12">
-                      <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                      </div>
-                      <p className="text-gray-500 mt-4 text-lg">
-                        Loading agents...
-                      </p>
-                    </div>
-                  ) : agents.length === 0 ? (
-                    <div className="text-center py-12 bg-gray-50 rounded-xl border-2 border-dashed border-gray-300">
-                      <div className="inline-flex items-center justify-center w-20 h-20 bg-gray-100 rounded-full mb-4">
-                        <svg
-                          className="w-10 h-10 text-gray-400"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-                          />
-                        </svg>
-                      </div>
-                      <h5 className="text-lg font-medium text-gray-900 mb-2">
-                        No agents available
-                      </h5>
-                      <p className="text-gray-500">
-                        Please create agents before starting calls
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      {agents.map((agent) => (
-                        <div
-                          key={agent._id}
-                          className="border-2 border-gray-200 rounded-xl p-6 cursor-pointer hover:border-blue-500 hover:bg-blue-50 transition-all duration-200 group"
-                          onClick={() => setSelectedAgent(agent)}
-                        >
-                          <div className="flex items-center mb-4">
-                            <div className="p-3 bg-blue-100 rounded-lg mr-4 group-hover:bg-blue-200 transition-colors duration-200">
-                              <svg
-                                className="w-6 h-6 text-blue-600"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-                                />
-                              </svg>
-                            </div>
-                            <div>
-                              <h5 className="text-lg font-semibold text-gray-900 group-hover:text-blue-600 transition-colors duration-200">
-                                {agent.agentName}
-                              </h5>
-                              <p className="text-sm text-gray-600">
-                                {agent.description}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="text-sm text-blue-600 font-medium">
-                            Click to select this agent
-                          </div>
+                    Call Transcript
+                    {selectedCall && (
+                      <span className="ml-3 text-xs font-normal text-gray-600 whitespace-nowrap">
+                        {formatDateTimeCompact(
+                          selectedCall.time ||
+                            selectedCall.createdAt ||
+                            (selectedCall.metadata &&
+                              (selectedCall.metadata.startTime ||
+                                selectedCall.metadata.callStartTime)) ||
+                            (selectedCall.externalResponse &&
+                              selectedCall.externalResponse.startTime)
+                        )}
+                      </span>
+                    )}
+                  </h3>
+                  {/* Call Details */}
+                  {selectedCall && (
+                    <div className="mt-1 grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="p-3">
+                        <div className="text-sm text-gray-500 mb-1">
+                          Contact Name
                         </div>
-                      ))}
+                        <div className="font-semibold text-gray-800">
+                          {getContactDisplayNameBlank(selectedCall)}
+                        </div>
+                      </div>
+                      <div className="p-3">
+                        <div className="text-sm text-gray-500 mb-1">
+                          Phone Number
+                        </div>
+                        <div className="font-semibold text-gray-800">
+                          {selectedCall.number || selectedCall.phone || ""}
+                        </div>
+                      </div>
+                      <div className="p-3">
+                        <div className="text-sm text-gray-500 mb-1">
+                          Call Duration
+                        </div>
+                        <div className="font-semibold text-gray-800">
+                          {formatDuration(selectedCall.duration || 0)}
+                        </div>
+                      </div>
+                      {/* Removed large Call Started block to save space */}
                     </div>
                   )}
                 </div>
-              )}
-              {/* Calling Interface */}
-              {selectedAgent && (
-                <div>
-                  <div className="mb-8 p-6 bg-gradient-to-r from-blue-50 to-blue-100 rounded-xl border border-blue-200">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h4 className="text-xl font-semibold text-gray-800 mb-2 flex items-center">
-                          <svg
-                            className="w-6 h-6 mr-2 text-blue-600"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-                            />
-                          </svg>
-                          Selected Agent: {selectedAgent.agentName}
-                        </h4>
-                        <p className="text-gray-700">
-                          {selectedAgent.description}
-                        </p>
-                      </div>
+                {/* Action buttons */}
+                <div className="relative ml-3" ref={downloadMenuRef}>
+                  <button
+                    className={`text-sm px-3 py-2 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-60 border focus:outline-none focus:ring-2 focus:ring-blue-300 ${
+                      showDownloadMenu
+                        ? "bg-gray-900 text-white border-gray-900"
+                        : "bg-black text-white border-transparent hover:bg-gray-800"
+                    }`}
+                    onClick={() => setShowDownloadMenu((v) => !v)}
+                    title="Download"
+                    disabled={isDownloadingPdf}
+                  >
+                    {isDownloadingPdf ? (
+                      <>
+                        <FiLoader className="animate-spin" />
+                      </>
+                    ) : (
+                      <>
+                        <FiDownload />
+                      </>
+                    )}
+                  </button>
+                  {showDownloadMenu && (
+                    <div className="absolute right-0 mt-2 w-44 bg-white rounded-lg shadow-xl z-10 overflow-hidden ring-1 ring-black/5">
                       <button
-                        onClick={() => setSelectedAgent(null)}
-                        className="px-4 py-2 text-sm text-blue-600 hover:text-blue-800 hover:bg-blue-200 rounded-lg transition-colors duration-200"
+                        className="w-full text-left px-3 py-2 text-sm flex items-center gap-2 transition-colors hover:bg-blue-50 hover:text-blue-700"
+                        onClick={() => {
+                          setShowDownloadMenu(false);
+                          handleDownloadTranscriptPDF();
+                        }}
                       >
-                        Change Agent
+                        <span className="inline-block w-2 h-2 rounded-full bg-gray-800"></span>
+                        <span>PDF</span>
+                      </button>
+                      <button
+                        className="w-full text-left px-3 py-2 text-sm flex items-center gap-2 transition-colors hover:bg-blue-50 hover:text-blue-700"
+                        onClick={() => {
+                          setShowDownloadMenu(false);
+                          handleDownloadTranscriptTXT();
+                        }}
+                      >
+                        <span className="inline-block w-2 h-2 rounded-full bg-gray-400"></span>
+                        <span>TXT</span>
                       </button>
                     </div>
-                  </div>
-                  {/* Campaign Overview */}
-                  <div className="mb-8 p-6 bg-gradient-to-r from-gray-50 to-gray-100 rounded-xl border border-gray-200">
-                    <h4 className="text-xl font-semibold text-gray-800 mb-4 flex items-center">
-                      <svg
-                        className="w-6 h-6 mr-2 text-gray-600"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
+                  )}
+                </div>
+                {/* Hidden audio element bound to the selected call */}
+                {audioUrl ? (
+                  <audio
+                    key={selectedCall?._id || "call-audio"}
+                    ref={audioRef}
+                    src={audioUrl}
+                    preload="metadata"
+                    crossOrigin="anonymous"
+                    onEnded={() => setIsPlaying(false)}
+                    onPause={() => setIsPlaying(false)}
+                    onPlay={() => setIsPlaying(true)}
+                    onError={(e) => {
+                      // Mark audio as unavailable when it fails to load (e.g., 404)
+                      setAudioAvailable(false);
+                      setAudioReady(false);
+                      setIsPlaying(false);
+                      if (audioRef.current) {
+                        audioRef.current.pause();
+                        audioRef.current.currentTime = 0;
+                      }
+                    }}
+                    onLoadedMetadata={() => {
+                      // Mark audio as available when metadata successfully loads
+                      setAudioAvailable(true);
+                      try {
+                        const d = audioRef.current?.duration || 0;
+                        if (d && isFinite(d) && d > 0) {
+                          setAudioDuration(d);
+                          setAudioReady(true);
+                        }
+                      } catch {}
+                    }}
+                    onLoadedData={() => {
+                      // Mark audio as available when it successfully loads
+                      setAudioAvailable(true);
+                      try {
+                        const d = audioRef.current?.duration || 0;
+                        if (d && isFinite(d) && d > 0) {
+                          setAudioDuration(d);
+                          setAudioReady(true);
+                        }
+                      } catch {}
+                    }}
+                  />
+                ) : null}
+
+                {/* WhatsApp redirect button */}
+                <button
+                  className="ml-3 bg-green-500 text-white text-sm px-3 py-2 rounded-lg hover:bg-green-600 transition-colors flex items-center gap-2 disabled:opacity-60"
+                  onClick={async () => {
+                    try {
+                      const raw =
+                        (selectedCall &&
+                          (selectedCall.number ||
+                            selectedCall.phone ||
+                            selectedCall.mobile ||
+                            (selectedCall.metadata &&
+                              selectedCall.metadata.customParams &&
+                              selectedCall.metadata.customParams.phone))) ||
+                        "";
+                      const digits = String(raw || "").replace(/\D/g, "");
+                      // Remove any leading zeros (e.g., 09546423919 -> 9546423919)
+                      const normalized = digits.replace(/^0+/, "");
+                      // Ensure Indian country code is prefixed (WhatsApp expects country code without +)
+                      const phone = normalized.startsWith("91")
+                        ? normalized
+                        : normalized
+                        ? `91${normalized}`
+                        : "";
+                      if (!phone) {
+                        try {
+                          toast.warn("No phone number found");
+                        } catch {}
+                        return;
+                      }
+                      // Explicitly open WhatsApp Web with default prefilled text from agent first message (public endpoint)
+                      let agentMsg = "";
+                      try {
+                        const primaryAgentId = getPrimaryAgentId();
+                        if (primaryAgentId) {
+                          const resp = await fetch(
+                            `${API_BASE}/agents/${primaryAgentId}/public`
+                          );
+                          const result = await resp.json();
+                          if (resp.ok && result?.data) {
+                            const ag = result.data;
+                            agentMsg =
+                              ag.firstMessage ||
+                              (Array.isArray(ag.startingMessages) &&
+                                ag.startingMessages[0]?.text) ||
+                              "";
+                          }
+                        }
+                      } catch (_) {}
+                      const text = agentMsg
+                        ? `&text=${encodeURIComponent(agentMsg)}`
+                        : "";
+                      const url = `https://web.whatsapp.com/send?phone=${phone}${text}`;
+                      window.open(url, "_blank", "noopener,noreferrer");
+                    } catch (_) {}
+                  }}
+                  title="Open WhatsApp"
+                  disabled={!selectedCall}
+                >
+                  <FaWhatsapp />
+                </button>
+
+                {/* Play/Pause recording button */}
+                {audioUrl && audioReady && (
+                  <button
+                    className="ml-3 bg-white text-gray-800 text-sm px-3 py-2 rounded-lg border hover:bg-gray-50 transition-colors flex items-center gap-2 disabled:opacity-60"
+                    onClick={handlePlayPause}
+                    title={isPlaying ? "Pause recording" : "Play recording"}
+                    disabled={!audioUrl}
+                  >
+                    {isPlaying ? <FaPause /> : <FaPlay />}
+                  </button>
+                )}
+
+                {/* Bookmark star button */}
+                {selectedCall &&
+                  (() => {
+                    const idCandidate =
+                      selectedCall.contactId ||
+                      selectedCall.documentId ||
+                      selectedCall._id ||
+                      selectedCall.phone ||
+                      selectedCall.number;
+                    const isBookmarked = idCandidate
+                      ? isContactBookmarked({
+                          _id: idCandidate,
+                          phone: selectedCall.phone,
+                          number: selectedCall.number,
+                        })
+                      : false;
+                    return (
+                      <button
+                        className={`ml-3 text-sm px-3 py-2 rounded-lg transition-colors flex items-center gap-2 ${
+                          isBookmarked
+                            ? "bg-yellow-500 text-white hover:bg-yellow-600"
+                            : "bg-white text-gray-800 border border-gray-300 hover:bg-gray-50"
+                        }`}
+                        onClick={() => {
+                          toggleBookmarkForContact({
+                            _id: idCandidate,
+                            phone: selectedCall.phone,
+                            number: selectedCall.number,
+                          });
+                        }}
+                        title={
+                          isBookmarked ? "Remove bookmark" : "Add bookmark"
+                        }
                       >
-                        <path
+                        <svg
+                          viewBox="0 0 24 24"
+                          fill={isBookmarked ? "currentColor" : "none"}
+                          stroke="currentColor"
+                          className="w-4 h-4"
+                          strokeWidth="2"
                           strokeLinecap="round"
                           strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-                        />
-                      </svg>
-                      Campaign Overview
-                    </h4>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                      <div className="text-center">
-                        <div className="text-2xl font-bold text-blue-600">
-                          {loadingContacts ? (
-                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-                          ) : (
-                            campaignContacts.length
-                          )}
-                        </div>
-                        <div className="text-sm text-gray-600">
-                          Campaign Contacts
-                        </div>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-2xl font-bold text-green-600">
-                          {loadingContacts ? (
-                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600 mx-auto"></div>
-                          ) : (
-                            campaignContacts.length
-                          )}
-                        </div>
-                        <div className="text-sm text-gray-600">
-                          Total Contacts
-                        </div>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-2xl font-bold text-purple-600">
-                          {loadingContacts ? (
-                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto"></div>
-                          ) : (
-                            getContactDisplayNameBlank(
-                              campaignContacts[currentContactIndex]
-                            ) || "None"
-                          )}
-                        </div>
-                        <div className="text-sm text-gray-600">
-                          Current Contact
-                        </div>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-2xl font-bold text-orange-600 capitalize">
-                          {callingStatus}
-                        </div>
-                        <div className="text-sm text-gray-600">Status</div>
-                      </div>
-                    </div>
-                  </div>
-                  {/* Call Progress */}
-                  <div className="mb-8">
-                    <div className="flex justify-between items-center mb-6">
-                      <h4 className="text-xl font-semibold text-gray-800 flex items-center">
-                        <svg
-                          className="w-6 h-6 mr-2 text-green-600"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
                         >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-                          />
+                          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21 12 17.77 5.82 21 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
                         </svg>
-                        Call Progress
-                      </h4>
-                      <div className="text-right">
-                        <div className="text-sm text-gray-600 mb-1">
-                          Contact {currentContactIndex + 1} of{" "}
-                          {campaignContacts.length}
-                        </div>
-                        <div className="text-sm text-gray-600">
-                          {getContactDisplayNameBlank(
-                            campaignContacts[currentContactIndex]
-                          ) || ""}
-                        </div>
-                      </div>
-                    </div>
-                    {/* Progress Bar */}
-                    <div className="w-full bg-gray-200 rounded-full h-3 mb-6">
-                      <div
-                        className="bg-gradient-to-r from-green-500 to-green-600 h-3 rounded-full transition-all duration-500 ease-out"
-                        style={{
-                          width: `${
-                            (getProgress().completed / getProgress().total) *
-                            100
-                          }%`,
+                      </button>
+                    );
+                  })()}
+                {/* Assign button in transcript header */}
+                <div className="relative ml-3">
+                  <button
+                    className="text-sm px-3 py-2 rounded-lg border hover:bg-gray-50"
+                    onClick={() =>
+                      setOpenAssignFor(
+                        openAssignFor === "transcript" ? null : "transcript"
+                      )
+                    }
+                    title="Assign"
+                  >
+                    Assign ▾
+                  </button>
+                  {renderAssignMenu({
+                    rowKey: "transcript",
+                    contacts: selectedCall,
+                    runId: selectedCall?.runId || currentRunId,
+                  })}
+                </div>
+              </div>
+
+              {/* Audio Timeline */}
+              {audioUrl && audioReady && audioDuration > 0 && (
+                <div className="px-6 pb-2 border-b border-gray-200">
+                  <div className="flex items-center gap-3 mb-2">
+                    <button
+                      className="bg-blue-600 text-white text-sm px-3 py-1.5 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                      onClick={handlePlayPause}
+                      disabled={!audioUrl}
+                      title={isPlaying ? "Pause" : "Play"}
+                    >
+                      {isPlaying ? (
+                        <FaPause className="w-3 h-3" />
+                      ) : (
+                        <FaPlay className="w-3 h-3" />
+                      )}
+                    </button>
+                    <div className="flex-1">
+                      <input
+                        type="range"
+                        min="0"
+                        max={audioDuration || 0}
+                        step="0.1"
+                        value={audioCurrentTime || 0}
+                        onChange={(e) => {
+                          const newTime = parseFloat(e.target.value);
+                          if (audioRef.current) {
+                            audioRef.current.currentTime = newTime;
+                            setAudioCurrentTime(newTime);
+                          }
                         }}
-                      ></div>
+                        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer no-thumb"
+                        style={{
+                          background: `linear-gradient(to right, #2563eb 0%, #2563eb ${
+                            ((audioCurrentTime || 0) / (audioDuration || 1)) *
+                            100
+                          }%, #e5e7eb ${
+                            ((audioCurrentTime || 0) / (audioDuration || 1)) *
+                            100
+                          }%, #e5e7eb 100%)`,
+                        }}
+                      />
                     </div>
-                    {/* Current Contact */}
-                    {callingStatus !== "idle" &&
-                      campaignContacts[currentContactIndex] && (
-                        <div className="p-6 bg-gradient-to-r from-green-50 to-green-100 rounded-xl border border-green-200 mb-6">
-                          <h5 className="font-semibold text-gray-800 mb-3 flex items-center">
-                            <svg
-                              className="w-5 h-5 mr-2 text-green-600"
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
-                              />
-                            </svg>
-                            Currently Calling
-                          </h5>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                              <div className="text-sm text-gray-600">Name</div>
-                              <div className="font-semibold text-gray-900">
-                                {getContactDisplayNameBlank(
-                                  campaignContacts[currentContactIndex]
-                                ) || ""}
-                              </div>
-                            </div>
-                            <div>
-                              <div className="text-sm text-gray-600">Phone</div>
-                              <div className="font-semibold text-gray-900">
-                                {campaignContacts[currentContactIndex]?.phone ||
-                                  ""}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    {/* Save Progress Button */}
-                    {callingStatus !== "idle" && (
-                      <div className="flex justify-center mb-4 space-x-3">
-                        <button
-                          onClick={manualSaveState}
-                          className="inline-flex items-center px-4 py-2 text-sm text-blue-600 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 hover:border-blue-300 transition-all duration-200"
-                          title="Manually save your calling progress"
-                        >
-                          <svg
-                            className="w-4 h-4 mr-1"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2v-9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                            />
-                          </svg>
-                          Save Progress
-                        </button>
-                        {/* Cleanup Duplicates Button */}
-                        <button
-                          onClick={removeDuplicateCallResults}
-                          className="inline-flex items-center px-4 py-2 text-sm text-orange-600 bg-orange-50 border border-orange-200 rounded-lg hover:bg-orange-100 hover:border-orange-300 transition-all duration-200"
-                          title="Remove duplicate call results"
-                        >
-                          <svg
-                            className="w-4 h-4 mr-1"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                            />
-                          </svg>
-                          Clean Duplicates
-                        </button>
-                        {/* Update Call Status Button */}
-                        <button
-                          onClick={() => {
-                            // Update status for all call results with uniqueIds
-                            callResults.forEach((result) => {
-                              if (result.uniqueId) {
-                                updateCallStatus(result.uniqueId);
-                              }
-                            });
-                          }}
-                          className="inline-flex items-center px-4 py-2 text-sm text-blue-600 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 hover:border-blue-300 transition-all duration-200"
-                          title="Update call status from external service"
-                        >
-                          <svg
-                            className="w-4 h-4 mr-1"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                            />
-                          </svg>
-                          Update Status
-                        </button>
-                      </div>
-                    )}
-                    {/* Control Buttons */}
-                    <div className="flex gap-4 justify-center">
-                      {callingStatus === "idle" && (
-                        <button
-                          onClick={startCalling}
-                          className="inline-flex items-center px-8 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white text-lg font-semibold rounded-xl hover:from-green-600 hover:to-green-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-1"
-                        >
-                          <FiPlay className="w-5 h-5 mr-2" />
-                          Start Calling
-                        </button>
-                      )}
-                      {callingStatus === "calling" && (
-                        <>
-                          <button
-                            onClick={pauseCalling}
-                            className="inline-flex items-center px-8 py-3 bg-gradient-to-r from-yellow-500 to-yellow-600 text-white text-lg font-semibold rounded-xl hover:from-yellow-600 hover:to-yellow-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-1"
-                          >
-                            <FiPause className="w-5 h-5 mr-2" />
-                            Pause
-                          </button>
-                          <button
-                            onClick={skipToNext}
-                            className="inline-flex items-center px-8 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-lg font-semibold rounded-xl hover:from-blue-600 hover:to-blue-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-1"
-                          >
-                            <FiSkipForward className="w-5 h-5 mr-2" />
-                            Skip
-                          </button>
-                        </>
-                      )}
-                      {callingStatus === "paused" && (
-                        <button
-                          onClick={resumeCalling}
-                          className="inline-flex items-center px-8 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white text-lg font-semibold rounded-xl hover:from-green-600 hover:to-green-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-1"
-                        >
-                          <FiPlay className="w-5 h-5 mr-2" />
-                          Resume
-                        </button>
-                      )}
-                      {(callingStatus === "completed" ||
-                        callingStatus === "paused") && (
-                        <button
-                          onClick={resetCalling}
-                          className="inline-flex items-center px-8 py-3 bg-gradient-to-r from-gray-500 to-gray-600 text-white text-lg font-semibold rounded-xl hover:from-gray-600 hover:to-gray-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-1"
-                        >
-                          Reset
-                        </button>
-                      )}
+                    <div className="text-xs text-gray-600 font-mono whitespace-nowrap">
+                      {formatDuration(audioCurrentTime)} /{" "}
+                      {formatDuration(audioDuration)}
                     </div>
                   </div>
-                  {/* Call Results */}
-                  {callResults.length > 0 && (
-                    <div>
-                      <h4 className="text-xl font-semibold text-gray-800 mb-4 flex items-center">
-                        <svg
-                          className="w-6 h-6 mr-2 text-blue-600"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-                          />
-                        </svg>
-                        Call Results
-                      </h4>
-                      <div className="max-h-80 overflow-y-auto space-y-3">
-                        {callResults.map((result, index) => (
-                          <div
-                            key={index}
-                            className={`p-4 rounded-xl border-2 ${
-                              result.success
-                                ? "bg-green-50 border-green-200 cursor-pointer hover:bg-green-100 hover:border-green-300 transition-all duration-200"
-                                : "bg-red-50 border-red-200"
-                            }`}
-                            onClick={() => {
-                              if (result.success && result.uniqueId) {
-                                // Create a call object with the necessary data for live logs
-                                const callData = {
-                                  _id: `result-${index}`,
-                                  name: getContactName(result.contact),
-                                  mobile: result.contact.phone,
-                                  agentId: {
-                                    agentName:
-                                      selectedAgent?.agentName ||
-                                      "Campaign Agent",
-                                  },
-                                  leadStatus: "connected",
-                                  metadata: {
-                                    customParams: {
-                                      uniqueid: result.uniqueId,
-                                    },
-                                  },
-                                  createdAt:
-                                    result.timestamp instanceof Date
-                                      ? result.timestamp
-                                      : new Date(result.timestamp),
-                                  time:
-                                    result.timestamp instanceof Date
-                                      ? result.timestamp
-                                      : new Date(result.timestamp),
-                                  duration: 0,
-                                  callType: "outbound",
-                                };
-                                handleViewLiveCall(callData);
-                              }
-                            }}
-                          >
-                            <div className="flex justify-between items-start">
-                              <div className="flex-1">
-                                <h6 className="font-semibold text-gray-800 mb-1">
-                                  {getContactDisplayNameBlank(result.contact)}
-                                </h6>
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                                  <div>
-                                    <span className="text-gray-600">
-                                      Phone:
-                                    </span>
-                                    <div className="font-medium">
-                                      {result.contact.phone}
-                                    </div>
-                                  </div>
-                                  <div>
-                                    <span className="text-gray-600">Time:</span>
-                                    <div className="font-medium">
-                                      {safeFormatTimestamp(result.timestamp)}
-                                    </div>
-                                  </div>
-                                  {result.uniqueId && (
-                                    <div>
-                                      <span className="text-gray-600">ID:</span>
-                                      <div className="font-medium text-xs">
-                                        {result.uniqueId.substring(0, 20)}...
-                                      </div>
+                </div>
+              )}
+
+              <div className="p-6">
+                {transcriptLoading ? (
+                  <div className="text-center py-10">
+                    <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                    </div>
+                    <p className="text-gray-500 mt-4 text-xl">
+                      Loading transcript...
+                    </p>
+                  </div>
+                ) : transcriptContent ? (
+                  <div className="bg-gray-50 rounded-lg p-4 max-h-96 overflow-y-auto">
+                    {parseTranscriptToChat(transcriptContent).map(
+                      (message, index) => (
+                        <div key={index} className="mb-4 last:mb-0">
+                          {message.isAI ? (
+                            <div className="flex justify-start">
+                              <div className="flex items-end space-x-2 max-w-xs lg:max-w-md">
+                                <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
+                                  <svg
+                                    className="w-4 h-4 text-white"
+                                    fill="currentColor"
+                                    viewBox="0 0 20 20"
+                                  >
+                                    <path
+                                      fillRule="evenodd"
+                                      d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-6-3a2 2 0 11-4 0 2 2 0 014 0zm-2 4a5 5 0 00-4.546 2.916A5.986 5.986 0 0010 16a5.986 5.986 0 004.546-2.084A5 5 0 0010 11z"
+                                      clipRule="evenodd"
+                                    />
+                                  </svg>
+                                </div>
+                                <div className="bg-blue-500 text-white rounded-lg px-4 py-2 shadow-sm">
+                                  <div className="text-lg">{message.text}</div>
+                                  {message.timestamp && (
+                                    <div className="text-xs text-blue-100 mt-1">
+                                      {message.timestamp}
                                     </div>
                                   )}
                                 </div>
                               </div>
-                              <div className="text-right ml-4">
-                                <span
-                                  className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
-                                    result.success
-                                      ? "bg-green-100 text-green-800"
-                                      : "bg-red-100 text-red-800"
-                                  }`}
-                                >
-                                  {result.success ? "Success" : "Failed"}
-                                </span>
-                                {result.success && result.uniqueId && (
-                                  <>
-                                    <div className="mt-2 flex items-center text-xs text-blue-600">
-                                      <svg
-                                        className="w-3 h-3 mr-1"
-                                        fill="currentColor"
-                                        viewBox="0 0 20 20"
-                                      >
-                                        <path
-                                          fillRule="evenodd"
-                                          d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z"
-                                          clipRule="evenodd"
-                                        />
-                                      </svg>
-                                      Click to view live logs
+                            </div>
+                          ) : message.isUser ? (
+                            <div className="flex justify-end">
+                              <div className="flex items-end space-x-2 max-w-xs lg:max-w-md">
+                                <div className="bg-gray-200 text-gray-800 rounded-lg px-4 py-2 shadow-sm">
+                                  <div className="text-sm">{message.text}</div>
+                                  {message.timestamp && (
+                                    <div className="text-xs text-gray-500 mt-1">
+                                      {message.timestamp}
                                     </div>
-                                    {/* Connection Status */}
-                                    <div className="mt-2">
-                                      <div
-                                        className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
-                                          callResultsConnectionStatus[
-                                            result.uniqueId
-                                          ] === "connected"
-                                            ? "bg-green-100 text-green-700 border border-green-200"
-                                            : callResultsConnectionStatus[
-                                                result.uniqueId
-                                              ] === "not_connected"
-                                            ? "bg-red-100 text-red-700 border border-red-200"
-                                            : "bg-gray-100 text-gray-600 border border-gray-200"
-                                        }`}
-                                      >
-                                        <div
-                                          className={`w-2 h-2 rounded-full mr-1 ${
-                                            callResultsConnectionStatus[
-                                              result.uniqueId
-                                            ] === "connected"
-                                              ? "bg-green-500"
-                                              : callResultsConnectionStatus[
-                                                  result.uniqueId
-                                                ] === "not_connected"
-                                              ? "bg-red-500"
-                                              : "bg-gray-400"
-                                          }`}
-                                        ></div>
-                                        {callResultsConnectionStatus[
-                                          result.uniqueId
-                                        ] === "connected"
-                                          ? "Connected"
-                                          : callResultsConnectionStatus[
-                                              result.uniqueId
-                                            ] === "not_connected"
-                                          ? "Not Accepted / Busy / Disconnected"
-                                          : "Checking..."}
-                                      </div>
-                                    </div>
-                                  </>
-                                )}
-                              </div>
-                            </div>
-                            {result.error && (
-                              <div className="mt-3 p-3 bg-red-100 rounded-lg">
-                                <p className="text-sm text-red-700">
-                                  <span className="font-semibold">Error:</span>{" "}
-                                  {result.error}
-                                </p>
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-      {/* Call Details Modal */}
-      {showCallDetailsModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl w-11/12 max-w-5xl max-h-[90vh] overflow-y-auto shadow-2xl">
-            <div className="flex justify-between items-center p-6 border-b border-gray-200">
-              <h3 className="text-2xl font-bold text-gray-800">Call Details</h3>
-              <button
-                className="bg-none border-none text-2xl cursor-pointer text-gray-500 hover:text-gray-700 p-2 w-10 h-10 flex items-center justify-center rounded-lg hover:bg-gray-200 transition-colors duration-200"
-                onClick={() => setShowCallDetailsModal(false)}
-              >
-                <FiX />
-              </button>
-            </div>
-            <div className="p-6">
-              {callDetailsLoading ? (
-                <div className="text-center py-8">
-                  <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                  </div>
-                  <p className="text-gray-500 mt-2">Loading call logs...</p>
-                </div>
-              ) : callDetails.length === 0 ? (
-                <div className="text-center py-12 bg-gray-50 rounded-xl border-2 border-dashed border-gray-300">
-                  <FiUsers className="mx-auto text-4xl text-gray-400 mb-4" />
-                  <h5 className="text-lg font-medium text-gray-600 mb-2">
-                    No call logs
-                  </h5>
-                  <p className="text-gray-500">
-                    No calls found for this campaign yet.
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {callDetails.map((log) => (
-                    <div
-                      key={log._id}
-                      className="border border-gray-200 rounded-lg p-4"
-                    >
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <div className="text-sm text-gray-500">Time</div>
-                          <div className="font-semibold">
-                            {new Date(
-                              log.createdAt || log.time
-                            ).toLocaleString()}
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-sm text-gray-500">Duration</div>
-                          <div className="font-semibold">
-                            {Math.max(0, log.duration || 0)}s
-                          </div>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-3">
-                        <div>
-                          <div className="text-sm text-gray-500">Mobile</div>
-                          <div className="font-medium">{log.mobile || "-"}</div>
-                        </div>
-                        <div>
-                          <div className="text-sm text-gray-500">Agent</div>
-                          <div className="font-medium">
-                            {log.agentId?.agentName || "-"}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-sm text-gray-500">
-                            Lead Status
-                          </div>
-                          <div className="font-medium capitalize">
-                            {log.leadStatus || "-"}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="mt-3 text-xs text-gray-500 break-all">
-                        <span className="font-semibold">uniqueId:</span>{" "}
-                        {log.metadata?.customParams?.uniqueid || "-"}
-                      </div>
-                      {log.transcript && (
-                        <details className="mt-3">
-                          <summary className="cursor-pointer text-sm text-blue-600">
-                            View transcript
-                          </summary>
-                          <pre className="whitespace-pre-wrap text-xs bg-gray-50 p-3 rounded mt-2 max-h-64 overflow-y-auto">
-                            {log.transcript}
-                          </pre>
-                        </details>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-              {/* Pagination */}
-              <div className="flex items-center justify-between mt-4">
-                <div className="text-sm text-gray-600">
-                  Page {callDetailsPage} of {callDetailsMeta.totalPages || 1} •
-                  Total {callDetailsMeta.totalLogs || 0}
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 disabled:opacity-50"
-                    onClick={() =>
-                      fetchCampaignCallLogs(Math.max(1, callDetailsPage - 1))
-                    }
-                    disabled={callDetailsPage <= 1 || callDetailsLoading}
-                  >
-                    Prev
-                  </button>
-                  <button
-                    className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 disabled:opacity-50"
-                    onClick={() => fetchCampaignCallLogs(callDetailsPage + 1)}
-                    disabled={
-                      callDetailsLoading ||
-                      (callDetailsMeta.totalPages &&
-                        callDetailsPage >= callDetailsMeta.totalPages)
-                    }
-                  >
-                    Next
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-      {/* Campaign Contacts Management Modal */}
-      {showContactsModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl w-11/12 max-w-6xl max-h-[90vh] overflow-y-auto shadow-2xl">
-            <div className="flex justify-between items-center p-6 border-b border-gray-200">
-              <h3 className="text-2xl font-bold text-gray-800">
-                Manage Campaign Contacts
-              </h3>
-              <button
-                className="bg-none border-none text-2xl cursor-pointer text-gray-500 hover:text-gray-700 p-2 w-10 h-10 flex items-center justify-center rounded-lg hover:bg-gray-200 transition-colors duration-200"
-                onClick={() => setShowContactsModal(false)}
-              >
-                <FiX />
-              </button>
-            </div>
-            <div className="p-6">
-              {/* Action Buttons */}
-              <div className="flex gap-3 mb-6">
-                <button
-                  onClick={() => setShowAddContactModal(true)}
-                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 flex items-center gap-2"
-                >
-                  <FiPlus className="w-4 h-4" />
-                  Add Contact
-                </button>
-                <button
-                  onClick={syncContactsFromGroups}
-                  disabled={
-                    loadingContacts ||
-                    !campaign?.groupIds ||
-                    campaign.groupIds.length === 0
-                  }
-                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
-                >
-                  {loadingContacts ? (
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                  ) : (
-                    <FiUsers className="w-4 h-4" />
-                  )}
-                  Sync from Groups
-                </button>
-                <button
-                  onClick={async () => {
-                    await syncContactsFromGroups(true);
-                    await fetchCampaignContacts();
-                  }}
-                  disabled={loadingContacts}
-                  className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 disabled:opacity-50 flex items-center gap-2"
-                >
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                    />
-                  </svg>
-                  Refresh
-                </button>
-              </div>
-              {/* Select and Call Controls */}
-              {campaignContacts.length > 0 && (
-                <div className="mb-4 p-4 bg-gray-50 rounded-lg border">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <label className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          checked={selectAllContacts}
-                          onChange={handleSelectAllContacts}
-                          className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-                        />
-                        <span className="text-sm font-medium text-gray-700">
-                          Select All ({selectedContacts.length} selected)
-                        </span>
-                      </label>
-                    </div>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={callSelectedContacts}
-                        disabled={selectedContacts.length === 0}
-                        className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                      >
-                        <svg
-                          className="w-4 h-4"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
-                          />
-                        </svg>
-                        Call Selected ({selectedContacts.length})
-                      </button>
-                      <button
-                        onClick={() => {
-                          setSelectedContacts([]);
-                          setSelectAllContacts(false);
-                        }}
-                        disabled={selectedContacts.length === 0}
-                        className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        Clear Selection
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-              {/* Contacts List */}
-              {loadingContacts ? (
-                <div className="text-center py-8">
-                  <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                  </div>
-                  <p className="text-gray-500 mt-2">Loading contacts...</p>
-                </div>
-              ) : campaignContacts.length === 0 ? (
-                <div className="text-center py-12 bg-gray-50 rounded-xl border-2 border-dashed border-gray-300">
-                  <FiUsers className="mx-auto text-4xl text-gray-400 mb-4" />
-                  <h5 className="text-lg font-medium text-gray-600 mb-2">
-                    No contacts in campaign
-                  </h5>
-                  <p className="text-gray-500">
-                    Add contacts manually or sync from groups to get started.
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {campaignContacts.map((contact) => (
-                    <div
-                      key={contact._id}
-                      className={`border rounded-lg p-4 ${
-                        isContactSelected(contact)
-                          ? "border-blue-500 bg-blue-50"
-                          : "border-gray-200"
-                      }`}
-                    >
-                      <div className="flex justify-between items-start">
-                        <div className="flex items-start gap-3 flex-1">
-                          <input
-                            type="checkbox"
-                            checked={isContactSelected(contact)}
-                            onChange={() => handleSelectContact(contact)}
-                            className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 mt-1"
-                          />
-                          <div className="flex-1">
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                              <div>
-                                <div className="text-sm text-gray-500">
-                                  Name
+                                  )}
                                 </div>
-                                <div className="font-semibold">
-                                  {getContactDisplayNameBlank(contact)}
-                                </div>
-                              </div>
-                              <div>
-                                <div className="text-sm text-gray-500">
-                                  Phone
-                                </div>
-                                <div className="font-medium">
-                                  {contact.phone}
-                                </div>
-                              </div>
-                              <div>
-                                <div className="text-sm text-gray-500">
-                                  Email
-                                </div>
-                                <div className="font-medium">
-                                  {contact.email || "-"}
+                                <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center flex-shrink-0">
+                                  <svg
+                                    className="w-4 h-4 text-white"
+                                    fill="currentColor"
+                                    viewBox="0 0 20 20"
+                                  >
+                                    <path
+                                      fillRule="evenodd"
+                                      d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z"
+                                      clipRule="evenodd"
+                                    />
+                                  </svg>
                                 </div>
                               </div>
                             </div>
-                            <div className="mt-2 text-xs text-gray-500">
-                              Added:{" "}
-                              {new Date(contact.addedAt).toLocaleDateString()}
+                          ) : (
+                            <div className="flex justify-center">
+                              <div className="bg-gray-100 text-gray-600 rounded-lg px-3 py-1 text-xs">
+                                {message.text}
+                              </div>
                             </div>
-                          </div>
+                          )}
                         </div>
-                        <div className="flex gap-2 ml-4">
-                          <button
-                            onClick={() =>
-                              removeContactFromCampaign(contact._id)
-                            }
-                            className="px-3 py-1 text-sm bg-red-100 text-red-700 rounded-md hover:bg-red-200"
-                          >
-                            Remove
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-      {/* Add Contact Modal */}
-      {showAddContactModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl w-11/12 max-w-md shadow-2xl">
-            <div className="flex justify-between items-center p-6 border-b border-gray-200">
-              <h3 className="text-2xl font-bold text-gray-800">
-                Add Contact to Campaign
-              </h3>
-              <button
-                className="bg-none border-none text-2xl cursor-pointer text-gray-500 hover:text-gray-700 p-2 w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-200 transition-colors duration-200"
-                onClick={() => setShowAddContactModal(false)}
-              >
-                <FiX />
-              </button>
-            </div>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                addContactToCampaign();
-              }}
-              className="p-6"
-            >
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Name (Optional)
-                  </label>
-                  <input
-                    type="text"
-                    value={contactForm.name}
-                    onChange={(e) =>
-                      setContactForm({ ...contactForm, name: e.target.value })
-                    }
-                    placeholder="Enter name (optional)"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Phone *
-                  </label>
-                  <input
-                    type="tel"
-                    value={contactForm.phone}
-                    onChange={(e) =>
-                      setContactForm({ ...contactForm, phone: e.target.value })
-                    }
-                    required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Email
-                  </label>
-                  <input
-                    type="email"
-                    value={contactForm.email}
-                    onChange={(e) =>
-                      setContactForm({ ...contactForm, email: e.target.value })
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </div>
-              </div>
-              <div className="flex justify-end gap-3 mt-6">
-                <button
-                  type="button"
-                  onClick={() => setShowAddContactModal(false)}
-                  className="px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={loadingContacts}
-                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
-                >
-                  {loadingContacts ? "Adding..." : "Add Contact"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-      {/* Add Groups Modal */}
-      {showAddGroupsModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl w-11/12 max-w-4xl max-h-[90vh] overflow-y-auto shadow-2xl add-groups-modal">
-            <div className="flex justify-between items-center p-6 border-b border-gray-200">
-              <h3 className="text-2xl font-bold text-gray-800">
-                Add Groups to Campaign
-              </h3>
-              <button
-                className="bg-none border-none text-2xl cursor-pointer text-gray-500 hover:text-gray-700 p-2 w-10 h-10 flex items-center justify-center rounded-lg hover:bg-gray-200 transition-colors duration-200"
-                onClick={handleCloseAddGroupsModal}
-              >
-                <FiX />
-              </button>
-            </div>
-            <div className="p-6">
-              {/* Current groups in campaign */}
-              <div className="mb-8">
-                <h4 className="text-lg font-semibold text-gray-800 mb-4">
-                  Current Groups in Campaign
-                </h4>
-                {campaignGroups.length === 0 ? (
-                  <div className="text-sm text-gray-500">
-                    No groups added yet.
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {campaignGroups.map((group) => (
-                      <div
-                        key={`current-${group._id}`}
-                        className="border border-gray-200 rounded-lg p-4 bg-gray-50"
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <div className="font-semibold text-gray-800">
-                              {group.name}
-                            </div>
-                            <div className="text-xs text-gray-500">
-                              {typeof group.contactsCount === "number"
-                                ? group.contactsCount
-                                : group.contacts?.length || 0}{" "}
-                              contacts
-                            </div>
-                          </div>
-                          <button
-                            className="text-red-600 hover:text-red-700"
-                            title="Remove from campaign"
-                            onClick={() => handleRemoveGroup(group._id)}
-                          >
-                            <FiTrash2 />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <div className="mb-6">
-                <h4 className="text-lg font-semibold text-gray-800 mb-4">
-                  Available Groups
-                </h4>
-                <p className="text-sm text-gray-600 mb-4">
-                  Select groups to add to this campaign. Only groups not already
-                  in the campaign are shown.
-                </p>
-                {getAvailableGroupsForCampaign().length === 0 ? (
-                  <div className="text-center py-8 bg-gray-50 rounded-xl border-2 border-dashed border-gray-300">
-                    <FiUsers className="mx-auto text-4xl text-gray-400 mb-4" />
-                    <h5 className="text-lg font-medium text-gray-600 mb-2">
-                      No available groups
-                    </h5>
-                    <p className="text-gray-500">
-                      All groups are already in this campaign
-                    </p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {getAvailableGroupsForCampaign().map((group) => (
-                      <div
-                        key={group._id}
-                        className="border border-gray-200 rounded-lg p-4 hover:border-green-500 hover:bg-green-50 transition-colors cursor-pointer"
-                        onClick={() => {
-                          const currentSelected = selectedGroups.filter(
-                            (id) => !campaignGroups.some((cg) => cg._id === id)
-                          );
-                          if (currentSelected.includes(group._id)) {
-                            setSelectedGroups(
-                              currentSelected.filter((id) => id !== group._id)
-                            );
-                          } else {
-                            setSelectedGroups([...currentSelected, group._id]);
-                          }
-                        }}
-                      >
-                        <div className="flex items-center justify-between mb-3">
-                          <h5 className="font-semibold text-gray-800">
-                            {group.name}
-                          </h5>
-                          <div
-                            className={`w-5 h-5 rounded border-2 ${
-                              selectedGroups.includes(group._id) &&
-                              !campaignGroups.some((cg) => cg._id === group._id)
-                                ? "bg-green-500 border-green-500"
-                                : "border-gray-300"
-                            } flex items-center justify-center`}
-                          >
-                            {selectedGroups.includes(group._id) &&
-                              !campaignGroups.some(
-                                (cg) => cg._id === group._id
-                              ) && (
-                                <svg
-                                  className="w-3 h-3 text-white"
-                                  fill="currentColor"
-                                  viewBox="0 0 20 20"
-                                >
-                                  <path
-                                    fillRule="evenodd"
-                                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                                    clipRule="evenodd"
-                                  />
-                                </svg>
-                              )}
-                          </div>
-                        </div>
-                        <p className="text-sm text-gray-600 mb-2">
-                          {group.description}
-                        </p>
-                        <div className="text-xs text-gray-500">
-                          {typeof group.contactsCount === "number"
-                            ? group.contactsCount
-                            : group.contacts?.length || 0}{" "}
-                          contacts
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
-                <button
-                  onClick={handleCloseAddGroupsModal}
-                  className="px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => {
-                    const groupsToAdd = selectedGroups.filter(
-                      (id) => !campaignGroups.some((cg) => cg._id === id)
-                    );
-                    handleAddSpecificGroupsToCampaign(groupsToAdd);
-                  }}
-                  disabled={
-                    addingGroups ||
-                    selectedGroups.filter(
-                      (id) => !campaignGroups.some((cg) => cg._id === id)
-                    ).length === 0
-                  }
-                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 flex items-center gap-2"
-                >
-                  {addingGroups ? (
-                    <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                      Adding...
-                    </>
-                  ) : (
-                    <>Update</>
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-      {/* Add Agent Modal */}
-      {showAddAgentModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl w-11/12 max-w-md shadow-2xl">
-            <div className="flex justify-between items-center p-6 border-b border-gray-200">
-              <h3 className="text-2xl font-bold text-gray-800">Select Agent</h3>
-              <button
-                className="bg-none border-none text-2xl cursor-pointer text-gray-500 hover:text-gray-700 p-2 w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-200 transition-colors duration-200"
-                onClick={() => setShowAddAgentModal(false)}
-              >
-                <FiX />
-              </button>
-            </div>
-            <div className="p-6">
-              {loadingAgents ? (
-                <div className="text-center py-8">
-                  <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                  </div>
-                  <p className="text-gray-500 mt-2">Loading agents...</p>
-                </div>
-              ) : (agents || []).length === 0 ? (
-                <div className="text-center py-8 bg-gray-50 rounded-xl border-2 border-dashed border-gray-300">
-                  <FiUsers className="mx-auto text-4xl text-gray-400 mb-4" />
-                  <h5 className="text-lg font-medium text-gray-600 mb-2">
-                    No agents available
-                  </h5>
-                  <p className="text-gray-500">Create an agent to proceed.</p>
-                </div>
-              ) : (
-                <div className="space-y-3 max-h-80 overflow-y-auto">
-                  {agents.map((agent) => (
-                    <label
-                      key={agent._id}
-                      className={`flex items-center justify-between border rounded-lg p-3 cursor-pointer ${
-                        selectedAgentIdForAssign === agent._id
-                          ? "border-blue-400 bg-blue-50"
-                          : "border-gray-200 hover:border-gray-300"
-                      }`}
-                      onClick={() => setSelectedAgentIdForAssign(agent._id)}
-                    >
-                      <div>
-                        <div className="font-semibold text-gray-900">
-                          {agent.agentName}
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          {agent.description}
-                        </div>
-                      </div>
-                      <input
-                        type="radio"
-                        name="assignAgent"
-                        checked={selectedAgentIdForAssign === agent._id}
-                        onChange={() => setSelectedAgentIdForAssign(agent._id)}
-                      />
-                    </label>
-                  ))}
-                </div>
-              )}
-              <div className="flex justify-end gap-3 mt-6">
-                <button
-                  type="button"
-                  onClick={() => setShowAddAgentModal(false)}
-                  className="px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  disabled={!selectedAgentIdForAssign}
-                  onClick={saveSelectedAgentToCampaign}
-                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
-                >
-                  Save
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-      {/* Live Call Modal */}
-      {showLiveCallModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl w-11/12 max-w-4xl max-h-[90vh] overflow-y-auto shadow-2xl">
-            <div className="flex justify-between items-center p-6 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-blue-100">
-              <div>
-                <h3 className="text-2xl font-bold text-gray-800 flex items-center">
-                  <svg
-                    className="w-6 h-6 mr-2 text-blue-600"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
-                    />
-                  </svg>
-                  Live Call Logs
-                </h3>
-                <p className="text-gray-600 mt-1">
-                  Real-time call transcript and details
-                </p>
-              </div>
-              <button
-                className="bg-none border-none text-2xl cursor-pointer text-gray-500 hover:text-gray-700 p-2 w-10 h-10 flex items-center justify-center rounded-lg hover:bg-gray-200 transition-colors duration-200"
-                onClick={closeLiveCallModal}
-              >
-                <FiX />
-              </button>
-            </div>
-            <div className="p-6">
-              {/* Call Information */}
-              {selectedCall && (
-                <div className="mb-6 p-4 bg-gray-50 rounded-lg">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                      <div className="text-sm text-gray-500">Contact</div>
-                      <div className="font-semibold">
-                        {getContactDisplayNameBlank(selectedCall)}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-gray-500">Agent</div>
-                      <div className="font-semibold">
-                        {selectedCall.agentId?.agentName || ""}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-gray-500">Status</div>
-                      <div className="font-semibold capitalize">
-                        {selectedCall.leadStatus || ""}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="mt-2 text-xs text-gray-500">
-                    <span className="font-semibold">uniqueId:</span>{" "}
-                    {selectedCall.metadata?.customParams?.uniqueid || ""}
-                  </div>
-                </div>
-              )}
-              {/* Live Status Indicator */}
-              <div className="mb-6">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center">
-                    <div
-                      className={`w-3 h-3 rounded-full mr-2 ${
-                        isPolling
-                          ? "bg-green-500 animate-pulse"
-                          : liveCallDetails?.metadata?.isActive === false
-                          ? "bg-red-500"
-                          : "bg-gray-400"
-                      }`}
-                    ></div>
-                    <span className="text-sm font-medium">
-                      {isPolling
-                        ? "Live - Polling for updates..."
-                        : liveCallDetails?.metadata?.isActive === false
-                        ? "Call ended - Polling stopped"
-                        : "Not polling"}
-                    </span>
-                  </div>
-                  <div className="flex items-center space-x-3 text-sm text-gray-500">
-                    {liveCallDetails
-                      ? `Last updated: ${new Date().toLocaleTimeString()}`
-                      : "Waiting for call data..."}
-                    {(isPolling ||
-                      liveCallDetails?.metadata?.isActive !== false) && (
-                      <button
-                        type="button"
-                        onClick={terminateCurrentCall}
-                        className="inline-flex items-center px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
-                        title="End call"
-                      >
-                        End Call
-                      </button>
+                      )
                     )}
                   </div>
-                </div>
-                {/* Connection Status */}
-                <div
-                  className={`inline-flex items-center px-3 py-2 rounded-lg text-sm font-medium ${
-                    callConnectionStatus === "connected"
-                      ? "bg-green-100 text-green-700 border border-green-200"
-                      : "bg-red-100 text-red-700 border border-red-200"
-                  }`}
-                >
-                  <div
-                    className={`w-2 h-2 rounded-full mr-2 ${
-                      callConnectionStatus === "connected"
-                        ? "bg-green-500"
-                        : "bg-red-500"
-                    }`}
-                  ></div>
-                  {callConnectionStatus === "connected"
-                    ? "Call Connected"
-                    : "Not Accepted / Busy / Disconnected"}
-                  {callConnectionStatus === "not_connected" && (
-                    <span className="ml-2 text-xs opacity-75">
-                      {liveCallDetails?.metadata?.isActive === false
-                        ? "(Call ended by system)"
-                        : "(No response for 40+ seconds)"}
-                    </span>
-                  )}
-                </div>
-              </div>
-              {/* Live Transcript */}
-              <div className="mb-6">
-                <h4 className="text-lg font-semibold text-gray-800 mb-3 flex items-center">
-                  <svg
-                    className="w-5 h-5 mr-2 text-green-600"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                    />
-                  </svg>
-                  Live Transcript
-                </h4>
-                {liveTranscriptLines.length > 0 ? (
-                  <div
-                    ref={transcriptRef}
-                    className="bg-gray-50 rounded-lg p-4 max-h-96 overflow-y-auto"
-                  >
-                    {liveTranscriptLines.map((line, index) => (
-                      <div key={index} className="mb-4 last:mb-0">
-                        {line.isAI ? (
-                          <div className="flex justify-start">
-                            <div className="flex items-end space-x-2 max-w-xs lg:max-w-md">
-                              <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
-                                <svg
-                                  className="w-4 h-4 text-white"
-                                  fill="currentColor"
-                                  viewBox="0 0 20 20"
-                                >
-                                  <path
-                                    fillRule="evenodd"
-                                    d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-6-3a2 2 0 11-4 0 2 2 0 014 0zm-2 4a5 5 0 00-4.546 2.916A5.986 5.986 0 0010 16a5.986 5.986 0 004.546-2.084A5 5 0 0010 11z"
-                                    clipRule="evenodd"
-                                  />
-                                </svg>
-                              </div>
-                              <div className="bg-blue-500 text-white rounded-lg px-4 py-2 shadow-sm">
-                                <div className="text-sm">{line.text}</div>
-                                {line.timestamp && (
-                                  <div className="text-xs text-blue-100 mt-1">
-                                    {line.timestamp}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        ) : line.isUser ? (
-                          <div className="flex justify-end">
-                            <div className="flex items-end space-x-2 max-w-xs lg:max-w-md">
-                              <div className="bg-gray-200 text-gray-800 rounded-lg px-4 py-2 shadow-sm">
-                                <div className="text-sm">{line.text}</div>
-                                {line.timestamp && (
-                                  <div className="text-xs text-gray-500 mt-1">
-                                    {line.timestamp}
-                                  </div>
-                                )}
-                              </div>
-                              <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center flex-shrink-0">
-                                <svg
-                                  className="w-4 h-4 text-white"
-                                  fill="currentColor"
-                                  viewBox="0 0 20 20"
-                                >
-                                  <path
-                                    fillRule="evenodd"
-                                    d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z"
-                                    clipRule="evenodd"
-                                  />
-                                </svg>
-                              </div>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="flex justify-center">
-                            <div className="bg-gray-100 text-gray-600 rounded-lg px-3 py-1 text-xs">
-                              {line.text}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                ) : liveTranscript ? (
-                  <div className="bg-gray-50 rounded-lg p-4 max-h-96 overflow-y-auto">
-                    <pre className="whitespace-pre-wrap text-sm text-gray-700">
-                      {liveTranscript}
-                    </pre>
-                  </div>
                 ) : (
-                  <div className="bg-gray-50 rounded-lg p-4 text-center text-gray-500">
+                  <div className="text-center py-10 text-gray-500">
                     <svg
                       className="w-8 h-8 mx-auto mb-2 text-gray-400"
                       fill="none"
@@ -11341,160 +10805,103 @@ useEffect(() => {
                         d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
                       />
                     </svg>
-                    No transcript available yet. Waiting for call data...
+                    No transcript available
                   </div>
                 )}
               </div>
-              {/* Call Details */}
-              {liveCallDetails && (
-                <div>
-                  <h4 className="text-lg font-semibold text-gray-800 mb-3 flex items-center">
-                    <svg
-                      className="w-5 h-5 mr-2 text-blue-600"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-                      />
-                    </svg>
-                    Call Details
-                  </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="bg-gray-50 rounded-lg p-4">
-                      <div className="text-sm text-gray-500 mb-1">Duration</div>
-                      <div className="font-semibold">
-                        {Math.max(0, liveCallDetails.duration || 0)}s
-                      </div>
-                    </div>
-                    <div className="bg-gray-50 rounded-lg p-4">
-                      <div className="text-sm text-gray-500 mb-1">
-                        Call Time
-                      </div>
-                      <div className="font-semibold">
-                        {new Date(
-                          liveCallDetails.createdAt || liveCallDetails.time
-                        ).toLocaleString()}
-                      </div>
-                    </div>
-                    <div className="bg-gray-50 rounded-lg p-4">
-                      <div className="text-sm text-gray-500 mb-1">
-                        Lead Status
-                      </div>
-                      <div className="font-semibold capitalize">
-                        {liveCallDetails.leadStatus || ""}
-                      </div>
-                    </div>
-                    <div className="bg-gray-50 rounded-lg p-4">
-                      <div className="text-sm text-gray-500 mb-1">
-                        Call Type
-                      </div>
-                      <div className="font-semibold capitalize">
-                        {liveCallDetails.callType || ""}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
-        </div>
-      )}
-      {waChatOpen && (
-        <div className="fixed bottom-4 right-4 w-110 h-[650px] bg-white border border-gray-200 rounded-2xl shadow-2xl z-50 flex flex-col overflow-hidden backdrop-blur-sm">
-          {/* Enhanced Header */}
-          <div className="px-4 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white flex items-center justify-between shadow-lg">
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
-                <FaWhatsapp className="w-6 h-6" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-sm">
-                  {waChatContact?.name || "WhatsApp Chat"}
+        )}
+        {/* Insufficient Credits Modal */}
+        {showCreditsModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-2xl w-11/12 max-w-md shadow-2xl">
+              <div className="flex justify-between items-center p-5 border-b border-gray-200">
+                <h3 className="text-lg font-semibold text-gray-900">
+                  Insufficient Balance
                 </h3>
-                <p className="text-xs text-green-100">
-                  {waChatContact?.number || ""}
+                <button
+                  className="bg-none border-none text-xl cursor-pointer text-gray-500 hover:text-gray-700 p-1 rounded-md hover:bg-gray-100"
+                  onClick={() => setShowCreditsModal(false)}
+                >
+                  <FiX />
+                </button>
+              </div>
+              <div className="p-6">
+                <p className="text-sm text-gray-700">
+                  Not sufficient credits. Please recharge first to start
+                  calling.
                 </p>
               </div>
-            </div>
-            <div className="flex items-center space-x-2">
-              {/* 24h countdown timer */}
-              <div
-                className="px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-700 border border-red-200 shadow-sm"
-                title="Time left in this 24h session"
-              >
-                ⏱ {waChatRemaining}
-              </div>
-              <button
-                type="button"
-                className="p-2 hover:bg-white/20 rounded-full transition-colors"
-                onClick={() => fetchWaChatMessages(waChatContact?.number)}
-                title="Refresh messages"
-              >
-                <svg
-                  className="w-4 h-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
+              <div className="flex justify-end gap-3 p-4 border-t border-gray-200">
+                <button
+                  className="px-4 py-2 text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50"
+                  onClick={() => setShowCreditsModal(false)}
                 >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                  />
-                </svg>
-              </button>
-              <button
-                type="button"
-                className="p-2 hover:bg-white/20 rounded-full transition-colors"
-                onClick={() => setWaChatOpen(false)}
-                title="Close"
-              >
-                <FiX className="w-4 h-4" />
-              </button>
+                  Cancel
+                </button>
+                <button
+                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+                  onClick={() => {
+                    setShowCreditsModal(false);
+                    // Navigate to Credits/Recharge section (adjust route if different)
+                    window.location.href = "/auth/credits";
+                  }}
+                >
+                  Add Credits
+                </button>
+              </div>
             </div>
           </div>
-          {/* Enhanced Chat Area */}
-          <div className="flex-1 overflow-y-auto relative bg-gradient-to-b from-gray-50 to-white">
-            <div className="p-4 space-y-3">
-              {renderMessagesWithDateSeparators()}
-              {waTyping && (
-                <div className="flex justify-start">
-                  <div className="px-4 py-3 rounded-2xl bg-gray-100 text-gray-700 text-sm italic shadow-sm animate-pulse">
-                    <div className="flex items-center space-x-2">
-                      <div className="flex space-x-1">
-                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                        <div
-                          className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
-                          style={{ animationDelay: "0.1s" }}
-                        ></div>
-                        <div
-                          className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
-                          style={{ animationDelay: "0.2s" }}
-                        ></div>
-                      </div>
-                      <span>typing...</span>
+        )}
+        {/* Make Calls Modal */}
+        {showCallModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 call-modal">
+            <div className="bg-white rounded-2xl w-11/12 max-w-5xl max-h-[90vh] overflow-y-auto shadow-2xl">
+              <div className="flex justify-between items-center p-6 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-gray-100">
+                <div>
+                  <h3 className="text-2xl font-bold text-gray-800">
+                    Make Calls to Campaign Groups
+                  </h3>
+                  <p className="text-gray-600 mt-1">
+                    Automate your campaign calling process
+                  </p>
+                  <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <div className="flex items-center text-sm text-blue-700">
+                      <svg
+                        className="w-4 h-4 mr-2"
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 9a1 1 0 000 2h6a1 1 0 100-2H7zm3 3a1 1 0 000 2H7a1 1 0 100 2h3z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                      <span>
+                        <strong>Auto-save enabled:</strong> Your calling
+                        progress is automatically saved and will persist across
+                        page reloads. You can continue calling from where you
+                        left off!
+                      </span>
                     </div>
                   </div>
                 </div>
-              )}
-            </div>
-          </div>
-          {/* Enhanced Template Selector Popup */}
-          {waTemplatesOpen && (
-            <div className="absolute top-4 right-4 w-80 bg-white border border-gray-200 rounded-2xl shadow-2xl z-10 backdrop-blur-sm">
-              {/* Enhanced Header */}
-              <div className="px-4 py-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-t-2xl">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                    <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
+                <button
+                  className="bg-none border-none text-2xl cursor-pointer text-gray-500 hover:text-gray-700 p-2 w-10 h-10 flex items-center justify-center rounded-lg hover:bg-gray-200 transition-colors duration-200"
+                  onClick={() => setShowCallModal(false)}
+                >
+                  <FiX />
+                </button>
+              </div>
+              <div className="p-6">
+                {/* Agent Selection */}
+                {!selectedAgent && (
+                  <div className="mb-8">
+                    <h4 className="text-xl font-semibold text-gray-800 mb-4 flex items-center">
                       <svg
-                        className="w-4 h-4 text-white"
+                        className="w-6 h-6 mr-2 text-blue-600"
                         fill="none"
                         stroke="currentColor"
                         viewBox="0 0 24 24"
@@ -11503,87 +10910,95 @@ useEffect(() => {
                           strokeLinecap="round"
                           strokeLinejoin="round"
                           strokeWidth={2}
-                          d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                          d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
                         />
                       </svg>
-                    </div>
-                    <h3 className="text-base font-semibold text-gray-800">
-                      Select Template
-                    </h3>
-                  </div>
-                  <button
-                    onClick={() => setWaTemplatesOpen(false)}
-                    className="text-gray-500 hover:text-gray-700 p-2 rounded-full hover:bg-white/50 transition-colors"
-                  >
-                    <FiX className="w-5 h-5" />
-                  </button>
-                </div>
-              </div>
-              {/* Content */}
-              <div className="max-h-80 overflow-y-auto">
-                {waTemplatesLoading ? (
-                  <div className="text-center py-8">
-                    <div className="text-sm text-gray-500">
-                      Loading templates...
-                    </div>
-                  </div>
-                ) : waTemplates.length > 0 ? (
-                  <div>
-                    {waTemplates.map((template) => (
-                      <div
-                        key={template.id}
-                        className="flex items-center justify-between px-4 py-4 hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 cursor-pointer border-b border-gray-100 last:border-b-0 transition-all duration-200 hover:shadow-sm"
-                        onClick={() => sendWaTemplateMessage(template)}
-                      >
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-2">
-                            <div className="text-sm font-semibold text-gray-800 truncate">
-                              {template.name}
-                            </div>
-                            <span
-                              className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                                template.status === "APPROVED"
-                                  ? "bg-green-100 text-green-700 border border-green-200"
-                                  : "bg-yellow-100 text-yellow-700 border border-yellow-200"
-                              }`}
-                            >
-                              {template.status}
-                            </span>
-                          </div>
-                          <div className="text-xs text-gray-600 line-clamp-2 leading-relaxed">
-                            {template.components
-                              ?.find((c) => c.type === "BODY")
-                              ?.text?.substring(0, 80)}
-                            {template.components?.find((c) => c.type === "BODY")
-                              ?.text?.length > 80
-                              ? "..."
-                              : ""}
-                          </div>
-                          {template.components?.find(
-                            (c) => c.type === "BUTTONS"
-                          ) && (
-                            <div className="text-xs text-blue-600 mt-2 flex items-center">
-                              <svg
-                                className="w-3 h-3 mr-1"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122"
-                                />
-                              </svg>
-                              Has interactive buttons
-                            </div>
-                          )}
+                      Select an Agent
+                    </h4>
+                    {loadingAgents ? (
+                      <div className="text-center py-12">
+                        <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full">
+                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
                         </div>
-                        <div className="ml-3 flex-shrink-0">
-                          <div className="w-10 h-10 bg-gradient-to-r from-green-500 to-green-600 rounded-full flex items-center justify-center hover:from-green-600 hover:to-green-700 transition-all duration-200 shadow-sm hover:shadow-md transform hover:scale-105">
+                        <p className="text-gray-500 mt-4 text-lg">
+                          Loading agents...
+                        </p>
+                      </div>
+                    ) : agents.length === 0 ? (
+                      <div className="text-center py-12 bg-gray-50 rounded-xl border-2 border-dashed border-gray-300">
+                        <div className="inline-flex items-center justify-center w-20 h-20 bg-gray-100 rounded-full mb-4">
+                          <svg
+                            className="w-10 h-10 text-gray-400"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                            />
+                          </svg>
+                        </div>
+                        <h5 className="text-lg font-medium text-gray-900 mb-2">
+                          No agents available
+                        </h5>
+                        <p className="text-gray-500">
+                          Please create agents before starting calls
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {agents.map((agent) => (
+                          <div
+                            key={agent._id}
+                            className="border-2 border-gray-200 rounded-xl p-6 cursor-pointer hover:border-blue-500 hover:bg-blue-50 transition-all duration-200 group"
+                            onClick={() => setSelectedAgent(agent)}
+                          >
+                            <div className="flex items-center mb-4">
+                              <div className="p-3 bg-blue-100 rounded-lg mr-4 group-hover:bg-blue-200 transition-colors duration-200">
+                                <svg
+                                  className="w-6 h-6 text-blue-600"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  viewBox="0 0 24 24"
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                                  />
+                                </svg>
+                              </div>
+                              <div>
+                                <h5 className="text-lg font-semibold text-gray-900 group-hover:text-blue-600 transition-colors duration-200">
+                                  {agent.agentName}
+                                </h5>
+                                <p className="text-sm text-gray-600">
+                                  {agent.description}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="text-sm text-blue-600 font-medium">
+                              Click to select this agent
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+                {/* Calling Interface */}
+                {selectedAgent && (
+                  <div>
+                    <div className="mb-8 p-6 bg-gradient-to-r from-blue-50 to-blue-100 rounded-xl border border-blue-200">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="text-xl font-semibold text-gray-800 mb-2 flex items-center">
                             <svg
-                              className="w-5 h-5 text-white"
+                              className="w-6 h-6 mr-2 text-blue-600"
                               fill="none"
                               stroke="currentColor"
                               viewBox="0 0 24 24"
@@ -11592,50 +11007,1505 @@ useEffect(() => {
                                 strokeLinecap="round"
                                 strokeLinejoin="round"
                                 strokeWidth={2}
-                                d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
+                                d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
                               />
                             </svg>
+                            Selected Agent: {selectedAgent.agentName}
+                          </h4>
+                          <p className="text-gray-700">
+                            {selectedAgent.description}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => setSelectedAgent(null)}
+                          className="px-4 py-2 text-sm text-blue-600 hover:text-blue-800 hover:bg-blue-200 rounded-lg transition-colors duration-200"
+                        >
+                          Change Agent
+                        </button>
+                      </div>
+                    </div>
+                    {/* Campaign Overview */}
+                    <div className="mb-8 p-6 bg-gradient-to-r from-gray-50 to-gray-100 rounded-xl border border-gray-200">
+                      <h4 className="text-xl font-semibold text-gray-800 mb-4 flex items-center">
+                        <svg
+                          className="w-6 h-6 mr-2 text-gray-600"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+                          />
+                        </svg>
+                        Campaign Overview
+                      </h4>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-blue-600">
+                            {loadingContacts ? (
+                              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                            ) : (
+                              campaignContacts.length
+                            )}
+                          </div>
+                          <div className="text-sm text-gray-600">
+                            Campaign Contacts
+                          </div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-green-600">
+                            {loadingContacts ? (
+                              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600 mx-auto"></div>
+                            ) : (
+                              campaignContacts.length
+                            )}
+                          </div>
+                          <div className="text-sm text-gray-600">
+                            Total Contacts
+                          </div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-purple-600">
+                            {loadingContacts ? (
+                              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto"></div>
+                            ) : (
+                              getContactDisplayNameBlank(
+                                campaignContacts[currentContactIndex]
+                              ) || "None"
+                            )}
+                          </div>
+                          <div className="text-sm text-gray-600">
+                            Current Contact
+                          </div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-orange-600 capitalize">
+                            {callingStatus}
+                          </div>
+                          <div className="text-sm text-gray-600">Status</div>
+                        </div>
+                      </div>
+                    </div>
+                    {/* Call Progress */}
+                    <div className="mb-8">
+                      <div className="flex justify-between items-center mb-6">
+                        <h4 className="text-xl font-semibold text-gray-800 flex items-center">
+                          <svg
+                            className="w-6 h-6 mr-2 text-green-600"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+                            />
+                          </svg>
+                          Call Progress
+                        </h4>
+                        <div className="text-right">
+                          <div className="text-sm text-gray-600 mb-1">
+                            Contact {currentContactIndex + 1} of{" "}
+                            {campaignContacts.length}
+                          </div>
+                          <div className="text-sm text-gray-600">
+                            {getContactDisplayNameBlank(
+                              campaignContacts[currentContactIndex]
+                            ) || ""}
+                          </div>
+                        </div>
+                      </div>
+                      {/* Progress Bar */}
+                      <div className="w-full bg-gray-200 rounded-full h-3 mb-6">
+                        <div
+                          className="bg-gradient-to-r from-green-500 to-green-600 h-3 rounded-full transition-all duration-500 ease-out"
+                          style={{
+                            width: `${
+                              (getProgress().completed / getProgress().total) *
+                              100
+                            }%`,
+                          }}
+                        ></div>
+                      </div>
+                      {/* Current Contact */}
+                      {callingStatus !== "idle" &&
+                        campaignContacts[currentContactIndex] && (
+                          <div className="p-6 bg-gradient-to-r from-green-50 to-green-100 rounded-xl border border-green-200 mb-6">
+                            <h5 className="font-semibold text-gray-800 mb-3 flex items-center">
+                              <svg
+                                className="w-5 h-5 mr-2 text-green-600"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
+                                />
+                              </svg>
+                              Currently Calling
+                            </h5>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div>
+                                <div className="text-sm text-gray-600">
+                                  Name
+                                </div>
+                                <div className="font-semibold text-gray-900">
+                                  {getContactDisplayNameBlank(
+                                    campaignContacts[currentContactIndex]
+                                  ) || ""}
+                                </div>
+                              </div>
+                              <div>
+                                <div className="text-sm text-gray-600">
+                                  Phone
+                                </div>
+                                <div className="font-semibold text-gray-900">
+                                  {campaignContacts[currentContactIndex]
+                                    ?.phone || ""}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      {/* Save Progress Button */}
+                      {callingStatus !== "idle" && (
+                        <div className="flex justify-center mb-4 space-x-3">
+                          <button
+                            onClick={manualSaveState}
+                            className="inline-flex items-center px-4 py-2 text-sm text-blue-600 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 hover:border-blue-300 transition-all duration-200"
+                            title="Manually save your calling progress"
+                          >
+                            <svg
+                              className="w-4 h-4 mr-1"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2v-9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                              />
+                            </svg>
+                            Save Progress
+                          </button>
+                          {/* Cleanup Duplicates Button */}
+                          <button
+                            onClick={removeDuplicateCallResults}
+                            className="inline-flex items-center px-4 py-2 text-sm text-orange-600 bg-orange-50 border border-orange-200 rounded-lg hover:bg-orange-100 hover:border-orange-300 transition-all duration-200"
+                            title="Remove duplicate call results"
+                          >
+                            <svg
+                              className="w-4 h-4 mr-1"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                              />
+                            </svg>
+                            Clean Duplicates
+                          </button>
+                          {/* Update Call Status Button */}
+                          <button
+                            onClick={() => {
+                              // Update status for all call results with uniqueIds
+                              callResults.forEach((result) => {
+                                if (result.uniqueId) {
+                                  updateCallStatus(result.uniqueId);
+                                }
+                              });
+                            }}
+                            className="inline-flex items-center px-4 py-2 text-sm text-blue-600 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 hover:border-blue-300 transition-all duration-200"
+                            title="Update call status from external service"
+                          >
+                            <svg
+                              className="w-4 h-4 mr-1"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                              />
+                            </svg>
+                            Update Status
+                          </button>
+                        </div>
+                      )}
+                      {/* Control Buttons */}
+                      <div className="flex gap-4 justify-center">
+                        {callingStatus === "idle" && (
+                          <button
+                            onClick={startCalling}
+                            className="inline-flex items-center px-8 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white text-lg font-semibold rounded-xl hover:from-green-600 hover:to-green-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-1"
+                          >
+                            <FiPlay className="w-5 h-5 mr-2" />
+                            Start Calling
+                          </button>
+                        )}
+                        {callingStatus === "calling" && (
+                          <>
+                            <button
+                              onClick={pauseCalling}
+                              className="inline-flex items-center px-8 py-3 bg-gradient-to-r from-yellow-500 to-yellow-600 text-white text-lg font-semibold rounded-xl hover:from-yellow-600 hover:to-yellow-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-1"
+                            >
+                              <FiPause className="w-5 h-5 mr-2" />
+                              Pause
+                            </button>
+                            <button
+                              onClick={skipToNext}
+                              className="inline-flex items-center px-8 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-lg font-semibold rounded-xl hover:from-blue-600 hover:to-blue-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-1"
+                            >
+                              <FiSkipForward className="w-5 h-5 mr-2" />
+                              Skip
+                            </button>
+                          </>
+                        )}
+                        {callingStatus === "paused" && (
+                          <button
+                            onClick={resumeCalling}
+                            className="inline-flex items-center px-8 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white text-lg font-semibold rounded-xl hover:from-green-600 hover:to-green-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-1"
+                          >
+                            <FiPlay className="w-5 h-5 mr-2" />
+                            Resume
+                          </button>
+                        )}
+                        {(callingStatus === "completed" ||
+                          callingStatus === "paused") && (
+                          <button
+                            onClick={resetCalling}
+                            className="inline-flex items-center px-8 py-3 bg-gradient-to-r from-gray-500 to-gray-600 text-white text-lg font-semibold rounded-xl hover:from-gray-600 hover:to-gray-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-1"
+                          >
+                            Reset
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    {/* Call Results */}
+                    {callResults.length > 0 && (
+                      <div>
+                        <h4 className="text-xl font-semibold text-gray-800 mb-4 flex items-center">
+                          <svg
+                            className="w-6 h-6 mr-2 text-blue-600"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+                            />
+                          </svg>
+                          Call Results
+                        </h4>
+                        <div className="max-h-80 overflow-y-auto space-y-3">
+                          {callResults.map((result, index) => (
+                            <div
+                              key={index}
+                              className={`p-4 rounded-xl border-2 ${
+                                result.success
+                                  ? "bg-green-50 border-green-200 cursor-pointer hover:bg-green-100 hover:border-green-300 transition-all duration-200"
+                                  : "bg-red-50 border-red-200"
+                              }`}
+                              onClick={() => {
+                                if (result.success && result.uniqueId) {
+                                  // Create a call object with the necessary data for live logs
+                                  const callData = {
+                                    _id: `result-${index}`,
+                                    name: getContactName(result.contact),
+                                    mobile: result.contact.phone,
+                                    agentId: {
+                                      agentName:
+                                        selectedAgent?.agentName ||
+                                        "Campaign Agent",
+                                    },
+                                    leadStatus: "connected",
+                                    metadata: {
+                                      customParams: {
+                                        uniqueid: result.uniqueId,
+                                      },
+                                    },
+                                    createdAt:
+                                      result.timestamp instanceof Date
+                                        ? result.timestamp
+                                        : new Date(result.timestamp),
+                                    time:
+                                      result.timestamp instanceof Date
+                                        ? result.timestamp
+                                        : new Date(result.timestamp),
+                                    duration: 0,
+                                    callType: "outbound",
+                                  };
+                                  handleViewLiveCall(callData);
+                                }
+                              }}
+                            >
+                              <div className="flex justify-between items-start">
+                                <div className="flex-1">
+                                  <h6 className="font-semibold text-gray-800 mb-1">
+                                    {getContactDisplayNameBlank(result.contact)}
+                                  </h6>
+                                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                                    <div>
+                                      <span className="text-gray-600">
+                                        Phone:
+                                      </span>
+                                      <div className="font-medium">
+                                        {result.contact.phone}
+                                      </div>
+                                    </div>
+                                    <div>
+                                      <span className="text-gray-600">
+                                        Time:
+                                      </span>
+                                      <div className="font-medium">
+                                        {safeFormatTimestamp(result.timestamp)}
+                                      </div>
+                                    </div>
+                                    {result.uniqueId && (
+                                      <div>
+                                        <span className="text-gray-600">
+                                          ID:
+                                        </span>
+                                        <div className="font-medium text-xs">
+                                          {result.uniqueId.substring(0, 20)}...
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="text-right ml-4">
+                                  <span
+                                    className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
+                                      result.success
+                                        ? "bg-green-100 text-green-800"
+                                        : "bg-red-100 text-red-800"
+                                    }`}
+                                  >
+                                    {result.success ? "Success" : "Failed"}
+                                  </span>
+                                  {result.success && result.uniqueId && (
+                                    <>
+                                      <div className="mt-2 flex items-center text-xs text-blue-600">
+                                        <svg
+                                          className="w-3 h-3 mr-1"
+                                          fill="currentColor"
+                                          viewBox="0 0 20 20"
+                                        >
+                                          <path
+                                            fillRule="evenodd"
+                                            d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z"
+                                            clipRule="evenodd"
+                                          />
+                                        </svg>
+                                        Click to view live logs
+                                      </div>
+                                      {/* Connection Status */}
+                                      <div className="mt-2">
+                                        <div
+                                          className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
+                                            callResultsConnectionStatus[
+                                              result.uniqueId
+                                            ] === "connected"
+                                              ? "bg-green-100 text-green-700 border border-green-200"
+                                              : callResultsConnectionStatus[
+                                                  result.uniqueId
+                                                ] === "not_connected"
+                                              ? "bg-red-100 text-red-700 border border-red-200"
+                                              : "bg-gray-100 text-gray-600 border border-gray-200"
+                                          }`}
+                                        >
+                                          <div
+                                            className={`w-2 h-2 rounded-full mr-1 ${
+                                              callResultsConnectionStatus[
+                                                result.uniqueId
+                                              ] === "connected"
+                                                ? "bg-green-500"
+                                                : callResultsConnectionStatus[
+                                                    result.uniqueId
+                                                  ] === "not_connected"
+                                                ? "bg-red-500"
+                                                : "bg-gray-400"
+                                            }`}
+                                          ></div>
+                                          {callResultsConnectionStatus[
+                                            result.uniqueId
+                                          ] === "connected"
+                                            ? "Connected"
+                                            : callResultsConnectionStatus[
+                                                result.uniqueId
+                                              ] === "not_connected"
+                                            ? "Not Accepted / Busy / Disconnected"
+                                            : "Checking..."}
+                                        </div>
+                                      </div>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                              {result.error && (
+                                <div className="mt-3 p-3 bg-red-100 rounded-lg">
+                                  <p className="text-sm text-red-700">
+                                    <span className="font-semibold">
+                                      Error:
+                                    </span>{" "}
+                                    {result.error}
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+        {/* Call Details Modal */}
+        {showCallDetailsModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-2xl w-11/12 max-w-5xl max-h-[90vh] overflow-y-auto shadow-2xl">
+              <div className="flex justify-between items-center p-6 border-b border-gray-200">
+                <h3 className="text-2xl font-bold text-gray-800">
+                  Call Details
+                </h3>
+                <button
+                  className="bg-none border-none text-2xl cursor-pointer text-gray-500 hover:text-gray-700 p-2 w-10 h-10 flex items-center justify-center rounded-lg hover:bg-gray-200 transition-colors duration-200"
+                  onClick={() => setShowCallDetailsModal(false)}
+                >
+                  <FiX />
+                </button>
+              </div>
+              <div className="p-6">
+                {callDetailsLoading ? (
+                  <div className="text-center py-8">
+                    <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                    </div>
+                    <p className="text-gray-500 mt-2">Loading call logs...</p>
+                  </div>
+                ) : callDetails.length === 0 ? (
+                  <div className="text-center py-12 bg-gray-50 rounded-xl border-2 border-dashed border-gray-300">
+                    <FiUsers className="mx-auto text-4xl text-gray-400 mb-4" />
+                    <h5 className="text-lg font-medium text-gray-600 mb-2">
+                      No call logs
+                    </h5>
+                    <p className="text-gray-500">
+                      No calls found for this campaign yet.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {callDetails.map((log) => (
+                      <div
+                        key={log._id}
+                        className="border border-gray-200 rounded-lg p-4"
+                      >
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <div className="text-sm text-gray-500">Time</div>
+                            <div className="font-semibold">
+                              {new Date(
+                                log.createdAt || log.time
+                              ).toLocaleString()}
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-sm text-gray-500">
+                              Duration
+                            </div>
+                            <div className="font-semibold">
+                              {Math.max(0, log.duration || 0)}s
+                            </div>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-3">
+                          <div>
+                            <div className="text-sm text-gray-500">Mobile</div>
+                            <div className="font-medium">
+                              {log.mobile || "-"}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="text-sm text-gray-500">Agent</div>
+                            <div className="font-medium">
+                              {log.agentId?.agentName || "-"}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="text-sm text-gray-500">
+                              Lead Status
+                            </div>
+                            <div className="font-medium capitalize">
+                              {log.leadStatus || "-"}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="mt-3 text-xs text-gray-500 break-all">
+                          <span className="font-semibold">uniqueId:</span>{" "}
+                          {log.metadata?.customParams?.uniqueid || "-"}
+                        </div>
+                        {log.transcript && (
+                          <details className="mt-3">
+                            <summary className="cursor-pointer text-sm text-blue-600">
+                              View transcript
+                            </summary>
+                            <pre className="whitespace-pre-wrap text-xs bg-gray-50 p-3 rounded mt-2 max-h-64 overflow-y-auto">
+                              {log.transcript}
+                            </pre>
+                          </details>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {/* Pagination */}
+                <div className="flex items-center justify-between mt-4">
+                  <div className="text-sm text-gray-600">
+                    Page {callDetailsPage} of {callDetailsMeta.totalPages || 1}{" "}
+                    • Total {callDetailsMeta.totalLogs || 0}
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 disabled:opacity-50"
+                      onClick={() =>
+                        fetchCampaignCallLogs(Math.max(1, callDetailsPage - 1))
+                      }
+                      disabled={callDetailsPage <= 1 || callDetailsLoading}
+                    >
+                      Prev
+                    </button>
+                    <button
+                      className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 disabled:opacity-50"
+                      onClick={() => fetchCampaignCallLogs(callDetailsPage + 1)}
+                      disabled={
+                        callDetailsLoading ||
+                        (callDetailsMeta.totalPages &&
+                          callDetailsPage >= callDetailsMeta.totalPages)
+                      }
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+        {/* Campaign Contacts Management Modal */}
+        {showContactsModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-2xl w-11/12 max-w-6xl max-h-[90vh] overflow-y-auto shadow-2xl">
+              <div className="flex justify-between items-center p-6 border-b border-gray-200">
+                <h3 className="text-2xl font-bold text-gray-800">
+                  Manage Campaign Contacts
+                </h3>
+                <button
+                  className="bg-none border-none text-2xl cursor-pointer text-gray-500 hover:text-gray-700 p-2 w-10 h-10 flex items-center justify-center rounded-lg hover:bg-gray-200 transition-colors duration-200"
+                  onClick={() => setShowContactsModal(false)}
+                >
+                  <FiX />
+                </button>
+              </div>
+              <div className="p-6">
+                {/* Action Buttons */}
+                <div className="flex gap-3 mb-6">
+                  <button
+                    onClick={() => setShowAddContactModal(true)}
+                    className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 flex items-center gap-2"
+                  >
+                    <FiPlus className="w-4 h-4" />
+                    Add Contact
+                  </button>
+                  <button
+                    onClick={syncContactsFromGroups}
+                    disabled={
+                      loadingContacts ||
+                      !campaign?.groupIds ||
+                      campaign.groupIds.length === 0
+                    }
+                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {loadingContacts ? (
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    ) : (
+                      <FiUsers className="w-4 h-4" />
+                    )}
+                    Sync from Groups
+                  </button>
+                  <button
+                    onClick={async () => {
+                      await syncContactsFromGroups(true);
+                      await fetchCampaignContacts();
+                    }}
+                    disabled={loadingContacts}
+                    className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 disabled:opacity-50 flex items-center gap-2"
+                  >
+                    <svg
+                      className="w-4 h-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                      />
+                    </svg>
+                    Refresh
+                  </button>
+                </div>
+                {/* Select and Call Controls */}
+                {campaignContacts.length > 0 && (
+                  <div className="mb-4 p-4 bg-gray-50 rounded-lg border">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <label className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={selectAllContacts}
+                            onChange={handleSelectAllContacts}
+                            className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                          />
+                          <span className="text-sm font-medium text-gray-700">
+                            Select All ({selectedContacts.length} selected)
+                          </span>
+                        </label>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={callSelectedContacts}
+                          disabled={selectedContacts.length === 0}
+                          className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                        >
+                          <svg
+                            className="w-4 h-4"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
+                            />
+                          </svg>
+                          Call Selected ({selectedContacts.length})
+                        </button>
+                        <button
+                          onClick={() => {
+                            setSelectedContacts([]);
+                            setSelectAllContacts(false);
+                          }}
+                          disabled={selectedContacts.length === 0}
+                          className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          Clear Selection
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {/* Contacts List */}
+                {loadingContacts ? (
+                  <div className="text-center py-8">
+                    <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                    </div>
+                    <p className="text-gray-500 mt-2">Loading contacts...</p>
+                  </div>
+                ) : campaignContacts.length === 0 ? (
+                  <div className="text-center py-12 bg-gray-50 rounded-xl border-2 border-dashed border-gray-300">
+                    <FiUsers className="mx-auto text-4xl text-gray-400 mb-4" />
+                    <h5 className="text-lg font-medium text-gray-600 mb-2">
+                      No contacts in campaign
+                    </h5>
+                    <p className="text-gray-500">
+                      Add contacts manually or sync from groups to get started.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {campaignContacts.map((contact) => (
+                      <div
+                        key={contact._id}
+                        className={`border rounded-lg p-4 ${
+                          isContactSelected(contact)
+                            ? "border-blue-500 bg-blue-50"
+                            : "border-gray-200"
+                        }`}
+                      >
+                        <div className="flex justify-between items-start">
+                          <div className="flex items-start gap-3 flex-1">
+                            <input
+                              type="checkbox"
+                              checked={isContactSelected(contact)}
+                              onChange={() => handleSelectContact(contact)}
+                              className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 mt-1"
+                            />
+                            <div className="flex-1">
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div>
+                                  <div className="text-sm text-gray-500">
+                                    Name
+                                  </div>
+                                  <div className="font-semibold">
+                                    {getContactDisplayNameBlank(contact)}
+                                  </div>
+                                </div>
+                                <div>
+                                  <div className="text-sm text-gray-500">
+                                    Phone
+                                  </div>
+                                  <div className="font-medium">
+                                    {contact.phone}
+                                  </div>
+                                </div>
+                                <div>
+                                  <div className="text-sm text-gray-500">
+                                    Email
+                                  </div>
+                                  <div className="font-medium">
+                                    {contact.email || "-"}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="mt-2 text-xs text-gray-500">
+                                Added:{" "}
+                                {new Date(contact.addedAt).toLocaleDateString()}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex gap-2 ml-4">
+                            <button
+                              onClick={() =>
+                                removeContactFromCampaign(contact._id)
+                              }
+                              className="px-3 py-1 text-sm bg-red-100 text-red-700 rounded-md hover:bg-red-200"
+                            >
+                              Remove
+                            </button>
                           </div>
                         </div>
                       </div>
                     ))}
                   </div>
-                ) : (
-                  <div className="text-center py-8">
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+        {/* Add Contact Modal */}
+        {showAddContactModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-2xl w-11/12 max-w-md shadow-2xl">
+              <div className="flex justify-between items-center p-6 border-b border-gray-200">
+                <h3 className="text-2xl font-bold text-gray-800">
+                  Add Contact to Campaign
+                </h3>
+                <button
+                  className="bg-none border-none text-2xl cursor-pointer text-gray-500 hover:text-gray-700 p-2 w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-200 transition-colors duration-200"
+                  onClick={() => setShowAddContactModal(false)}
+                >
+                  <FiX />
+                </button>
+              </div>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  addContactToCampaign();
+                }}
+                className="p-6"
+              >
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Name (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={contactForm.name}
+                      onChange={(e) =>
+                        setContactForm({ ...contactForm, name: e.target.value })
+                      }
+                      placeholder="Enter name (optional)"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Phone *
+                    </label>
+                    <input
+                      type="tel"
+                      value={contactForm.phone}
+                      onChange={(e) =>
+                        setContactForm({
+                          ...contactForm,
+                          phone: e.target.value,
+                        })
+                      }
+                      required
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Email
+                    </label>
+                    <input
+                      type="email"
+                      value={contactForm.email}
+                      onChange={(e) =>
+                        setContactForm({
+                          ...contactForm,
+                          email: e.target.value,
+                        })
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+                <div className="flex justify-end gap-3 mt-6">
+                  <button
+                    type="button"
+                    onClick={() => setShowAddContactModal(false)}
+                    className="px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={loadingContacts}
+                    className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
+                  >
+                    {loadingContacts ? "Adding..." : "Add Contact"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+        {/* Add Groups Modal */}
+        {showAddGroupsModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-2xl w-11/12 max-w-4xl max-h-[90vh] overflow-y-auto shadow-2xl add-groups-modal">
+              <div className="flex justify-between items-center p-6 border-b border-gray-200">
+                <h3 className="text-2xl font-bold text-gray-800">
+                  Add Groups to Campaign
+                </h3>
+                <button
+                  className="bg-none border-none text-2xl cursor-pointer text-gray-500 hover:text-gray-700 p-2 w-10 h-10 flex items-center justify-center rounded-lg hover:bg-gray-200 transition-colors duration-200"
+                  onClick={handleCloseAddGroupsModal}
+                >
+                  <FiX />
+                </button>
+              </div>
+              <div className="p-6">
+                {/* Current groups in campaign */}
+                <div className="mb-8">
+                  <h4 className="text-lg font-semibold text-gray-800 mb-4">
+                    Current Groups in Campaign
+                  </h4>
+                  {campaignGroups.length === 0 ? (
                     <div className="text-sm text-gray-500">
-                      No templates available
+                      No groups added yet.
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {campaignGroups.map((group) => (
+                        <div
+                          key={`current-${group._id}`}
+                          className="border border-gray-200 rounded-lg p-4 bg-gray-50"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <div className="font-semibold text-gray-800">
+                                {group.name}
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                {typeof group.contactsCount === "number"
+                                  ? group.contactsCount
+                                  : group.contacts?.length || 0}{" "}
+                                contacts
+                              </div>
+                            </div>
+                            <button
+                              className="text-red-600 hover:text-red-700"
+                              title="Remove from campaign"
+                              onClick={() => handleRemoveGroup(group._id)}
+                            >
+                              <FiTrash2 />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="mb-6">
+                  <h4 className="text-lg font-semibold text-gray-800 mb-4">
+                    Available Groups
+                  </h4>
+                  <p className="text-sm text-gray-600 mb-4">
+                    Select groups to add to this campaign. Only groups not
+                    already in the campaign are shown.
+                  </p>
+                  {getAvailableGroupsForCampaign().length === 0 ? (
+                    <div className="text-center py-8 bg-gray-50 rounded-xl border-2 border-dashed border-gray-300">
+                      <FiUsers className="mx-auto text-4xl text-gray-400 mb-4" />
+                      <h5 className="text-lg font-medium text-gray-600 mb-2">
+                        No available groups
+                      </h5>
+                      <p className="text-gray-500">
+                        All groups are already in this campaign
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {getAvailableGroupsForCampaign().map((group) => (
+                        <div
+                          key={group._id}
+                          className="border border-gray-200 rounded-lg p-4 hover:border-green-500 hover:bg-green-50 transition-colors cursor-pointer"
+                          onClick={() => {
+                            const currentSelected = selectedGroups.filter(
+                              (id) =>
+                                !campaignGroups.some((cg) => cg._id === id)
+                            );
+                            if (currentSelected.includes(group._id)) {
+                              setSelectedGroups(
+                                currentSelected.filter((id) => id !== group._id)
+                              );
+                            } else {
+                              setSelectedGroups([
+                                ...currentSelected,
+                                group._id,
+                              ]);
+                            }
+                          }}
+                        >
+                          <div className="flex items-center justify-between mb-3">
+                            <h5 className="font-semibold text-gray-800">
+                              {group.name}
+                            </h5>
+                            <div
+                              className={`w-5 h-5 rounded border-2 ${
+                                selectedGroups.includes(group._id) &&
+                                !campaignGroups.some(
+                                  (cg) => cg._id === group._id
+                                )
+                                  ? "bg-green-500 border-green-500"
+                                  : "border-gray-300"
+                              } flex items-center justify-center`}
+                            >
+                              {selectedGroups.includes(group._id) &&
+                                !campaignGroups.some(
+                                  (cg) => cg._id === group._id
+                                ) && (
+                                  <svg
+                                    className="w-3 h-3 text-white"
+                                    fill="currentColor"
+                                    viewBox="0 0 20 20"
+                                  >
+                                    <path
+                                      fillRule="evenodd"
+                                      d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                                      clipRule="evenodd"
+                                    />
+                                  </svg>
+                                )}
+                            </div>
+                          </div>
+                          <p className="text-sm text-gray-600 mb-2">
+                            {group.description}
+                          </p>
+                          <div className="text-xs text-gray-500">
+                            {typeof group.contactsCount === "number"
+                              ? group.contactsCount
+                              : group.contacts?.length || 0}{" "}
+                            contacts
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
+                  <button
+                    onClick={handleCloseAddGroupsModal}
+                    className="px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => {
+                      const groupsToAdd = selectedGroups.filter(
+                        (id) => !campaignGroups.some((cg) => cg._id === id)
+                      );
+                      handleAddSpecificGroupsToCampaign(groupsToAdd);
+                    }}
+                    disabled={
+                      addingGroups ||
+                      selectedGroups.filter(
+                        (id) => !campaignGroups.some((cg) => cg._id === id)
+                      ).length === 0
+                    }
+                    className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {addingGroups ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        Adding...
+                      </>
+                    ) : (
+                      <>Update</>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+        {/* Add Agent Modal */}
+        {showAddAgentModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-2xl w-11/12 max-w-md shadow-2xl">
+              <div className="flex justify-between items-center p-6 border-b border-gray-200">
+                <h3 className="text-2xl font-bold text-gray-800">
+                  Select Agent
+                </h3>
+                <button
+                  className="bg-none border-none text-2xl cursor-pointer text-gray-500 hover:text-gray-700 p-2 w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-200 transition-colors duration-200"
+                  onClick={() => setShowAddAgentModal(false)}
+                >
+                  <FiX />
+                </button>
+              </div>
+              <div className="p-6">
+                {loadingAgents ? (
+                  <div className="text-center py-8">
+                    <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                    </div>
+                    <p className="text-gray-500 mt-2">Loading agents...</p>
+                  </div>
+                ) : (agents || []).length === 0 ? (
+                  <div className="text-center py-8 bg-gray-50 rounded-xl border-2 border-dashed border-gray-300">
+                    <FiUsers className="mx-auto text-4xl text-gray-400 mb-4" />
+                    <h5 className="text-lg font-medium text-gray-600 mb-2">
+                      No agents available
+                    </h5>
+                    <p className="text-gray-500">Create an agent to proceed.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3 max-h-80 overflow-y-auto">
+                    {agents.map((agent) => (
+                      <label
+                        key={agent._id}
+                        className={`flex items-center justify-between border rounded-lg p-3 cursor-pointer ${
+                          selectedAgentIdForAssign === agent._id
+                            ? "border-blue-400 bg-blue-50"
+                            : "border-gray-200 hover:border-gray-300"
+                        }`}
+                        onClick={() => setSelectedAgentIdForAssign(agent._id)}
+                      >
+                        <div>
+                          <div className="font-semibold text-gray-900">
+                            {agent.agentName}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {agent.description}
+                          </div>
+                        </div>
+                        <input
+                          type="radio"
+                          name="assignAgent"
+                          checked={selectedAgentIdForAssign === agent._id}
+                          onChange={() =>
+                            setSelectedAgentIdForAssign(agent._id)
+                          }
+                        />
+                      </label>
+                    ))}
+                  </div>
+                )}
+                <div className="flex justify-end gap-3 mt-6">
+                  <button
+                    type="button"
+                    onClick={() => setShowAddAgentModal(false)}
+                    className="px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!selectedAgentIdForAssign}
+                    onClick={saveSelectedAgentToCampaign}
+                    className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
+                  >
+                    Save
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+        {/* Live Call Modal */}
+        {showLiveCallModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-2xl w-11/12 max-w-4xl max-h-[90vh] overflow-y-auto shadow-2xl">
+              <div className="flex justify-between items-center p-6 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-blue-100">
+                <div>
+                  <h3 className="text-2xl font-bold text-gray-800 flex items-center">
+                    <svg
+                      className="w-6 h-6 mr-2 text-blue-600"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
+                      />
+                    </svg>
+                    Live Call Logs
+                  </h3>
+                  <p className="text-gray-600 mt-1">
+                    Real-time call transcript and details
+                  </p>
+                </div>
+                <button
+                  className="bg-none border-none text-2xl cursor-pointer text-gray-500 hover:text-gray-700 p-2 w-10 h-10 flex items-center justify-center rounded-lg hover:bg-gray-200 transition-colors duration-200"
+                  onClick={closeLiveCallModal}
+                >
+                  <FiX />
+                </button>
+              </div>
+              <div className="p-6">
+                {/* Call Information */}
+                {selectedCall && (
+                  <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <div className="text-sm text-gray-500">Contact</div>
+                        <div className="font-semibold">
+                          {getContactDisplayNameBlank(selectedCall)}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-sm text-gray-500">Agent</div>
+                        <div className="font-semibold">
+                          {selectedCall.agentId?.agentName || ""}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-sm text-gray-500">Status</div>
+                        <div className="font-semibold capitalize">
+                          {selectedCall.leadStatus || ""}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="mt-2 text-xs text-gray-500">
+                      <span className="font-semibold">uniqueId:</span>{" "}
+                      {selectedCall.metadata?.customParams?.uniqueid || ""}
+                    </div>
+                  </div>
+                )}
+                {/* Live Status Indicator */}
+                <div className="mb-6">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center">
+                      <div
+                        className={`w-3 h-3 rounded-full mr-2 ${
+                          isPolling
+                            ? "bg-green-500 animate-pulse"
+                            : liveCallDetails?.metadata?.isActive === false
+                            ? "bg-red-500"
+                            : "bg-gray-400"
+                        }`}
+                      ></div>
+                      <span className="text-sm font-medium">
+                        {isPolling
+                          ? "Live - Polling for updates..."
+                          : liveCallDetails?.metadata?.isActive === false
+                          ? "Call ended - Polling stopped"
+                          : "Not polling"}
+                      </span>
+                    </div>
+                    <div className="flex items-center space-x-3 text-sm text-gray-500">
+                      {liveCallDetails
+                        ? `Last updated: ${new Date().toLocaleTimeString()}`
+                        : "Waiting for call data..."}
+                      {(isPolling ||
+                        liveCallDetails?.metadata?.isActive !== false) && (
+                        <button
+                          type="button"
+                          onClick={terminateCurrentCall}
+                          className="inline-flex items-center px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
+                          title="End call"
+                        >
+                          End Call
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  {/* Connection Status */}
+                  <div
+                    className={`inline-flex items-center px-3 py-2 rounded-lg text-sm font-medium ${
+                      callConnectionStatus === "connected"
+                        ? "bg-green-100 text-green-700 border border-green-200"
+                        : "bg-red-100 text-red-700 border border-red-200"
+                    }`}
+                  >
+                    <div
+                      className={`w-2 h-2 rounded-full mr-2 ${
+                        callConnectionStatus === "connected"
+                          ? "bg-green-500"
+                          : "bg-red-500"
+                      }`}
+                    ></div>
+                    {callConnectionStatus === "connected"
+                      ? "Call Connected"
+                      : "Not Accepted / Busy / Disconnected"}
+                    {callConnectionStatus === "not_connected" && (
+                      <span className="ml-2 text-xs opacity-75">
+                        {liveCallDetails?.metadata?.isActive === false
+                          ? "(Call ended by system)"
+                          : "(No response for 40+ seconds)"}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                {/* Live Transcript */}
+                <div className="mb-6">
+                  <h4 className="text-lg font-semibold text-gray-800 mb-3 flex items-center">
+                    <svg
+                      className="w-5 h-5 mr-2 text-green-600"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                      />
+                    </svg>
+                    Live Transcript
+                  </h4>
+                  {liveTranscriptLines.length > 0 ? (
+                    <div
+                      ref={transcriptRef}
+                      className="bg-gray-50 rounded-lg p-4 max-h-96 overflow-y-auto"
+                    >
+                      {liveTranscriptLines.map((line, index) => (
+                        <div key={index} className="mb-4 last:mb-0">
+                          {line.isAI ? (
+                            <div className="flex justify-start">
+                              <div className="flex items-end space-x-2 max-w-xs lg:max-w-md">
+                                <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
+                                  <svg
+                                    className="w-4 h-4 text-white"
+                                    fill="currentColor"
+                                    viewBox="0 0 20 20"
+                                  >
+                                    <path
+                                      fillRule="evenodd"
+                                      d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-6-3a2 2 0 11-4 0 2 2 0 014 0zm-2 4a5 5 0 00-4.546 2.916A5.986 5.986 0 0010 16a5.986 5.986 0 004.546-2.084A5 5 0 0010 11z"
+                                      clipRule="evenodd"
+                                    />
+                                  </svg>
+                                </div>
+                                <div className="bg-blue-500 text-white rounded-lg px-4 py-2 shadow-sm">
+                                  <div className="text-sm">{line.text}</div>
+                                  {line.timestamp && (
+                                    <div className="text-xs text-blue-100 mt-1">
+                                      {line.timestamp}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          ) : line.isUser ? (
+                            <div className="flex justify-end">
+                              <div className="flex items-end space-x-2 max-w-xs lg:max-w-md">
+                                <div className="bg-gray-200 text-gray-800 rounded-lg px-4 py-2 shadow-sm">
+                                  <div className="text-sm">{line.text}</div>
+                                  {line.timestamp && (
+                                    <div className="text-xs text-gray-500 mt-1">
+                                      {line.timestamp}
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center flex-shrink-0">
+                                  <svg
+                                    className="w-4 h-4 text-white"
+                                    fill="currentColor"
+                                    viewBox="0 0 20 20"
+                                  >
+                                    <path
+                                      fillRule="evenodd"
+                                      d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z"
+                                      clipRule="evenodd"
+                                    />
+                                  </svg>
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex justify-center">
+                              <div className="bg-gray-100 text-gray-600 rounded-lg px-3 py-1 text-xs">
+                                {line.text}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : liveTranscript ? (
+                    <div className="bg-gray-50 rounded-lg p-4 max-h-96 overflow-y-auto">
+                      <pre className="whitespace-pre-wrap text-sm text-gray-700">
+                        {liveTranscript}
+                      </pre>
+                    </div>
+                  ) : (
+                    <div className="bg-gray-50 rounded-lg p-4 text-center text-gray-500">
+                      <svg
+                        className="w-8 h-8 mx-auto mb-2 text-gray-400"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+                        />
+                      </svg>
+                      No transcript available yet. Waiting for call data...
+                    </div>
+                  )}
+                </div>
+                {/* Call Details */}
+                {liveCallDetails && (
+                  <div>
+                    <h4 className="text-lg font-semibold text-gray-800 mb-3 flex items-center">
+                      <svg
+                        className="w-5 h-5 mr-2 text-blue-600"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+                        />
+                      </svg>
+                      Call Details
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="bg-gray-50 rounded-lg p-4">
+                        <div className="text-sm text-gray-500 mb-1">
+                          Duration
+                        </div>
+                        <div className="font-semibold">
+                          {Math.max(0, liveCallDetails.duration || 0)}s
+                        </div>
+                      </div>
+                      <div className="bg-gray-50 rounded-lg p-4">
+                        <div className="text-sm text-gray-500 mb-1">
+                          Call Time
+                        </div>
+                        <div className="font-semibold">
+                          {new Date(
+                            liveCallDetails.createdAt || liveCallDetails.time
+                          ).toLocaleString()}
+                        </div>
+                      </div>
+                      <div className="bg-gray-50 rounded-lg p-4">
+                        <div className="text-sm text-gray-500 mb-1">
+                          Lead Status
+                        </div>
+                        <div className="font-semibold capitalize">
+                          {liveCallDetails.leadStatus || ""}
+                        </div>
+                      </div>
+                      <div className="bg-gray-50 rounded-lg p-4">
+                        <div className="text-sm text-gray-500 mb-1">
+                          Call Type
+                        </div>
+                        <div className="font-semibold capitalize">
+                          {liveCallDetails.callType || ""}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 )}
               </div>
             </div>
-          )}
-          {/* Enhanced Input Area */}
-          <div className="border-t border-gray-200 bg-white p-4">
-            <div className="flex items-end space-x-3">
-              <button
-                className="p-3 bg-gray-100 hover:bg-gray-200 rounded-full transition-colors duration-200 shadow-sm hover:shadow-md"
-                onClick={toggleWaTemplates}
-                title="Templates"
-              >
-                <FiPlus className="w-5 h-5 text-gray-600" />
-              </button>
-              <div className="flex-1 relative">
-                <input
-                  type="text"
-                  value={waChatInput}
-                  onChange={(e) => setWaChatInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") sendWaChatMessage();
-                  }}
-                  placeholder="Type a message..."
-                  className="w-full px-4 py-3 pr-12 text-sm border border-gray-300 rounded-full focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 shadow-sm hover:shadow-md"
-                />
+          </div>
+        )}
+        {waChatOpen && (
+          <div className="fixed bottom-4 right-4 w-110 h-[650px] bg-white border border-gray-200 rounded-2xl shadow-2xl z-50 flex flex-col overflow-hidden backdrop-blur-sm">
+            {/* Enhanced Header */}
+            <div className="px-4 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white flex items-center justify-between shadow-lg">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
+                  <FaWhatsapp className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-sm">
+                    {waChatContact?.name || "WhatsApp Chat"}
+                  </h3>
+                  <p className="text-xs text-green-100">
+                    {waChatContact?.number || ""}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center space-x-2">
+                {/* 24h countdown timer */}
+                <div
+                  className="px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-700 border border-red-200 shadow-sm"
+                  title="Time left in this 24h session"
+                >
+                  ⏱ {waChatRemaining}
+                </div>
                 <button
                   type="button"
-                  onClick={sendWaChatMessage}
-                  disabled={!waChatInput.trim()}
-                  className="absolute right-2 top-1/2 transform -translate-y-1/2 p-2 bg-green-500 hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-full transition-all duration-200 shadow-sm hover:shadow-md"
+                  className="p-2 hover:bg-white/20 rounded-full transition-colors"
+                  onClick={() => fetchWaChatMessages(waChatContact?.number)}
+                  title="Refresh messages"
                 >
                   <svg
                     className="w-4 h-4"
@@ -11647,16 +12517,219 @@ useEffect(() => {
                       strokeLinecap="round"
                       strokeLinejoin="round"
                       strokeWidth={2}
-                      d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
+                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
                     />
                   </svg>
                 </button>
+                <button
+                  type="button"
+                  className="p-2 hover:bg-white/20 rounded-full transition-colors"
+                  onClick={() => setWaChatOpen(false)}
+                  title="Close"
+                >
+                  <FiX className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+            {/* Enhanced Chat Area */}
+            <div className="flex-1 overflow-y-auto relative bg-gradient-to-b from-gray-50 to-white">
+              <div className="p-4 space-y-3">
+                {renderMessagesWithDateSeparators()}
+                {waTyping && (
+                  <div className="flex justify-start">
+                    <div className="px-4 py-3 rounded-2xl bg-gray-100 text-gray-700 text-sm italic shadow-sm animate-pulse">
+                      <div className="flex items-center space-x-2">
+                        <div className="flex space-x-1">
+                          <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                          <div
+                            className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+                            style={{ animationDelay: "0.1s" }}
+                          ></div>
+                          <div
+                            className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+                            style={{ animationDelay: "0.2s" }}
+                          ></div>
+                        </div>
+                        <span>typing...</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+            {/* Enhanced Template Selector Popup */}
+            {waTemplatesOpen && (
+              <div className="absolute top-4 right-4 w-80 bg-white border border-gray-200 rounded-2xl shadow-2xl z-10 backdrop-blur-sm">
+                {/* Enhanced Header */}
+                <div className="px-4 py-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-t-2xl">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
+                        <svg
+                          className="w-4 h-4 text-white"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                          />
+                        </svg>
+                      </div>
+                      <h3 className="text-base font-semibold text-gray-800">
+                        Select Template
+                      </h3>
+                    </div>
+                    <button
+                      onClick={() => setWaTemplatesOpen(false)}
+                      className="text-gray-500 hover:text-gray-700 p-2 rounded-full hover:bg-white/50 transition-colors"
+                    >
+                      <FiX className="w-5 h-5" />
+                    </button>
+                  </div>
+                </div>
+                {/* Content */}
+                <div className="max-h-80 overflow-y-auto">
+                  {waTemplatesLoading ? (
+                    <div className="text-center py-8">
+                      <div className="text-sm text-gray-500">
+                        Loading templates...
+                      </div>
+                    </div>
+                  ) : waTemplates.length > 0 ? (
+                    <div>
+                      {waTemplates.map((template) => (
+                        <div
+                          key={template.id}
+                          className="flex items-center justify-between px-4 py-4 hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 cursor-pointer border-b border-gray-100 last:border-b-0 transition-all duration-200 hover:shadow-sm"
+                          onClick={() => sendWaTemplateMessage(template)}
+                        >
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-2">
+                              <div className="text-sm font-semibold text-gray-800 truncate">
+                                {template.name}
+                              </div>
+                              <span
+                                className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                                  template.status === "APPROVED"
+                                    ? "bg-green-100 text-green-700 border border-green-200"
+                                    : "bg-yellow-100 text-yellow-700 border border-yellow-200"
+                                }`}
+                              >
+                                {template.status}
+                              </span>
+                            </div>
+                            <div className="text-xs text-gray-600 line-clamp-2 leading-relaxed">
+                              {template.components
+                                ?.find((c) => c.type === "BODY")
+                                ?.text?.substring(0, 80)}
+                              {template.components?.find(
+                                (c) => c.type === "BODY"
+                              )?.text?.length > 80
+                                ? "..."
+                                : ""}
+                            </div>
+                            {template.components?.find(
+                              (c) => c.type === "BUTTONS"
+                            ) && (
+                              <div className="text-xs text-blue-600 mt-2 flex items-center">
+                                <svg
+                                  className="w-3 h-3 mr-1"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  viewBox="0 0 24 24"
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122"
+                                  />
+                                </svg>
+                                Has interactive buttons
+                              </div>
+                            )}
+                          </div>
+                          <div className="ml-3 flex-shrink-0">
+                            <div className="w-10 h-10 bg-gradient-to-r from-green-500 to-green-600 rounded-full flex items-center justify-center hover:from-green-600 hover:to-green-700 transition-all duration-200 shadow-sm hover:shadow-md transform hover:scale-105">
+                              <svg
+                                className="w-5 h-5 text-white"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
+                                />
+                              </svg>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <div className="text-sm text-gray-500">
+                        No templates available
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+            {/* Enhanced Input Area */}
+            <div className="border-t border-gray-200 bg-white p-4">
+              <div className="flex items-end space-x-3">
+                <button
+                  className="p-3 bg-gray-100 hover:bg-gray-200 rounded-full transition-colors duration-200 shadow-sm hover:shadow-md"
+                  onClick={toggleWaTemplates}
+                  title="Templates"
+                >
+                  <FiPlus className="w-5 h-5 text-gray-600" />
+                </button>
+                <div className="flex-1 relative">
+                  <input
+                    type="text"
+                    value={waChatInput}
+                    onChange={(e) => setWaChatInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") sendWaChatMessage();
+                    }}
+                    placeholder="Type a message..."
+                    className="w-full px-4 py-3 pr-12 text-sm border border-gray-300 rounded-full focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 shadow-sm hover:shadow-md"
+                  />
+                  <button
+                    type="button"
+                    onClick={sendWaChatMessage}
+                    disabled={!waChatInput.trim()}
+                    className="absolute right-2 top-1/2 transform -translate-y-1/2 p-2 bg-green-500 hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-full transition-all duration-200 shadow-sm hover:shadow-md"
+                  >
+                    <svg
+                      className="w-4 h-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
+                      />
+                    </svg>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
-    </div>
+        )}
+      </div>
     </>
   );
 }
