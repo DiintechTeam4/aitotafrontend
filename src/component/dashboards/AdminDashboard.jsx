@@ -33,6 +33,7 @@ import PlanManagement from "./components/PlanManagement";
 import CreditManagement from "./components/CreditManagement";
 import CouponManagement from "./components/CouponManagement";
 import ToolsManagement from "./components/ToolsManagement";
+import WhatsAppTemplateManagement from "./components/WhatsAppTemplateManagement";
 
 const AdminDashboard = ({ user, onLogout }) => {
   const navigate = useNavigate();
@@ -82,6 +83,8 @@ const AdminDashboard = ({ user, onLogout }) => {
   const [clientTokenForHumanAgent, setClientTokenForHumanAgent] =
     useState(null);
   const [isSubmittingClient, setIsSubmittingClient] = useState(false);
+  const [showWhatsAppTemplateModal, setShowWhatsAppTemplateModal] = useState(false);
+  const [whatsAppClientId, setWhatsAppClientId] = useState(null);
 
   // Helpers: JWT decode and expiry check
   const decodeJwt = (token) => {
@@ -1176,6 +1179,22 @@ const AdminDashboard = ({ user, onLogout }) => {
             setReviewClientId(null);
           }}
           onApprove={handleApproveClient}
+          onWhatsAppClick={(clientId) => {
+            setShowApprovalModal(false);
+            setWhatsAppClientId(clientId);
+            setShowWhatsAppTemplateModal(true);
+          }}
+        />
+      )}
+
+      {/* WhatsApp Template Management Modal */}
+      {showWhatsAppTemplateModal && whatsAppClientId && (
+        <WhatsAppTemplateManagement
+          clientId={whatsAppClientId}
+          onClose={() => {
+            setShowWhatsAppTemplateModal(false);
+            setWhatsAppClientId(null);
+          }}
         />
       )}
 
