@@ -4093,6 +4093,29 @@ function CampaignDetails({ campaignId, onBack }) {
       if (response.ok) {
         const result = await response.json();
         if (result.success && result.data) {
+          // Capture backend-provided run metadata (latest runId + inferred start)
+          const backendRunId =
+            result?.data?.progress?.runId ||
+            result?.data?.latestRunId ||
+            result?.data?.progress?.currentRunId ||
+            null;
+          const backendRunStart = result?.data?.runStartTime
+            ? new Date(result.data.runStartTime)
+            : null;
+          const runChanged =
+            backendRunId &&
+            backendRunId !== currentRunId &&
+            backendRunId !== undefined;
+          if (runChanged) {
+            setCurrentRunId(backendRunId);
+          }
+          if (
+            backendRunStart &&
+            (!campaignStartTime || runChanged) &&
+            !Number.isNaN(backendRunStart.getTime())
+          ) {
+            setCampaignStartTime(backendRunStart);
+          }
           // Update campaign running status from backend
           const nextIsRunning = result.data.isRunning;
           const backendAllFinalized = !!result?.data?.allCallsFinalized;
