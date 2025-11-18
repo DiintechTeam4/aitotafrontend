@@ -267,7 +267,9 @@ const HumanAgentDetails = ({ agentId, onBack }) => {
           }
         );
         const data = await response.json();
-        setSelectedGroupContacts(data.contacts || []);
+        const contactsList =
+          data?.data?.contacts || data?.contacts || [];
+        setSelectedGroupContacts(contactsList);
       } else {
         setSelectedGroupContacts([]);
       }
@@ -741,7 +743,9 @@ const HumanAgentDetails = ({ agentId, onBack }) => {
           }
         );
         const data = await response.json();
-        setSelectedGroupContacts(data.data || []);
+        const contactsList =
+          data?.data?.contacts || data?.contacts || [];
+        setSelectedGroupContacts(contactsList);
       } else {
         setSelectedGroupContacts([]);
       }
@@ -977,6 +981,7 @@ const HumanAgentDetails = ({ agentId, onBack }) => {
         </div>
       </div>
 
+
       {/* Agent Info moved to header (minimal) */}
 
       {/* My Report */}
@@ -1168,11 +1173,20 @@ const HumanAgentDetails = ({ agentId, onBack }) => {
       {activeTab === "assign" && (
         <>
           {/* Assigned Groups Section */}
-          <div className="bg-white border border-gray-200 rounded-xl p-6 mb-8">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-              <FiUsers className="w-5 h-5 mr-2 text-green-600" />
-              Assigned Groups
-            </h3>
+          <div className="mb-8">
+            <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+                <FiUsers className="w-5 h-5 mr-2 text-green-600" />
+                Assigned Groups
+              </h3>
+              <button
+                className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-blue-700 transition-colors"
+                onClick={() => setShowSuperModal(true)}
+              >
+                <FiPlus className="mr-2 h-4 w-4" />
+                Assign Contacts
+              </button>
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {assignedGroups.length === 0 ? (
                 <div className="col-span-full text-center text-gray-500 py-4">
@@ -1217,94 +1231,77 @@ const HumanAgentDetails = ({ agentId, onBack }) => {
             </div>
           </div>
           {showGroupContactsModal && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-xm transition-all">
-              <div className="bg-white rounded-2xl w-[390px] max-w-[97vw] shadow-xl border border-gray-200 p-0 overflow-hidden animate-fade-in">
-                {/* Header */}
-                <div className="px-6 py-4 border-b flex items-center justify-between bg-gradient-to-r from-blue-50 to-white">
-                  <div>
-                    <h2 className="text-lg font-semibold text-blue-700">
-                      <span className="inline-block mr-1 align-middle">👥</span>
-                      {selectedGroupForContacts?.name || "Group"} Contacts
-                    </h2>
-                    <p className="text-xs text-gray-500 mt-1">
-                      All contacts in this group
-                    </p>
+            <div className="mt-6 rounded-2xl border border-gray-200 bg-white shadow-sm">
+              <div className="px-6 py-4 border-b bg-gradient-to-r from-blue-50/60 to-white flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold text-blue-700">
+                    <span className="inline-block mr-1 align-middle">👥</span>
+                    {selectedGroupForContacts?.name || "Group"} Contacts
+                  </h2>
+                  <p className="text-xs text-gray-500 mt-1">
+                    All contacts in this group
+                  </p>
+                </div>
+                <button
+                  className="text-gray-400 hover:text-red-500 text-2xl rounded-full px-2 py-1 transition-colors duration-150"
+                  onClick={() => {
+                    setShowGroupContactsModal(false);
+                    setSelectedGroupContacts([]);
+                    setSelectedGroupForContacts(null);
+                  }}
+                  aria-label="Close contacts panel"
+                >
+                  ×
+                </button>
+              </div>
+              <div className="px-6 py-5 min-h-[120px] max-h-[340px] overflow-y-auto">
+                {loadingGroupContacts ? (
+                  <div className="text-center text-gray-500 py-8">
+                    Loading...
                   </div>
-                  <button
-                    className="text-gray-400 hover:text-red-500 text-2xl rounded-full px-2 py-1 transition-colors duration-150"
-                    onClick={() => {
-                      setShowGroupContactsModal(false);
-                      setSelectedGroupContacts([]);
-                      setSelectedGroupForContacts(null);
-                    }}
-                    aria-label="Close"
-                  >
-                    ×
-                  </button>
-                </div>
-                {/* Body */}
-                <div className="px-6 py-5 min-h-[120px] max-h-[340px] overflow-y-auto bg-white">
-                  {loadingGroupContacts ? (
-                    <div className="text-center text-gray-500 py-8">
-                      Loading...
-                    </div>
-                  ) : selectedGroupContacts.length === 0 ? (
-                    <div className="text-center text-gray-500 py-8">
-                      No contacts found in this group.
-                    </div>
-                  ) : (
-                    <ul className="space-y-3">
-                      {selectedGroupContacts.map((c) => (
-                        <li
-                          key={c._id}
-                          className="border border-blue-100 bg-blue-50/50 rounded-xl px-5 py-3 shadow flex flex-col gap-0.5 hover:shadow-md transition-all"
-                        >
-                          <span className="font-bold text-gray-800 flex items-center gap-2">
-                            <span className="text-blue-600">•</span>{" "}
-                            {c.name || "No Name"}
+                ) : selectedGroupContacts.length === 0 ? (
+                  <div className="text-center text-gray-500 py-8">
+                    No contacts found in this group.
+                  </div>
+                ) : (
+                  <ul className="space-y-3">
+                    {selectedGroupContacts.map((c) => (
+                      <li
+                        key={c._id}
+                        className="border border-blue-100 bg-blue-50/50 rounded-xl px-5 py-3 shadow flex flex-col gap-0.5 hover:shadow-md transition-all"
+                      >
+                        <span className="font-bold text-gray-800 flex items-center gap-2">
+                          <span className="text-blue-600">•</span>{" "}
+                          {c.name || "No Name"}
+                        </span>
+                        <span className="text-[13px] text-gray-700">
+                          {c.phone}
+                        </span>
+                        {c.email && (
+                          <span className="text-[13px] text-blue-700 font-mono">
+                            {c.email}
                           </span>
-                          <span className="text-[13px] text-gray-700">
-                            {c.phone}
-                          </span>
-                          {c.email && (
-                            <span className="text-[13px] text-blue-700 font-mono">
-                              {c.email}
-                            </span>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-                {/* Footer */}
-                <div className="px-6 py-4 border-t bg-gradient-to-r from-blue-50 to-white flex justify-end rounded-b-2xl">
-                  <button
-                    className="px-6 py-1.5 bg-white border border-gray-300 font-semibold rounded-lg hover:bg-gray-100 transition-all"
-                    onClick={() => {
-                      setShowGroupContactsModal(false);
-                      setSelectedGroupContacts([]);
-                      setSelectedGroupForContacts(null);
-                    }}
-                  >
-                    Close
-                  </button>
-                </div>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+              <div className="px-6 py-4 border-t bg-gradient-to-r from-blue-50/60 to-white flex justify-end rounded-b-2xl">
+                <button
+                  className="px-6 py-1.5 bg-white border border-gray-300 font-semibold rounded-lg hover:bg-gray-100 transition-all"
+                  onClick={() => {
+                    setShowGroupContactsModal(false);
+                    setSelectedGroupContacts([]);
+                    setSelectedGroupForContacts(null);
+                  }}
+                >
+                  Close
+                </button>
               </div>
             </div>
           )}
         </>
-      )}
-
-      {activeTab === "assign" && (
-        <div className="my-4 flex justify-end">
-          <button
-            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-            onClick={() => setShowSuperModal(true)}
-          >
-            <FiPlus className="w-4 h-4 inline-block mr-2" />
-            Assign Contacts
-          </button>
-        </div>
       )}
 
       {/* Daily Performance Chart (Report) */}
