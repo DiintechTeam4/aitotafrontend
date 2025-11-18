@@ -66,6 +66,9 @@ const HumanAgentDetails = ({ agentId, onBack }) => {
   const [selectedFileName, setSelectedFileName] = useState("");
   const [superSearch, setSuperSearch] = useState("");
   const [assignSearch, setAssignSearch] = useState("");
+  const [assignmentFilter, setAssignmentFilter] = useState("all"); // "all" | "assigned" | "notAssigned"
+  const [assignedContactIds, setAssignedContactIds] = useState(new Set()); // Track which contacts are assigned
+  const [assigningContacts, setAssigningContacts] = useState(false); // Loading state for assignment
 
   // Phone normalization helper
   const normalizePhoneLocal = (value) => {
@@ -765,13 +768,32 @@ const HumanAgentDetails = ({ agentId, onBack }) => {
       );
       const result = await resp.json();
       if (resp.ok && result?.success) {
-        setContacts((result.data && result.data.contacts) || []);
+        const contactsList = (result.data && result.data.contacts) || [];
+        setContacts(contactsList);
+        
+        // Check which contacts are already assigned to this agent
+        const assignedIds = new Set();
+        if (agentId && contactsList.length > 0) {
+          contactsList.forEach((contact) => {
+            if (contact.assignedToHumanAgents && Array.isArray(contact.assignedToHumanAgents)) {
+              const isAssigned = contact.assignedToHumanAgents.some(
+                (assignment) => String(assignment.humanAgentId) === String(agentId)
+              );
+              if (isAssigned) {
+                assignedIds.add(String(contact._id));
+              }
+            }
+          });
+        }
+        setAssignedContactIds(assignedIds);
       } else {
         setContacts([]);
+        setAssignedContactIds(new Set());
       }
     } catch (e) {
       console.error("Error loading group contacts (client):", e);
       setContacts([]);
+      setAssignedContactIds(new Set());
     } finally {
       setLoadingContacts(false);
     }
@@ -1916,15 +1938,30 @@ const HumanAgentDetails = ({ agentId, onBack }) => {
                       {(() => {
                         const normalized = superSearch.trim().toLowerCase();
                         const visible = (contacts || []).filter((c) => {
-                          if (!normalized) return true;
-                          const name = String(c.name || "").toLowerCase();
-                          const phone = String(c.phone || "").toLowerCase();
-                          const email = String(c.email || "").toLowerCase();
-                          return (
-                            name.includes(normalized) ||
-                            phone.includes(normalized) ||
-                            email.includes(normalized)
-                          );
+                          // Search filter
+                          if (normalized) {
+                            const name = String(c.name || "").toLowerCase();
+                            const phone = String(c.phone || "").toLowerCase();
+                            const email = String(c.email || "").toLowerCase();
+                            if (
+                              !name.includes(normalized) &&
+                              !phone.includes(normalized) &&
+                              !email.includes(normalized)
+                            ) {
+                              return false;
+                            }
+                          }
+                          
+                          // Assignment filter
+                          const isAssigned = assignedContactIds.has(String(c._id));
+                          if (assignmentFilter === "assigned" && !isAssigned) {
+                            return false;
+                          }
+                          if (assignmentFilter === "notAssigned" && isAssigned) {
+                            return false;
+                          }
+                          
+                          return true;
                         });
                         const ids = visible.map((c) => c._id);
                         const allSelected =
@@ -1956,6 +1993,28 @@ const HumanAgentDetails = ({ agentId, onBack }) => {
                         Selected {assignContacts.length}
                       </div>
                     </div>
+                    
+                    {/* Assignment Filter Buttons */}
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className="text-xs font-medium text-gray-700">Filter by assignment:</span>
+                      {[
+                        { key: "all", label: "All" },
+                        { key: "assigned", label: "Already Assigned" },
+                        { key: "notAssigned", label: "Not Assigned" },
+                      ].map((filter) => (
+                        <button
+                          key={filter.key}
+                          onClick={() => setAssignmentFilter(filter.key)}
+                          className={`px-3 py-1.5 rounded-md text-xs font-medium border transition-colors ${
+                            assignmentFilter === filter.key
+                              ? "bg-blue-600 text-white border-blue-600"
+                              : "bg-white text-gray-700 border-gray-200 hover:bg-gray-50"
+                          }`}
+                        >
+                          {filter.label}
+                        </button>
+                      ))}
+                    </div>
 
                     <div className="flex-1 overflow-y-auto thin-scrollbar">
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -1970,109 +2029,169 @@ const HumanAgentDetails = ({ agentId, onBack }) => {
                         ) : (
                           contacts
                             .filter((c) => {
+                              // Search filter
                               const q = superSearch.trim().toLowerCase();
-                              if (!q) return true;
-                              const name = String(c.name || "").toLowerCase();
-                              const phone = String(c.phone || "").toLowerCase();
-                              const email = String(c.email || "").toLowerCase();
+                              if (q) {
+                                const name = String(c.name || "").toLowerCase();
+                                const phone = String(c.phone || "").toLowerCase();
+                                const email = String(c.email || "").toLowerCase();
+                                if (
+                                  !name.includes(q) &&
+                                  !phone.includes(q) &&
+                                  !email.includes(q)
+                                ) {
+                                  return false;
+                                }
+                              }
+                              
+                              // Assignment filter
+                              const isAssigned = assignedContactIds.has(String(c._id));
+                              if (assignmentFilter === "assigned" && !isAssigned) {
+                                return false;
+                              }
+                              if (assignmentFilter === "notAssigned" && isAssigned) {
+                                return false;
+                              }
+                              
+                              return true;
+                            })
+                            .map((contact) => {
+                              const isAssigned = assignedContactIds.has(String(contact._id));
                               return (
-                                name.includes(q) ||
-                                phone.includes(q) ||
-                                email.includes(q)
+                                <div
+                                  key={contact._id}
+                                  className={`border rounded-lg p-3 flex flex-col transition-colors ${
+                                    assignContacts.includes(contact._id)
+                                      ? "border-blue-500 bg-blue-50"
+                                      : isAssigned
+                                      ? "border-green-300 bg-green-50"
+                                      : "border-gray-200 bg-white"
+                                  }`}
+                                >
+                                  <label className="flex items-start gap-2 cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      checked={assignContacts.includes(
+                                        contact._id
+                                      )}
+                                      onChange={() => {
+                                        setAssignContacts((prev) =>
+                                          prev.includes(contact._id)
+                                            ? prev.filter(
+                                                (id) => id !== contact._id
+                                              )
+                                            : [...prev, contact._id]
+                                        );
+                                      }}
+                                      className="mt-1 accent-blue-500"
+                                    />
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center gap-2">
+                                        {contact.name && (
+                                          <div className="font-semibold text-sm text-gray-900 truncate">
+                                            {contact.name}
+                                          </div>
+                                        )}
+                                        {isAssigned && (
+                                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                            Assigned
+                                          </span>
+                                        )}
+                                      </div>
+                                      <div className="text-xs text-gray-600 truncate">
+                                        {contact.phone}
+                                      </div>
+                                      {contact.email && (
+                                        <div className="text-xs text-gray-500 truncate">
+                                          {contact.email}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </label>
+                                </div>
                               );
                             })
-                            .map((contact) => (
-                              <div
-                                key={contact._id}
-                                className={`border rounded-lg p-3 flex flex-col transition-colors ${
-                                  assignContacts.includes(contact._id)
-                                    ? "border-blue-500 bg-blue-50"
-                                    : "border-gray-200 bg-white"
-                                }`}
-                              >
-                                <label className="flex items-start gap-2 cursor-pointer">
-                                  <input
-                                    type="checkbox"
-                                    checked={assignContacts.includes(
-                                      contact._id
-                                    )}
-                                    onChange={() => {
-                                      setAssignContacts((prev) =>
-                                        prev.includes(contact._id)
-                                          ? prev.filter(
-                                              (id) => id !== contact._id
-                                            )
-                                          : [...prev, contact._id]
-                                      );
-                                    }}
-                                    className="mt-1 accent-blue-500"
-                                  />
-                                  <div className="flex-1 min-w-0">
-                                    {contact.name && (
-                                      <div className="font-semibold text-sm text-gray-900 truncate">
-                                        {contact.name}
-                                      </div>
-                                    )}
-                                    <div className="text-xs text-gray-600 truncate">
-                                      {contact.phone}
-                                    </div>
-                                    {contact.email && (
-                                      <div className="text-xs text-gray-500 truncate">
-                                        {contact.email}
-                                      </div>
-                                    )}
-                                  </div>
-                                </label>
-                              </div>
-                            ))
                         )}
                       </div>
                     </div>
                     <div className="flex justify-end mt-4 pt-4 border-t border-gray-200">
-                      <button
-                        disabled={assignContacts.length === 0}
-                        className="px-5 py-2 bg-green-600 text-white rounded-lg text-sm font-medium disabled:bg-gray-400 disabled:cursor-not-allowed hover:bg-green-700 transition-colors"
-                        onClick={async () => {
-                          try {
-                            const token = sessionStorage.getItem("clienttoken");
-                            const response = await fetch(
-                              `https://aitotabackend-sih2.onrender.com/api/v1/client/groups/${selectedGroup._id}/assign?owner=assign`,
-                              {
-                                method: "POST",
-                                headers: {
-                                  Authorization: `Bearer ${token}`,
-                                  "Content-Type": "application/json",
-                                },
-                                body: JSON.stringify({
-                                  contactIds: assignContacts,
-                                  agentId: agent._id,
-                                }),
-                              }
-                            );
-                            const result = await response.json();
-                            if (result.success) {
-                              // Refresh contacts to show updated assignments
-                              await handleSelectGroup(selectedGroup);
-                              setAssignContacts([]);
-                              alert(
-                                result.message ||
-                                  `Successfully assigned ${assignContacts.length} contact(s)`
-                              );
-                            } else {
-                              alert(
-                                result.error || "Failed to assign contacts"
-                              );
+                      {(() => {
+                        // Check if any selected contacts are already assigned
+                        const selectedAssigned = assignContacts.some((id) =>
+                          assignedContactIds.has(String(id))
+                        );
+                        const selectedNotAssigned = assignContacts.some(
+                          (id) => !assignedContactIds.has(String(id))
+                        );
+                        const buttonText =
+                          selectedAssigned && selectedNotAssigned
+                            ? "Assign/Reassign Checked"
+                            : selectedAssigned
+                            ? "Reassign Checked Contacts"
+                            : "Assign Checked Contacts";
+
+                        return (
+                          <button
+                            disabled={
+                              assignContacts.length === 0 || assigningContacts
                             }
-                          } catch (error) {
-                            console.error("Error assigning contacts:", error);
-                            alert(
-                              "Failed to assign contacts. Please try again."
-                            );
-                          }
-                        }}
-                      >
-                        Assign Checked Contacts
-                      </button>
+                            className="px-5 py-2 bg-green-600 text-white rounded-lg text-sm font-medium disabled:bg-gray-400 disabled:cursor-not-allowed hover:bg-green-700 transition-colors flex items-center gap-2"
+                            onClick={async () => {
+                              try {
+                                setAssigningContacts(true);
+                                const token = sessionStorage.getItem("clienttoken");
+                                const response = await fetch(
+                                  `https://aitotabackend-sih2.onrender.com/api/v1/client/groups/${selectedGroup._id}/assign?owner=assign`,
+                                  {
+                                    method: "POST",
+                                    headers: {
+                                      Authorization: `Bearer ${token}`,
+                                      "Content-Type": "application/json",
+                                    },
+                                    body: JSON.stringify({
+                                      contactIds: assignContacts,
+                                      agentId: agent._id,
+                                      humanAgentId: agent._id,
+                                    }),
+                                  }
+                                );
+                                const result = await response.json();
+                                if (result.success) {
+                                  // Refresh contacts to show updated assignments
+                                  await handleSelectGroup(selectedGroup);
+                                  setAssignContacts([]);
+                                  alert(
+                                    result.message ||
+                                      `Successfully ${
+                                        selectedAssigned ? "reassigned" : "assigned"
+                                      } ${assignContacts.length} contact(s)`
+                                  );
+                                } else {
+                                  alert(
+                                    result.error || "Failed to assign contacts"
+                                  );
+                                }
+                              } catch (error) {
+                                console.error("Error assigning contacts:", error);
+                                alert(
+                                  "Failed to assign contacts. Please try again."
+                                );
+                              } finally {
+                                setAssigningContacts(false);
+                              }
+                            }}
+                          >
+                            {assigningContacts ? (
+                              <>
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                <span>Processing...</span>
+                              </>
+                            ) : (
+                              buttonText
+                            )}
+                          </button>
+                        );
+                      })()}
                     </div>
                   </>
                 )}
