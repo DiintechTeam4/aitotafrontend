@@ -629,7 +629,13 @@ function CampaignDetails({ campaignId, onBack }) {
   };
   const extractContactIdForAssign = (record) => {
     if (!record) return null;
-    return ( record._id );
+    return (
+      record._id ||
+      record.id ||
+      record.documentId ||
+      record.contactId ||
+      null
+    );
   };
   const getAgentSelectionsForRow = (rowKey) =>
     agentSelectionsByRow[rowKey] || [];
@@ -654,6 +660,7 @@ function CampaignDetails({ campaignId, onBack }) {
       };
     });
   };
+  const [humanAgents, setHumanAgents] = useState([]);
   const assignContactsToHumanAgents = async ({ rowKey, contacts, runId }) => {
     const contactArray = Array.isArray(contacts)
       ? contacts.filter(Boolean)
@@ -728,6 +735,216 @@ function CampaignDetails({ campaignId, onBack }) {
         delete clone[rowKey];
         return clone;
       });
+    }
+  };
+  const runTranscriptRangeAssignment = useCallback(
+    async ({ runId, agentId, minCount = 0, maxCount = null, silent = false }) => {
+      if (!campaignId) {
+        throw new Error("Campaign ID missing");
+      }
+      if (!runId) {
+        throw new Error("Run ID is required");
+      }
+      if (!agentId) {
+        throw new Error("Human agent ID is required");
+      }
+      const authToken =
+        sessionStorage.getItem("clienttoken") ||
+        localStorage.getItem("admintoken");
+      if (!authToken) {
+        throw new Error("Authentication token not found");
+      }
+      const transcriptRangePayload = {};
+      if (typeof minCount === "number") {
+        transcriptRangePayload.minTranscriptCount = Number(minCount);
+      }
+      if (maxCount !== null && maxCount !== undefined) {
+        transcriptRangePayload.maxTranscriptCount = Number(maxCount);
+      }
+      if (!Object.keys(transcriptRangePayload).length) {
+        transcriptRangePayload.minTranscriptCount = 0;
+      }
+      const response = await fetch(
+        `${API_BASE}/campaigns/${campaignId}/history/${runId}/assign-contacts`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${authToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            humanAgentIds: [agentId],
+            transcriptRange: transcriptRangePayload,
+          }),
+        }
+      );
+      const data = await response.json().catch(() => null);
+      if (!response.ok || data?.success === false) {
+        throw new Error(data?.error || "Failed to assign contacts");
+      }
+      setAutoAssignLastResult({
+        timestamp: Date.now(),
+        assignedContactsCount: data?.data?.assignedContactsCount ?? 0,
+        transcriptRange:
+          data?.data?.transcriptRangeApplied || transcriptRangePayload,
+      });
+      setAutoAssignError("");
+      if (!silent) {
+        toast?.success?.(data?.message || "Contacts assigned successfully");
+      }
+      return data;
+    },
+    [campaignId]
+  );
+
+  const stopAutoAssignMonitor = useCallback((reason = "") => {
+    if (autoAssignIntervalRef.current) {
+      console.log(`🛑 AUTO-ASSIGN: Stopping monitor${reason ? ` - ${reason}` : ""}`);
+      clearInterval(autoAssignIntervalRef.current);
+      autoAssignIntervalRef.current = null;
+    }
+    setAutoAssignConfig(null);
+    setAutoAssignError(reason || "");
+  }, []);
+
+  const resolveHumanAgentLabel = useCallback(
+    (agentId) => {
+      if (!agentId) return "selected agent";
+      const agent = (humanAgents || []).find(
+        (entry) => String(entry?._id || entry?.id) === String(agentId)
+      );
+      return (
+        agent?.humanAgentName ||
+        agent?.agentName ||
+        agent?.name ||
+        agent?.email ||
+        "selected agent"
+      );
+    },
+    [humanAgents]
+  );
+
+  const startAutoAssignMonitor = useCallback(
+    (config) => {
+      if (!config?.runId || !config?.agentId) {
+        console.log("🚫 AUTO-ASSIGN: Cannot start - missing runId or agentId", config);
+        return;
+      }
+      console.log(`🔄 AUTO-ASSIGN: Starting monitor for runId ${config.runId}, agentId ${config.agentId}`);
+      stopAutoAssignMonitor("");
+      setAutoAssignConfig(config);
+      setAutoAssignError("");
+      const interval = Math.max(6000, config.intervalMs || 10000);
+      autoAssignIntervalRef.current = setInterval(() => {
+        // Check if campaign is still running before assigning
+        if (campaign?.isRunning === false) {
+          console.log("🛑 AUTO-ASSIGN: Campaign stopped, stopping monitor");
+          stopAutoAssignMonitor("Campaign stopped");
+          return;
+        }
+        const timestamp = new Date().toISOString();
+        console.log(`[${timestamp}] 🔄 AUTO-ASSIGN: Running assignment for runId ${config.runId}, range: [${config.minCount || 0}, ${config.maxCount === null ? 'null' : config.maxCount}]`);
+        runTranscriptRangeAssignment({
+          runId: config.runId,
+          agentId: config.agentId,
+          minCount:
+            typeof config.minCount === "number" ? config.minCount : 0,
+          maxCount:
+            config.maxCount === null || config.maxCount === undefined
+              ? null
+              : config.maxCount,
+          silent: true,
+        }).then((result) => {
+          const assignedCount = result?.data?.assignedContactsCount || 0;
+          if (assignedCount > 0) {
+            console.log(`[${timestamp}] ✅ AUTO-ASSIGN: Successfully assigned ${assignedCount} contacts`);
+          } else {
+            console.log(`[${timestamp}] ⏳ AUTO-ASSIGN: No contacts matched criteria yet, will check again in ${interval}ms`);
+          }
+        }).catch((error) => {
+          console.error(`[${timestamp}] ❌ AUTO-ASSIGN: Assignment failed:`, error);
+          setAutoAssignError(error?.message || "Auto assignment failed");
+        });
+      }, interval);
+    },
+    [runTranscriptRangeAssignment, stopAutoAssignMonitor, campaign?.isRunning]
+  );
+
+  const handleBulkAssignSubmit = async () => {
+    try {
+      if (!campaignId) {
+        toast?.error?.("Campaign ID missing");
+        return;
+      }
+      if (!bulkAssignAgentId) {
+        toast?.warn?.("Select a human agent");
+        return;
+      }
+      const targetRunId =
+        bulkAssignSelectedRunId || resolveDefaultRunIdForAssignment();
+      if (!targetRunId) {
+        toast?.warn?.("Select a campaign run to assign");
+        return;
+      }
+      const parseCountValue = (value) => {
+        if (value === "" || value === null || value === undefined) return null;
+        const num = Number(value);
+        return Number.isFinite(num) ? num : null;
+      };
+      const minCount = parseCountValue(bulkAssignMinTranscript);
+      const maxCount = parseCountValue(bulkAssignMaxTranscript);
+      if (
+        (bulkAssignMinTranscript !== "" && minCount === null) ||
+        (bulkAssignMaxTranscript !== "" && maxCount === null)
+      ) {
+        toast?.warn?.("Transcript counts must be valid numbers");
+        return;
+      }
+      if (
+        minCount !== null &&
+        maxCount !== null &&
+        Number(minCount) > Number(maxCount)
+      ) {
+        toast?.warn?.("Minimum transcript count cannot exceed maximum");
+        return;
+      }
+      setIsBulkAssigning(true);
+      const normalizedMin =
+        typeof minCount === "number" ? minCount : 0;
+      const normalizedMax =
+        typeof maxCount === "number" ? maxCount : null;
+      await runTranscriptRangeAssignment({
+        runId: targetRunId,
+        agentId: bulkAssignAgentId,
+        minCount: normalizedMin,
+        maxCount: normalizedMax,
+        silent: false,
+      });
+      closeBulkAssignModal();
+      try {
+        await fetchCampaignHistory(campaignId);
+      } catch (_) {}
+      try {
+        await fetchCampaignCallingStatus();
+      } catch (_) {}
+      const shouldAutoAssignLive =
+        campaign?.isRunning &&
+        (!currentRunId || currentRunId === targetRunId);
+      if (shouldAutoAssignLive) {
+        startAutoAssignMonitor({
+          runId: targetRunId,
+          agentId: bulkAssignAgentId,
+          minCount: normalizedMin,
+          maxCount: normalizedMax,
+        });
+      } else {
+        stopAutoAssignMonitor("");
+      }
+    } catch (error) {
+      console.error("Bulk assignment failed:", error);
+      toast?.error?.(error?.message || "Failed to assign contacts");
+    } finally {
+      setIsBulkAssigning(false);
     }
   };
   const renderAssignMenu = ({ rowKey, contacts, runId }) => {
@@ -824,6 +1041,198 @@ function CampaignDetails({ campaignId, onBack }) {
           >
             {isAssigning ? "Assigning..." : "Assign"}
           </button>
+        </div>
+      </div>
+    );
+  };
+  const renderBulkAssignModal = () => {
+    if (!showBulkAssignModal) return null;
+    const runOptions = [];
+    if (currentRunId) {
+      runOptions.push({
+        value: currentRunId,
+        label: `Current run (${currentRunId.slice(-6)})`,
+      });
+    }
+    if (Array.isArray(campaignHistory)) {
+      campaignHistory.forEach((run, index) => {
+        const runValue =
+          extractHistoryRunId(run) || `history-${index}`;
+        if (!runValue) return;
+        if (runValue === currentRunId) return;
+        const labelParts = [];
+        if (run.instanceNumber) {
+          labelParts.push(`Run #${run.instanceNumber}`);
+        }
+        if (run.startTime) {
+          labelParts.push(
+            new Date(run.startTime).toLocaleString(undefined, {
+              month: "short",
+              day: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+            })
+          );
+        }
+        const runSuffix =
+          runValue.length > 6 ? runValue.slice(-6) : runValue;
+        labelParts.push(runSuffix);
+        runOptions.push({
+          value: runValue,
+          label: labelParts.filter(Boolean).join(" · "),
+        });
+      });
+    }
+    const agentOptions = Array.isArray(humanAgents) ? humanAgents : [];
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4 py-6">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6">
+          <div className="flex items-start justify-between mb-4">
+            <div>
+              <h3 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
+                <FiUsers className="text-blue-600" />
+                Bulk Assign AI leads
+              </h3>
+              <p className="text-sm text-gray-600 mt-1">
+                Choose a campaign run, human agent, and optional transcript
+                count range. All contacts whose conversation count falls within
+                the range will be assigned automatically.
+              </p>
+              {bulkAssignContext === "postStart" && (
+                <p className="text-xs text-blue-600 mt-2">
+                  Campaign started successfully. Assign this run’s contacts now
+                  or skip and assign later.
+                </p>
+              )}
+            </div>
+            <button
+              type="button"
+              className="text-gray-400 hover:text-gray-600"
+              onClick={closeBulkAssignModal}
+            >
+              ×
+            </button>
+          </div>
+          <div className="space-y-4">
+            <div>
+              <label className="text-xs font-medium text-gray-600 block mb-1">
+                Select run
+              </label>
+              <select
+                value={bulkAssignSelectedRunId}
+                onChange={(e) => setBulkAssignSelectedRunId(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+              >
+                <option value="">Select a campaign run</option>
+                {runOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-gray-600 block mb-1">
+                Assign to human agent
+              </label>
+              <select
+                value={bulkAssignAgentId}
+                onChange={(e) => setBulkAssignAgentId(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+              >
+                <option value="">Select human agent</option>
+                {agentOptions.map((agent) => {
+                  const agentId = agent?._id || agent?.id;
+                  const label =
+                    agent?.humanAgentName ||
+                    agent?.agentName ||
+                    agent?.name ||
+                    agent?.email ||
+                    "Unnamed agent";
+                  return (
+                    <option key={agentId || label} value={agentId || label}>
+                      {label}
+                    </option>
+                  );
+                })}
+              </select>
+              {humanAgentsLoading && (
+                <p className="text-xs text-gray-500 mt-1">
+                  Loading human agents...
+                </p>
+              )}
+              {humanAgentsError && (
+                <p className="text-xs text-red-500 mt-1">{humanAgentsError}</p>
+              )}
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs font-medium text-gray-600 block mb-1">
+                  Minimum transcript count
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  value={bulkAssignMinTranscript}
+                  onChange={(e) => setBulkAssignMinTranscript(e.target.value)}
+                  placeholder="e.g., 0"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-600 block mb-1">
+                  Maximum transcript count
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  value={bulkAssignMaxTranscript}
+                  onChange={(e) => setBulkAssignMaxTranscript(e.target.value)}
+                  placeholder="e.g., 10"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+            </div>
+            <p className="text-xs text-gray-500">
+              Leave both transcript inputs blank to assign every contact in the
+              selected run. Transcript counts refer to the conversation count
+              displayed in the Recent Call Logs table.
+            </p>
+          </div>
+          <div className="flex items-center justify-between mt-6">
+            {bulkAssignContext === "postStart" ? (
+              <button
+                type="button"
+                onClick={closeBulkAssignModal}
+                className="text-sm text-gray-500 hover:text-gray-700"
+              >
+                Skip for now
+              </button>
+            ) : (
+              <span />
+            )}
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={closeBulkAssignModal}
+                className="px-4 py-2 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleBulkAssignSubmit}
+                disabled={isBulkAssigning}
+                className={`px-4 py-2 text-sm rounded-lg text-white ${
+                  isBulkAssigning
+                    ? "bg-blue-300 cursor-not-allowed"
+                    : "bg-blue-600 hover:bg-blue-700"
+                }`}
+              >
+                {isBulkAssigning ? "Assigning..." : "Assign contacts"}
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -1340,7 +1749,7 @@ function CampaignDetails({ campaignId, onBack }) {
   const [liveCallDetails, setLiveCallDetails] = useState(null);
   const [transcriptCounts, setTranscriptCounts] = useState(new Map());
   const [openAssignFor, setOpenAssignFor] = useState(null);
-  const [humanAgents, setHumanAgents] = useState([]);
+  
   const [humanAgentsLoading, setHumanAgentsLoading] = useState(false);
   const [humanAgentsError, setHumanAgentsError] = useState("");
   const [agentSelectionsByRow, setAgentSelectionsByRow] = useState({});
@@ -1348,9 +1757,20 @@ function CampaignDetails({ campaignId, onBack }) {
   const [callConnectionStatus, setCallConnectionStatus] = useState("connected"); // connected, not_connected
   const [callResultsConnectionStatus, setCallResultsConnectionStatus] =
     useState({}); // Track connection status for each call result
+  const [showBulkAssignModal, setShowBulkAssignModal] = useState(false);
+  const [bulkAssignAgentId, setBulkAssignAgentId] = useState("");
+  const [bulkAssignMinTranscript, setBulkAssignMinTranscript] = useState("");
+  const [bulkAssignMaxTranscript, setBulkAssignMaxTranscript] = useState("");
+  const [bulkAssignSelectedRunId, setBulkAssignSelectedRunId] = useState("");
+  const [isBulkAssigning, setIsBulkAssigning] = useState(false);
+  const [bulkAssignContext, setBulkAssignContext] = useState("manual");
+  const [autoAssignConfig, setAutoAssignConfig] = useState(null);
+  const [autoAssignLastResult, setAutoAssignLastResult] = useState(null);
+  const [autoAssignError, setAutoAssignError] = useState("");
   const [statusLogsCollapsed, setStatusLogsCollapsed] = useState(false);
   const logsPollRef = useRef(null);
   const transcriptRef = useRef(null);
+  const autoAssignIntervalRef = useRef(null);
   // When true, clear current dashboard lists to be ready for next run
   const [readyForNextRun, setReadyForNextRun] = useState(false);
   // Show all history modal
@@ -1436,6 +1856,136 @@ function CampaignDetails({ campaignId, onBack }) {
   useEffect(() => {
     loadHumanAgents();
   }, [loadHumanAgents]);
+  useEffect(() => {
+    return () => {
+      stopAutoAssignMonitor("");
+    };
+  }, [stopAutoAssignMonitor]);
+  useEffect(() => {
+    if (!autoAssignConfig) return;
+    
+    // Stop if campaign is not running
+    if (campaign?.isRunning === false) {
+      console.log("🛑 AUTO-ASSIGN: Campaign stopped, stopping monitor");
+      stopAutoAssignMonitor("Campaign stopped. Auto assignment paused.");
+      return;
+    }
+    
+    // Stop if runId changed
+    if (
+      currentRunId &&
+      autoAssignConfig.runId &&
+      currentRunId !== autoAssignConfig.runId
+    ) {
+      console.log(`🛑 AUTO-ASSIGN: RunId changed from ${autoAssignConfig.runId} to ${currentRunId}, stopping monitor`);
+      stopAutoAssignMonitor("");
+    }
+    
+    // Don't stop auto-assignment based on completed calls - let it continue until campaign ends
+    // This allows assignment of contacts as they meet transcript criteria during live calls
+    // Only stop when campaign.isRunning becomes false
+  }, [autoAssignConfig, campaign?.isRunning, currentRunId, stopAutoAssignMonitor, campaignHistory]);
+  const extractHistoryRunId = (run, fallback = "") => {
+    if (!run) return fallback;
+    const candidate =
+      run?.runId ||
+      run?.effectiveRunId ||
+      run?._id ||
+      (run?.instanceNumber ? `run-${run.instanceNumber}` : "");
+    return candidate ? String(candidate) : fallback;
+  };
+  const computeHistoryStats = (run) => {
+    const stats = run?.stats || {};
+    const contacts = Array.isArray(run?.contacts)
+      ? run.contacts.filter(Boolean)
+      : [];
+
+    const hasReliableStats =
+      typeof stats.totalContacts === "number" && stats.totalContacts > 0;
+
+    if (hasReliableStats) {
+      return {
+        totalContacts: stats.totalContacts || contacts.length || 0,
+        successfulCalls: stats.successfulCalls || 0,
+        failedCalls: stats.failedCalls || 0,
+        totalCallDuration: stats.totalCallDuration || 0,
+        averageCallDuration: stats.averageCallDuration || 0,
+      };
+    }
+
+    let successfulCalls = 0;
+    let failedCalls = 0;
+    let totalCallDuration = 0;
+
+    contacts.forEach((contact) => {
+      const leadStatus = String(contact?.leadStatus || "").toLowerCase();
+      const status = String(contact?.status || "").toLowerCase();
+      const isConnected =
+        (leadStatus && leadStatus !== "not_connected") ||
+        ["completed", "connected"].includes(status);
+      if (isConnected) {
+        successfulCalls += 1;
+      } else {
+        failedCalls += 1;
+      }
+      const duration = Number(
+        contact?.duration ??
+          contact?.callDuration ??
+          contact?.stats?.duration ??
+          0
+      );
+      if (Number.isFinite(duration)) {
+        totalCallDuration += duration;
+      }
+    });
+
+    const totalContacts = contacts.length;
+    const averageCallDuration =
+      totalContacts > 0
+        ? Math.round(totalCallDuration / totalContacts)
+        : 0;
+
+    return {
+      totalContacts,
+      successfulCalls,
+      failedCalls,
+      totalCallDuration,
+      averageCallDuration,
+    };
+  };
+  const resolveDefaultRunIdForAssignment = (preferredRunId = null) => {
+    if (preferredRunId) return preferredRunId;
+    if (currentRunId) return currentRunId;
+    if (Array.isArray(campaignHistory) && campaignHistory.length > 0) {
+      const firstRunId = extractHistoryRunId(campaignHistory[0]);
+      if (firstRunId) return firstRunId;
+    }
+    return "";
+  };
+  const openBulkAssignModal = (context = "manual", defaultRunId = null) => {
+    try {
+      if ((!humanAgents || humanAgents.length === 0) && !humanAgentsLoading) {
+        loadHumanAgents();
+      }
+    } catch (_) {}
+    setBulkAssignContext(context);
+    const fallbackAgentId =
+      (humanAgents &&
+        humanAgents.length > 0 &&
+        (humanAgents[0]._id || humanAgents[0].id || humanAgents[0]?.humanAgentId)) ||
+      "";
+    setBulkAssignAgentId((prev) => prev || fallbackAgentId);
+    setBulkAssignMinTranscript("");
+    setBulkAssignMaxTranscript("");
+    setBulkAssignSelectedRunId(
+      resolveDefaultRunIdForAssignment(defaultRunId)
+    );
+    setShowBulkAssignModal(true);
+  };
+  const closeBulkAssignModal = () => {
+    setShowBulkAssignModal(false);
+    setBulkAssignContext("manual");
+  };
   useEffect(() => {
     const skipReset = !!skipNextAudioResetRef.current;
     if (skipReset) {
@@ -4080,6 +4630,8 @@ function CampaignDetails({ campaignId, onBack }) {
   const fetchCampaignCallingStatus = async () => {
     try {
       if (!campaignId) return;
+      const timestamp = new Date().toISOString();
+      console.log(`[${timestamp}] 🔄 FRONTEND: Fetching campaign status for ${campaignId}`);
       const token = sessionStorage.getItem("clienttoken");
       const response = await fetch(
         `${API_BASE}/campaigns/${campaignId}/calling-status`,
@@ -4093,36 +4645,23 @@ function CampaignDetails({ campaignId, onBack }) {
       if (response.ok) {
         const result = await response.json();
         if (result.success && result.data) {
-          // Capture backend-provided run metadata (latest runId + inferred start)
-          const backendRunId =
-            result?.data?.progress?.runId ||
-            result?.data?.latestRunId ||
-            result?.data?.progress?.currentRunId ||
-            null;
-          const backendRunStart = result?.data?.runStartTime
-            ? new Date(result.data.runStartTime)
-            : null;
-          const runChanged =
-            backendRunId &&
-            backendRunId !== currentRunId &&
-            backendRunId !== undefined;
-          if (runChanged) {
-            setCurrentRunId(backendRunId);
-          }
-          if (
-            backendRunStart &&
-            (!campaignStartTime || runChanged) &&
-            !Number.isNaN(backendRunStart.getTime())
-          ) {
-            setCampaignStartTime(backendRunStart);
-          }
           // Update campaign running status from backend
           const nextIsRunning = result.data.isRunning;
           const backendAllFinalized = !!result?.data?.allCallsFinalized;
           const isActuallyRunning = !!result?.data?.isActuallyRunning;
+          
+          console.log(`[${timestamp}] 📊 FRONTEND STATUS: Campaign ${campaignId} - isRunning: ${nextIsRunning}, allFinalized: ${backendAllFinalized}, isActuallyRunning: ${isActuallyRunning}, initiated: ${result.data.initiatedCount}, completed: ${result.data.completedCount}`);
+          
+          // If campaign completed, stop auto-assignment immediately
+          if (backendAllFinalized && nextIsRunning === false) {
+            console.log(`[${timestamp}] ✅ FRONTEND: Campaign ${campaignId} completed, stopping auto-assignment`);
+            stopAutoAssignMonitor("Campaign completed");
+          }
+          
           // Auto-save history when backend indicates calling has become inactive
           try {
             const wasRunning = campaign?.isRunning;
+            console.log(`[${timestamp}] 🔄 FRONTEND: Campaign status change - wasRunning: ${wasRunning}, nextIsRunning: ${nextIsRunning}`);
             const effectiveRunId = currentRunId || result?.data?.latestRunId;
             // More robust completion detection
             const shouldAutoSave =
@@ -4280,9 +4819,11 @@ function CampaignDetails({ campaignId, onBack }) {
     // Set up polling based on campaign status
     if (campaign?.isRunning) {
       // More frequent polling when campaign is running (every 2 seconds)
+      console.log(`🔄 FRONTEND POLLING: Starting frequent polling (2s) for running campaign ${campaignId}`);
       intervalId = setInterval(poll, 2000);
     } else {
       // Less frequent polling when campaign is idle (every 10 seconds)
+      console.log(`🔄 FRONTEND POLLING: Starting idle polling (10s) for stopped campaign ${campaignId}`);
       intervalId = setInterval(poll, 10000);
     }
     // Listen for visibility changes
@@ -5287,6 +5828,7 @@ function CampaignDetails({ campaignId, onBack }) {
   };
   // Backend start/stop campaign calling (replace frontend calling flow)
   const startCampaignCallingBackend = async () => {
+    let startedRunId = null;
     try {
       if (!campaign?._id) return;
       // Get primary agent ID for campaign
@@ -5329,6 +5871,7 @@ function CampaignDetails({ campaignId, onBack }) {
           if (newRunId) {
             setCurrentRunId(newRunId);
             setCampaignStartTime(new Date());
+            startedRunId = newRunId;
           }
         } catch (_) {}
         setCampaign((prev) => (prev ? { ...prev, isRunning: true } : prev));
@@ -5369,7 +5912,16 @@ function CampaignDetails({ campaignId, onBack }) {
         });
         if (!result.success) {
           // Error handling is done in universalCalling
-          return;
+          return null;
+        }
+        const runIdFromResult =
+          result?.data?.data?.runId ||
+          result?.data?.data?.status?.runId ||
+          null;
+        if (runIdFromResult) {
+          startedRunId = runIdFromResult;
+        } else if (currentRunId) {
+          startedRunId = currentRunId;
         }
       }
     } catch (e) {
@@ -5378,6 +5930,7 @@ function CampaignDetails({ campaignId, onBack }) {
     } finally {
       setIsTogglingCampaign(false);
     }
+    return startedRunId;
   };
   const stopCampaignCallingBackend = async () => {
     try {
@@ -5720,7 +6273,7 @@ function CampaignDetails({ campaignId, onBack }) {
         const confirmStart = window.confirm("Start the campaign now?");
         if (!confirmStart) return;
         // Start campaign
-        await startCampaignCallingBackend();
+        const startedRunId = await startCampaignCallingBackend();
         // When a new run begins, ensure we show live data again
         setIsLiveCallActive(true);
         // Broadcast status change to other tabs
@@ -5728,10 +6281,15 @@ function CampaignDetails({ campaignId, onBack }) {
         channel.postMessage({
           type: "campaign-status-update",
           isRunning: true,
-          runId: currentRunId,
+          runId: startedRunId || currentRunId,
           timestamp: Date.now(),
         });
         channel.close();
+        try {
+          const defaultRunIdForModal =
+            startedRunId || currentRunId || resolveDefaultRunIdForAssignment();
+          openBulkAssignModal("postStart", defaultRunIdForModal);
+        } catch (_) {}
       }
     } finally {
       setIsTogglingCampaign(false);
@@ -5743,6 +6301,7 @@ function CampaignDetails({ campaignId, onBack }) {
     const isExpanded = !!historyExpanded[runKey];
     const setIsExpanded = (val) =>
       setHistoryExpanded((prev) => ({ ...prev, [runKey]: val }));
+    const historyStats = useMemo(() => computeHistoryStats(run), [run]);
     const handleForceSaveHistory = async () => {
       try {
         const token = localStorage.getItem("token");
@@ -5760,7 +6319,7 @@ function CampaignDetails({ campaignId, onBack }) {
               "Content-Type": "application/json",
               Authorization: `Bearer ${token}`,
             },
-            body: JSON.stringify({ runId: run.runId }),
+            body: JSON.stringify({ runId: extractHistoryRunId(run) }),
           }
         );
         const data = await resp.json();
@@ -5789,56 +6348,6 @@ function CampaignDetails({ campaignId, onBack }) {
                   Campaign Run #{run.instanceNumber}
                 </h3>
                 <p className="text-sm text-gray-600 flex flex-wrap items-center gap-3">
-                  {(() => {
-                    const parseDate = (val) => {
-                      const d = new Date(val);
-                      return isNaN(d.getTime()) ? null : d;
-                    };
-                    const dateObj =
-                      parseDate(run.createdAt) ||
-                      parseDate(run.startTime) ||
-                      new Date();
-                    const startObj =
-                      parseDate(run.startTime) || parseDate(run.createdAt);
-                    const endObj =
-                      parseDate(run.endTime) ||
-                      parseDate(run.updatedAt) ||
-                      startObj;
-                    const dateStr = dateObj
-                      ? dateObj.toLocaleDateString("en-GB", {
-                          day: "2-digit",
-                          month: "2-digit",
-                          year: "numeric",
-                        })
-                      : "-";
-                    const startStr = startObj
-                      ? startObj.toLocaleTimeString([], {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                          second: "2-digit",
-                        })
-                      : "-";
-                    const endStr = endObj
-                      ? endObj.toLocaleTimeString([], {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                          second: "2-digit",
-                        })
-                      : "-";
-                    return (
-                      <>
-                        <span>
-                          <strong>Date:</strong> {dateStr}
-                        </span>
-                        <span>
-                          <strong>Start:</strong> {startStr}
-                        </span>
-                        <span>
-                          <strong>End:</strong> {endStr}
-                        </span>
-                      </>
-                    );
-                  })()}
                   <span className="inline-flex items-center gap-1">
                     <FiClock />
                     <strong>Duration:</strong>{" "}
@@ -5903,11 +6412,11 @@ function CampaignDetails({ campaignId, onBack }) {
               {!isExpanded && (
                 <div className="text-right">
                   <div className="text-sm font-medium text-gray-900">
-                    {run.stats.successfulCalls} Connected,{" "}
-                    {run.stats.failedCalls} Not Connected
+                    {historyStats.successfulCalls} Connected,{" "}
+                    {historyStats.failedCalls} Not Connected
                   </div>
                   <div className="text-xs text-gray-500">
-                    {run.stats.totalContacts} total contacts
+                    {historyStats.totalContacts} total contacts
                   </div>
                 </div>
               )}
@@ -5929,25 +6438,25 @@ function CampaignDetails({ campaignId, onBack }) {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
               <div className="bg-blue-50 p-3 rounded-lg">
                 <div className="text-2xl font-bold text-blue-600">
-                  {run.stats.totalContacts}
+                  {historyStats.totalContacts}
                 </div>
                 <div className="text-sm text-blue-800">Total Contacts</div>
               </div>
               <div className="bg-green-50 p-3 rounded-lg">
                 <div className="text-2xl font-bold text-green-600">
-                  {run.stats.successfulCalls}
+                  {historyStats.successfulCalls}
                 </div>
                 <div className="text-sm text-green-800">Connected Calls</div>
               </div>
               <div className="bg-red-50 p-3 rounded-lg">
                 <div className="text-2xl font-bold text-red-600">
-                  {run.stats.failedCalls}
+                  {historyStats.failedCalls}
                 </div>
                 <div className="text-sm text-red-800">Not Connected Calls</div>
               </div>
               <div className="bg-purple-50 p-3 rounded-lg">
                 <div className="text-2xl font-bold text-purple-600">
-                  {formatHMSCompact(run.stats?.totalCallDuration || 0)}
+                  {formatHMSCompact(historyStats.totalCallDuration || 0)}
                 </div>
                 <div className="text-sm text-purple-800">Total Duration</div>
               </div>
@@ -6844,17 +7353,48 @@ function CampaignDetails({ campaignId, onBack }) {
                           B = getSec(b);
                         return durationSort === "longest" ? B - A : A - B;
                       })
-                      .map((lead, idx) => (
-                        <tr
-                          key={`${
-                            lead.documentId || lead.contactId || "hrow"
-                          }-${idx}`}
-                          className={`hover:bg-gray-50 ${
-                            isCallLogSelected(lead)
-                              ? "bg-blue-50 border-blue-200"
-                              : ""
-                          }`}
-                        >
+                      .map((lead, idx) => {
+                        const assignedAgentLabels = (() => {
+                          if (
+                            !Array.isArray(lead?.assignedToHumanAgents) ||
+                            lead.assignedToHumanAgents.length === 0
+                          ) {
+                            return [];
+                          }
+                          const labelMap = new Map();
+                          lead.assignedToHumanAgents.forEach((assignment) => {
+                            if (!assignment) return;
+                            const agentId =
+                              assignment.humanAgentId ||
+                              assignment.agentId ||
+                              assignment._id;
+                            if (!agentId) return;
+                            const existing = labelMap.get(String(agentId));
+                            if (existing) return;
+                            const label =
+                              assignment.humanAgentName ||
+                              assignment.agentName ||
+                              assignment.email ||
+                              resolveHumanAgentLabel(agentId) ||
+                              String(agentId);
+                            labelMap.set(String(agentId), label);
+                          });
+                          return Array.from(labelMap.entries()).map(
+                            ([id, label]) => ({ id, label })
+                          );
+                        })();
+
+                        return (
+                          <tr
+                            key={`${
+                              lead.documentId || lead.contactId || "hrow"
+                            }-${idx}`}
+                            className={`hover:bg-gray-50 ${
+                              isCallLogSelected(lead)
+                                ? "bg-blue-50 border-blue-200"
+                                : ""
+                            }`}
+                          >
                           <td className="py-2 px-3">
                             <input
                               type="checkbox"
@@ -7173,86 +7713,102 @@ function CampaignDetails({ campaignId, onBack }) {
                           <td className="py-2 px-3">{lead.leadStatus}</td>
                           {/* Action: Bookmark toggle + Assign dropdown */}
                           <td className="py-2 px-3">
-                            <div className="flex items-center gap-2">
-                              {(() => {
-                                const idCandidate =
-                                  lead.contactId ||
-                                  lead.documentId ||
-                                  lead._id ||
-                                  lead.phone ||
-                                  lead.number;
-                                const isBk = idCandidate
-                                  ? isContactBookmarked({
-                                      _id: idCandidate,
-                                      phone: lead.phone,
-                                      number: lead.number,
-                                    })
-                                  : false;
-                                return (
-                                  <button
-                                    type="button"
-                                    className={`p-1 rounded border ${
-                                      isBk
-                                        ? "bg-yellow-100 border-yellow-300"
-                                        : "bg-white border-gray-300 hover:bg-gray-50"
-                                    }`}
-                                    title={
-                                      isBk ? "Remove bookmark" : "Add bookmark"
-                                    }
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      toggleBookmarkForContact({
+                            <div className="flex flex-col gap-2">
+                              {assignedAgentLabels.length > 0 && (
+                                <div className="flex flex-wrap gap-1">
+                                  {assignedAgentLabels.map((agent) => (
+                                    <span
+                                      key={`assigned-${agent.id}`}
+                                      className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium rounded-full border border-indigo-200 bg-indigo-50 text-indigo-700"
+                                      title={`Assigned to ${agent.label}`}
+                                    >
+                                      <FiUser className="w-3 h-3" />
+                                      {agent.label}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                              <div className="flex items-center gap-2">
+                                {(() => {
+                                  const idCandidate =
+                                    lead.contactId ||
+                                    lead.documentId ||
+                                    lead._id ||
+                                    lead.phone ||
+                                    lead.number;
+                                  const isBk = idCandidate
+                                    ? isContactBookmarked({
                                         _id: idCandidate,
                                         phone: lead.phone,
                                         number: lead.number,
-                                      });
-                                    }}
-                                  >
-                                    {/* star icon */}
-                                    <svg
-                                      viewBox="0 0 24 24"
-                                      fill={isBk ? "currentColor" : "none"}
-                                      stroke="currentColor"
-                                      className="w-4 h-4 text-yellow-500"
-                                      strokeWidth="2"
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                    >
-                                      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21 12 17.77 5.82 21 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
-                                    </svg>
-                                  </button>
-                                );
-                              })()}
-                              {(() => {
-                                const rowId =
-                                  lead.documentId || lead.contactId || `${idx}`;
-                                const key = `assign-${rowId}`;
-                                return (
-                                  <div className="relative">
+                                      })
+                                    : false;
+                                  return (
                                     <button
                                       type="button"
-                                      className="inline-flex items-center px-2 py-1 text-xs border rounded hover:bg-gray-50"
-                                      title="Assign"
+                                      className={`p-1 rounded border ${
+                                        isBk
+                                          ? "bg-yellow-100 border-yellow-300"
+                                          : "bg-white border-gray-300 hover:bg-gray-50"
+                                      }`}
+                                      title={
+                                        isBk ? "Remove bookmark" : "Add bookmark"
+                                      }
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        setOpenAssignFor(
-                                          openAssignFor === key ? null : key
-                                        );
+                                        toggleBookmarkForContact({
+                                          _id: idCandidate,
+                                          phone: lead.phone,
+                                          number: lead.number,
+                                        });
                                       }}
                                     >
-                                      Assign ▾
+                                      {/* star icon */}
+                                      <svg
+                                        viewBox="0 0 24 24"
+                                        fill={isBk ? "currentColor" : "none"}
+                                        stroke="currentColor"
+                                        className="w-4 h-4 text-yellow-500"
+                                        strokeWidth="2"
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                      >
+                                        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21 12 17.77 5.82 21 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                                      </svg>
                                     </button>
-                                    {renderAssignMenu({
-                                      rowKey: key,
-                                      contacts: lead,
-                                      runId:
-                                        lead?.runId ||
-                                        run?.runId ||
-                                        currentRunId,
-                                    })}
-                                  </div>
-                                );
-                              })()}
+                                  );
+                                })()}
+                                {(() => {
+                                  const rowId =
+                                    lead.documentId || lead.contactId || `${idx}`;
+                                  const key = `assign-${rowId}`;
+                                  return (
+                                    <div className="relative">
+                                      <button
+                                        type="button"
+                                        className="inline-flex items-center px-2 py-1 text-xs border rounded hover:bg-gray-50"
+                                        title="Assign"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setOpenAssignFor(
+                                            openAssignFor === key ? null : key
+                                          );
+                                        }}
+                                      >
+                                        Assign ▾
+                                      </button>
+                                      {renderAssignMenu({
+                                        rowKey: key,
+                                        contacts: lead,
+                                        runId:
+                                          lead?.runId ||
+                                          extractHistoryRunId(run) ||
+                                          currentRunId,
+                                      })}
+                                    </div>
+                                  );
+                                })()}
+                              </div>
                             </div>
                           </td>
                           {/* Redial button in its own column */}
@@ -7274,7 +7830,8 @@ function CampaignDetails({ campaignId, onBack }) {
                             </button>
                           </td>
                         </tr>
-                      ))}
+                      );
+                      })}
                   </tbody>
                 </table>
               </div>
@@ -7769,6 +8326,14 @@ function CampaignDetails({ campaignId, onBack }) {
                         </span>
                       </>
                     )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openBulkAssignModal("manual")}
+                    className="inline-flex items-center justify-center h-9 px-3 border rounded-md border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    <FiUsers className="w-4 h-4 mr-2" />
+                    Bulk Assign AI leads
                   </button>
                 </div>
                 {/* Add buttons */}
@@ -12753,6 +13318,7 @@ function CampaignDetails({ campaignId, onBack }) {
           </div>
         )}
       </div>
+      {renderBulkAssignModal()}
     </>
   );
 }
