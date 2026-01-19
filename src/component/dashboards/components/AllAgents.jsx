@@ -658,11 +658,11 @@ const AllAgents = () => {
     if (key === "snapbx" || key === "sanpbx") {
       return {
         serviceProvider: "snapbx",
-        didNumber: "01246745649",
-        accessToken: "12a54dd751f35e274f2c68e4cbe70888",
-        accessKey: "mob",
-        appId: "3",
-        callerId: "6745649", // Last 7 digits
+        didNumber: "01246122400", // Use one of your new DIDs
+        accessToken: "47214c8560cf8bf5c06f5c00044ce0f6", // Updated API-Token
+        accessKey: "mobii", // Updated Access-Key
+        appId: "2", // Updated App ID
+        callerId: "6122400", // Last 7 digits of DID
       };
     }
     return null;

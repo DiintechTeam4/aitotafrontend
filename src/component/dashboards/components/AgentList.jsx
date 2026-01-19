@@ -2628,10 +2628,10 @@ const AgentList = ({ agents, isLoading, onEdit, onDelete, clientId }) => {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Accesstoken: "12a54dd751f35e274f2c68e4cbe70888",
+            Accesstoken: "15f5924dc6778b97212085051cc97856",
           },
           body: JSON.stringify({
-            access_key: "mob",
+            access_key: "mobii",
           }),
         }
       );
