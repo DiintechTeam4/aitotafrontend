@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { useAsyncError, useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { API_BASE_URL } from "../../config";
 import {
   FaChartBar,
@@ -23,6 +23,7 @@ import {
   FaUserTie,
   FaRupeeSign,
   FaUser,
+  FaUserCog,
 } from "react-icons/fa";
 import ApprovalFormDetails from "./components/ApprovalFormDetails";
 import HumanAgentManagement from "./components/HumanAgentManagement";
@@ -87,6 +88,112 @@ const AdminDashboard = ({ user, onLogout }) => {
   const [isSubmittingClient, setIsSubmittingClient] = useState(false);
   const [showWhatsAppTemplateModal, setShowWhatsAppTemplateModal] = useState(false);
   const [whatsAppClientId, setWhatsAppClientId] = useState(null);
+
+  // End-user (app user) profile field config per client
+  const [endUserProfileClient, setEndUserProfileClient] = useState(null);
+  const [endUserProfileFields, setEndUserProfileFields] = useState([]);
+  const [endUserProfileLoading, setEndUserProfileLoading] = useState(false);
+  const [endUserProfileSaving, setEndUserProfileSaving] = useState(false);
+
+  const fetchEndUserProfileFields = async (clientId) => {
+    setEndUserProfileLoading(true);
+    try {
+      if (!ensureAdminAuthValid()) return;
+      const token =
+        localStorage.getItem("admintoken") ||
+        sessionStorage.getItem("admintoken");
+      const resp = await fetch(
+        `${API_BASE_URL}/admin/clients/${clientId}/end-user-profile-fields`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+      const json = await resp.json();
+      if (!resp.ok || !json.success) {
+        throw new Error(json.message || "Failed to load profile fields");
+      }
+      setEndUserProfileFields(json.data.fields || []);
+    } catch (e) {
+      alert(e.message || "Failed to load profile fields");
+      setEndUserProfileClient(null);
+    } finally {
+      setEndUserProfileLoading(false);
+    }
+  };
+
+  const openEndUserProfileSetup = (client) => {
+    setEndUserProfileClient({
+      id: client._id,
+      name: client.businessName || client.name || client.email,
+    });
+    fetchEndUserProfileFields(client._id);
+  };
+
+  const saveEndUserProfileFields = async () => {
+    if (!endUserProfileClient) return;
+    setEndUserProfileSaving(true);
+    try {
+      if (!ensureAdminAuthValid()) return;
+      const token =
+        localStorage.getItem("admintoken") ||
+        sessionStorage.getItem("admintoken");
+      const resp = await fetch(
+        `${API_BASE_URL}/admin/clients/${endUserProfileClient.id}/end-user-profile-fields`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ fields: endUserProfileFields }),
+        }
+      );
+      const json = await resp.json();
+      if (!resp.ok || !json.success) {
+        throw new Error(json.message || "Save failed");
+      }
+      setEndUserProfileFields(json.data.fields || []);
+      alert("End-user profile fields saved");
+    } catch (e) {
+      alert(e.message || "Save failed");
+    } finally {
+      setEndUserProfileSaving(false);
+    }
+  };
+
+  const addCustomEndUserField = () => {
+    setEndUserProfileFields((prev) => [
+      ...prev,
+      {
+        key: `custom_${Date.now()}`,
+        label: "",
+        required: false,
+        locked: false,
+        fieldType: "string",
+        order: prev.length,
+      },
+    ]);
+  };
+
+  const removeEndUserField = (index) => {
+    const row = endUserProfileFields[index];
+    if (row?.locked) return;
+    setEndUserProfileFields((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const updateEndUserField = (index, patch) => {
+    setEndUserProfileFields((prev) => {
+      const next = [...prev];
+      const cur = next[index];
+      if (!cur) return prev;
+      if (cur.locked && patch.key !== undefined) return prev;
+      next[index] = { ...cur, ...patch };
+      return next;
+    });
+  };
 
   // Helpers: JWT decode and expiry check
   const decodeJwt = (token) => {
@@ -723,12 +830,15 @@ const AdminDashboard = ({ user, onLogout }) => {
 
   const handleDeleteClient = async () => {
     try {
+      const adminTok =
+        localStorage.getItem("admintoken") ||
+        sessionStorage.getItem("admintoken");
       const response = await fetch(
         `${API_BASE_URL}/admin/deleteclient/${clientToDelete}`,
         {
           method: "DELETE",
           headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
+            Authorization: `Bearer ${adminTok}`,
           },
         }
       );
@@ -1197,6 +1307,176 @@ const AdminDashboard = ({ user, onLogout }) => {
             setWhatsAppClientId(null);
           }}
         />
+      )}
+
+      {/* End-user profile field schema (registration step 3) */}
+      {endUserProfileClient && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[70] flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="bg-gradient-to-r from-slate-700 to-slate-800 px-6 py-4 flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+                  <FaUserCog />
+                  End-user profile setup
+                </h2>
+                <p className="text-sm text-slate-200 mt-1">
+                  {endUserProfileClient.name} — fields users fill after email &amp; mobile
+                  verification. Email and mobile cannot be removed.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="text-white hover:text-slate-200 p-1"
+                onClick={() => {
+                  setEndUserProfileClient(null);
+                  setEndUserProfileFields([]);
+                }}
+              >
+                <FaTimes size={20} />
+              </button>
+            </div>
+
+            <div className="p-4 overflow-y-auto flex-1">
+              <p className="text-sm text-gray-600 mb-4">
+                Public schema (for apps):{" "}
+                <code className="text-xs bg-gray-100 px-1 rounded break-all">
+                  {API_BASE_URL}/user-auth/client/
+                  {endUserProfileClient.id}/end-user-profile-fields
+                </code>
+              </p>
+              {endUserProfileLoading ? (
+                <div className="py-12 text-center text-gray-500">Loading…</div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="overflow-x-auto border border-gray-200 rounded-lg">
+                    <table className="min-w-full text-sm">
+                      <thead className="bg-gray-50 text-left text-xs uppercase text-gray-500">
+                        <tr>
+                          <th className="px-3 py-2">Key</th>
+                          <th className="px-3 py-2">Label</th>
+                          <th className="px-3 py-2">Type</th>
+                          <th className="px-3 py-2 text-center">Required</th>
+                          <th className="px-3 py-2 w-24" />
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {endUserProfileFields.map((row, idx) => (
+                          <tr key={`${row.key}-${idx}`} className="bg-white">
+                            <td className="px-3 py-2 align-middle">
+                              {row.locked ? (
+                                <span className="font-mono text-gray-700">
+                                  {row.key}
+                                </span>
+                              ) : (
+                                <input
+                                  className="w-full border border-gray-200 rounded px-2 py-1 font-mono text-xs"
+                                  value={row.key}
+                                  onChange={(e) =>
+                                    updateEndUserField(idx, {
+                                      key: e.target.value
+                                        .replace(/\s+/g, "_")
+                                        .replace(/[^a-zA-Z0-9_]/g, ""),
+                                    })
+                                  }
+                                />
+                              )}
+                              {row.locked && (
+                                <span className="ml-2 text-xs text-amber-700 bg-amber-50 px-1 rounded">
+                                  fixed
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-3 py-2 align-middle">
+                              <input
+                                className="w-full border border-gray-200 rounded px-2 py-1"
+                                value={row.label}
+                                onChange={(e) =>
+                                  updateEndUserField(idx, {
+                                    label: e.target.value,
+                                  })
+                                }
+                              />
+                            </td>
+                            <td className="px-3 py-2 align-middle">
+                              {row.locked ? (
+                                <span className="text-gray-500">—</span>
+                              ) : (
+                                <select
+                                  className="border border-gray-200 rounded px-2 py-1 w-full"
+                                  value={row.fieldType || "string"}
+                                  onChange={(e) =>
+                                    updateEndUserField(idx, {
+                                      fieldType: e.target.value,
+                                    })
+                                  }
+                                >
+                                  <option value="string">Short text</option>
+                                  <option value="textarea">Long text</option>
+                                  <option value="number">Number</option>
+                                </select>
+                              )}
+                            </td>
+                            <td className="px-3 py-2 text-center align-middle">
+                              <input
+                                type="checkbox"
+                                checked={!!row.required}
+                                disabled={!!row.locked}
+                                onChange={(e) =>
+                                  updateEndUserField(idx, {
+                                    required: e.target.checked,
+                                  })
+                                }
+                              />
+                            </td>
+                            <td className="px-3 py-2 text-right align-middle">
+                              {!row.locked && (
+                                <button
+                                  type="button"
+                                  className="text-red-600 text-xs hover:underline"
+                                  onClick={() => removeEndUserField(idx)}
+                                >
+                                  Remove
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={addCustomEndUserField}
+                    className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-red-700 border border-red-200 rounded-lg hover:bg-red-50"
+                  >
+                    <FaPlus className="text-xs" /> Add field
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="bg-gray-50 px-6 py-4 flex justify-end gap-2 border-t border-gray-200">
+              <button
+                type="button"
+                className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg"
+                onClick={() => {
+                  setEndUserProfileClient(null);
+                  setEndUserProfileFields([]);
+                }}
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                disabled={endUserProfileSaving || endUserProfileLoading}
+                className="px-4 py-2 rounded-lg bg-slate-800 text-white hover:bg-slate-900 disabled:opacity-50"
+                onClick={saveEndUserProfileFields}
+              >
+                {endUserProfileSaving ? "Saving…" : "Save"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Human Agent Management Modal */}
@@ -1771,7 +2051,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                             </td>
 
                             <td className="px-4 py-6 text-center">
-                              <div className="flex flex-row items-center gap-1 justify-center">
+                              <div className="flex flex-row flex-wrap items-center gap-2 justify-center">
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
@@ -1796,6 +2076,18 @@ const AdminDashboard = ({ user, onLogout }) => {
                                   {loggedInClients.has(client._id)
                                     ? "Logged In"
                                     : "Authenticate"}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openEndUserProfileSetup(client);
+                                  }}
+                                  className="inline-flex items-center justify-center gap-1 px-3 py-2 rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50 text-xs font-semibold"
+                                  title="Configure end-user registration profile fields"
+                                >
+                                  <FaUserCog className="text-sm" />
+                                  User profile
                                 </button>
                               </div>
                             </td>
