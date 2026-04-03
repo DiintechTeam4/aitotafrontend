@@ -126,10 +126,10 @@ const AdminDashboard = ({ user, onLogout }) => {
 
   const openEndUserProfileSetup = (client) => {
     setEndUserProfileClient({
-      id: client._id,
+      id: client.userId,
       name: client.businessName || client.name || client.email,
     });
-    fetchEndUserProfileFields(client._id);
+    fetchEndUserProfileFields(client.userId);
   };
 
   const saveEndUserProfileFields = async () => {
