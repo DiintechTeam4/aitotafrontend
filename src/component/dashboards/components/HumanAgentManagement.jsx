@@ -349,9 +349,9 @@ const HumanAgentManagement = ({
   }, [clientInfo.businessLogoUrl]);
 
   return (
-    <div className="fixed inset-0 bg-gray-50 p-6 ml-64 z-50 overflow-auto">
-      <div className="w-full">
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+    <div className="fixed inset-0 bg-black/40 z-[70] p-3 sm:p-6 overflow-y-auto">
+      <div className="w-full max-w-6xl mx-auto">
+        <div className="bg-white rounded-lg shadow-xl border border-gray-200">
           <div className="px-6 py-4 border-b border-gray-200">
             <div className="flex items-center justify-between">
               <div className="flex justify-between items-center gap-3">

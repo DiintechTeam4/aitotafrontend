@@ -22,7 +22,6 @@ const Home = () => {
 
   const handleGetCall = (e) => {
     e.preventDefault();
-    // Handle form submission logic here
     console.log("Form submitted:", formData);
   };
 
@@ -161,15 +160,12 @@ const Home = () => {
                 Harness the power of Aitota's AI Voice for seamless, natural interactions 
                 that transcend traditional barriers and connect people globally.
               </p>
-              <div className="space-y-3 md:space-y-4">
-                <button 
-                  onClick={handleGetStarted}
-                  className="bg-black border border-white text-white px-6 py-2 rounded hover:bg-white hover:text-black transition-colors"
-                >
-                  Get Started
-                </button>
-                
-              </div>
+              <button 
+                onClick={handleGetStarted}
+                className="bg-black border border-white text-white px-6 py-2 rounded hover:bg-white hover:text-black transition-colors"
+              >
+                Get Started
+              </button>
             </div>
           </div>
 
@@ -188,15 +184,12 @@ const Home = () => {
                 Aitota enhances every conversation with intuitive AI Voice solutions, 
                 enabling effective and collaborative communication for individuals and businesses.
               </p>
-              <div className="space-y-3">
-                <button 
-                  onClick={handleGetStarted}
-                  className="bg-black border border-white text-white px-6 py-2 rounded hover:bg-white hover:text-black transition-colors"
-                >
-                  Get Started
-                </button>
-                
-              </div>
+              <button 
+                onClick={handleGetStarted}
+                className="bg-black border border-white text-white px-6 py-2 rounded hover:bg-white hover:text-black transition-colors"
+              >
+                Get Started
+              </button>
             </div>
           </div>
 
@@ -215,15 +208,12 @@ const Home = () => {
                 Leverage Aitota's advanced AI Voice systems for impactful, efficient communication, 
                 ensuring your interactions are always innovative and effective.
               </p>
-              <div className="space-y-3">
-                <button 
-                  onClick={handleGetStarted}
-                  className="bg-black border border-white text-white px-6 py-2 rounded hover:bg-white hover:text-black transition-colors"
-                >
-                  Get Started
-                </button>
-                
-              </div>
+              <button 
+                onClick={handleGetStarted}
+                className="bg-black border border-white text-white px-6 py-2 rounded hover:bg-white hover:text-black transition-colors"
+              >
+                Get Started
+              </button>
             </div>
           </div>
 
@@ -242,15 +232,12 @@ const Home = () => {
                 Bridge gaps and foster global collaboration with Aitota's AI Voice, 
                 creating a world where every voice is heard and understood.
               </p>
-              <div className="space-y-3">
-                <button 
-                  onClick={handleGetStarted}
-                  className="bg-black border border-white text-white px-6 py-2 rounded hover:bg-white hover:text-black transition-colors"
-                >
-                  Get Started
-                </button>
-                
-              </div>
+              <button 
+                onClick={handleGetStarted}
+                className="bg-black border border-white text-white px-6 py-2 rounded hover:bg-white hover:text-black transition-colors"
+              >
+                Get Started
+              </button>
             </div>
           </div>
 
@@ -269,15 +256,12 @@ const Home = () => {
                 Integrate Aitota's AI Voice into systems across education, health, transportation, 
                 eCommerce, banking, and customer support, enhancing communication and driving success.
               </p>
-              <div className="space-y-3">
-                <button 
-                  onClick={handleGetStarted}
-                  className="bg-black border border-white text-white px-6 py-2 rounded hover:bg-white hover:text-black transition-colors"
-                >
-        Get Started
-      </button>
-                
-              </div>
+              <button 
+                onClick={handleGetStarted}
+                className="bg-black border border-white text-white px-6 py-2 rounded hover:bg-white hover:text-black transition-colors"
+              >
+                Get Started
+              </button>
             </div>
           </div>
         </div>
@@ -287,15 +271,12 @@ const Home = () => {
       <footer className="bg-gray-900 px-6 py-12 lg:px-12">
         <div className="max-w-6xl mx-auto">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-8">
-            {/* Aitota */}
             <div>
               <h3 className="text-xl font-bold mb-4">Aitota</h3>
               <ul className="space-y-2">
                 <li><a href="#about" className="text-gray-400 hover:text-white transition-colors">About</a></li>
               </ul>
             </div>
-
-            {/* Office */}
             <div>
               <h3 className="text-xl font-bold mb-4">Office</h3>
               <div className="text-gray-400 space-y-2">
@@ -304,8 +285,6 @@ const Home = () => {
                 <p>contact@aitota.com</p>
               </div>
             </div>
-
-            {/* Quick Links */}
             <div>
               <h3 className="text-xl font-bold mb-4">Quick Links</h3>
               <ul className="space-y-2">
@@ -314,8 +293,6 @@ const Home = () => {
                 <li><a href="#careers" className="text-gray-400 hover:text-white transition-colors">Careers</a></li>
               </ul>
             </div>
-
-            {/* Legal Stuff */}
             <div>
               <h3 className="text-xl font-bold mb-4">Legal Stuff</h3>
               <ul className="space-y-2">
@@ -326,8 +303,6 @@ const Home = () => {
               </ul>
             </div>
           </div>
-
-          {/* Copyright */}
           <div className="border-t border-gray-800 pt-8">
             <p className="text-gray-400 text-sm">
               Copyright © 2024 aitota. All Rights Reserved.

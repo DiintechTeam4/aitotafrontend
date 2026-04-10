@@ -24,6 +24,15 @@ import {
   FaRupeeSign,
   FaUser,
   FaUserCog,
+  FaEdit,
+  FaTrash,
+  FaEye,
+  FaBuilding,
+  FaPhone,
+  FaEnvelope,
+  FaMapMarkerAlt,
+  FaGlobe,
+  FaIdCard,
 } from "react-icons/fa";
 import ApprovalFormDetails from "./components/ApprovalFormDetails";
 import HumanAgentManagement from "./components/HumanAgentManagement";
@@ -88,6 +97,17 @@ const AdminDashboard = ({ user, onLogout }) => {
   const [isSubmittingClient, setIsSubmittingClient] = useState(false);
   const [showWhatsAppTemplateModal, setShowWhatsAppTemplateModal] = useState(false);
   const [whatsAppClientId, setWhatsAppClientId] = useState(null);
+  const [openSettingsMenu, setOpenSettingsMenu] = useState(null);
+  const [showAdminDropdown, setShowAdminDropdown] = useState(false);
+  const adminDropdownRef = React.useRef(null);
+  const [showEditClientModal, setShowEditClientModal] = useState(false);
+  const [editingClient, setEditingClient] = useState(null);
+  const [editClientData, setEditClientData] = useState({
+    name: "", email: "", businessName: "", websiteUrl: "",
+    city: "", pincode: "", gstNo: "", panNo: "", mobileNo: "", address: "",
+  });
+  const [isSubmittingEditClient, setIsSubmittingEditClient] = useState(false);
+  const [viewClientModal, setViewClientModal] = useState(null);
 
   // End-user (app user) profile field config per client
   const [endUserProfileClient, setEndUserProfileClient] = useState(null);
@@ -239,6 +259,49 @@ const AdminDashboard = ({ user, onLogout }) => {
     return true;
   };
 
+  // Close settings dropdown when clicking outside
+  useEffect(() => {
+    if (!openSettingsMenu) return;
+    const handler = () => setOpenSettingsMenu(null);
+    document.addEventListener('click', handler);
+    return () => document.removeEventListener('click', handler);
+  }, [openSettingsMenu]);
+
+  // Close admin dropdown when clicking outside
+  useEffect(() => {
+    if (!showAdminDropdown) return;
+    const handler = (e) => {
+      if (adminDropdownRef.current && !adminDropdownRef.current.contains(e.target)) {
+        setShowAdminDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showAdminDropdown]);
+
+  // Get admin info from localStorage (saved at login time)
+  const getAdminInfo = () => {
+    try {
+      const stored = localStorage.getItem('adminData');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        return {
+          name: parsed?.name || 'Admin',
+          email: parsed?.email || '',
+        };
+      }
+    } catch {}
+    // Fallback: try JWT token
+    const token = localStorage.getItem('admintoken') || sessionStorage.getItem('admintoken');
+    if (!token) return { name: 'Admin', email: '' };
+    const payload = decodeJwt(token);
+    return {
+      name: payload?.name || payload?.username || 'Admin',
+      email: payload?.email || '',
+    };
+  };
+  const adminInfo = getAdminInfo();
+
   // On mount, ensure token is valid; if expired, redirect to admin login
   useEffect(() => {
     ensureAdminAuthValid();
@@ -286,20 +349,15 @@ const AdminDashboard = ({ user, onLogout }) => {
   }, [activeTab]);
 
   // Auto-close modals when switching tabs to avoid overlap
+  const prevTabRef = React.useRef(activeTab);
   useEffect(() => {
-    if (showApprovalModal || reviewClientId) {
-      setShowApprovalModal(false);
-      setReviewClientId(null);
-    }
-    if (
-      showHumanAgentModal ||
-      selectedClientForHumanAgent ||
-      clientTokenForHumanAgent
-    ) {
-      setShowHumanAgentModal(false);
-      setSelectedClientForHumanAgent(null);
-      setClientTokenForHumanAgent(null);
-    }
+    if (prevTabRef.current === activeTab) return;
+    prevTabRef.current = activeTab;
+    setShowApprovalModal(false);
+    setReviewClientId(null);
+    setShowHumanAgentModal(false);
+    setSelectedClientForHumanAgent(null);
+    setClientTokenForHumanAgent(null);
   }, [activeTab]);
 
   // Tools/Templates state
@@ -745,6 +803,28 @@ const AdminDashboard = ({ user, onLogout }) => {
     return new Date(dateString).toLocaleDateString(undefined, options);
   };
 
+  const getClientLogoUrl = (client) => {
+    if (!client) return "";
+    if (typeof client.businessLogoUrl === "string" && client.businessLogoUrl) {
+      return client.businessLogoUrl;
+    }
+    if (
+      client.businessLogo &&
+      typeof client.businessLogo.url === "string" &&
+      client.businessLogo.url
+    ) {
+      return client.businessLogo.url;
+    }
+    if (
+      client.businessLogo &&
+      typeof client.businessLogo === "string" &&
+      client.businessLogo.startsWith("http")
+    ) {
+      return client.businessLogo;
+    }
+    return "";
+  };
+
   const handleBusinessLogoChange = async (e) => {
     const file = e.target.files[0];
     setBusinessLogoFile(file);
@@ -864,6 +944,48 @@ const AdminDashboard = ({ user, onLogout }) => {
     setShowDeleteModal(true);
   };
 
+  const openEditClient = (client) => {
+    setEditingClient(client);
+    setEditClientData({
+      name: client.name || "",
+      email: client.email || "",
+      businessName: client.businessName || "",
+      websiteUrl: client.websiteUrl || "",
+      city: client.city || "",
+      pincode: client.pincode || "",
+      gstNo: client.gstNo || "",
+      panNo: client.panNo || "",
+      mobileNo: client.mobileNo || "",
+      address: client.address || "",
+    });
+    setShowEditClientModal(true);
+  };
+
+  const handleEditClient = async () => {
+    try {
+      setIsSubmittingEditClient(true);
+      const adminTok = localStorage.getItem("admintoken") || sessionStorage.getItem("admintoken");
+      const response = await fetch(`${API_BASE_URL}/admin/updateclient/${editingClient._id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${adminTok}`,
+        },
+        body: JSON.stringify(editClientData),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message || "Failed to update client");
+      setShowEditClientModal(false);
+      setEditingClient(null);
+      alert("Client updated successfully");
+      await getclients();
+    } catch (error) {
+      alert(error.message || "Failed to update client. Please try again.");
+    } finally {
+      setIsSubmittingEditClient(false);
+    }
+  };
+
   const handleApproveClient = async (clientId) => {
     try {
       // You can add an approval API call here if needed
@@ -980,12 +1102,12 @@ const AdminDashboard = ({ user, onLogout }) => {
     <div className="min-h-screen bg-gray-50">
       {/* Add Client Modal */}
       {showAddClientModal && (
-        <div className="fixed inset-0 bg-opacity-40 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/35 z-[60] flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden relative flex flex-col">
             {/* Header */}
-            <div className="bg-gradient-to-r from-red-600 to-red-700 px-6 py-4 flex items-center justify-between">
+            <div className="bg-gradient-to-r from-slate-800 to-slate-900 px-6 py-4 flex items-center justify-between">
               <div className="flex items-center space-x-3">
-                <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-red-600 font-bold">
+                <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-slate-700 font-bold">
                   <FaPlus className="text-sm" />
                 </div>
                 <h2 className="text-xl font-semibold text-white">
@@ -1250,9 +1372,112 @@ const AdminDashboard = ({ user, onLogout }) => {
         </div>
       )}
 
+      {/* View Client Modal - replaced by ApprovalFormDetails */}
+      {false && (
+        <div className="fixed inset-0 bg-black/40 z-[60] flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="bg-gradient-to-r from-slate-800 to-slate-900 px-6 py-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                {getClientLogoUrl(viewClientModal) ? (
+                  <img src={getClientLogoUrl(viewClientModal)} alt="logo" className="w-10 h-10 rounded-full object-cover" onError={(e) => { e.currentTarget.src = "/AitotaLogo.png"; }} />
+                ) : (
+                  <div className="w-10 h-10 rounded-full bg-red-500 flex items-center justify-center text-white font-bold">
+                    {(viewClientModal?.businessName?.[0] || viewClientModal?.name?.[0] || "C").toUpperCase()}
+                  </div>
+                )}
+                <div>
+                  <h2 className="text-lg font-semibold text-white">{viewClientModal.businessName || viewClientModal.name}</h2>
+                  <p className="text-xs text-slate-300">Client since {formatDate(viewClientModal.createdAt)}</p>
+                </div>
+              </div>
+              <button className="text-white hover:text-red-200" onClick={() => setViewClientModal(null)}>
+                <FaTimes size={20} />
+              </button>
+            </div>
+            <div className="p-6 overflow-y-auto flex-1 space-y-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                  <FaUser className="text-red-500 mt-1 flex-shrink-0" />
+                  <div>
+                    <p className="text-xs text-gray-500 font-medium uppercase">Full Name</p>
+                    <p className="text-sm text-gray-800 font-medium">{viewClientModal.name || "—"}</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                  <FaEnvelope className="text-red-500 mt-1 flex-shrink-0" />
+                  <div>
+                    <p className="text-xs text-gray-500 font-medium uppercase">Email</p>
+                    <p className="text-sm text-gray-800 break-all">{viewClientModal.email || "—"}</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                  <FaPhone className="text-red-500 mt-1 flex-shrink-0" />
+                  <div>
+                    <p className="text-xs text-gray-500 font-medium uppercase">Mobile</p>
+                    <p className="text-sm text-gray-800">{viewClientModal.mobileNo || "—"}</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                  <FaBuilding className="text-red-500 mt-1 flex-shrink-0" />
+                  <div>
+                    <p className="text-xs text-gray-500 font-medium uppercase">Business Name</p>
+                    <p className="text-sm text-gray-800">{viewClientModal.businessName || "—"}</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                  <FaGlobe className="text-red-500 mt-1 flex-shrink-0" />
+                  <div>
+                    <p className="text-xs text-gray-500 font-medium uppercase">Website</p>
+                    {viewClientModal.websiteUrl ? (
+                      <a href={viewClientModal.websiteUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-red-600 hover:underline break-all">{viewClientModal.websiteUrl}</a>
+                    ) : <p className="text-sm text-gray-800">—</p>}
+                  </div>
+                </div>
+                <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                  <FaMapMarkerAlt className="text-red-500 mt-1 flex-shrink-0" />
+                  <div>
+                    <p className="text-xs text-gray-500 font-medium uppercase">Location</p>
+                    <p className="text-sm text-gray-800">{[viewClientModal.address, viewClientModal.city, viewClientModal.pincode].filter(Boolean).join(", ") || "—"}</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                  <FaIdCard className="text-red-500 mt-1 flex-shrink-0" />
+                  <div>
+                    <p className="text-xs text-gray-500 font-medium uppercase">GST Number</p>
+                    <p className="text-sm text-gray-800 font-mono">{viewClientModal.gstNo || "—"}</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                  <FaIdCard className="text-red-500 mt-1 flex-shrink-0" />
+                  <div>
+                    <p className="text-xs text-gray-500 font-medium uppercase">PAN Number</p>
+                    <p className="text-sm text-gray-800 font-mono">{viewClientModal.panNo || "—"}</p>
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg">
+                <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${
+                  viewClientModal.isApproved ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"
+                }`}>
+                  {viewClientModal.isApproved ? "Approved" : "Pending Approval"}
+                </span>
+                {viewClientModal.clientType && (
+                  <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-700 capitalize">
+                    {viewClientModal.clientType}
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="bg-gray-50 px-6 py-4 flex justify-end border-t border-gray-200">
+              <button className="px-6 py-2 bg-slate-800 text-white rounded-lg hover:bg-slate-900" onClick={() => setViewClientModal(null)}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Delete Confirmation Modal */}
       {showDeleteModal && (
-        <div className="fixed inset-0 bg-gray-500 bg-opacity-40 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-gray-500 bg-opacity-40 z-[60] flex items-center justify-center p-4">
           <div className="bg-white rounded-lg shadow-xl w-full max-w-md relative">
             <div className="p-6">
               <h2 className="text-2xl font-bold mb-4 text-center">
@@ -1276,6 +1501,74 @@ const AdminDashboard = ({ user, onLogout }) => {
                   Delete
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Approval Modal */}
+      {showEditClientModal && editingClient && (
+        <div className="fixed inset-0 bg-black/35 z-[60] flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden relative flex flex-col">
+            <div className="bg-gradient-to-r from-slate-800 to-slate-900 px-6 py-4 flex items-center justify-between">
+              <h2 className="text-xl font-semibold text-white">Edit Client</h2>
+              <button className="text-white hover:text-red-200" onClick={() => setShowEditClientModal(false)}>
+                <FaTimes size={20} />
+              </button>
+            </div>
+            <div className="p-6 overflow-y-auto flex-1">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Full Name</label>
+                  <input type="text" className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-500" value={editClientData.name} onChange={(e) => setEditClientData({ ...editClientData, name: e.target.value })} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+                  <input type="email" className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-500" value={editClientData.email} onChange={(e) => setEditClientData({ ...editClientData, email: e.target.value })} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Business Name</label>
+                  <input type="text" className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-500" value={editClientData.businessName} onChange={(e) => setEditClientData({ ...editClientData, businessName: e.target.value })} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Mobile Number</label>
+                  <input type="tel" className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-500" value={editClientData.mobileNo} onChange={(e) => setEditClientData({ ...editClientData, mobileNo: e.target.value })} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Website URL</label>
+                  <input type="url" className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-500" value={editClientData.websiteUrl} onChange={(e) => setEditClientData({ ...editClientData, websiteUrl: e.target.value })} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">City</label>
+                  <input type="text" className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-500" value={editClientData.city} onChange={(e) => setEditClientData({ ...editClientData, city: e.target.value })} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Pincode</label>
+                  <input type="text" className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-500" value={editClientData.pincode} onChange={(e) => setEditClientData({ ...editClientData, pincode: e.target.value })} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Address</label>
+                  <input type="text" className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-500" value={editClientData.address} onChange={(e) => setEditClientData({ ...editClientData, address: e.target.value })} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">GST Number</label>
+                  <input type="text" className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-500" value={editClientData.gstNo} onChange={(e) => setEditClientData({ ...editClientData, gstNo: e.target.value })} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">PAN Number</label>
+                  <input type="text" className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-500" value={editClientData.panNo} onChange={(e) => setEditClientData({ ...editClientData, panNo: e.target.value })} />
+                </div>
+              </div>
+            </div>
+            <div className="bg-gray-50 px-6 py-4 flex items-center justify-end gap-3 border-t border-gray-200">
+              <button className="px-6 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50" onClick={() => setShowEditClientModal(false)}>Cancel</button>
+              <button
+                className={`px-6 py-2 rounded-lg font-medium text-white ${isSubmittingEditClient ? "bg-gray-400 cursor-not-allowed" : "bg-red-600 hover:bg-red-700"}`}
+                onClick={handleEditClient}
+                disabled={isSubmittingEditClient}
+              >
+                {isSubmittingEditClient ? "Saving..." : "Save Changes"}
+              </button>
             </div>
           </div>
         </div>
@@ -1311,7 +1604,7 @@ const AdminDashboard = ({ user, onLogout }) => {
 
       {/* End-user profile field schema (registration step 3) */}
       {endUserProfileClient && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[70] flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/40 z-[70] flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
             <div className="bg-gradient-to-r from-slate-700 to-slate-800 px-6 py-4 flex items-center justify-between">
               <div>
@@ -1508,7 +1801,7 @@ const AdminDashboard = ({ user, onLogout }) => {
 
       {/* Sidebar */}
       <div
-        className={`fixed top-0 left-0 h-full bg-white shadow-xl z-50 transition-all duration-300 ease-in-out ${
+        className={`fixed top-0 left-0 h-full bg-white shadow-xl z-50 transition-all duration-300 ease-in-out flex flex-col ${
           isMobile
             ? isSidebarOpen
               ? "w-64 translate-x-0"
@@ -1519,10 +1812,10 @@ const AdminDashboard = ({ user, onLogout }) => {
         }`}
       >
         {/* Sidebar Header */}
-        <div className="flex justify-between items-center p-4 border-b border-gray-200 bg-gradient-to-r from-red-600 to-red-700">
+        <div className="flex-shrink-0 flex justify-between items-center p-4 border-b border-gray-200 bg-gradient-to-r from-slate-800 to-slate-900">
           {isSidebarOpen && (
             <div className="flex items-center space-x-3">
-              <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-red-600 font-bold">
+              <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-slate-700 font-bold">
                 A
               </div>
               <h4 className="m-0 font-semibold text-lg text-white">
@@ -1539,15 +1832,15 @@ const AdminDashboard = ({ user, onLogout }) => {
         </div>
 
         {/* Main Navigation */}
-        <div className="flex flex-col h-full">
-          <div className="flex-1 py-4">
+        <div className="relative flex flex-col flex-1 min-h-0 overflow-hidden">
+          <div className="flex-1 py-4 overflow-y-auto scrollbar-hide pb-2">
             {navItems.map((item, index) => (
               <div key={index}>
                 <button
                   className={`flex items-center w-full py-3 px-4 text-left transition-colors duration-200 ${
                     activeTab === item.name ||
                     (item.subItems && item.subItems.includes(activeTab))
-                      ? "bg-red-50 text-red-600 border-r-4 border-red-500"
+                      ? "bg-indigo-50 text-indigo-700 border-r-4 border-indigo-500"
                       : "text-gray-600 hover:bg-gray-50"
                   }`}
                   onClick={() => {
@@ -1601,8 +1894,8 @@ const AdminDashboard = ({ user, onLogout }) => {
                           key={subIndex}
                           className={`flex items-center w-full py-2 text-left transition-colors duration-200 ${
                             activeTab === subItem
-                              ? "text-red-600 font-medium"
-                              : "text-gray-600 hover:text-red-600"
+                              ? "text-indigo-700 font-medium"
+                              : "text-gray-600 hover:text-indigo-700"
                           }`}
                           onClick={() => setActiveTab(subItem)}
                         >
@@ -1615,15 +1908,15 @@ const AdminDashboard = ({ user, onLogout }) => {
             ))}
           </div>
 
-          {/* Bottom Navigation - Fixed at bottom */}
-          <div className="absolute bottom-0 left-0 right-0 border-t border-gray-200 bg-white">
+          {/* Bottom Navigation - Sticky at bottom */}
+          <div className="border-t-2 border-gray-200 bg-white flex-shrink-0 divide-y divide-gray-100">
             {bottomNavItems.map((item, index) => (
               <div key={index}>
                 <button
                   className={`flex items-center w-full py-3 px-4 text-left transition-colors duration-200 ${
                     activeTab === item.name ||
                     (item.subItems && item.subItems.includes(activeTab))
-                      ? "bg-red-50 text-red-600 border-r-4 border-red-500"
+                      ? "bg-indigo-50 text-indigo-700 border-r-4 border-indigo-500"
                       : "text-gray-600 hover:bg-gray-50"
                   }`}
                   onClick={() => {
@@ -1686,8 +1979,8 @@ const AdminDashboard = ({ user, onLogout }) => {
                           key={subIndex}
                           className={`flex items-center w-full py-2 text-left transition-colors duration-200 ${
                             activeTab === subItem
-                              ? "text-red-600 font-medium"
-                              : "text-gray-600 hover:text-red-600"
+                              ? "text-indigo-700 font-medium"
+                              : "text-gray-600 hover:text-indigo-700"
                           }`}
                           onClick={() => {
                             if (subItem === "Log out") {
@@ -1721,26 +2014,111 @@ const AdminDashboard = ({ user, onLogout }) => {
           isMobile ? "ml-0" : isSidebarOpen ? "ml-64" : "ml-20"
         } transition-all duration-300 ease-in-out`}
       >
-        {/* Mobile Header */}
-        {isMobile && (
-          <div className="sticky top-0 z-30 bg-white shadow-sm">
-            <div className="flex justify-between items-center p-4">
+        {/* Top Header Bar */}
+        <div className="sticky top-0 z-30 bg-white border-b border-gray-200 shadow-sm">
+          <div className="flex justify-between items-center px-6 py-3">
+            {/* Left: Mobile menu + Page title */}
+            <div className="flex items-center gap-3">
+              {isMobile && (
+                <button className="p-2 text-gray-600 hover:text-gray-800" onClick={toggleSidebar}>
+                  <FaBars size={20} />
+                </button>
+              )}
+              <h4 className="font-semibold text-gray-800 text-base">{activeTab}</h4>
+            </div>
+
+            {/* Right: Admin info with dropdown */}
+            <div className="relative" ref={adminDropdownRef}>
               <button
-                className="p-2 text-gray-600 hover:text-gray-800"
-                onClick={toggleSidebar}
+                onClick={() => setShowAdminDropdown(!showAdminDropdown)}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors"
               >
-                <FaBars size={20} />
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-slate-700 to-slate-900 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+                  {(adminInfo.name?.[0] || 'A').toUpperCase()}
+                </div>
+                {!isMobile && (
+                  <div className="text-left">
+                    <p className="text-sm font-semibold text-gray-800 leading-tight">{adminInfo.name}</p>
+                    <p className="text-xs text-gray-500 leading-tight">{adminInfo.email}</p>
+                  </div>
+                )}
+                <svg className={`w-4 h-4 text-gray-500 transition-transform ${showAdminDropdown ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
               </button>
-              <h4 className="font-bold text-lg">Admin Dashboard</h4>
-              <div className="w-8"></div>
+
+              {showAdminDropdown && (
+                <div className="absolute right-0 mt-1 w-56 bg-white border border-gray-200 rounded-xl shadow-lg z-50 overflow-hidden">
+                  <div className="px-4 py-3 bg-gray-50 border-b border-gray-100">
+                    <p className="text-sm font-semibold text-gray-800 truncate">{adminInfo.name}</p>
+                    <p className="text-xs text-gray-500 truncate">{adminInfo.email}</p>
+                  </div>
+                  <button
+                    className="flex items-center w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 gap-2"
+                    onClick={() => { setShowAdminDropdown(false); setActiveTab('AdminProfile'); }}
+                  >
+                    <FaUser className="text-slate-500" /> Profile
+                  </button>
+                  <button
+                    className="flex items-center w-full px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 gap-2 border-t border-gray-100"
+                    onClick={() => { setShowAdminDropdown(false); onLogout(); }}
+                  >
+                    <FaSignOutAlt className="text-red-500" /> Logout
+                  </button>
+                </div>
+              )}
             </div>
           </div>
-        )}
+        </div>
 
         {/* Page Content */}
         <main className="p-6">
           <div className="max-w-7xl mx-auto">
             {/* Dashboard Content based on active tab */}
+            {activeTab === "AdminProfile" && (
+              <div className="max-w-lg mx-auto mt-6">
+                <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+
+                  {/* Avatar + name */}
+                  <div className="flex flex-col items-center py-10 border-b border-gray-100">
+                    <div className="w-16 h-16 rounded-full bg-gray-100 border border-gray-200 flex items-center justify-center text-2xl font-bold text-gray-700">
+                      {(adminInfo.name?.[0] || 'A').toUpperCase()}
+                    </div>
+                    <p className="mt-3 text-lg font-semibold text-gray-800">{adminInfo.name}</p>
+                    <p className="text-sm text-gray-400">{adminInfo.email}</p>
+                    <span className="mt-2 text-xs text-gray-400 border border-gray-200 rounded-full px-3 py-0.5">Administrator</span>
+                  </div>
+
+                  {/* Info rows */}
+                  <div className="divide-y divide-gray-100">
+                    <div className="flex justify-between items-center px-6 py-4">
+                      <span className="text-sm text-gray-400">Full Name</span>
+                      <span className="text-sm font-medium text-gray-700">{adminInfo.name || '—'}</span>
+                    </div>
+                    <div className="flex justify-between items-center px-6 py-4">
+                      <span className="text-sm text-gray-400">Email</span>
+                      <span className="text-sm font-medium text-gray-700">{adminInfo.email || '—'}</span>
+                    </div>
+                    <div className="flex justify-between items-center px-6 py-4">
+                      <span className="text-sm text-gray-400">Role</span>
+                      <span className="text-sm font-medium text-gray-700">Administrator</span>
+                    </div>
+                  </div>
+
+                  {/* Logout */}
+                  <div className="px-6 py-5 border-t border-gray-100">
+                    <button
+                      onClick={onLogout}
+                      className="w-full py-2.5 text-sm font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
+                    >
+                      <FaSignOutAlt className="text-gray-400" /> Logout
+                    </button>
+                  </div>
+
+                </div>
+              </div>
+            )}
+
             {activeTab === "Overview" && (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-4">
@@ -1865,7 +2243,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                 </div>
 
                 {/* filter Button for type of clients*/}
-                <div className="p-4 border-b border-gray-100 flex justify-between">
+                <div className="p-4 border-b border-gray-100 flex flex-col lg:flex-row gap-3 lg:items-center lg:justify-between">
                   <div className="flex flex-wrap gap-2 items-center">
                     {[
                       { key: "all", label: "All" },
@@ -1919,37 +2297,49 @@ const AdminDashboard = ({ user, onLogout }) => {
                       <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-500 mx-auto"></div>
                       <p className="mt-2 text-gray-500">Loading clients...</p>
                     </div>
-                  ) : !clients || clients.length === 0 ? (
+                  ) : filteredClients.length === 0 ? (
                     <div className="p-8 text-center">
-                      <p className="text-gray-500">No clients found.</p>
+                      <p className="text-gray-500">
+                        No clients found for current filters.
+                      </p>
                     </div>
                   ) : (
-                    <table className="min-w-full divide-y divide-gray-200">
+                    <table className="w-full divide-y divide-gray-200 table-fixed">
+                      <colgroup>
+                        <col className="w-10" />
+                        <col className="w-44" />
+                        <col className="w-16" />
+                        <col className="w-40" />
+                        <col className="w-48" />
+                        <col className="w-36" />
+                        <col className="w-52" />
+                        <col className="w-24" />
+                      </colgroup>
                       <thead className="bg-gray-50">
                         <tr>
-                          <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-12">
-                            SNo.
+                          <th className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            #
                           </th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/6">
-                            Name
+                          <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Business
                           </th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/6">
+                          <th className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                             Agents
                           </th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/6">
-                            Business Details
+                          <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Owner
                           </th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/6">
-                            Contact Info
+                          <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Contact
                           </th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/8">
+                          <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                             KYC
                           </th>
-                          <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-1/6">
+                          <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                             Actions
                           </th>
-                          <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-1/8">
-                            Team Settings
+                          <th className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Settings
                           </th>
                         </tr>
                       </thead>
@@ -1957,97 +2347,66 @@ const AdminDashboard = ({ user, onLogout }) => {
                         {filteredClients.map((client, index) => (
                           <tr
                             key={index}
-                            onClick={() => {
-                              setReviewClientId(client._id);
-                              setShowApprovalModal(true);
-                            }}
                             className={`${
                               index % 2 === 0 ? "bg-white" : "bg-gray-50"
-                            } hover:bg-gray-100 cursor-pointer`}
-                            title="Click to review client"
+                            } hover:bg-gray-100`}
                           >
                             <td className="px-3 py-2 whitespace-nowrap text-center text-xs text-gray-500">
                               {index + 1}
                             </td>
-                            <td className="px-4 py-6 whitespace-nowrap">
-                              <div className="flex items-center">
-                                {client.businessLogoUrl ? (
+                            <td className="px-3 py-4">
+                              <div className="flex items-center gap-2">
+                                {getClientLogoUrl(client) ? (
                                   <img
-                                    src={client.businessLogoUrl}
+                                    src={getClientLogoUrl(client)}
                                     alt={client.businessName || client.name}
-                                    className="flex-shrink-0 h-12 w-12 rounded-full object-cover"
+                                    className="flex-shrink-0 h-9 w-9 rounded-full object-cover"
+                                    onError={(e) => { e.currentTarget.src = "/AitotaLogo.png"; }}
                                   />
                                 ) : (
-                                  <div className="flex-shrink-0 h-12 w-12 rounded-full bg-red-100 flex items-center justify-center text-red-600 font-semibold">
-                                    {client.name.charAt(0).toUpperCase()}
+                                  <div className="flex-shrink-0 h-9 w-9 rounded-full bg-red-100 flex items-center justify-center text-red-600 font-semibold text-sm">
+                                    {(client?.businessName?.[0] || client?.name?.[0] || "C").toUpperCase()}
                                   </div>
                                 )}
-                                <div className="ml-3">
-                                  <div className="text-sm font-medium text-gray-900">
-                                    {client.businessName}
+                                <div className="min-w-0">
+                                  <div className="text-sm font-medium text-gray-900 truncate" title={client.businessName}>
+                                    {client.businessName || "—"}
                                   </div>
-                                  <div className="text-xs text-gray-500 mt-1">
-                                    Client since {formatDate(client.createdAt)}
+                                  <div className="text-xs text-gray-400 truncate">
+                                    {formatDate(client.createdAt)}
                                   </div>
                                 </div>
                               </div>
                             </td>
-                            <td className="px-4 py-6">
-                              {/* {agentCounts[client._id] === undefined ? (
-                                <span className="inline-flex items-center px-2 py-1 text-gray-500 text-xs">
-                                  <span className="inline-block h-3 w-3 mr-2 animate-spin rounded-full border-[2px] border-gray-300 border-t-gray-600"></span>
-                                  Loading
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center px-2 py-1 text-gray-700 text-xs">
-                                  {agentCounts[client._id]}
-                                </span>
-                              )} */}
-                              <span>-</span>
+                            <td className="px-2 py-4 text-center">
+                              <span className="text-sm text-gray-500">—</span>
                             </td>
-                            <td className="px-4 py-6">
-                              <div className="text-sm font-medium text-gray-900">
-                                {client.name}
+                            <td className="px-3 py-4">
+                              <div className="text-sm font-medium text-gray-900 truncate" title={client.name}>
+                                {client.name || "—"}
                               </div>
-                              <div className="text-xs text-gray-500 mt-2">
-                                {client.websiteUrl ? (
-                                  <a
-                                    href={client.websiteUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="inline-flex items-center text-red-600 hover:underline"
-                                  >
-                                    Website{" "}
-                                    <FaExternalLinkAlt className="ml-1 text-xs" />
-                                  </a>
-                                ) : (
-                                  "No website"
-                                )}
+                              {client.websiteUrl && (
+                                <a
+                                  href={client.websiteUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center text-xs text-red-600 hover:underline mt-1"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  Website <FaExternalLinkAlt className="ml-1" />
+                                </a>
+                              )}
+                            </td>
+                            <td className="px-3 py-4">
+                              <div className="text-xs text-gray-900 truncate" title={client.email}>{client.email || "—"}</div>
+                              <div className="text-xs text-gray-500 mt-1">{client.mobileNo || "—"}</div>
+                              <div className="text-xs text-gray-400 mt-1 truncate" title={[client.city, client.pincode].filter(Boolean).join(", ")}>
+                                {[client.city, client.pincode].filter(Boolean).join(", ") || "—"}
                               </div>
                             </td>
-                            <td className="px-4 py-6">
-                              <div className="text-sm text-gray-900 font-medium">
-                                {client.email}
-                              </div>
-                              <div className="text-xs text-gray-500 mt-2">
-                                {client.mobileNo}
-                              </div>
-                              <div className="text-xs text-gray-500 mt-1">
-                                {client.address}
-                              </div>
-                              <div className="text-xs text-gray-500 mt-1">
-                                {client.city}, {client.pincode}
-                              </div>
-                            </td>
-                            <td className="px-4 py-6">
-                              <div className="text-sm text-gray-900">
-                                <div className="text-xs text-gray-600">
-                                  GST: {client.gstNo}
-                                </div>
-                                <div className="text-xs text-gray-600 mt-2">
-                                  PAN: {client.panNo}
-                                </div>
-                              </div>
+                            <td className="px-3 py-4">
+                              <div className="text-xs text-gray-600">GST: <span className="font-mono">{client.gstNo || "—"}</span></div>
+                              <div className="text-xs text-gray-600 mt-1">PAN: <span className="font-mono">{client.panNo || "—"}</span></div>
                             </td>
 
                             <td className="px-4 py-6 text-center">
@@ -2092,25 +2451,61 @@ const AdminDashboard = ({ user, onLogout }) => {
                               </div>
                             </td>
                             <td className="px-4 py-6 text-center">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-
-                                  openHumanAgentManagement(
-                                    client._id,
-                                    client.name
-                                  );
-                                }}
-                                disabled={loadingClientId === client._id}
-                                className="inline-flex items-center justify-center w-10 h-10 transition-colors disabled:opacity-50"
-                                title="Settings"
-                              >
-                                {loadingClientId === client._id ? (
-                                  "..."
-                                ) : (
-                                  <FaCog className="text-sm" />
+                              <div className="relative inline-block">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setOpenSettingsMenu(openSettingsMenu === client._id ? null : client._id);
+                                  }}
+                                  disabled={loadingClientId === client._id}
+                                  className="inline-flex items-center justify-center w-10 h-10 rounded-md hover:bg-gray-100 transition-colors disabled:opacity-50"
+                                  title="Settings"
+                                >
+                                  {loadingClientId === client._id ? (
+                                    "..."
+                                  ) : (
+                                    <FaCog className="text-sm" />
+                                  )}
+                                </button>
+                                {openSettingsMenu === client._id && (
+                                  <div
+                                    className="absolute right-0 mt-1 w-36 bg-white border border-gray-200 rounded-lg shadow-lg z-50"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <button
+                                      className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-t-lg"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setOpenSettingsMenu(null);
+                                        setReviewClientId(client._id);
+                                        setShowApprovalModal(true);
+                                      }}
+                                    >
+                                      <FaEye className="mr-2 text-green-500" /> View
+                                    </button>
+                                    <button
+                                      className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setOpenSettingsMenu(null);
+                                        openEditClient(client);
+                                      }}
+                                    >
+                                      <FaEdit className="mr-2 text-blue-500" /> Edit
+                                    </button>
+                                    <button
+                                      className="flex items-center w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 rounded-b-lg"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setOpenSettingsMenu(null);
+                                        confirmDelete(client._id);
+                                      }}
+                                    >
+                                      <FaTrash className="mr-2 text-red-500" /> Delete
+                                    </button>
+                                  </div>
                                 )}
-                              </button>
+                              </div>
                             </td>
                           </tr>
                         ))}

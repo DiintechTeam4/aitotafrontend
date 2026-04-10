@@ -261,8 +261,8 @@ const BusinessForm = ({ isOpen, onClose, onCreated }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-3 sm:p-4 z-50">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[92vh] overflow-hidden flex flex-col">
         {/* Modal Header */}
         <div className="sticky top-0 bg-white border-b border-gray-200 px-8 py-6 flex items-center justify-between rounded-t-2xl">
           <div>
@@ -281,8 +281,8 @@ const BusinessForm = ({ isOpen, onClose, onCreated }) => {
           </button>
         </div>
         {/* Modal Content */}
-        <form className="p-8" onSubmit={handleSubmit}>
-          <div className="space-y-6">
+        <form className="p-4 sm:p-8 overflow-y-auto" onSubmit={handleSubmit}>
+          <div className="space-y-5 sm:space-y-6">
             {/* Title */}
             <div className="space-y-2">
               <label className="flex items-center text-sm font-medium text-gray-700">
@@ -445,7 +445,7 @@ const BusinessForm = ({ isOpen, onClose, onCreated }) => {
             </div>
             {/* Error and Buttons */}
             {error && <div className="text-red-600 font-medium">{error}</div>}
-            <div className="flex flex-col sm:flex-row gap-4 pt-6 border-t border-gray-200">
+            <div className="flex flex-col sm:flex-row gap-4 pt-6 border-t border-gray-200 sticky bottom-0 bg-white">
               <button
                 type="submit"
                 disabled={loading}

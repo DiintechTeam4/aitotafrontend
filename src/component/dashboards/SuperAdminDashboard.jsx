@@ -430,7 +430,7 @@ const SuperAdminDashboard = ({ user, onLogout }) => {
     <div className="min-h-screen bg-gray-100">
       {/* Add Admin Modal */}
       {showAddAdminModal && (
-        <div className="fixed inset-0 backdrop-blur-sm bg-opacity-50 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-lg shadow-xl w-full max-w-md relative">
             <button 
               className="absolute top-4 right-4 text-gray-500 hover:text-gray-700"
@@ -495,7 +495,7 @@ const SuperAdminDashboard = ({ user, onLogout }) => {
 
       {/* Add Client Modal */}
       {showAddClientModal && (
-        <div className="fixed inset-0 backdrop-blur-sm bg-opacity-50 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-lg shadow-xl w-full max-w-md relative min-h-screen">
             <button 
               className="absolute top-4 right-4 text-gray-500 hover:text-gray-700"
@@ -631,7 +631,7 @@ const SuperAdminDashboard = ({ user, onLogout }) => {
 
       {/* Admin Login Modal */}
       {showLoginModal && (
-        <div className="fixed inset-0 backdrop-blur-sm bg-opacity-50 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-lg shadow-xl w-full max-w-md relative">
             <button 
               className="absolute top-4 right-4 text-gray-500 hover:text-gray-700"
@@ -654,7 +654,7 @@ const SuperAdminDashboard = ({ user, onLogout }) => {
       {/* Client Login Modal */}
 
       {showClientLoginModal && (
-        <div className="fixed inset-0 backdrop-blur-sm bg-opacity-50 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-lg shadow-xl w-full max-w-md relative">
             <button 
               className="absolute top-4 right-4 text-gray-500 hover:text-gray-700"
@@ -677,7 +677,7 @@ const SuperAdminDashboard = ({ user, onLogout }) => {
 
       {/* Delete Admin Confirmation Modal */}
       {showDeleteAdminModal && (
-        <div className="fixed inset-0 backdrop-blur-sm bg-opacity-50 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-lg shadow-xl w-full max-w-md relative">
             <div className="p-6">
               <h2 className="text-2xl font-bold mb-4 text-center">Confirm Delete</h2>
@@ -705,7 +705,7 @@ const SuperAdminDashboard = ({ user, onLogout }) => {
 
       {/* Delete Client Confirmation Modal */}
       {showDeleteClientModal && (
-        <div className="fixed inset-0 backdrop-blur-sm bg-opacity-50 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-lg shadow-xl w-full max-w-md relative">
             <div className="p-6">
               <h2 className="text-2xl font-bold mb-4 text-center">Confirm Delete</h2>

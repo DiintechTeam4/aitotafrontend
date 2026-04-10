@@ -1607,7 +1607,7 @@ const HumanAgentDetails = ({ agentId, onBack }) => {
       )}
 
       {showSuperModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="bg-white rounded-lg w-[90vw] max-w-6xl h-[85vh] shadow-xl p-6 overflow-hidden relative flex flex-col">
             <button
               onClick={() => {

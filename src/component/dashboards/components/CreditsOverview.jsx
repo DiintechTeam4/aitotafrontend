@@ -2149,7 +2149,7 @@ export default function CreditsOverview() {
 
       {/* Payment Loading Overlay */}
       {paymentLoading && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60]">
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60]">
           <div className="bg-white rounded-xl p-8 shadow-xl text-center max-w-sm w-full mx-4">
             <div className="animate-spin rounded-full h-12 w-12 border-4 border-gray-200 border-t-black mx-auto mb-4"></div>
             <h3 className="text-lg font-semibold text-gray-900 mb-2">
@@ -2164,7 +2164,7 @@ export default function CreditsOverview() {
 
       {/* Transcript Modal */}
       {transcriptModal.isOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60]">
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60]">
           <div className="bg-white rounded-xl shadow-xl max-w-5xl w-full mx-4 max-h-[90vh] overflow-hidden">
             <div className="flex items-center justify-between p-6 border-b border-gray-200">
               <div>
@@ -2279,7 +2279,7 @@ export default function CreditsOverview() {
 
       {/* Invoice Modal */}
       {invoiceModal.isOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60]">
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60]">
           <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full mx-4 max-h-[80vh] overflow-hidden">
             <div className="flex items-center justify-between p-6 border-b border-gray-200">
               <h3 className="text-lg font-semibold text-gray-900">

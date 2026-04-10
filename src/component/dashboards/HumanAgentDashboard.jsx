@@ -17,6 +17,8 @@ import {
   FiMessageSquare,
   FiHeadphones,
   FiShoppingCart,
+  FiMenu,
+  FiX,
 } from "react-icons/fi";
 import { API_BASE_URL } from "../../config";
 import PerformanceKPIs from "./components/PerformanceKPIs";
@@ -31,6 +33,7 @@ const HumanAgentDashboard = ({ userData, onLogout }) => {
   const [activeSection, setActiveSection] = useState("kpi");
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
+  const [showAgentDropdown, setShowAgentDropdown] = useState(false);
 
   useEffect(() => {
     if (userData) {
@@ -454,38 +457,42 @@ const HumanAgentDashboard = ({ userData, onLogout }) => {
   };
 
   return (
-    <div className="h-screen font-sans bg-gray-50">
-      <div className="flex h-full">
+    <div className="min-h-screen font-sans bg-gray-50">
+
+      <div className="flex min-h-screen">
         {/* Sidebar */}
         <aside
-          className={`w-64 bg-gradient-to-b from-gray-900 to-black text-white flex flex-col shadow-lg transition-all duration-300 ${
+          className={`fixed lg:sticky top-0 left-0 w-64 bg-white text-gray-700 flex flex-col shadow-lg border-r border-gray-200 transition-transform duration-300 h-screen z-50 ${
             isMobile
               ? isSidebarOpen
                 ? "translate-x-0"
                 : "-translate-x-full"
               : ""
-          } ${isMobile ? "fixed z-50 h-full" : ""}`}
+          }`}
         >
-          <div className="p-6 border-b border-gray-700">
-            <h1 className="text-2xl font-bold text-white mb-3">Team</h1>
-            <div className="flex flex-row gap-2">
-              <span className="text-sm text-gray-300 font-semibold">
-                {humanAgent?.name || "Agent"}
-              </span>
-              <span className="text-sm text-gray-300 font-semibold">
-                ({humanAgent?.role || "Executive"})
-              </span>
+          {/* Sidebar Header - dark */}
+          <div className="px-5 py-4 border-b border-slate-700 bg-slate-800 flex-shrink-0">
+            <p className="text-xs text-slate-400 uppercase tracking-widest font-medium mb-3">Team</p>
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-full bg-slate-600 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+                {(humanAgent?.name?.[0] || 'A').toUpperCase()}
+              </div>
+              <div className="flex flex-col min-w-0">
+                <p className="text-sm font-semibold text-white leading-tight truncate">{humanAgent?.name || 'Agent'}</p>
+                <p className="text-xs text-slate-400 leading-tight truncate mt-0.5 capitalize">{humanAgent?.role || 'humanAgent'}</p>
+              </div>
             </div>
           </div>
 
-          <nav className="flex-1 py-4">
+          {/* Nav items - white */}
+          <nav className="flex-1 py-4 overflow-y-auto scrollbar-hide">
             {navItems.map((item) => (
               <button
                 key={item.name}
                 className={`flex items-center w-full px-6 py-4 text-left transition-all duration-200 gap-3 ${
                   activeSection === item.name
-                    ? "bg-black text-white border-r-4 border-white"
-                    : "text-gray-300 hover:bg-gray-800 hover:text-white"
+                    ? "bg-gray-100 text-gray-900 border-r-4 border-gray-800 font-semibold"
+                    : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
                 }`}
                 onClick={() => handleSectionChange(item.name)}
               >
@@ -495,15 +502,15 @@ const HumanAgentDashboard = ({ userData, onLogout }) => {
             ))}
           </nav>
 
-          {/* Bottom Navigation */}
-          <div className="p-4 border-t border-gray-700">
+          {/* Bottom nav - white */}
+          <div className="border-t border-gray-200 bg-white">
             {bottomNavItems.map((item) => (
               <button
                 key={item.name}
                 className={`flex items-center w-full px-6 py-4 text-left transition-all duration-200 gap-3 ${
                   activeSection === item.name
-                    ? "bg-black text-white border-r-4 border-white"
-                    : "text-gray-300 hover:bg-gray-800 hover:text-white"
+                    ? "bg-gray-100 text-gray-900 border-r-4 border-gray-800 font-semibold"
+                    : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
                 }`}
                 onClick={() => handleSectionChange(item.name)}
               >
@@ -512,7 +519,7 @@ const HumanAgentDashboard = ({ userData, onLogout }) => {
               </button>
             ))}
             <button
-              className="flex items-center w-full px-6 py-4 text-left transition-all duration-200 gap-3 text-gray-300 hover:bg-gray-800 hover:text-white"
+              className="flex items-center w-full px-6 py-4 text-left transition-all duration-200 gap-3 text-gray-600 hover:bg-gray-50 hover:text-gray-900"
               onClick={handleLogout}
             >
               <FiLogOut className="text-xl w-6 text-center" />
@@ -530,7 +537,59 @@ const HumanAgentDashboard = ({ userData, onLogout }) => {
         )}
 
         {/* Main Content */}
-        <main className="flex-1 flex flex-col bg-white">
+        <main className="flex-1 flex flex-col bg-white lg:ml-0">
+          {/* Top Header */}
+          <div className="sticky top-0 z-30 bg-white border-b border-gray-200 shadow-sm flex-shrink-0">
+            <div className="flex justify-between items-center px-6 py-3">
+              <div className="flex items-center gap-3">
+                <button
+                  className="lg:hidden p-2 text-gray-600"
+                  onClick={toggleSidebar}
+                >
+                  <FiMenu className="w-5 h-5" />
+                </button>
+                <span className="font-semibold text-gray-800 text-sm capitalize">
+                  {activeSection.replace(/-/g, ' ')}
+                </span>
+              </div>
+
+              {/* Agent info + dropdown */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowAgentDropdown(v => !v)}
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors"
+                >
+                  <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-700 font-bold text-sm flex-shrink-0">
+                    {(humanAgent?.name?.[0] || 'A').toUpperCase()}
+                  </div>
+                  <div className="text-left hidden sm:block">
+                    <p className="text-sm font-semibold text-gray-800 leading-tight">{humanAgent?.name || 'Agent'}</p>
+                    <p className="text-xs text-gray-500 leading-tight">{humanAgent?.email || ''}</p>
+                  </div>
+                  <svg className={`w-4 h-4 text-gray-500 transition-transform ${showAgentDropdown ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+
+                {showAgentDropdown && (
+                  <div className="absolute right-0 mt-1 w-56 bg-white border border-gray-200 rounded-xl shadow-lg z-50 overflow-hidden">
+                    <div className="px-4 py-3 bg-gray-50 border-b border-gray-100">
+                      <p className="text-sm font-semibold text-gray-800 truncate">{humanAgent?.name || 'Agent'}</p>
+                      <p className="text-xs text-gray-500 truncate">{humanAgent?.email || ''}</p>
+                      <p className="text-xs text-gray-400 truncate mt-0.5 capitalize">{humanAgent?.role || 'humanAgent'}</p>
+                    </div>
+                    <button
+                      className="flex items-center w-full px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 gap-2"
+                      onClick={() => { setShowAgentDropdown(false); handleLogout(); }}
+                    >
+                      <FiLogOut className="text-red-400" /> Logout
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
           {renderMainContent()}
         </main>
       </div>
