@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import LoginForm from "./LoginForm";
-import AiTotaLogo from "../../../public/AitotaLogo.png";
+const AiTotaLogo = "/AitotaLogo.png";
 
 const AuthLayout = ({ onLogin }) => {
   // Open directly to client login

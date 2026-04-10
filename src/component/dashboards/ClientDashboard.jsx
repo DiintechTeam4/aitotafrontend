@@ -18,6 +18,8 @@ import {
   FiSettings,
   FiKey,
   FiCopy,
+  FiMenu,
+  FiX,
 } from "react-icons/fi";
 import AgentForm from "./components/AgentForm";
 import AgentList from "./components/AgentList";
@@ -32,7 +34,7 @@ import MyBusiness from "./components/MyBusiness";
 import { API_BASE_URL } from "../../config";
 import MyDials from "./components/MyDials";
 import CreditsOverview from "./components/CreditsOverview";
-import AiTotaLogo from "../../../public/AitotaLogo.png";
+const AiTotaLogo = "/AitotaLogo.png";
 import PlansBrowse from "./components/PlansBrowse";
 import Pricing from "./components/Pricing";
 
@@ -65,6 +67,8 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
     return localStorage.getItem("clientDashboard_activeTab") || "list";
   });
   const [apiSettingsTab, setApiSettingsTab] = useState("docs");
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [showClientDropdown, setShowClientDropdown] = useState(false);
   const [apiKey, setApiKey] = useState("");
   const [apiKeyPreview, setApiKeyPreview] = useState("");
   const [isApproved, setIsApproved] = useState(null);
@@ -265,6 +269,7 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
 
   const handleSectionChange = (section) => {
     persistSectionChange(section);
+    setIsMobileMenuOpen(false);
   };
 
   // API Key functions
@@ -878,16 +883,28 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
   }
 
   return (
-    <div className="h-screen font-sans bg-gray-50">
-      <div className="flex h-full">
+    <div className="min-h-screen font-sans bg-gray-50">
+
+      {isMobileMenuOpen && (
+        <div
+          className="fixed inset-0 bg-black/40 z-30 lg:hidden"
+          onClick={() => setIsMobileMenuOpen(false)}
+        />
+      )}
+
+      <div className="flex min-h-[calc(100vh-0px)]">
         {/* Sidebar */}
-        <aside className="w-64 bg-gradient-to-b from-gray-900 to-black text-white flex flex-col shadow-lg">
-          <div className="p-5 border-b border-gray-700">
-            <div className="flex items-center gap-3 mb-3">
+        <aside
+          className={`fixed lg:sticky top-0 left-0 z-40 h-screen w-64 bg-white text-gray-700 flex flex-col shadow-lg border-r border-gray-200 transform transition-transform duration-200 ${
+            isMobileMenuOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+          }`}
+        >
+          <div className="p-5 border-b border-slate-700 bg-slate-800">
+            <div className="flex items-center gap-3">
               <img
                 src={AiTotaLogo}
                 alt="AiTota Logo"
-                className="h-10 w-10 rounded-full object-cover bg-gray-800 ring-1 ring-gray-700 shadow-md"
+                className="h-10 w-10 rounded-full object-cover bg-slate-700 ring-1 ring-slate-600 shadow-md"
                 referrerPolicy="no-referrer"
               />
               <div className="flex-1 min-w-0">
@@ -896,91 +913,19 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
                 </h1>
               </div>
             </div>
-            <div className="h-px w-full bg-gradient-to-r from-transparent via-gray-700 to-transparent mb-3" />
-            <div className="flex flex-col gap-3">
-              {clientInfo ? (
-                <div className="rounded-xl bg-gradient-to-br from-gray-800/40 to-gray-900/30 border border-gray-700/60 p-3 shadow-inner">
-                  <div className="flex items-center gap-2 mb-2">
-                    {clientInfo.businessLogoUrl ? (
-                      <img
-                        src={clientInfo.businessLogoUrl}
-                        alt={clientInfo.businessName}
-                        className="h-10 w-10 rounded-full object-cover bg-gray-800 ring-1 ring-gray-700 shadow-md"
-                        referrerPolicy="no-referrer"
-                        onError={(e) => {
-                          console.log("Business logo failed to load:", e.target.src);
-                          e.target.style.display = 'none';
-                          e.target.nextSibling.style.display = 'flex';
-                        }}
-                        onLoad={() => {
-                          console.log("Business logo loaded successfully:", clientInfo.businessLogoUrl);
-                        }}
-                      />
-                    ) : null}
-                    <div 
-                      className={`h-10 w-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-sm font-bold shadow-md ${clientInfo.businessLogoUrl ? 'hidden' : 'flex'}`}
-                    >
-                        {(clientInfo.businessName || "C")[0]?.toUpperCase()}
-                      </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <div
-                          className="text-sm font-semibold text-gray-100 truncate max-w-[9rem]"
-                          title={clientInfo.businessName}
-                        >
-                          {clientInfo.businessName}
-                        </div>
-                      </div>
-                      <div
-                        className="text-[11px] text-gray-400 uppercase tracking-wider mt-0.5 truncate max-w-[11rem]"
-                        title={clientInfo.name}
-                      >
-                        {clientInfo.name}
-                      </div>
-                    </div>
-                  </div>
-                  <div
-                    className="flex items-center gap-2 text-xs text-gray-300 truncate"
-                    title={clientInfo.email}
-                  >
-                    <svg
-                      className="w-3.5 h-3.5 text-gray-400 flex-shrink-0"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth="2"
-                        d="M16 12H8m0 0l3 3m-3-3l3-3m9 3a9 9 0 11-18 0 9 9 0 0118 0z"
-                      />
-                    </svg>
-                    <span className="truncate">{clientInfo.email}</span>
-                  </div>
-                </div>
-              ) : (
-                <div className="rounded-xl bg-gradient-to-br from-gray-800/40 to-gray-900/30 border border-gray-700/60 p-4 flex items-center gap-3">
-                  <div className="h-8 w-8 rounded-full border-2 border-gray-700 border-t-transparent animate-spin" />
-                  <div className="text-sm text-gray-400">
-                    Loading client info...
-                  </div>
-                </div>
-              )}
-            </div>
           </div>
 
           <nav className="flex-1 py-4 overflow-y-auto scrollbar-hide">
             <button
               className={`relative flex items-center w-full px-6 py-4 text-left transition-all duration-200 gap-3 ${
                 activeSection === "performance"
-                  ? "bg-white/10 text-white border-r-4 border-white font-semibold"
-                  : "text-gray-300 hover:bg-gray-800 hover:text-white"
+                  ? "bg-gray-100 text-gray-900 border-r-4 border-gray-800 font-semibold"
+                  : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
               }`}
               aria-current={activeSection === "performance" ? "page" : undefined}
               onClick={() => handleSectionChange("performance")}
             >
-              <span className={`${activeSection === "performance" ? "absolute left-0 top-0 h-full w-1 bg-white" : "hidden"}`}></span>
+              <span className="hidden"></span>
               <FiTrendingUp className="text-xl w-6 text-center" />
               <span className="flex-1 font-medium">Performance</span>
             </button>
@@ -988,13 +933,13 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
             <button
               className={`relative flex items-center w-full px-6 py-4 text-left transition-all duration-200 gap-3 ${
                 activeSection === "agents"
-                  ? "bg-white/10 text-white border-r-4 border-white font-semibold"
-                  : "text-gray-300 hover:bg-gray-800 hover:text-white"
+                  ? "bg-gray-100 text-gray-900 border-r-4 border-gray-800 font-semibold"
+                  : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
               }`}
               aria-current={activeSection === "agents" ? "page" : undefined}
               onClick={() => handleSectionChange("agents")}
             >
-              <span className={`${activeSection === "agents" ? "absolute left-0 top-0 h-full w-1 bg-white" : "hidden"}`}></span>
+              <span className="hidden"></span>
               <FiUsers className="text-xl w-6 text-center" />
               <span className="flex-1 font-medium">AI Agents</span>
             </button>
@@ -1002,13 +947,13 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
             <button
               className={`relative flex items-center w-full px-6 py-4 text-left transition-all duration-200 gap-3 ${
                 activeSection === "bond"
-                  ? "bg-white/10 text-white border-r-4 border-white font-semibold"
-                  : "text-gray-300 hover:bg-gray-800 hover:text-white"
+                  ? "bg-gray-100 text-gray-900 border-r-4 border-gray-800 font-semibold"
+                  : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
               }`}
               aria-current={activeSection === "bond" ? "page" : undefined}
               onClick={() => handleSectionChange("bond")}
             >
-              <span className={`${activeSection === "bond" ? "absolute left-0 top-0 h-full w-1 bg-white" : "hidden"}`}></span>
+              <span className="hidden"></span>
               <FiArrowDownLeft className="text-xl w-6 text-center" />
               <span className="flex-1 font-medium">InBound</span>
             </button>
@@ -1016,13 +961,13 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
             <button
               className={`relative flex items-center w-full px-6 py-4 text-left transition-all duration-200 gap-3 ${
                 activeSection === "outbound"
-                  ? "bg-white/10 text-white border-r-4 border-white font-semibold"
-                  : "text-gray-300 hover:bg-gray-800 hover:text-white"
+                  ? "bg-gray-100 text-gray-900 border-r-4 border-gray-800 font-semibold"
+                  : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
               }`}
               aria-current={activeSection === "outbound" ? "page" : undefined}
               onClick={() => handleSectionChange("outbound")}
             >
-              <span className={`${activeSection === "outbound" ? "absolute left-0 top-0 h-full w-1 bg-white" : "hidden"}`}></span>
+              <span className="hidden"></span>
               <FiArrowUpRight className="text-xl w-6 text-center" />
               <span className="flex-1 font-medium">Outbound</span>
             </button>
@@ -1030,13 +975,13 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
             <button
               className={`relative flex items-center w-full px-6 py-4 text-left transition-all duration-200 gap-3 ${
                 activeSection === "human_agent"
-                  ? "bg-white/10 text-white border-r-4 border-white font-semibold"
-                  : "text-gray-300 hover:bg-gray-800 hover:text-white"
+                  ? "bg-gray-100 text-gray-900 border-r-4 border-gray-800 font-semibold"
+                  : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
               }`}
               aria-current={activeSection === "human_agent" ? "page" : undefined}
               onClick={() => handleSectionChange("human_agent")}
             >
-              <span className={`${activeSection === "human_agent" ? "absolute left-0 top-0 h-full w-1 bg-white" : "hidden"}`}></span>
+              <span className="hidden"></span>
               <FiUserCheck className="text-xl w-6 text-center" />
               <span className="flex-1 font-medium">Team</span>
             </button>
@@ -1044,13 +989,13 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
             <button
               className={`relative flex items-center w-full px-6 py-4 text-left transition-all duration-200 gap-3 ${
                 activeSection === "mybusiness"
-                  ? "bg-white/10 text-white border-r-4 border-white font-semibold"
-                  : "text-gray-300 hover:bg-gray-800 hover:text-white"
+                  ? "bg-gray-100 text-gray-900 border-r-4 border-gray-800 font-semibold"
+                  : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
               }`}
               aria-current={activeSection === "mybusiness" ? "page" : undefined}
               onClick={() => handleSectionChange("mybusiness")}
             >
-              <span className={`${activeSection === "mybusiness" ? "absolute left-0 top-0 h-full w-1 bg-white" : "hidden"}`}></span>
+              <span className="hidden"></span>
               <FiBriefcase className="text-xl w-6 text-center" />
               <span className="flex-1 font-medium">My Business</span>
             </button>
@@ -1058,13 +1003,13 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
             <button
               className={`relative flex items-center w-full px-6 py-4 text-left transition-all duration-200 gap-3 ${
                 activeSection === "mydials"
-                  ? "bg-white/10 text-white border-r-4 border-white font-semibold"
-                  : "text-gray-300 hover:bg-gray-800 hover:text-white"
+                  ? "bg-gray-100 text-gray-900 border-r-4 border-gray-800 font-semibold"
+                  : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
               }`}
               aria-current={activeSection === "mydials" ? "page" : undefined}
               onClick={() => handleSectionChange("mydials")}
             >
-              <span className={`${activeSection === "mydials" ? "absolute left-0 top-0 h-full w-1 bg-white" : "hidden"}`}></span>
+              <span className="hidden"></span>
               <FiPhone className="text-xl w-6 text-center" />
               <span className="flex-1 font-medium">My Dials</span>
             </button>
@@ -1072,13 +1017,13 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
             <button
               className={`relative flex items-center w-full px-6 py-4 text-left transition-all duration-200 gap-3 ${
                 activeSection === "credits"
-                  ? "bg-white/10 text-white border-r-4 border-white font-semibold"
-                  : "text-gray-300 hover:bg-gray-800 hover:text-white"
+                  ? "bg-gray-100 text-gray-900 border-r-4 border-gray-800 font-semibold"
+                  : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
               }`}
               aria-current={activeSection === "credits" ? "page" : undefined}
               onClick={() => handleSectionChange("credits")}
             >
-              <span className={`${activeSection === "credits" ? "absolute left-0 top-0 h-full w-1 bg-white" : "hidden"}`}></span>
+              <span className="hidden"></span>
               <FiTrendingUp className="text-xl w-6 text-center" />
               <span className="flex-1 font-medium">Credits</span>
             </button>
@@ -1086,34 +1031,33 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
             <button
               className={`relative flex items-center w-full px-6 py-4 text-left transition-all duration-200 gap-3 ${
                 activeSection === "api-settings"
-                  ? "bg-white/10 text-white border-r-4 border-white font-semibold"
-                  : "text-gray-300 hover:bg-gray-800 hover:text-white"
+                  ? "bg-gray-100 text-gray-900 border-r-4 border-gray-800 font-semibold"
+                  : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
               }`}
               aria-current={activeSection === "api-settings" ? "page" : undefined}
               onClick={() => handleSectionChange("api-settings")}
             >
-              <span className={`${activeSection === "api-settings" ? "absolute left-0 top-0 h-full w-1 bg-white" : "hidden"}`}></span>
+              <span className="hidden"></span>
               <FiSettings className="text-xl w-6 text-center" />
               <span className="flex-1 font-medium">API Settings</span>
             </button>
           </nav>
 
-          <div className="p-4">
+          <div className="p-4 border-t border-gray-200">
             <button
               className={`relative flex items-center w-full px-6 py-4 text-left transition-all duration-200 gap-3 ${
                 activeSection === "about"
-                  ? "bg-white/10 text-white border-r-4 border-white font-semibold"
-                  : "text-gray-300 hover:bg-gray-800 hover:text-white"
+                  ? "bg-gray-100 text-gray-900 border-r-4 border-gray-800 font-semibold"
+                  : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
               }`}
               aria-current={activeSection === "about" ? "page" : undefined}
               onClick={() => handleSectionChange("about")}
             >
-              <span className={`${activeSection === "about" ? "absolute left-0 top-0 h-full w-1 bg-white" : "hidden"}`}></span>
               <FiInfo className="text-xl w-6 text-center" />
               <span className="flex-1 font-medium">About Us</span>
             </button>
             <button
-              className="flex items-center w-full px-6 py-4 text-left transition-all duration-200 gap-3 text-gray-300 hover:bg-gray-800 hover:text-white rounded"
+              className="flex items-center w-full px-6 py-4 text-left transition-all duration-200 gap-3 text-gray-600 hover:bg-gray-50 hover:text-gray-900 rounded"
               onClick={onLogout}
             >
               <FiLogOut className="text-xl w-6 text-center" />
@@ -1123,7 +1067,69 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
         </aside>
 
         {/* Main Content */}
-        <main className="flex-1 flex flex-col bg-white">
+        <main className="flex-1 flex flex-col bg-white lg:ml-0">
+          {/* Top Header */}
+          <div className="sticky top-0 z-30 bg-white border-b border-gray-200 shadow-sm flex-shrink-0">
+            <div className="flex justify-between items-center px-6 py-3">
+              <div className="flex items-center gap-3">
+                <button
+                  className="lg:hidden p-2 text-gray-600"
+                  onClick={() => setIsMobileMenuOpen(prev => !prev)}
+                >
+                  <FiMenu className="w-5 h-5" />
+                </button>
+                <span className="font-semibold text-gray-800 text-sm capitalize">
+                  {activeSection.replace(/_/g, ' ')}
+                </span>
+              </div>
+
+              {/* Client info + dropdown */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowClientDropdown(v => !v)}
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors"
+                >
+                  <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-700 font-bold text-sm flex-shrink-0">
+                    {(clientInfo?.businessName?.[0] || clientInfo?.name?.[0] || 'C').toUpperCase()}
+                  </div>
+                  {!isMobileMenuOpen && (
+                    <div className="text-left hidden sm:block">
+                      <p className="text-sm font-semibold text-gray-800 leading-tight">{clientInfo?.name || 'Client'}</p>
+                      <p className="text-xs text-gray-500 leading-tight">{clientInfo?.email || ''}</p>
+                    </div>
+                  )}
+                  <svg className={`w-4 h-4 text-gray-500 transition-transform ${showClientDropdown ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+
+                {showClientDropdown && (
+                  <div className="absolute right-0 mt-1 w-56 bg-white border border-gray-200 rounded-xl shadow-lg z-50 overflow-hidden">
+                    <div className="px-4 py-3 bg-gray-50 border-b border-gray-100">
+                      <p className="text-sm font-semibold text-gray-800 truncate">{clientInfo?.name || 'Client'}</p>
+                      <p className="text-xs text-gray-500 truncate">{clientInfo?.email || ''}</p>
+                      {clientInfo?.businessName && (
+                        <p className="text-xs text-gray-400 truncate mt-0.5">{clientInfo.businessName}</p>
+                      )}
+                    </div>
+                    <button
+                      className="flex items-center w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 gap-2"
+                      onClick={() => { setShowClientDropdown(false); handleSectionChange('mybusiness'); }}
+                    >
+                      <FiBriefcase className="text-gray-400" /> My Business
+                    </button>
+                    <button
+                      className="flex items-center w-full px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 gap-2 border-t border-gray-100"
+                      onClick={() => { setShowClientDropdown(false); onLogout(); }}
+                    >
+                      <FiLogOut className="text-red-400" /> Logout
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
           {renderMainContent()}
         </main>
       </div>

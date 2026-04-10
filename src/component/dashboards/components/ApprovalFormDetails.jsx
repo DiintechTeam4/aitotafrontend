@@ -454,8 +454,8 @@ const ApprovalFormDetails = ({ clientId, onClose, onApprove, onEdit, onWhatsAppC
 
   if (loading) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-white">
-        <div className="text-center">
+      <div className="fixed inset-0 bg-black/40 z-[60] flex items-center justify-center p-4">
+        <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-8 text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-500 mx-auto"></div>
           <p className="mt-4 text-gray-600">Loading client profile...</p>
         </div>
@@ -465,17 +465,12 @@ const ApprovalFormDetails = ({ clientId, onClose, onApprove, onEdit, onWhatsAppC
 
   if (error) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-white">
-        <div className="text-center max-w-md mx-auto p-6">
-          <div className="text-red-500 text-6xl mb-4">⚠️</div>
-          <h2 className="text-lg font-semibold text-gray-800 mb-2">
-            No Profile Found
-          </h2>
+      <div className="fixed inset-0 bg-black/40 z-[60] flex items-center justify-center p-4">
+        <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-8 text-center">
+          <div className="text-red-500 text-5xl mb-4">⚠️</div>
+          <h2 className="text-lg font-semibold text-gray-800 mb-2">No Profile Found</h2>
           <p className="text-gray-600 mb-4">{error}</p>
-          <button
-            onClick={onClose}
-            className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
-          >
+          <button onClick={onClose} className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700">
             Close
           </button>
         </div>
@@ -484,47 +479,26 @@ const ApprovalFormDetails = ({ clientId, onClose, onApprove, onEdit, onWhatsAppC
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 bg-gray-50 overflow-y-auto"
-      style={{ marginLeft: "16rem" }}
-    >
-      {/* Professional Header */}
-      <div className="sticky top-0 bg-white border-b border-gray-200 shadow-sm">
-        <div className="max-w-7xl mx-auto px-6 py-3">
-          <div className="flex justify-between items-center">
-            <div className="flex items-center space-x-3">
-              <button
-                onClick={onClose}
-                className="flex items-center gap-2 text-gray-600 hover:text-red-600 font-medium px-3 py-1.5 rounded-lg transition-colors hover:bg-gray-100"
-              >
-                <FaArrowLeft className="text-lg" />
-                <span className="text-base">Back to Dashboard</span>
-              </button>
-            </div>
-            <div className="text-center">
-              <h1 className="text-2xl font-bold text-gray-800">
-                Client Profile Review
-              </h1>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => {
-                  if (onWhatsAppClick) {
-                    onWhatsAppClick(clientId);
-                  }
-                }}
-                className="px-4 py-2 rounded-full bg-green-500 text-white transition-colors flex items-center font-semibold text-xs shadow-sm hover:bg-green-600"
-              >
-                <FaWhatsapp className="mr-2 text-white" />
-                WhatsApp
-              </button>
-            </div>
+    <div className="fixed inset-0 bg-black/40 z-[60] flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[92vh] flex flex-col overflow-hidden">
+        {/* Modal Header */}
+        <div className="bg-gradient-to-r from-slate-800 to-slate-900 px-6 py-4 flex items-center justify-between flex-shrink-0">
+          <h2 className="text-lg font-semibold text-white">Client Profile Review</h2>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => { if (onWhatsAppClick) onWhatsAppClick(clientId); }}
+              className="px-3 py-1.5 rounded-full bg-green-500 text-white flex items-center font-semibold text-xs hover:bg-green-600"
+            >
+              <FaWhatsapp className="mr-1.5" /> WhatsApp
+            </button>
+            <button onClick={onClose} className="text-white hover:text-red-200">
+              <FaTimes size={20} />
+            </button>
           </div>
         </div>
-      </div>
 
       {/* Main Content */}
-      <div className="max-w-6xl mx-auto p-5">
+      <div className="overflow-y-auto flex-1 p-5">
         {clientData && (
           <div className="space-y-5">
             {/* Client Overview Card */}
@@ -666,7 +640,7 @@ const ApprovalFormDetails = ({ clientId, onClose, onApprove, onEdit, onWhatsAppC
                 Client Information
               </h3>
               {editMode ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="bg-gray-50 rounded-lg p-3">
                     <label className="block text-xs font-medium text-gray-500 mb-1.5">
                       Full Name
@@ -748,7 +722,7 @@ const ApprovalFormDetails = ({ clientId, onClose, onApprove, onEdit, onWhatsAppC
                       placeholder="Website"
                     />
                   </div>
-                  <div className="bg-gray-50 rounded-lg p-3 md:col-span-2">
+                  <div className="bg-gray-50 rounded-lg p-3 col-span-1 md:col-span-2">
                     <label className="block text-xs font-medium text-gray-500 mb-1.5">
                       Address
                     </label>
@@ -787,7 +761,7 @@ const ApprovalFormDetails = ({ clientId, onClose, onApprove, onEdit, onWhatsAppC
                       placeholder="Pincode"
                     />
                   </div>
-                  <div className="md:col-span-3 flex items-center gap-3 mt-2">
+                  <div className="md:col-span-2 flex items-center gap-3 mt-2">
                     <button
                       onClick={handleSaveProfile}
                       disabled={savingProfile}
@@ -804,7 +778,7 @@ const ApprovalFormDetails = ({ clientId, onClose, onApprove, onEdit, onWhatsAppC
                   </div>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* Name */}
                   <div className="bg-gray-50 rounded-lg p-3">
                     <label className="block text-xs font-medium text-gray-500 mb-1.5 flex items-center">
@@ -876,7 +850,7 @@ const ApprovalFormDetails = ({ clientId, onClose, onApprove, onEdit, onWhatsAppC
                   </div>
 
                   {/* Address */}
-                  <div className="bg-gray-50 rounded-lg p-3 md:col-span-2">
+                  <div className="bg-gray-50 rounded-lg p-3 col-span-1 md:col-span-2">
                     <label className="block text-xs font-medium text-gray-500 mb-1.5 flex items-center">
                       <FaMapMarkerAlt className="mr-2 text-red-500" />
                       Address
@@ -1009,6 +983,7 @@ const ApprovalFormDetails = ({ clientId, onClose, onApprove, onEdit, onWhatsAppC
             )}
           </div>
         )}
+      </div>
       </div>
     </div>
   );
