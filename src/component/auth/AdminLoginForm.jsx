@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { FaLock, FaUser, FaSignInAlt } from 'react-icons/fa';
 import { API_BASE_URL } from '../../config';
@@ -11,7 +10,6 @@ const AdminLoginForm = ({ onLogin, switchToRegister }) => {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const navigate = useNavigate();
 
   const handleChange = (e) => {
     setFormData({
@@ -40,27 +38,13 @@ const AdminLoginForm = ({ onLogin, switchToRegister }) => {
         throw new Error(response.data.message || 'Login failed');
       }
 
-      // Store admin token
-      localStorage.setItem('admintoken', response.data.token);
-
-      // Store admin data
-      const adminData = {
-        role: 'admin',
-        name: response.data.admin?.name || response.data.name,
-        email: response.data.admin?.email || response.data.email
-      };
-      localStorage.setItem('adminData', JSON.stringify(adminData));
-
-      // Call onLogin with structured data
+      // Call onLogin — parent (routes/index.jsx) handles storage + navigation
       onLogin({
         token: response.data.token,
-        name: adminData.name,
-        email: adminData.email,
+        name: response.data.admin?.name || response.data.name,
+        email: response.data.admin?.email || response.data.email,
         role: 'admin'
       });
-      
-      // Navigate to dashboard after successful login
-      navigate('/admin/dashboard');
     } catch (err) {
       console.error('Login error:', err);
       const errorMessage = err.response?.data?.message || err.message || 'Invalid admin credentials. Please try again.';

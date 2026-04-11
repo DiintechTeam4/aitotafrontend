@@ -1,24 +1,28 @@
 import { useState } from "react";
-import { Routes, Route, useNavigate, Link, Navigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import AdminLoginForm from "./AdminLoginForm";
 import AdminRegisterForm from "./AdminRegisterForm";
 
 const AdminAuthLayout = ({ onLogin }) => {
-  const [authMode, setAuthMode] = useState("login"); // 'login' or 'register'
+  const location = useLocation();
   const navigate = useNavigate();
 
+  // Determine mode from current URL path
+  const isRegister = location.pathname.includes("register");
+  const [mode, setMode] = useState(isRegister ? "register" : "login");
+
   const switchToRegister = () => {
-    setAuthMode("register");
+    setMode("register");
     navigate("/admin/register");
   };
 
   const switchToLogin = () => {
-    setAuthMode("login");
+    setMode("login");
     navigate("/admin/login");
   };
 
   const handleRegisterSuccess = () => {
-    setAuthMode("login");
+    setMode("login");
     navigate("/admin/login");
   };
 
@@ -32,63 +36,52 @@ const AdminAuthLayout = ({ onLogin }) => {
       <div className="max-w-md w-full bg-white rounded-lg shadow-md p-8">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-blue-800">Admin Portal</h1>
-          <p className="text-gray-600 mt-2">
-            Secured access for administrators
-          </p>
+          <p className="text-gray-600 mt-2">Secured access for administrators</p>
         </div>
 
-        <Routes>
-          <Route
-            path="/login"
-            element={
-              <AdminLoginForm
-                onLogin={handleLoginSuccess}
-                switchToRegister={switchToRegister}
-              />
-            }
+        {mode === "login" ? (
+          <AdminLoginForm
+            onLogin={handleLoginSuccess}
+            switchToRegister={switchToRegister}
           />
-          <Route
-            path="/register"
-            element={
-              <AdminRegisterForm
-                onSuccess={handleRegisterSuccess}
-                switchToLogin={switchToLogin}
-              />
-            }
+        ) : (
+          <AdminRegisterForm
+            onSuccess={handleRegisterSuccess}
+            switchToLogin={switchToLogin}
           />
-          <Route path="/" element={<Navigate to="/admin/login" replace />} />
-        </Routes>
+        )}
 
         <div className="mt-6 border-t border-gray-200 pt-4">
           <div className="text-center">
-            {authMode === "login" ? (
+            {mode === "login" ? (
               <div className="mt-4">
                 <p className="text-gray-600">Need to create an account?</p>
-                <Link
-                  to="/admin/register"
-                  className="mt-2 inline-block text-blue-600 hover:underline"
+                <button
                   onClick={switchToRegister}
+                  className="mt-2 inline-block text-blue-600 hover:underline bg-transparent border-none cursor-pointer"
                 >
                   Register as Admin
-                </Link>
+                </button>
               </div>
             ) : (
               <div className="mt-4">
                 <p className="text-gray-600">Already have an account?</p>
-                <Link
-                  to="/admin/login"
-                  className="mt-2 inline-block text-blue-600 hover:underline"
+                <button
                   onClick={switchToLogin}
+                  className="mt-2 inline-block text-blue-600 hover:underline bg-transparent border-none cursor-pointer"
                 >
                   Log in as Admin
-                </Link>
+                </button>
               </div>
             )}
           </div>
           <div className="mt-6 text-center">
-            <Link to="/auth" className="text-gray-500 hover:text-gray-700">
+            <button
+              onClick={() => window.open('/client/login', '_blank', 'noopener,noreferrer')}
+              className="text-gray-500 hover:text-gray-700 bg-transparent border-none cursor-pointer text-sm"
+            >
               Return to main login
-            </Link>
+            </button>
           </div>
         </div>
       </div>
