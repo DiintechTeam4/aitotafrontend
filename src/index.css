@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 @import url('https://fonts.googleapis.com/css2?family=Urbanist:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
 
 /* Hide scrollbar utility */
@@ -302,4 +303,13 @@
 @media (max-width: 900px) {
   .nav-desktop { display: none !important; }
   .nav-hamburger { display: flex !important; }
+=======
+/* Hide scrollbar utility */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+>>>>>>> e18c35bba89540ac3518d67d7e46ee9300360007
 }
