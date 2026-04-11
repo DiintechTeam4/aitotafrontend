@@ -589,12 +589,9 @@ const AdminDashboard = ({ user, onLogout }) => {
       });
 
       if (response.status === 401) {
-<<<<<<< HEAD
         // Token invalid/expired — clear storage and redirect to login
         localStorage.removeItem("admintoken");
         localStorage.removeItem("adminData");
-=======
->>>>>>> e18c35bba89540ac3518d67d7e46ee9300360007
         redirectToAdminLogin();
         return;
       }
