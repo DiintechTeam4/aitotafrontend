@@ -80,7 +80,6 @@ import MakecallLogin        from "../pages/MakecallLogin";
 import MakecallDashboard    from "../pages/MakecallDashboard";
 import AgentMobileTalk      from "../component/dashboards/components/AgentMobileTalk";
 import PublicBusinessDetails from "../component/dashboards/components/PublicBusinessDetails";
-import Testing              from "../component/dashboards/components/Testing";
 
 // ── Preloader ──────────────────────────────────────────────
 import Preloader from "./Preloader";
@@ -428,7 +427,6 @@ export default function AppRoutes() {
 
         {/* ── MISC ────────────────────────────────────── */}
         <Route path="/agent/:agentId/talk" element={<AgentMobileTalk />} />
-        <Route path="/testing"             element={<Testing />} />
 
         {/* ── PUBLIC BUSINESS ─────────────────────────── */}
         <Route path="/:slug" element={<PublicBusinessDetails />} />
