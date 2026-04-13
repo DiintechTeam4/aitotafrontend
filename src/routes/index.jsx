@@ -318,6 +318,7 @@ function UserRoutes({ loginPath, dashboardPath }) {
     <Routes>
       <Route path=""          element={<Navigate to={loginPath} replace />} />
       <Route path="login"     element={isAuth ? <Navigate to={dashboardPath} replace /> : <AuthLayout onLogin={handleLogin} />} />
+      <Route path="register"   element={isAuth ? <Navigate to={dashboardPath} replace /> : <AuthLayout onLogin={handleLogin} defaultStep="register" />} />
       <Route path="dashboard" element={
         <ProtectedRoute isAuth={isAuth} redirectTo={loginPath}>
           {getDashboard()}

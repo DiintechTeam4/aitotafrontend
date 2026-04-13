@@ -34,6 +34,7 @@ import MyBusiness from "./components/MyBusiness";
 import { API_BASE_URL } from "../../config";
 import MyDials from "./components/MyDials";
 import CreditsOverview from "./components/CreditsOverview";
+import DistributionTool from "./components/DistributionTool";
 const AiTotaLogo = "/AitotaLogo.png";
 import PlansBrowse from "./components/PlansBrowse";
 import Pricing from "./components/Pricing";
@@ -635,6 +636,9 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
       case "credits":
         return <CreditsOverview />;
 
+      case "distribution":
+        return <DistributionTool />;
+
       case "api-settings":
         return (
           <div className="h-full flex flex-col">
@@ -1012,6 +1016,20 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
               <span className="hidden"></span>
               <FiPhone className="text-xl w-6 text-center" />
               <span className="flex-1 font-medium">My Dials</span>
+            </button>
+
+            <button
+              className={`relative flex items-center w-full px-6 py-4 text-left transition-all duration-200 gap-3 ${
+                activeSection === "distribution"
+                  ? "bg-gray-100 text-gray-900 border-r-4 border-gray-800 font-semibold"
+                  : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+              }`}
+              aria-current={activeSection === "distribution" ? "page" : undefined}
+              onClick={() => handleSectionChange("distribution")}
+            >
+              <span className="hidden"></span>
+              <FiSend className="text-xl w-6 text-center" />
+              <span className="flex-1 font-medium">Distribution Tool</span>
             </button>
 
             <button

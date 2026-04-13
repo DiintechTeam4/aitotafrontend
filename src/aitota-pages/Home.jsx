@@ -178,7 +178,7 @@ function HeroSection() {
                 >
                     {/* Try for Free Button */}
                     <Link
-                        to="/contact"
+                        to="/client/register"
                         className="group"
                         style={{
                             background: 'var(--accent)', // Original Gradient

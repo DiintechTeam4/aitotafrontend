@@ -225,8 +225,8 @@ const LoginForm = ({ userType, onLogin, switchToRegister }) => {
         </div>
       )}
 
-      {/* Regular Login Form - hide for client; keep for user/HumanAgent */}
-      {userType !== "client" && (
+      {/* Regular Login Form */}
+      {userType !== "HumanAgent" && (
         <form onSubmit={handleSubmit}>
           <div className="mb-4">
             <label className="block text-gray-700 text-sm font-bold mb-2 flex items-center">
