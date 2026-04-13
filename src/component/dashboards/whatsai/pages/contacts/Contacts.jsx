@@ -63,6 +63,8 @@ export default function Contacts({ onNavigate }) {
   function openAssign(c) {
     setAssignContact(c)
     setSelectedGroups((c.group || []).map((g) => (typeof g === 'object' ? g._id : g)).filter(Boolean))
+    // Refresh groups list every time modal opens
+    contactsApi.groups().then(({ data }) => { if (data.success) setGroups(data.data.groups || []) }).catch(() => {})
     setAssignOpen(true)
   }
 
@@ -137,11 +139,21 @@ export default function Contacts({ onNavigate }) {
 
       <Modal open={assignOpen} title="Assign groups" onClose={() => setAssignOpen(false)}
         footer={<ModalActions loading={saving} onCancel={() => setAssignOpen(false)} onConfirm={saveAssign} />}>
-        <p className="text-sm text-slate-400 mb-3">Select groups for {assignContact?.name}.</p>
-        <select multiple className="w-full min-h-[140px] rounded-lg border border-[#334155] bg-[#0F172A] px-3 py-2 text-sm text-[#F1F5F9]"
-          value={selectedGroups.map(String)} onChange={(e) => setSelectedGroups([...e.target.selectedOptions].map((o) => o.value))}>
-          {groups.map((g) => <option key={g._id} value={g._id}>{g.name}</option>)}
-        </select>
+        <p className="text-sm text-slate-400 mb-3">Select groups for <strong className="text-[#F1F5F9]">{assignContact?.name}</strong>.</p>
+        {groups.length === 0 ? (
+          <div className="text-center py-6">
+            <p className="text-sm text-slate-500 mb-2">No groups found.</p>
+            <button type="button" className="text-xs text-[#25D366] hover:underline" onClick={() => { setAssignOpen(false); onNavigate('contact-groups') }}>Create a group first →</button>
+          </div>
+        ) : (
+          <>
+            <p className="text-xs text-slate-500 mb-2">Hold Ctrl/Cmd to select multiple.</p>
+            <select multiple className="w-full min-h-[140px] rounded-lg border border-[#334155] bg-[#0F172A] px-3 py-2 text-sm text-[#F1F5F9]"
+              value={selectedGroups.map(String)} onChange={(e) => setSelectedGroups([...e.target.selectedOptions].map((o) => o.value))}>
+              {groups.map((g) => <option key={g._id} value={g._id}>{g.name}</option>)}
+            </select>
+          </>
+        )}
       </Modal>
 
       <Modal open={addOpen} title="Add contact" onClose={() => setAddOpen(false)}
