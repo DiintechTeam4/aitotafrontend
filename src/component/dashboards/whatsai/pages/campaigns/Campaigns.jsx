@@ -11,6 +11,7 @@ export default function Campaigns({ onNavigate }) {
   const [list, setList] = useState([])
   const [loading, setLoading] = useState(true)
   const [deleting, setDeleting] = useState(null)
+  const [sending, setSending] = useState(null)
 
   async function load() {
     setLoading(true)
@@ -27,13 +28,24 @@ export default function Campaigns({ onNavigate }) {
   useEffect(() => { load() }, [])
 
   async function sendNow(id) {
+    if (sending) return
+    setSending(id)
     try {
       const { data } = await campaignsApi.send(id)
       if (data.success) toast.success(data.message || 'Sending started')
       else toast.error(data.message)
       load()
     } catch (e) {
-      toast.error(e.response?.data?.message || 'Send failed')
+      const msg = e.response?.data?.message || 'Send failed'
+      const details = e.response?.data?.data
+      if (details?.hint) {
+        toast.error(`${msg}. ${details.hint}`)
+      } else {
+        toast.error(msg)
+      }
+    }
+    finally {
+      setSending(null)
     }
   }
 
@@ -74,7 +86,9 @@ export default function Campaigns({ onNavigate }) {
                   <TD>
                     <div className="flex flex-wrap gap-2">
                       {(c.status === 'draft' || c.status === 'scheduled') && (
-                        <Button type="button" size="sm" onClick={() => sendNow(c._id)}>Send</Button>
+                        <Button type="button" size="sm" disabled={sending === c._id} onClick={() => sendNow(c._id)}>
+                          {sending === c._id ? 'Sending…' : 'Send'}
+                        </Button>
                       )}
                       <Button type="button" size="sm" variant="danger" disabled={deleting === c._id} onClick={() => remove(c._id)}>{deleting === c._id ? '...' : 'Delete'}</Button>
                     </div>

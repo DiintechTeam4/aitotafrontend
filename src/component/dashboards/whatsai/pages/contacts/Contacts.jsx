@@ -147,11 +147,25 @@ export default function Contacts({ onNavigate }) {
           </div>
         ) : (
           <>
-            <p className="text-xs text-slate-500 mb-2">Hold Ctrl/Cmd to select multiple.</p>
-            <select multiple className="w-full min-h-[140px] rounded-lg border border-[#334155] bg-[#0F172A] px-3 py-2 text-sm text-[#F1F5F9]"
-              value={selectedGroups.map(String)} onChange={(e) => setSelectedGroups([...e.target.selectedOptions].map((o) => o.value))}>
-              {groups.map((g) => <option key={g._id} value={g._id}>{g.name}</option>)}
-            </select>
+            <p className="text-xs text-slate-500 mb-2">Select one or more groups.</p>
+            <div className="max-h-[220px] overflow-y-auto rounded-lg border border-[#334155] bg-[#0F172A] p-2 space-y-1">
+              {groups.map((g) => {
+                const checked = selectedGroups.includes(String(g._id))
+                return (
+                  <label key={g._id} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-[#1E293B] cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={(e) => {
+                        if (e.target.checked) setSelectedGroups((prev) => [...prev, String(g._id)])
+                        else setSelectedGroups((prev) => prev.filter((id) => id !== String(g._id)))
+                      }}
+                    />
+                    <span className="text-sm text-[#F1F5F9]">{g.name}</span>
+                  </label>
+                )
+              })}
+            </div>
           </>
         )}
       </Modal>
