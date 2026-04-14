@@ -74,6 +74,7 @@ import AdminDashboard      from "../component/dashboards/AdminDashboard";
 import ClientDashboard     from "../component/dashboards/ClientDashboard";
 import HumanAgentDashboard from "../component/dashboards/HumanAgentDashboard";
 import SuperAdminDashboard from "../component/dashboards/SuperAdminDashboard";
+import WorkspaceDashboard from "../component/dashboards/components/WorkspaceDashboard";
 
 // ── Other Pages ────────────────────────────────────────────
 import MakecallLogin        from "../pages/MakecallLogin";
@@ -226,6 +227,45 @@ function SuperadminRoutes() {
         </ProtectedRoute>
       } />
       <Route path="*" element={<Navigate to={isAuth ? "/superadmin/dashboard" : "/superadmin/login"} replace />} />
+    </Routes>
+  );
+}
+
+// ══════════════════════════════════════════════════════════
+//  WORKSPACE ROUTES
+// ══════════════════════════════════════════════════════════
+function WorkspaceRoutes() {
+  const [isAuth, setIsAuth] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [workspace, setWorkspace] = useState(null);
+
+  useEffect(() => {
+    const token = localStorage.getItem("admintoken") || sessionStorage.getItem("admintoken");
+    const wsData = localStorage.getItem("activeWorkspace");
+    
+    if (token && wsData && !isTokenExpired(token)) {
+      setIsAuth(true);
+      setWorkspace(JSON.parse(wsData));
+    }
+    setLoading(false);
+  }, []);
+
+  if (loading) return <Spinner />;
+
+  return (
+    <Routes>
+      <Route path="dashboard" element={
+        <ProtectedRoute isAuth={isAuth} redirectTo="/admin/login">
+          {workspace ? (
+            <WorkspaceDashboard workspace={workspace} onBack={() => window.close()} />
+          ) : (
+            <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white italic">
+              No active workspace found. Please open from Admin Panel.
+            </div>
+          )}
+        </ProtectedRoute>
+      } />
+      <Route path="*" element={<Navigate to="/workspace/dashboard" replace />} />
     </Routes>
   );
 }
@@ -401,6 +441,7 @@ export default function AppRoutes() {
 
         {/* ── SUPERADMIN ──────────────────────────────── */}
         <Route path="/superadmin/*" element={<SuperadminRoutes />} />
+        <Route path="/workspace/*" element={<WorkspaceRoutes />} />
 
         {/* ── CLIENT ──────────────────────────────────── */}
         {/* /client/login  →  client login                */}

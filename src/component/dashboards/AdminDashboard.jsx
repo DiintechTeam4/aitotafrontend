@@ -46,6 +46,9 @@ import CouponManagement from "./components/CouponManagement";
 import ToolsManagement from "./components/ToolsManagement";
 import UserInfo from "./components/UserInfo";
 import WhatsAppTemplateManagement from "./components/WhatsAppTemplateManagement";
+import WorkspaceManagement from "./components/WorkspaceManagement";
+import WorkspaceDashboard from "./components/WorkspaceDashboard";
+import TabManagement from "./components/TabManagement";
 
 const AdminDashboard = ({ user, onLogout }) => {
   const navigate = useNavigate();
@@ -58,6 +61,7 @@ const AdminDashboard = ({ user, onLogout }) => {
       return "Overview";
     }
   });
+  const [manageTabsWorkspaceId, setManageTabsWorkspaceId] = useState(null);
   const [isMobile, setIsMobile] = useState(false);
   const [clients, setclients] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -787,7 +791,7 @@ const AdminDashboard = ({ user, onLogout }) => {
       icon: <FaDatabase />,
       subItems: ["Chats"],
     },
-    { name: "AI Agent", icon: <FaRobot /> },
+    { name: "Workspaces", icon: <FaBuilding /> },
     { name: "User", icon: <FaUser /> },
     // { name: "Tickets", icon: <FaClipboardList /> },
   ];
@@ -2220,6 +2224,19 @@ const AdminDashboard = ({ user, onLogout }) => {
                   Support ticket management functionality coming soon...
                 </p>
               </div>
+            )}
+
+            {activeTab === "Workspaces" && (
+              manageTabsWorkspaceId ? (
+                <TabManagement 
+                  workspaceId={manageTabsWorkspaceId} 
+                  onBack={() => setManageTabsWorkspaceId(null)} 
+                />
+              ) : (
+                <WorkspaceManagement 
+                  onManageTabs={(ws) => setManageTabsWorkspaceId(ws._id)} 
+                />
+              )
             )}
 
             {activeTab === "Tools" && <ToolsManagement />}

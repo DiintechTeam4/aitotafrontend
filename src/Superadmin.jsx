@@ -79,15 +79,15 @@ const Superadmin = () => {
     setIsLoading(false);
   };
 
-  const handleAuthSuccess = (superAdminData) => {
+  const handleAuthSuccess = (userData) => {
     // Store super admin token and user data
-    localStorage.setItem("superadmintoken", superAdminData.token);
+    localStorage.setItem("superadmintoken", userData.token);
     localStorage.setItem(
       "superAdminData",
       JSON.stringify({
-        role: superAdminData.role,
-        name: superAdminData.name,
-        email: superAdminData.email,
+        role: userData.role || userData.userType || "superadmin",
+        name: userData.name,
+        email: userData.email,
       })
     );
 

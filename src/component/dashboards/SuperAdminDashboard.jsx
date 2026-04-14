@@ -107,8 +107,14 @@ const SuperAdminDashboard = ({ user, onLogout }) => {
   const getAdmins = async () => {
     try {
       setIsLoading(true);
+      const token = localStorage.getItem('superadmintoken');
       const response = await fetch(
-        `${API_BASE_URL}/superadmin/getadmins`
+        `${API_BASE_URL}/superadmin/getadmins`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        }
       );
       const data = await response.json();
       console.log(data);
@@ -124,8 +130,14 @@ const SuperAdminDashboard = ({ user, onLogout }) => {
   const getClients = async () => {
     try {
       setIsLoading(true);
+      const token = localStorage.getItem('superadmintoken');
       const response = await fetch(
-        `${API_BASE_URL}/superadmin/getclients`
+        `${API_BASE_URL}/superadmin/getclients`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        }
       );
       const data = await response.json();
       console.log(data);
@@ -140,7 +152,7 @@ const SuperAdminDashboard = ({ user, onLogout }) => {
 
   const deleteadmin = async(id) => {
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('superadmintoken');
       if (!token) {
         throw new Error('No authentication token found');
       }
@@ -171,7 +183,7 @@ const SuperAdminDashboard = ({ user, onLogout }) => {
 
   const deleteclient = async(id) => {
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('superadmintoken');
       if (!token) {
         throw new Error('No authentication token found');
       }
@@ -226,60 +238,66 @@ const SuperAdminDashboard = ({ user, onLogout }) => {
 
   // Handle admin login
   const handleAdminLogin = (loginData) => {
-    // Close the modal
-    setShowLoginModal(false);
+    // Store login data for the target admin using correct keys for AdminRoutes
+    localStorage.setItem('admintoken', loginData.token);
+    localStorage.setItem('adminData', JSON.stringify({ 
+      role: 'admin', 
+      name: loginData.user?.name, 
+      email: loginData.user?.email 
+    }));
     
-    onLogout(); // First logout from super admin
-    
-    // Small delay to ensure logout completes before login
-    setTimeout(() => {
-      window.location.href = "/"; // Redirect to root where the auth state will be checked
-      
-      // Store login data for the auth flow to pick up
-      localStorage.setItem('token', loginData.token);
-      localStorage.setItem('userType', 'admin');
-      localStorage.setItem('userId', loginData.user._id || loginData.user.id);
-    }, 100);
+    // Open admin dashboard in a new tab
+    window.open("/admin/dashboard", "_blank");
   };
-    // Handle client login
-    const handleClientLogin = (loginData) => {
-      // Close the modal
-      setShowClientLoginModal(false);
-      
-      onLogout(); // First logout from super admin
-      
-      // Small delay to ensure logout completes before login
-      setTimeout(() => {
-        window.location.href = "/"; // Redirect to root where the auth state will be checked
-        
-        // Store login data for the auth flow to pick up
-        localStorage.setItem('token', loginData.token);
-        localStorage.setItem('userType', 'client');
-        localStorage.setItem('userId', loginData.user._id || loginData.user.id);
-      }, 100);
-    };
+
+  const handleClientLogin = (loginData) => {
+    // Store login data for the target client using correct keys for UserRoutes (sessionStorage)
+    sessionStorage.setItem('clienttoken', loginData.token);
+    sessionStorage.setItem('clientData', JSON.stringify({ 
+      role: 'client', 
+      name: loginData.user?.name || loginData.user?.businessName, 
+      email: loginData.user?.email,
+      clientId: loginData.user?._id || loginData.user?.id
+    }));
+    
+    // Open client dashboard in a new tab
+    window.open("/client/dashboard", "_blank");
+  };
   
   // Open login modal for a specific admin
-  const openAdminLogin = (adminId, adminEmail, adminName) => {
-    setSelectedAdminId(adminId);
-    setSelectedAdminName(adminName);
-    setShowLoginModal(true);
-    
-    // Store the admin email in sessionStorage for the login form to use
-    if (adminEmail) {
-      sessionStorage.setItem('tempadminEmail', adminEmail);
+  const openAdminLogin = async (adminId, adminEmail, adminName) => {
+    try {
+      const token = localStorage.getItem('superadmintoken');
+      const response = await fetch(`${API_BASE_URL}/superadmin/accessadmin/${adminId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await response.json();
+      if (data.success) {
+        handleAdminLogin(data);
+      } else {
+        alert(data.message || 'Failed to login as admin');
+      }
+    } catch (error) {
+      console.error('Error accessing admin:', error);
+      alert('Error accessing admin');
     }
   };
 
-   // Open login modal for a specific admin
-   const openClientLogin = (clientId, clientEmail, clientName) => {
-    setSelectedClientId(clientId);
-    setSelectedClientName(clientName);
-    setShowClientLoginModal(true);
-    
-    // Store the admin email in sessionStorage for the login form to use
-    if (clientEmail) {
-      sessionStorage.setItem('tempClientEmail', clientEmail);
+  const openClientLogin = async (clientId, clientEmail, clientName) => {
+    try {
+      const token = localStorage.getItem('superadmintoken');
+      const response = await fetch(`${API_BASE_URL}/superadmin/accessclient/${clientId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await response.json();
+      if (data.success) {
+        handleClientLogin(data);
+      } else {
+        alert(data.message || 'Failed to login as client');
+      }
+    } catch (error) {
+      console.error('Error accessing client:', error);
+      alert('Error accessing client');
     }
   };
 
@@ -326,7 +344,7 @@ const SuperAdminDashboard = ({ user, onLogout }) => {
         return;
       }
 
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('superadmintoken');
       if (!token) {
         throw new Error('No authentication token found');
       }
@@ -373,7 +391,7 @@ const SuperAdminDashboard = ({ user, onLogout }) => {
         return;
       }
 
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('superadmintoken');
       if (!token) {
         throw new Error('No authentication token found');
       }
