@@ -74,7 +74,7 @@ export default function Campaigns({ onNavigate }) {
       <Card>
         {loading ? <Loader /> : (
           <Table>
-            <THead><TR><TH>Name</TH><TH>Status</TH><TH>Total</TH><TH>Sent</TH><TH>Failed</TH><TH /></TR></THead>
+            <THead><TR><TH>Name</TH><TH>Status</TH><TH>Total</TH><TH>Sent</TH><TH>Failed</TH><TH>Last error</TH><TH /></TR></THead>
             <TBody>
               {list.map((c) => (
                 <TR key={c._id}>
@@ -83,6 +83,9 @@ export default function Campaigns({ onNavigate }) {
                   <TD>{c.totalContacts}</TD>
                   <TD>{c.sent}</TD>
                   <TD>{c.failed}</TD>
+                  <TD className="max-w-[360px] text-xs text-red-400 truncate" title={c.lastError || ''}>
+                    {c.lastError || '—'}
+                  </TD>
                   <TD>
                     <div className="flex flex-wrap gap-2">
                       {(c.status === 'draft' || c.status === 'scheduled') && (
@@ -95,7 +98,7 @@ export default function Campaigns({ onNavigate }) {
                   </TD>
                 </TR>
               ))}
-              {!list.length && <TR><TD colSpan={6} className="text-center text-slate-500">No campaigns yet</TD></TR>}
+              {!list.length && <TR><TD colSpan={7} className="text-center text-slate-500">No campaigns yet</TD></TR>}
             </TBody>
           </Table>
         )}

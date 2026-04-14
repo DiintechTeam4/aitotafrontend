@@ -15,7 +15,12 @@ export default function Settings({ user }) {
 
   useEffect(() => {
     authApi.getProfile()
-      .then(({ data }) => { if (data.success) setProfile(data.data) })
+      .then(({ data }) => {
+        if (data.success) {
+          setProfile(data.data)
+          setPhoneId(data?.data?.waPhoneNumberId || '')
+        }
+      })
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [])

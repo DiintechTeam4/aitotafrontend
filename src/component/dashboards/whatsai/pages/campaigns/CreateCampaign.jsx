@@ -22,7 +22,13 @@ export default function CreateCampaign({ onNavigate }) {
       try {
         const [g, t] = await Promise.all([contactsApi.groups(), templatesApi.list()])
         if (g.data.success) setGroups(g.data.data.groups || [])
-        if (t.data.success) setTemplates(t.data.data.templates || [])
+        if (t.data.success) {
+          const allTemplates = t.data.data.templates || []
+          const validTemplates = allTemplates.filter(
+            (tpl) => String(tpl?.whatsappTemplateName || '').trim().length > 0
+          )
+          setTemplates(validTemplates)
+        }
       } catch (e) {
         toast.error(e.response?.data?.message || 'Failed to load form data')
       }
@@ -40,7 +46,16 @@ export default function CreateCampaign({ onNavigate }) {
       if (data.success) {
         toast.success('Campaign created')
         const c = data.data.campaign
-        if (!scheduledAt && c.status === 'draft') await campaignsApi.send(c._id)
+        if (!scheduledAt && c.status === 'draft') {
+          try {
+            const sendRes = await campaignsApi.send(c._id)
+            if (!sendRes?.data?.success) {
+              toast.error(sendRes?.data?.message || 'Campaign send failed')
+            }
+          } catch (sendErr) {
+            toast.error(sendErr.response?.data?.message || 'Campaign send failed')
+          }
+        }
         onNavigate('campaigns')
       } else toast.error(data.message)
     } catch (e) {
@@ -70,7 +85,11 @@ export default function CreateCampaign({ onNavigate }) {
             <span className="mb-1 block text-sm font-medium text-slate-300">Template</span>
             <select className="w-full rounded-lg border border-[#334155] bg-[#0F172A] px-3 py-2 text-[#F1F5F9]" value={templateId} onChange={(e) => setTemplateId(e.target.value)} required>
               <option value="">Select template</option>
-              {templates.map((t) => <option key={t._id} value={t._id}>{t.name}</option>)}
+              {templates.map((t) => (
+                <option key={t._id} value={t._id}>
+                  {t.name} ({t.whatsappTemplateName} | {t.languageCode || 'en_US'})
+                </option>
+              ))}
             </select>
           </label>
           <Input label="Schedule (optional)" type="datetime-local" value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} />

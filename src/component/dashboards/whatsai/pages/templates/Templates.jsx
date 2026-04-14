@@ -9,7 +9,7 @@ import { Table, THead, TBody, TR, TH, TD } from '../../ui/Table'
 import { Loader } from '../../ui/Loader'
 import { TemplatePreview } from '../../shared/TemplatePreview'
 
-const emptyForm = { name: '', whatsappTemplateName: '', languageCode: 'en', bodyPreview: '' }
+const emptyForm = { name: '', whatsappTemplateName: '', languageCode: 'en_US', bodyPreview: '' }
 
 export default function Templates() {
   const [list, setList] = useState([])
@@ -31,9 +31,14 @@ export default function Templates() {
 
   async function save() {
     if (!form.name || !form.whatsappTemplateName) { toast.error('Name and WhatsApp template name required'); return }
+    const normalized = {
+      ...form,
+      whatsappTemplateName: form.whatsappTemplateName.trim().toLowerCase().replace(/\s+/g, '_'),
+      languageCode: (form.languageCode || 'en_US').trim() || 'en_US',
+    }
     setSaving(true)
     try {
-      const { data } = await templatesApi.create({ ...form, sampleParams: [] })
+      const { data } = await templatesApi.create({ ...normalized, sampleParams: [] })
       if (data.success) { toast.success('Template saved'); setOpen(false); setForm(emptyForm); load() }
       else toast.error(data.message)
     } catch (e) { toast.error(e.response?.data?.message || 'Save failed') } finally { setSaving(false) }
@@ -88,7 +93,7 @@ export default function Templates() {
         <div className="space-y-3">
           <Input label="Display name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
           <Input label="WhatsApp template name (Meta)" value={form.whatsappTemplateName} onChange={(e) => setForm({ ...form, whatsappTemplateName: e.target.value })} required />
-          <Input label="Language code" value={form.languageCode} onChange={(e) => setForm({ ...form, languageCode: e.target.value })} />
+          <Input label="Language code" value={form.languageCode} onChange={(e) => setForm({ ...form, languageCode: e.target.value })} placeholder="en_US" />
           <label className="block w-full">
             <span className="mb-1 block text-sm font-medium text-slate-300">Body preview</span>
             <textarea className="w-full min-h-[100px] rounded-lg border border-[#334155] bg-[#0F172A] px-3 py-2 text-[#F1F5F9]" value={form.bodyPreview} onChange={(e) => setForm({ ...form, bodyPreview: e.target.value })} />
