@@ -53,13 +53,17 @@ export default function CreateCampaign({ onNavigate }) {
               toast.error(sendRes?.data?.message || 'Campaign send failed')
             }
           } catch (sendErr) {
-            toast.error(sendErr.response?.data?.message || 'Campaign send failed')
+            const sm = sendErr.response?.data?.message || 'Campaign send failed'
+            const sh = sendErr.response?.data?.data?.hint
+            toast.error(sh ? `${sm} — ${sh}` : sm)
           }
         }
         onNavigate('campaigns')
       } else toast.error(data.message)
     } catch (e) {
-      toast.error(e.response?.data?.message || 'Failed to create')
+      const msg = e.response?.data?.message || 'Failed to create'
+      const hint = e.response?.data?.data?.hint
+      toast.error(hint ? `${msg} — ${hint}` : msg)
     } finally {
       setLoading(false)
     }
@@ -87,7 +91,7 @@ export default function CreateCampaign({ onNavigate }) {
               <option value="">Select template</option>
               {templates.map((t) => (
                 <option key={t._id} value={t._id}>
-                  {t.name} ({t.whatsappTemplateName} | {t.languageCode || 'en_US'})
+                  {t.name} ({t.whatsappTemplateName} | {t.languageCode || 'en'})
                 </option>
               ))}
             </select>

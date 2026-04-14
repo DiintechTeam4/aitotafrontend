@@ -41,6 +41,8 @@ export const contactsApi = {
 }
 export const templatesApi = {
   list: () => waApi.get('/templates'),
+  metaApproved: () => waApi.get('/templates/meta-approved'),
+  saveFromMeta: (body) => waApi.post('/templates/from-meta', body),
   get: (id) => waApi.get(`/templates/${id}`),
   create: (body) => waApi.post('/templates', body),
   update: (id, body) => waApi.patch(`/templates/${id}`, body),
