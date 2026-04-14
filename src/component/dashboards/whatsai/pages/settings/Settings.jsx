@@ -22,18 +22,24 @@ export default function Settings({ user }) {
 
   async function connect(e) {
     e.preventDefault()
-    if (!phoneId.trim() || !token.trim()) { toast.error('Phone Number ID and Access Token required'); return }
+    const cleanPhoneId = phoneId.trim()
+    const cleanToken = token.trim()
+    if (!cleanPhoneId || !cleanToken) { toast.error('Phone Number ID and Access Token required'); return }
+    if (!/^\d{8,20}$/.test(cleanPhoneId)) {
+      toast.error('Phone Number ID numeric hona chahiye (example: 790783224112773)')
+      return
+    }
     setSaving(true)
     try {
       const { data } = await authApi.connectWhatsApp({
-        whatsappPhoneNumberId: phoneId.trim(),
-        whatsappAccessToken: token.trim(),
+        whatsappPhoneNumberId: cleanPhoneId,
+        whatsappAccessToken: cleanToken,
       })
       if (data.success) {
         toast.success('WhatsApp connected successfully!')
         setToken('')
         setPhoneId('')
-        setProfile(prev => ({ ...prev, waPhoneNumberId: phoneId.trim(), connected: true }))
+        setProfile(prev => ({ ...prev, waPhoneNumberId: cleanPhoneId, connected: true }))
       } else toast.error(data.message)
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to connect')
@@ -92,6 +98,7 @@ export default function Settings({ user }) {
             value={phoneId}
             onChange={(e) => setPhoneId(e.target.value)}
             placeholder="e.g. 790783224112773"
+            inputMode="numeric"
           />
           <Input
             label="Access Token"
