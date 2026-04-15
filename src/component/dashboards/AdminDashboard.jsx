@@ -690,7 +690,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                 }));
                 
                 // Redirect to client dashboard
-                window.location.href = '/auth/dashboard';
+                window.location.href = '/client/dashboard';
               </script>
             </head>
             <body>

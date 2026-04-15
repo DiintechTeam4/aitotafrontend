@@ -54,7 +54,7 @@ const SuperAdminLoginForm = ({ onLogin}) => {
       // Call onLogin with structured data
       onLogin({
         token: response.data.token,
-        userType: 'superadmin',
+        role: 'superadmin',
         name: superAdminData.name,
         email: superAdminData.email
       });

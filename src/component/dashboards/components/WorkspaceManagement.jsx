@@ -8,6 +8,7 @@ const WorkspaceManagement = ({ onLogin, onManageTabs }) => {
   const [showModal, setShowModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [editingWorkspace, setEditingWorkspace] = useState(null);
+  const [loadingLoginId, setLoadingLoginId] = useState(null);
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -25,6 +26,42 @@ const WorkspaceManagement = ({ onLogin, onManageTabs }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const token = localStorage.getItem("admintoken") || sessionStorage.getItem("admintoken");
+
+  const handleWorkspaceLogin = async (workspace) => {
+    try {
+      setLoadingLoginId(workspace._id);
+      const response = await fetch(`${API_BASE_URL}/workspaces/${workspace._id}/token`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!response.ok) throw new Error("Failed to get workspace token");
+      const data = await response.json();
+      if (!data.token) throw new Error("No token received");
+
+      const clientData = JSON.stringify({
+        role: 'client',
+        userType: 'client',
+        name: workspace.name,
+        email: workspace.email,
+        clientId: workspace._id
+      });
+
+      const newWindow = window.open("about:blank", "_blank");
+      if (!newWindow) { alert("Popup blocked! Please allow popups."); return; }
+
+      newWindow.document.open();
+      newWindow.document.write(`<html><head><title>Loading...</title><script>
+        sessionStorage.clear();
+        sessionStorage.setItem('clienttoken', ${JSON.stringify(data.token)});
+        sessionStorage.setItem('clientData', ${JSON.stringify(clientData)});
+        window.location.replace('/client/dashboard');
+      <\/script></head><body><p>Loading...</p></body></html>`);
+      newWindow.document.close();
+    } catch (error) {
+      alert(error.message || "Failed to open workspace dashboard");
+    } finally {
+      setLoadingLoginId(null);
+    }
+  };
 
   const fetchWorkspaces = async () => {
     try {
@@ -235,13 +272,12 @@ const WorkspaceManagement = ({ onLogin, onManageTabs }) => {
                     <td className="px-6 py-4">
                       <div className="flex items-center justify-center space-x-2">
                         <button
-                          onClick={() => {
-                            localStorage.setItem("activeWorkspace", JSON.stringify(workspace));
-                            window.open("/workspace/dashboard", "_blank");
-                          }}
-                          className="flex items-center bg-purple-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-purple-700 transition-all shadow-sm active:scale-95"
+                          onClick={() => handleWorkspaceLogin(workspace)}
+                          disabled={loadingLoginId === workspace._id}
+                          className="flex items-center bg-purple-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-purple-700 transition-all shadow-sm active:scale-95 disabled:opacity-50"
                         >
-                          <FaSignInAlt className="mr-1.5" /> Login
+                          <FaSignInAlt className="mr-1.5" />
+                          {loadingLoginId === workspace._id ? "Loading..." : "Login"}
                         </button>
                         <button
                           onClick={() => onManageTabs(workspace)}

@@ -143,12 +143,13 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
         })
         .catch((error) => {
           console.error("Error fetching profile:", error);
-          setIsApproved(false);
-          // Set fallback info
+          // Workspace login - profile may not exist in Client collection, still show dashboard
+          setIsApproved(true);
+          setIsProfileCompleted(true);
           setClientInfo({
-            name: "Unknown",
-            email: "No email",
-            businessLogoUrl: "",
+            name: sessionStorage.getItem('clientData') ? JSON.parse(sessionStorage.getItem('clientData')).name || 'Workspace' : 'Workspace',
+            email: sessionStorage.getItem('clientData') ? JSON.parse(sessionStorage.getItem('clientData')).email || '' : '',
+            businessLogoUrl: '',
             clientId: currentClient,
           });
         });

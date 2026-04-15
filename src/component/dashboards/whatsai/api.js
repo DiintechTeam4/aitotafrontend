@@ -1,6 +1,6 @@
 import axios from 'axios'
 
-const WHATSAI_API_BASE = import.meta.env.VITE_WHATSAI_API_URL || 'http://localhost:5000/api'
+const WHATSAI_API_BASE = import.meta.env.VITE_WHATSAI_API_URL || 'http://localhost:4000/api/v1/whatsai'
 
 const api = axios.create({
   baseURL: WHATSAI_API_BASE,
