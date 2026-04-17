@@ -33,17 +33,23 @@ const WhatsAppTemplateManagement = ({ clientId, onClose }) => {
         throw new Error("Admin token not found");
       }
 
-      const response = await fetch(
-        `${API_BASE_URL}/whatsapp-template/requests?clientId=${clientId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${adminToken}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
+      // If no clientId is provided, fetch all requests
+      const url = clientId 
+        ? `${API_BASE_URL}/whatsapp-template/requests?clientId=${clientId}`
+        : `${API_BASE_URL}/whatsapp-template/requests`;
+      
+      const response = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${adminToken}`,
+          "Content-Type": "application/json",
+        },
+      });
 
       if (!response.ok) {
+        if (response.status === 404) {
+          setRequests([]);
+          return;
+        }
         throw new Error("Failed to fetch requests");
       }
 
@@ -51,7 +57,7 @@ const WhatsAppTemplateManagement = ({ clientId, onClose }) => {
       setRequests(data.data || []);
     } catch (error) {
       console.error("Error fetching requests:", error);
-      alert(error.message || "Failed to fetch requests");
+      setRequests([]);
     } finally {
       setLoading(false);
     }
@@ -324,6 +330,16 @@ const WhatsAppTemplateManagement = ({ clientId, onClose }) => {
           <div className="text-center py-12">
             <FaWhatsapp className="text-gray-300 text-6xl mx-auto mb-4" />
             <p className="text-gray-500 text-lg">No templates found</p>
+            {clientId && (
+              <p className="text-gray-400 text-sm mt-2">
+                No templates found for this client. Try checking other tabs or remove client filter.
+              </p>
+            )}
+            {requests.length > 0 && filteredRequests.length === 0 && (
+              <p className="text-gray-400 text-sm mt-2">
+                {requests.length} template(s) available in other tabs
+              </p>
+            )}
           </div>
         ) : (
           <div className="space-y-4">

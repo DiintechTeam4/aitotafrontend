@@ -914,7 +914,7 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
               />
               <div className="flex-1 min-w-0">
                 <h1 className="text-2xl font-bold text-white leading-tight truncate">
-                  AItota
+                  Client Portal
                 </h1>
               </div>
             </div>

@@ -162,7 +162,7 @@ const ApprovalFormDetails = ({ clientId, onClose, onApprove, onEdit, onWhatsAppC
       let profileData = null;
       try {
         const profileResponse = await timedFetch(
-          `${API_BASE_URL}/auth/client/profile/client/${clientId}`,
+          `${API_BASE_URL}/auth/client/profile`,
           {
             method: "GET",
             headers: {

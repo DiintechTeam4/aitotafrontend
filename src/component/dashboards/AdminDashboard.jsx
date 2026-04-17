@@ -33,6 +33,8 @@ import {
   FaMapMarkerAlt,
   FaGlobe,
   FaIdCard,
+  FaWhatsapp,
+  FaDownload,
 } from "react-icons/fa";
 import ApprovalFormDetails from "./components/ApprovalFormDetails";
 import HumanAgentManagement from "./components/HumanAgentManagement";
@@ -112,6 +114,12 @@ const AdminDashboard = ({ user, onLogout }) => {
   });
   const [isSubmittingEditClient, setIsSubmittingEditClient] = useState(false);
   const [viewClientModal, setViewClientModal] = useState(null);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importConfig, setImportConfig] = useState({
+    appSource: '',
+    clients: []
+  });
+  const [isImporting, setIsImporting] = useState(false);
 
   // End-user (app user) profile field config per client
   const [endUserProfileClient, setEndUserProfileClient] = useState(null);
@@ -345,10 +353,14 @@ const AdminDashboard = ({ user, onLogout }) => {
     } catch {}
   }, [activeTab]);
 
-  // Default Client tab to show Prime list
+  // Default Client tab to show all clients, and reset filters for new app tabs
   useEffect(() => {
     if (activeTab === "Client") {
-      setClientTypeFilter("prime");
+      setClientTypeFilter("all");
+      setAppSourceFilter("all");
+    } else if (activeTab === "DialAI" || activeTab === "AiVani" || activeTab === "HelloPaAI") {
+      setClientTypeFilter("all");
+      setSearchTerm("");
     }
   }, [activeTab]);
 
@@ -613,7 +625,7 @@ const AdminDashboard = ({ user, onLogout }) => {
 
   useEffect(() => {
     console.log(activeTab);
-    if (activeTab == "Client" || activeTab == "Overview") {
+    if (activeTab == "Client" || activeTab == "Overview" || activeTab == "DialAI" || activeTab == "AiVani" || activeTab == "HelloPaAI") {
       getclients();
     }
   }, [activeTab]);
@@ -725,6 +737,7 @@ const AdminDashboard = ({ user, onLogout }) => {
 
   // Filter clients based on search term
   const [clientTypeFilter, setClientTypeFilter] = useState("all");
+  const [appSourceFilter, setAppSourceFilter] = useState("all");
 
   const clientTypeCounts = useMemo(() => {
     const counts = {
@@ -762,6 +775,11 @@ const AdminDashboard = ({ user, onLogout }) => {
           if (clientTypeFilter === "all") return true;
           return (client.clientType || "").toLowerCase() === clientTypeFilter;
         })
+        .filter((client) => {
+          if (appSourceFilter === "all") return true;
+          if (appSourceFilter === "direct") return !client.appSource || client.appSource === "direct";
+          return client.appSource === appSourceFilter;
+        })
         .filter(
           (client) =>
             client.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -779,6 +797,11 @@ const AdminDashboard = ({ user, onLogout }) => {
   const navItems = [
     { name: "Overview", icon: <FaChartBar /> },
     { name: "Client", icon: <FaUsers /> },
+    {
+      name: "New App Clients",
+      icon: <FaExternalLinkAlt />,
+      subItems: ["DialAI", "AiVani", "HelloPaAI"],
+    },
     // { name: "Agents", icon: <FaUserTie /> },
     {
       name: "Accounts",
@@ -993,6 +1016,38 @@ const AdminDashboard = ({ user, onLogout }) => {
     }
   };
 
+  const handleImportClients = async () => {
+    try {
+      setIsImporting(true);
+      const adminToken = localStorage.getItem("admintoken") || sessionStorage.getItem("admintoken");
+      
+      const response = await fetch(`${API_BASE_URL}/admin/import-external-clients`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${adminToken}`,
+        },
+        body: JSON.stringify(importConfig),
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.message || "Failed to import clients");
+      }
+      
+      alert(data.message);
+      setShowImportModal(false);
+      setImportConfig({ appSource: '', clients: [] });
+      await getclients(); // Refresh client list
+      
+    } catch (error) {
+      alert(error.message || "Failed to import clients. Please try again.");
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
   const handleApproveClient = async (clientId) => {
     try {
       // You can add an approval API call here if needed
@@ -1107,6 +1162,161 @@ const AdminDashboard = ({ user, onLogout }) => {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Import Clients Modal */}
+      {showImportModal && (
+        <div className="fixed inset-0 bg-black/35 z-[60] flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden relative flex flex-col">
+            <div className="bg-gradient-to-r from-blue-800 to-blue-900 px-6 py-4 flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-blue-700 font-bold">
+                  <FaDownload className="text-sm" />
+                </div>
+                <h2 className="text-xl font-semibold text-white">Import Clients from External Apps</h2>
+              </div>
+              <button
+                className="text-white hover:text-red-200 transition-colors p-1"
+                onClick={() => {
+                  setShowImportModal(false);
+                  setImportConfig({ appSource: '', clients: [] });
+                }}
+              >
+                <FaTimes size={20} />
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto flex-1">
+              <div className="space-y-6">
+                {/* App Source Selection */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Select App Source *
+                  </label>
+                  <select
+                    value={importConfig.appSource}
+                    onChange={(e) => setImportConfig({ ...importConfig, appSource: e.target.value })}
+                    className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                  >
+                    <option value="">Choose an app...</option>
+                    <option value="dialai">DialAI</option>
+                    <option value="aivani">AiVani</option>
+                    <option value="hellopaai">HelloPaAI</option>
+                  </select>
+                </div>
+
+                {/* Sample Data Format */}
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <h4 className="text-sm font-semibold text-gray-800 mb-2">Expected JSON Format:</h4>
+                  <pre className="text-xs text-gray-600 bg-white p-3 rounded border overflow-x-auto">
+{`{
+  "appSource": "dialai",
+  "clients": [
+    {
+      "name": "John Doe",
+      "email": "john@example.com",
+      "businessName": "John's Business",
+      "mobileNo": "9876543210",
+      "city": "Mumbai",
+      "externalId": "ext_123",
+      "clientType": "prime"
+    }
+  ]
+}`}
+                  </pre>
+                </div>
+
+                {/* Client Data Input */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Client Data (JSON Array) *
+                  </label>
+                  <textarea
+                    rows={8}
+                    placeholder='[{"name": "Client Name", "email": "client@example.com", "businessName": "Business Name", "mobileNo": "9876543210"}]'
+                    value={JSON.stringify(importConfig.clients, null, 2)}
+                    onChange={(e) => {
+                      try {
+                        const clients = JSON.parse(e.target.value);
+                        setImportConfig({ ...importConfig, clients });
+                      } catch (error) {
+                        // Keep the raw text for editing
+                        setImportConfig({ ...importConfig, clients: e.target.value });
+                      }
+                    }}
+                    className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors font-mono text-sm"
+                  />
+                </div>
+
+                {/* Quick Add Sample */}
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const sampleClients = [
+                        {
+                          name: "Sample Client 1",
+                          email: "sample1@example.com",
+                          businessName: "Sample Business 1",
+                          mobileNo: "9876543210",
+                          city: "Mumbai",
+                          externalId: "sample_001",
+                          clientType: "new"
+                        },
+                        {
+                          name: "Sample Client 2",
+                          email: "sample2@example.com",
+                          businessName: "Sample Business 2",
+                          mobileNo: "9876543211",
+                          city: "Delhi",
+                          externalId: "sample_002",
+                          clientType: "prime"
+                        }
+                      ];
+                      setImportConfig({ ...importConfig, clients: sampleClients });
+                    }}
+                    className="px-3 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                  >
+                    Add Sample Data
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setImportConfig({ ...importConfig, clients: [] })}
+                    className="px-3 py-2 text-sm bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors"
+                  >
+                    Clear Data
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-gray-50 px-6 py-4 flex items-center justify-between border-t border-gray-200">
+              <p className="text-sm text-gray-500">* Required fields</p>
+              <div className="flex space-x-3">
+                <button
+                  className="px-6 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+                  onClick={() => {
+                    setShowImportModal(false);
+                    setImportConfig({ appSource: '', clients: [] });
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  className={`px-6 py-2 rounded-lg transition-colors font-medium shadow-sm ${
+                    isImporting || !importConfig.appSource || !Array.isArray(importConfig.clients) || importConfig.clients.length === 0
+                      ? "bg-gray-400 text-white cursor-not-allowed"
+                      : "bg-blue-600 text-white hover:bg-blue-700"
+                  }`}
+                  onClick={handleImportClients}
+                  disabled={isImporting || !importConfig.appSource || !Array.isArray(importConfig.clients) || importConfig.clients.length === 0}
+                >
+                  {isImporting ? "Importing..." : `Import ${Array.isArray(importConfig.clients) ? importConfig.clients.length : 0} Clients`}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Add Client Modal */}
       {showAddClientModal && (
         <div className="fixed inset-0 bg-black/35 z-[60] flex items-center justify-center p-4">
@@ -1599,9 +1809,9 @@ const AdminDashboard = ({ user, onLogout }) => {
       )}
 
       {/* WhatsApp Template Management Modal */}
-      {showWhatsAppTemplateModal && whatsAppClientId && (
+      {showWhatsAppTemplateModal && (
         <WhatsAppTemplateManagement
-          clientId={whatsAppClientId}
+          clientId={whatsAppClientId} // This can be null to show all templates
           onClose={() => {
             setShowWhatsAppTemplateModal(false);
             setWhatsAppClientId(null);
@@ -1871,6 +2081,15 @@ const AdminDashboard = ({ user, onLogout }) => {
                         } else {
                           setActiveTab("Datastore"); // Open submenu with Datastore selected by default
                         }
+                      } else if (item.name === "New App Clients") {
+                        if (
+                          activeTab === item.name ||
+                          item.subItems.includes(activeTab)
+                        ) {
+                          setActiveTab("Overview"); // Close submenu if already open
+                        } else {
+                          setActiveTab("DialAI"); // Open submenu with DialAI selected by default
+                        }
                       } else {
                         // For other items with submenus, toggle the submenu
                         if (activeTab === item.name) {
@@ -1890,7 +2109,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                   )}
                 </button>
 
-                {/* Submenu for Accounts and Datastore */}
+                {/* Submenu for Accounts, Datastore, and New App Clients */}
                 {isSidebarOpen &&
                   item.subItems &&
                   (item.subItems.includes(activeTab) ||
@@ -2239,16 +2458,349 @@ const AdminDashboard = ({ user, onLogout }) => {
               )
             )}
 
-            {activeTab === "Tools" && <ToolsManagement />}
+            {activeTab === "Tools" && (
+              <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xl font-semibold text-gray-800">Tools Management</h3>
+                  <button
+                    onClick={() => {
+                      setWhatsAppClientId(null); // No specific client - show all templates
+                      setShowWhatsAppTemplateModal(true);
+                    }}
+                    className="flex items-center px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+                  >
+                    <FaWhatsapp className="mr-2" />
+                    WhatsApp Templates
+                  </button>
+                </div>
+                <ToolsManagement />
+              </div>
+            )}
+
+            {/* New App Clients Tabs */}
+            {(activeTab === "DialAI" || activeTab === "AiVani" || activeTab === "HelloPaAI") && (
+              <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
+                <div className="p-4 border-b border-gray-100">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-3 sm:space-y-0">
+                    <h3 className="text-xl font-semibold text-gray-800">
+                      {activeTab} Clients
+                    </h3>
+                    <div className="flex space-x-4">
+                      <button
+                        onClick={() => setShowAddClientModal(true)}
+                        className="flex items-center px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+                      >
+                        <FaPlus className="mr-2" />
+                        Add {activeTab} Client
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Client Type filter Button */}
+                <div className="p-4 border-b border-gray-100 flex flex-col lg:flex-row gap-3 lg:items-center lg:justify-between">
+                  <div className="flex flex-wrap gap-2 items-center">
+                    {[
+                      { key: "all", label: "All" },
+                      { key: "new", label: "New" },
+                      { key: "prime", label: "Prime" },
+                      { key: "demo", label: "Demo" },
+                      { key: "owned", label: "In-house" },
+                      { key: "testing", label: "Testing" },
+                      { key: "rejected", label: "Rejected" },
+                    ].map((btn) => {
+                      const appFilteredClients = clients ? clients.filter(c => c.appSource === activeTab.toLowerCase()) : [];
+                      const typeCount = btn.key === "all" ? appFilteredClients.length : appFilteredClients.filter(c => (c.clientType || "").toLowerCase() === btn.key).length;
+                      return (
+                        <button
+                          key={btn.key}
+                          onClick={() => setClientTypeFilter(btn.key)}
+                          className={`px-4 py-2 rounded-full text-sm font-medium border transition-colors ${
+                            clientTypeFilter === btn.key
+                              ? "bg-red-600 text-white border-red-600"
+                              : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                          }`}
+                        >
+                          {btn.label}
+                          <span
+                            className={`ml-2 inline-block text-xs rounded-full px-2 py-0.5 ${
+                              clientTypeFilter === btn.key
+                                ? "bg-red-500 text-white"
+                                : "bg-gray-200 text-gray-800"
+                            }`}
+                          >
+                            {typeCount}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder={`Search ${activeTab} clients...`}
+                      className="pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                    <div className="absolute left-3 top-1/2 transform -translate-y-1/2">
+                      <FaSearch className="text-gray-400" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Table */}
+                <div className="overflow-x-auto">
+                  {isLoading ? (
+                    <div className="p-8 text-center">
+                      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-500 mx-auto"></div>
+                      <p className="mt-2 text-gray-500">Loading {activeTab} clients...</p>
+                    </div>
+                  ) : (() => {
+                    const appFilteredClients = clients ? clients
+                      .filter(client => client.appSource === activeTab.toLowerCase())
+                      .filter((client) => {
+                        if (clientTypeFilter === "all") return true;
+                        return (client.clientType || "").toLowerCase() === clientTypeFilter;
+                      })
+                      .filter(
+                        (client) =>
+                          client.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          client.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          client.businessName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          client.mobileNo?.includes(searchTerm) ||
+                          client.city?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          client.gstNo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          client.panNo?.toLowerCase().includes(searchTerm.toLowerCase())
+                      ) : [];
+                    
+                    return appFilteredClients.length === 0 ? (
+                      <div className="p-8 text-center">
+                        <p className="text-gray-500">
+                          No {activeTab} clients found for current filters.
+                        </p>
+                      </div>
+                    ) : (
+                      <table className="w-full divide-y divide-gray-200 table-fixed">
+                        <colgroup>
+                          <col className="w-10" />
+                          <col className="w-44" />
+                          <col className="w-16" />
+                          <col className="w-40" />
+                          <col className="w-48" />
+                          <col className="w-36" />
+                          <col className="w-52" />
+                          <col className="w-24" />
+                        </colgroup>
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              #
+                            </th>
+                            <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Business
+                            </th>
+                            <th className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Agents
+                            </th>
+                            <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Owner
+                            </th>
+                            <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Contact
+                            </th>
+                            <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              KYC
+                            </th>
+                            <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Actions
+                            </th>
+                            <th className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Settings
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {appFilteredClients.map((client, index) => (
+                            <tr
+                              key={index}
+                              className={`${
+                                index % 2 === 0 ? "bg-white" : "bg-gray-50"
+                              } hover:bg-gray-100`}
+                            >
+                              <td className="px-3 py-2 whitespace-nowrap text-center text-xs text-gray-500">
+                                {index + 1}
+                              </td>
+                              <td className="px-3 py-4">
+                                <div className="flex items-center gap-2">
+                                  {getClientLogoUrl(client) ? (
+                                    <img
+                                      src={getClientLogoUrl(client)}
+                                      alt={client.businessName || client.name}
+                                      className="flex-shrink-0 h-9 w-9 rounded-full object-cover"
+                                      onError={(e) => { e.currentTarget.src = "/AitotaLogo.png"; }}
+                                    />
+                                  ) : (
+                                    <div className="flex-shrink-0 h-9 w-9 rounded-full bg-red-100 flex items-center justify-center text-red-600 font-semibold text-sm">
+                                      {(client?.businessName?.[0] || client?.name?.[0] || "C").toUpperCase()}
+                                    </div>
+                                  )}
+                                  <div className="min-w-0">
+                                    <div className="text-sm font-medium text-gray-900 truncate" title={client.businessName}>
+                                      {client.businessName || "—"}
+                                    </div>
+                                    <div className="text-xs text-gray-400 truncate">
+                                      {formatDate(client.createdAt)}
+                                    </div>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-2 py-4 text-center">
+                                <span className="text-sm text-gray-500">—</span>
+                              </td>
+                              <td className="px-3 py-4">
+                                <div className="text-sm font-medium text-gray-900 truncate" title={client.name}>
+                                  {client.name || "—"}
+                                </div>
+                                {client.websiteUrl && (
+                                  <a
+                                    href={client.websiteUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center text-xs text-red-600 hover:underline mt-1"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    Website <FaExternalLinkAlt className="ml-1" />
+                                  </a>
+                                )}
+                              </td>
+                              <td className="px-3 py-4">
+                                <div className="text-xs text-gray-900 truncate" title={client.email}>{client.email || "—"}</div>
+                                <div className="text-xs text-gray-500 mt-1">{client.mobileNo || "—"}</div>
+                                <div className="text-xs text-gray-400 mt-1 truncate" title={[client.city, client.pincode].filter(Boolean).join(", ")}>
+                                  {[client.city, client.pincode].filter(Boolean).join(", ") || "—"}
+                                </div>
+                              </td>
+                              <td className="px-3 py-4">
+                                <div className="text-xs text-gray-600">GST: <span className="font-mono">{client.gstNo || "—"}</span></div>
+                                <div className="text-xs text-gray-600 mt-1">PAN: <span className="font-mono">{client.panNo || "—"}</span></div>
+                              </td>
+                              <td className="px-4 py-6 text-center">
+                                <div className="flex flex-row flex-wrap items-center gap-2 justify-center">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      openClientLogin(
+                                        client._id,
+                                        client.email,
+                                        client.name
+                                      );
+                                    }}
+                                    className={`inline-flex items-center justify-center w-24 ${
+                                      loggedInClients.has(client._id)
+                                        ? "bg-green-600 hover:bg-green-700"
+                                        : "bg-red-600 hover:bg-red-700"
+                                    } text-white px-3 py-2 rounded-md transition-colors text-xs font-semibold`}
+                                    title={
+                                      loggedInClients.has(client._id)
+                                        ? "Client Logged In"
+                                        : "Client Login"
+                                    }
+                                  >
+                                    {loggedInClients.has(client._id)
+                                      ? "Logged In"
+                                      : "Authenticate"}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      openEndUserProfileSetup(client);
+                                    }}
+                                    className="inline-flex items-center justify-center gap-1 px-3 py-2 rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50 text-xs font-semibold"
+                                    title="Configure end-user registration profile fields"
+                                  >
+                                    <FaUserCog className="text-sm" />
+                                    User profile
+                                  </button>
+                                </div>
+                              </td>
+                              <td className="px-4 py-6 text-center">
+                                <div className="relative inline-block">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setOpenSettingsMenu(openSettingsMenu === client._id ? null : client._id);
+                                    }}
+                                    disabled={loadingClientId === client._id}
+                                    className="inline-flex items-center justify-center w-10 h-10 rounded-md hover:bg-gray-100 transition-colors disabled:opacity-50"
+                                    title="Settings"
+                                  >
+                                    {loadingClientId === client._id ? (
+                                      "..."
+                                    ) : (
+                                      <FaCog className="text-sm" />
+                                    )}
+                                  </button>
+                                  {openSettingsMenu === client._id && (
+                                    <div
+                                      className="absolute right-0 mt-1 w-36 bg-white border border-gray-200 rounded-lg shadow-lg z-50"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      <button
+                                        className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-t-lg"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setOpenSettingsMenu(null);
+                                          setReviewClientId(client._id);
+                                          setShowApprovalModal(true);
+                                        }}
+                                      >
+                                        <FaEye className="mr-2 text-green-500" /> View
+                                      </button>
+                                      <button
+                                        className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setOpenSettingsMenu(null);
+                                          openEditClient(client);
+                                        }}
+                                      >
+                                        <FaEdit className="mr-2 text-blue-500" /> Edit
+                                      </button>
+                                      <button
+                                        className="flex items-center w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 rounded-b-lg"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setOpenSettingsMenu(null);
+                                          confirmDelete(client._id);
+                                        }}
+                                      >
+                                        <FaTrash className="mr-2 text-red-500" /> Delete
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    );
+                  })()
+                  }
+                </div>
+              </div>
+            )}
 
             {/* Client Table */}
             {activeTab === "Client" && (
               <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
-                {/* Search and filters */}
+                {/* Header */}
                 <div className="p-4 border-b border-gray-100">
-                  <div className="flex flex-col sm:flex-row justify-between items-center space-y-2 sm:space-y-0">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-3 sm:space-y-0">
                     <h3 className="text-xl font-semibold text-gray-800">
-                      Client List
+                      Client Management
                     </h3>
                     <div className="flex space-x-4">
                       <button
@@ -2262,7 +2814,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                   </div>
                 </div>
 
-                {/* filter Button for type of clients*/}
+                {/* Client Type filter Button */}
                 <div className="p-4 border-b border-gray-100 flex flex-col lg:flex-row gap-3 lg:items-center lg:justify-between">
                   <div className="flex flex-wrap gap-2 items-center">
                     {[
@@ -2328,6 +2880,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                       <colgroup>
                         <col className="w-10" />
                         <col className="w-44" />
+                        <col className="w-20" />
                         <col className="w-16" />
                         <col className="w-40" />
                         <col className="w-48" />
@@ -2342,6 +2895,9 @@ const AdminDashboard = ({ user, onLogout }) => {
                           </th>
                           <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                             Business
+                          </th>
+                          <th className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            App Source
                           </th>
                           <th className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                             Agents
@@ -2397,6 +2953,23 @@ const AdminDashboard = ({ user, onLogout }) => {
                                   </div>
                                 </div>
                               </div>
+                            </td>
+                            <td className="px-2 py-4 text-center">
+                              {(() => {
+                                const appSource = client.appSource || 'direct';
+                                const appConfig = {
+                                  dialai: { label: 'DialAI', color: 'bg-blue-100 text-blue-800' },
+                                  aivani: { label: 'AiVani', color: 'bg-green-100 text-green-800' },
+                                  hellopaai: { label: 'HelloPaAI', color: 'bg-purple-100 text-purple-800' },
+                                  direct: { label: 'Direct', color: 'bg-orange-100 text-orange-800' }
+                                };
+                                const config = appConfig[appSource] || { label: 'Unknown', color: 'bg-gray-100 text-gray-800' };
+                                return (
+                                  <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold ${config.color}`}>
+                                    {config.label}
+                                  </span>
+                                );
+                              })()}
                             </td>
                             <td className="px-2 py-4 text-center">
                               <span className="text-sm text-gray-500">—</span>
