@@ -131,6 +131,7 @@ const WorkspaceDashboard = ({ workspace, onBack }) => {
     const t = normalizeTabName(tabName);
     return t === "clients" || t === "client" || t === "users" || t === "user" || t.includes("client") || t.includes("user");
   };
+  const isUsersTab = normalizeTabName(activeTab).includes("user");
 
   useEffect(() => {
     if (isClientLikeTab(activeTab)) {
@@ -512,15 +513,13 @@ const WorkspaceDashboard = ({ workspace, onBack }) => {
               {/* Header */}
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
                 <h3 className="text-xl font-semibold text-gray-800">
-                  {normalizeTabName(activeTab) === "users" || normalizeTabName(activeTab) === "user"
-                    ? "Users Management"
-                    : "Client Management"}
+                  {isUsersTab ? "Users Management" : "Client Management"}
                 </h3>
                 <button
                   onClick={() => { setClientData(initialClientState); setShowAddModal(true); }}
                   className="flex items-center px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm font-medium"
                 >
-                  <FaPlus className="mr-2" /> Add Client
+                  <FaPlus className="mr-2" /> {isUsersTab ? "Add User" : "Add Client"}
                 </button>
               </div>
 
@@ -572,19 +571,19 @@ const WorkspaceDashboard = ({ workspace, onBack }) => {
                   ) : filteredClients.length === 0 ? (
                     <div className="p-8 text-center">
                       <FaUsers className="mx-auto text-4xl text-gray-200 mb-3" />
-                      <p className="text-gray-500 text-sm font-medium">No clients assigned to this workspace</p>
-                      <p className="text-gray-400 text-xs mt-1">Click "Add Client" to register a new client</p>
+                      <p className="text-gray-500 text-sm font-medium">No {isUsersTab ? "users" : "clients"} assigned to this workspace</p>
+                      <p className="text-gray-400 text-xs mt-1">Click "{isUsersTab ? "Add User" : "Add Client"}" to register a new entry</p>
                     </div>
                   ) : (
                     <table className="w-full divide-y divide-gray-200">
                       <thead className="bg-gray-50">
                         <tr>
-                          <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">#</th>
-                          <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Business</th>
-                          <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</th>
-                          <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                          <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                          <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Settings</th>
+                          <th className="px-2 py-2 text-center text-[11px] font-medium text-gray-500 uppercase tracking-wider">#</th>
+                          <th className="px-2 py-2 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider">{isUsersTab ? "User" : "Business"}</th>
+                          <th className="px-2 py-2 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider">Contact</th>
+                          <th className="px-2 py-2 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                          <th className="px-2 py-2 text-center text-[11px] font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                          <th className="px-2 py-2 text-center text-[11px] font-medium text-gray-500 uppercase tracking-wider">Settings</th>
                         </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
@@ -592,43 +591,43 @@ const WorkspaceDashboard = ({ workspace, onBack }) => {
                           const isThisWs = client.workspaceId?.toString() === workspace._id.toString();
                           return (
                             <tr key={client._id} className={`${index % 2 === 0 ? "bg-white" : "bg-gray-50"} hover:bg-gray-100`}>
-                              <td className="px-3 py-3 text-center text-xs text-gray-500">{index + 1}</td>
-                              <td className="px-3 py-4">
+                              <td className="px-2 py-2 text-center text-[11px] text-gray-500">{index + 1}</td>
+                              <td className="px-2 py-2">
                                 <div className="flex items-center gap-2">
                                   {getClientLogoUrl(client) ? (
-                                    <img src={getClientLogoUrl(client)} alt="logo" className="h-9 w-9 rounded-full object-cover flex-shrink-0" />
+                                    <img src={getClientLogoUrl(client)} alt="logo" className="h-8 w-8 rounded-full object-cover flex-shrink-0" />
                                   ) : (
-                                    <div className="h-9 w-9 rounded-full bg-red-100 flex items-center justify-center text-red-600 font-semibold text-sm flex-shrink-0">
+                                    <div className="h-8 w-8 rounded-full bg-red-100 flex items-center justify-center text-red-600 font-semibold text-xs flex-shrink-0">
                                       {(client?.businessName?.[0] || client?.name?.[0] || "C").toUpperCase()}
                                     </div>
                                   )}
-                                  <div className="min-w-0">
-                                    <div className="text-sm font-medium text-gray-900 truncate">{client.businessName || "—"}</div>
-                                    <div className="text-xs text-gray-400">{formatDate(client.createdAt)}</div>
+                                  <div className="min-w-0 max-w-[240px]">
+                                    <div className="text-xs font-semibold text-gray-900 truncate">{client.businessName || client.name || "—"}</div>
+                                    <div className="text-[11px] text-gray-400">{formatDate(client.createdAt)}</div>
                                   </div>
                                 </div>
                               </td>
-                              <td className="px-3 py-4">
-                                <div className="text-xs text-gray-900 truncate">{client.email || "—"}</div>
-                                <div className="text-xs text-gray-500 mt-0.5">{client.mobileNo || "—"}</div>
-                                <div className="text-xs text-gray-400 mt-0.5">{client.city || "—"}</div>
+                              <td className="px-2 py-2">
+                                <div className="text-[11px] text-gray-900 truncate max-w-[220px]">{client.email || "—"}</div>
+                                <div className="text-[11px] text-gray-500 mt-0.5">{client.mobileNo || "—"}</div>
+                                <div className="text-[11px] text-gray-400 mt-0.5">{client.city || "—"}</div>
                               </td>
-                              <td className="px-3 py-4">
+                              <td className="px-2 py-2">
                                 <button
                                   onClick={() => toggleApproval(client)}
-                                  className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                                  className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${
                                     client.isApproved ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"
                                   }`}
                                 >
                                   {client.isApproved ? <><FaCheckCircle className="mr-1" /> Approved</> : <><FaTimesCircle className="mr-1" /> Pending</>}
                                 </button>
                               </td>
-                              <td className="px-3 py-4 text-center">
+                              <td className="px-2 py-2 text-center">
                                 <div className="flex items-center justify-center gap-2">
                                   <button
                                     onClick={() => openClientLogin(client._id, client.email, client.name)}
                                     disabled={authenticatingClientId === client._id}
-                                    className={`px-3 py-1.5 rounded-md text-xs font-semibold text-white transition-colors ${
+                                    className={`px-2.5 py-1 rounded-md text-[11px] font-semibold text-white transition-colors ${
                                       authenticatingClientId === client._id ? "bg-gray-400 cursor-wait" : "bg-red-600 hover:bg-red-700"
                                     }`}
                                   >
@@ -636,15 +635,15 @@ const WorkspaceDashboard = ({ workspace, onBack }) => {
                                   </button>
                                   <button
                                     onClick={() => handleAssignToWorkspace(client._id, isThisWs)}
-                                    className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${
+                                    className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
                                       isThisWs ? "bg-indigo-100 text-indigo-700" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                                     }`}
                                   >
-                                    {isThisWs ? "Member" : "+ Add"}
+                                    {isThisWs ? "User" : "Make User"}
                                   </button>
                                 </div>
                               </td>
-                              <td className="px-3 py-4 text-center">
+                              <td className="px-2 py-2 text-center">
                                 <div className="relative inline-block" ref={openSettingsMenu === client._id ? settingsMenuRef : null}>
                                   <button
                                     onClick={() => setOpenSettingsMenu(openSettingsMenu === client._id ? null : client._id)}
@@ -684,13 +683,13 @@ const WorkspaceDashboard = ({ workspace, onBack }) => {
               {/* Header */}
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
                 <h3 className="text-xl font-semibold text-gray-800">
-                  {normalizeTabName(activeTab).includes("user") ? "Users Management" : "Client Management"}
+                  {isUsersTab ? "Users Management" : "Client Management"}
                 </h3>
                 <button
                   onClick={() => { setClientData(initialClientState); setShowAddModal(true); }}
                   className="flex items-center px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm font-medium"
                 >
-                  <FaPlus className="mr-2" /> Add Client
+                  <FaPlus className="mr-2" /> {isUsersTab ? "Add User" : "Add Client"}
                 </button>
               </div>
 
@@ -742,19 +741,19 @@ const WorkspaceDashboard = ({ workspace, onBack }) => {
                   ) : filteredClients.length === 0 ? (
                     <div className="p-8 text-center">
                       <FaUsers className="mx-auto text-4xl text-gray-200 mb-3" />
-                      <p className="text-gray-500 text-sm font-medium">No clients assigned to this workspace</p>
-                      <p className="text-gray-400 text-xs mt-1">Click "Add Client" to register a new client</p>
+                      <p className="text-gray-500 text-sm font-medium">No {isUsersTab ? "users" : "clients"} assigned to this workspace</p>
+                      <p className="text-gray-400 text-xs mt-1">Click "{isUsersTab ? "Add User" : "Add Client"}" to register a new entry</p>
                     </div>
                   ) : (
                     <table className="w-full divide-y divide-gray-200">
                       <thead className="bg-gray-50">
                         <tr>
-                          <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">#</th>
-                          <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Business</th>
-                          <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</th>
-                          <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                          <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                          <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Settings</th>
+                          <th className="px-2 py-2 text-center text-[11px] font-medium text-gray-500 uppercase tracking-wider">#</th>
+                          <th className="px-2 py-2 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider">{isUsersTab ? "User" : "Business"}</th>
+                          <th className="px-2 py-2 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider">Contact</th>
+                          <th className="px-2 py-2 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                          <th className="px-2 py-2 text-center text-[11px] font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                          <th className="px-2 py-2 text-center text-[11px] font-medium text-gray-500 uppercase tracking-wider">Settings</th>
                         </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
