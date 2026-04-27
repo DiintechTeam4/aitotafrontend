@@ -93,12 +93,26 @@ const WorkspaceDashboard = ({ workspace, onBack }) => {
       const response = await fetch(`${API_BASE_URL}/workspaces/${workspace._id}/clients`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      const res = await response.json();
+      const res = await parseApiResponse(response);
       
       let allData = [];
       if (Array.isArray(res)) allData = res;
       else if (res.data && Array.isArray(res.data)) allData = res.data;
       else if (res.clients && Array.isArray(res.clients)) allData = res.clients;
+
+      // Frontend fallback: if workspace API returns empty in legacy mapping cases,
+      // use admin client list so Users/Client tab never appears blank.
+      if (allData.length === 0 && token) {
+        const allClientsResp = await fetch(`${API_BASE_URL}/admin/getclients`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const allClientsJson = await parseApiResponse(allClientsResp);
+        if (Array.isArray(allClientsJson?.data)) {
+          allData = allClientsJson.data;
+        } else if (Array.isArray(allClientsJson)) {
+          allData = allClientsJson;
+        }
+      }
 
       setClients(allData);
     } catch (error) {
@@ -108,8 +122,18 @@ const WorkspaceDashboard = ({ workspace, onBack }) => {
     }
   };
 
+  const normalizeTabName = (tabName = "") =>
+    String(tabName || "")
+      .toLowerCase()
+      .replace(/[^a-z]/g, "");
+
+  const isClientLikeTab = (tabName = "") => {
+    const t = normalizeTabName(tabName);
+    return t === "clients" || t === "client" || t === "users" || t === "user" || t.includes("client") || t.includes("user");
+  };
+
   useEffect(() => {
-    if (activeTab.toLowerCase() === "clients" || activeTab.toLowerCase() === "client") {
+    if (isClientLikeTab(activeTab)) {
       fetchClients();
     }
   }, [workspace._id, activeTab]);
@@ -483,11 +507,15 @@ const WorkspaceDashboard = ({ workspace, onBack }) => {
                 ))}
               </div>
              </div>
-          ) : (activeTab.toLowerCase() === "clients" || activeTab.toLowerCase() === "client") ? (
+          ) : isClientLikeTab(activeTab) ? (
             <div className="max-w-7xl mx-auto">
               {/* Header */}
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
-                <h3 className="text-xl font-semibold text-gray-800">Client Management</h3>
+                <h3 className="text-xl font-semibold text-gray-800">
+                  {normalizeTabName(activeTab) === "users" || normalizeTabName(activeTab) === "user"
+                    ? "Users Management"
+                    : "Client Management"}
+                </h3>
                 <button
                   onClick={() => { setClientData(initialClientState); setShowAddModal(true); }}
                   className="flex items-center px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm font-medium"
@@ -652,12 +680,174 @@ const WorkspaceDashboard = ({ workspace, onBack }) => {
               </div>
             </div>
           ) : (
-            <div className="flex flex-col items-center justify-center h-full text-slate-300 py-32 space-y-4">
-              <div className="h-20 w-20 bg-gray-50 rounded-[30px] flex items-center justify-center border border-gray-100">
-                <FaChartBar className="text-3xl opacity-20" />
+            <div className="max-w-7xl mx-auto">
+              {/* Header */}
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
+                <h3 className="text-xl font-semibold text-gray-800">
+                  {normalizeTabName(activeTab).includes("user") ? "Users Management" : "Client Management"}
+                </h3>
+                <button
+                  onClick={() => { setClientData(initialClientState); setShowAddModal(true); }}
+                  className="flex items-center px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm font-medium"
+                >
+                  <FaPlus className="mr-2" /> Add Client
+                </button>
               </div>
-              <h2 className="text-xl font-black text-slate-800">{activeTab} Section</h2>
-              <p className="font-medium text-slate-400">Module integration is part of the custom menu configuration.</p>
+
+              <div className="bg-white rounded-lg shadow-sm border border-gray-100">
+                {/* Filters */}
+                <div className="p-4 border-b border-gray-100 flex flex-wrap items-center gap-2">
+                  {[
+                    { key: "all", label: "All" },
+                    { key: "new", label: "New" },
+                    { key: "prime", label: "Prime" },
+                    { key: "demo", label: "Demo" },
+                    { key: "owned", label: "In-house" },
+                    { key: "testing", label: "Testing" },
+                    { key: "rejected", label: "Rejected" },
+                  ].map((btn) => (
+                    <button
+                      key={btn.key}
+                      onClick={() => setClientTypeFilter(btn.key)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                        clientTypeFilter === btn.key
+                          ? "bg-red-600 text-white border-red-600"
+                          : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                      }`}
+                    >
+                      {btn.label} <span className={`ml-1 text-xs ${
+                        clientTypeFilter === btn.key ? "text-red-100" : "text-gray-400"
+                      }`}>{clientTypeCounts[btn.key] || 0}</span>
+                    </button>
+                  ))}
+                  <div className="ml-auto relative">
+                    <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs" />
+                    <input
+                      type="text"
+                      placeholder="Search clients..."
+                      className="pl-8 pr-4 py-1.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 text-sm"
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                {/* Table */}
+                <div className="overflow-x-auto rounded-b-lg">
+                  {loading ? (
+                    <div className="p-8 text-center">
+                      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-500 mx-auto"></div>
+                      <p className="mt-2 text-gray-500 text-sm">Loading clients...</p>
+                    </div>
+                  ) : filteredClients.length === 0 ? (
+                    <div className="p-8 text-center">
+                      <FaUsers className="mx-auto text-4xl text-gray-200 mb-3" />
+                      <p className="text-gray-500 text-sm font-medium">No clients assigned to this workspace</p>
+                      <p className="text-gray-400 text-xs mt-1">Click "Add Client" to register a new client</p>
+                    </div>
+                  ) : (
+                    <table className="w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">#</th>
+                          <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Business</th>
+                          <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</th>
+                          <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                          <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                          <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Settings</th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {filteredClients.map((client, index) => {
+                          const isThisWs = client.workspaceId?.toString() === workspace._id.toString();
+                          return (
+                            <tr key={client._id} className={`${index % 2 === 0 ? "bg-white" : "bg-gray-50"} hover:bg-gray-100`}>
+                              <td className="px-3 py-3 text-center text-xs text-gray-500">{index + 1}</td>
+                              <td className="px-3 py-4">
+                                <div className="flex items-center gap-2">
+                                  {getClientLogoUrl(client) ? (
+                                    <img src={getClientLogoUrl(client)} alt="logo" className="h-9 w-9 rounded-full object-cover flex-shrink-0" />
+                                  ) : (
+                                    <div className="h-9 w-9 rounded-full bg-red-100 flex items-center justify-center text-red-600 font-semibold text-sm flex-shrink-0">
+                                      {(client?.businessName?.[0] || client?.name?.[0] || "C").toUpperCase()}
+                                    </div>
+                                  )}
+                                  <div className="min-w-0">
+                                    <div className="text-sm font-medium text-gray-900 truncate">{client.businessName || "—"}</div>
+                                    <div className="text-xs text-gray-400">{formatDate(client.createdAt)}</div>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-3 py-4">
+                                <div className="text-xs text-gray-900 truncate">{client.email || "—"}</div>
+                                <div className="text-xs text-gray-500 mt-0.5">{client.mobileNo || "—"}</div>
+                                <div className="text-xs text-gray-400 mt-0.5">{client.city || "—"}</div>
+                              </td>
+                              <td className="px-3 py-4">
+                                <button
+                                  onClick={() => toggleApproval(client)}
+                                  className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                                    client.isApproved ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"
+                                  }`}
+                                >
+                                  {client.isApproved ? <><FaCheckCircle className="mr-1" /> Approved</> : <><FaTimesCircle className="mr-1" /> Pending</>}
+                                </button>
+                              </td>
+                              <td className="px-3 py-4 text-center">
+                                <div className="flex items-center justify-center gap-2">
+                                  <button
+                                    onClick={() => openClientLogin(client._id, client.email, client.name)}
+                                    disabled={authenticatingClientId === client._id}
+                                    className={`px-3 py-1.5 rounded-md text-xs font-semibold text-white transition-colors ${
+                                      authenticatingClientId === client._id ? "bg-gray-400 cursor-wait" : "bg-red-600 hover:bg-red-700"
+                                    }`}
+                                  >
+                                    {authenticatingClientId === client._id ? "Loading..." : "Authenticate"}
+                                  </button>
+                                  <button
+                                    onClick={() => handleAssignToWorkspace(client._id, isThisWs)}
+                                    className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${
+                                      isThisWs ? "bg-indigo-100 text-indigo-700" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                                    }`}
+                                  >
+                                    {isThisWs ? "Member" : "+ Add"}
+                                  </button>
+                                </div>
+                              </td>
+                              <td className="px-3 py-4 text-center">
+                                <div className="relative inline-block" ref={openSettingsMenu === client._id ? settingsMenuRef : null}>
+                                  <button
+                                    onClick={() => setOpenSettingsMenu(openSettingsMenu === client._id ? null : client._id)}
+                                    className="inline-flex items-center justify-center w-8 h-8 rounded-md hover:bg-gray-100 transition-colors"
+                                  >
+                                    <FaCog className="text-gray-500 text-sm" />
+                                  </button>
+                                  {openSettingsMenu === client._id && (
+                                    <div className="absolute right-0 mt-1 w-36 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
+                                      <button
+                                        onClick={() => { setClientData({ ...client, confirmPassword: "" }); setEditingClient(client); setShowEditModal(true); setOpenSettingsMenu(null); }}
+                                        className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-t-lg"
+                                      >
+                                        <FaEdit className="mr-2 text-blue-500" /> Edit
+                                      </button>
+                                      <button
+                                        onClick={() => { setOpenSettingsMenu(null); handleDeleteClient(client._id); }}
+                                        className="flex items-center w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 rounded-b-lg"
+                                      >
+                                        <FaTrash className="mr-2 text-red-500" /> Delete
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              </div>
             </div>
           )}
         </main>

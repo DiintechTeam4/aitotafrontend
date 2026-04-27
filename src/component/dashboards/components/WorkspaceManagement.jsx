@@ -9,6 +9,9 @@ const WorkspaceManagement = ({ onLogin, onManageTabs }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [editingWorkspace, setEditingWorkspace] = useState(null);
   const [loadingLoginId, setLoadingLoginId] = useState(null);
+  const [expandedWorkspaceIds, setExpandedWorkspaceIds] = useState(() => new Set());
+  const [workspaceClients, setWorkspaceClients] = useState(() => ({})); // { [workspaceId]: Client[] }
+  const [loadingClientsId, setLoadingClientsId] = useState(null);
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -26,6 +29,90 @@ const WorkspaceManagement = ({ onLogin, onManageTabs }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const token = localStorage.getItem("admintoken") || sessionStorage.getItem("admintoken");
+
+  const parseApiResponse = async (response) => {
+    const contentType = response.headers.get("content-type") || "";
+    if (contentType.includes("application/json")) return response.json();
+    const text = await response.text();
+    return { success: false, message: text || `HTTP ${response.status}` };
+  };
+
+  const fetchWorkspaceClients = async (workspaceId) => {
+    try {
+      if (!token) throw new Error("Admin session missing. Please login again.");
+      setLoadingClientsId(workspaceId);
+      const resp = await fetch(`${API_BASE_URL}/workspaces/${workspaceId}/clients`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const json = await parseApiResponse(resp);
+      const list = Array.isArray(json)
+        ? json
+        : Array.isArray(json?.data)
+        ? json.data
+        : Array.isArray(json?.clients)
+        ? json.clients
+        : [];
+      setWorkspaceClients((prev) => ({ ...prev, [workspaceId]: list }));
+      return list;
+    } catch (e) {
+      console.error("Error fetching workspace clients:", e);
+      setWorkspaceClients((prev) => ({ ...prev, [workspaceId]: [] }));
+      return [];
+    } finally {
+      setLoadingClientsId(null);
+    }
+  };
+
+  const toggleWorkspaceUsers = async (workspaceId) => {
+    setExpandedWorkspaceIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(workspaceId)) next.delete(workspaceId);
+      else next.add(workspaceId);
+      return next;
+    });
+    // Lazy-load on first expand
+    if (!workspaceClients[workspaceId]) {
+      await fetchWorkspaceClients(workspaceId);
+    }
+  };
+
+  const openClientLogin = async (clientId, email, name) => {
+    try {
+      if (!token) throw new Error("Admin session missing. Please login again.");
+      const resp = await fetch(`${API_BASE_URL}/admin/get-client-token/${clientId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await parseApiResponse(resp);
+      if (!resp.ok || !data?.token) {
+        throw new Error(data?.message || "Failed to authenticate client");
+      }
+
+      const clientData = JSON.stringify({
+        role: "client",
+        userType: "client",
+        name: name || "",
+        email: email || "",
+        clientId: clientId,
+      });
+
+      const newWindow = window.open("about:blank", "_blank");
+      if (!newWindow) {
+        alert("Popup blocked! Please allow popups.");
+        return;
+      }
+
+      newWindow.document.open();
+      newWindow.document.write(`<html><head><title>Loading...</title><script>
+        sessionStorage.clear();
+        sessionStorage.setItem('clienttoken', ${JSON.stringify(data.token)});
+        sessionStorage.setItem('clientData', ${JSON.stringify(clientData)});
+        window.location.replace('/client/dashboard');
+      </script></head><body></body></html>`);
+      newWindow.document.close();
+    } catch (e) {
+      alert(e?.message || "Client login failed");
+    }
+  };
 
   const handleWorkspaceLogin = async (workspace) => {
     try {
@@ -241,58 +328,151 @@ const WorkspaceManagement = ({ onLogin, onManageTabs }) => {
                 </tr>
               ) : (
                 filteredWorkspaces.map((workspace) => (
-                  <tr key={workspace._id} className="hover:bg-gray-50/50 transition-colors group">
-                    <td className="px-6 py-4">
-                      <div className="flex items-center">
-                        <div className="h-11 w-11 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center font-bold mr-4 text-lg shadow-sm">
-                          {workspace.name.charAt(0).toUpperCase()}
+                  <React.Fragment key={workspace._id}>
+                    <tr className="hover:bg-gray-50/50 transition-colors group">
+                      <td className="px-6 py-4">
+                        <div className="flex items-center">
+                          <div className="h-11 w-11 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center font-bold mr-4 text-lg shadow-sm">
+                            {workspace.name.charAt(0).toUpperCase()}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-bold text-gray-900 leading-tight truncate">{workspace.name}</p>
+                            <p className="text-xs text-gray-500 mt-0.5 truncate">{workspace.businessName || "No business name"}</p>
+                            <button
+                              type="button"
+                              onClick={() => toggleWorkspaceUsers(workspace._id)}
+                              className="mt-1 text-xs font-bold text-purple-700 hover:underline"
+                            >
+                              {expandedWorkspaceIds.has(workspace._id) ? "Hide users" : "Show users"}
+                              {Array.isArray(workspaceClients[workspace._id]) ? ` (${workspaceClients[workspace._id].length})` : ""}
+                            </button>
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-bold text-gray-900 leading-tight">{workspace.name}</p>
-                          <p className="text-xs text-gray-500 mt-0.5">{workspace.businessName || "No business name"}</p>
+                      </td>
+                      <td className="px-6 py-4">
+                        <p className="text-sm text-gray-700 font-medium">{workspace.email}</p>
+                        <p className="text-xs text-gray-500 mt-0.5">{workspace.mobileNo || "No number"}</p>
+                      </td>
+                      <td className="px-6 py-4">
+                        <p className="text-sm text-gray-700">{workspace.city || "-"}</p>
+                        <p className="text-xs text-gray-500">{workspace.pincode || ""}</p>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center justify-center space-x-2">
+                          <button
+                            onClick={() => handleWorkspaceLogin(workspace)}
+                            disabled={loadingLoginId === workspace._id}
+                            className="flex items-center bg-purple-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-purple-700 transition-all shadow-sm active:scale-95 disabled:opacity-50"
+                          >
+                            <FaSignInAlt className="mr-1.5" />
+                            {loadingLoginId === workspace._id ? "Loading..." : "Login"}
+                          </button>
+                          <button
+                            onClick={() => onManageTabs(workspace)}
+                            className="flex items-center bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-blue-600 hover:text-white transition-all shadow-sm active:scale-95"
+                            title="Manage Workspace Tabs"
+                          >
+                            <FaList className="mr-1.5" /> Manage Tabs
+                          </button>
+                          <button
+                            onClick={() => handleOpenModal(workspace)}
+                            className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          >
+                            <FaEdit />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(workspace._id)}
+                            className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          >
+                            <FaTrash />
+                          </button>
                         </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <p className="text-sm text-gray-700 font-medium">{workspace.email}</p>
-                      <p className="text-xs text-gray-500 mt-0.5">{workspace.mobileNo || "No number"}</p>
-                    </td>
-                    <td className="px-6 py-4">
-                      <p className="text-sm text-gray-700">{workspace.city || "-"}</p>
-                      <p className="text-xs text-gray-500">{workspace.pincode || ""}</p>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center justify-center space-x-2">
-                        <button
-                          onClick={() => handleWorkspaceLogin(workspace)}
-                          disabled={loadingLoginId === workspace._id}
-                          className="flex items-center bg-purple-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-purple-700 transition-all shadow-sm active:scale-95 disabled:opacity-50"
-                        >
-                          <FaSignInAlt className="mr-1.5" />
-                          {loadingLoginId === workspace._id ? "Loading..." : "Login"}
-                        </button>
-                        <button
-                          onClick={() => onManageTabs(workspace)}
-                          className="flex items-center bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-blue-600 hover:text-white transition-all shadow-sm active:scale-95"
-                          title="Manage Workspace Tabs"
-                        >
-                          <FaList className="mr-1.5" /> Manage Tabs
-                        </button>
-                        <button
-                          onClick={() => handleOpenModal(workspace)}
-                          className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                        >
-                          <FaEdit />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(workspace._id)}
-                          className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                        >
-                          <FaTrash />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
+                      </td>
+                    </tr>
+
+                    {expandedWorkspaceIds.has(workspace._id) && (
+                      <tr className="bg-white">
+                        <td colSpan={4} className="px-6 pb-6">
+                          <div className="mt-3 rounded-2xl border border-gray-100 bg-gray-50/40 overflow-hidden">
+                            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-white">
+                              <div className="text-sm font-bold text-gray-800">
+                                Workspace Users (Clients)
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => fetchWorkspaceClients(workspace._id)}
+                                disabled={loadingClientsId === workspace._id}
+                                className="text-xs font-bold text-gray-700 hover:underline disabled:opacity-50"
+                              >
+                                {loadingClientsId === workspace._id ? "Refreshing..." : "Refresh"}
+                              </button>
+                            </div>
+
+                            {loadingClientsId === workspace._id && !workspaceClients[workspace._id] ? (
+                              <div className="px-4 py-10 text-center text-sm text-gray-500">Loading users…</div>
+                            ) : (workspaceClients[workspace._id] || []).length === 0 ? (
+                              <div className="px-4 py-8 text-center text-sm text-gray-500">
+                                No clients assigned to this workspace.
+                              </div>
+                            ) : (
+                              <div className="overflow-x-auto">
+                                <table className="w-full">
+                                  <thead>
+                                    <tr className="text-left text-[11px] font-extrabold text-gray-500 uppercase tracking-wider bg-gray-50/70">
+                                      <th className="px-4 py-3">User</th>
+                                      <th className="px-4 py-3">Email</th>
+                                      <th className="px-4 py-3">Mobile</th>
+                                      <th className="px-4 py-3">Status</th>
+                                      <th className="px-4 py-3 text-right">Action</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-gray-100 bg-white">
+                                    {(workspaceClients[workspace._id] || []).map((c) => (
+                                      <tr key={c._id} className="hover:bg-gray-50">
+                                        <td className="px-4 py-3">
+                                          <div className="flex items-center gap-3 min-w-[220px]">
+                                            <div className="h-9 w-9 rounded-xl bg-gray-100 text-gray-700 flex items-center justify-center font-extrabold text-sm">
+                                              {(c.name?.[0] || "U").toUpperCase()}
+                                            </div>
+                                            <div className="min-w-0">
+                                              <div className="text-sm font-bold text-gray-900 truncate">{c.name || "—"}</div>
+                                              <div className="text-xs text-gray-500 truncate">{c.businessName || "—"}</div>
+                                            </div>
+                                          </div>
+                                        </td>
+                                        <td className="px-4 py-3 text-sm text-gray-700">{c.email || "—"}</td>
+                                        <td className="px-4 py-3 text-sm text-gray-700">{c.mobileNo || "—"}</td>
+                                        <td className="px-4 py-3">
+                                          <div className="flex items-center gap-2">
+                                            <span className={`px-2 py-1 rounded-full text-[11px] font-extrabold ${c.isApproved ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>
+                                              {c.isApproved ? "Approved" : "Pending"}
+                                            </span>
+                                            <span className={`px-2 py-1 rounded-full text-[11px] font-extrabold ${c.isprofileCompleted ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-600"}`}>
+                                              {c.isprofileCompleted ? "Profile OK" : "Profile Incomplete"}
+                                            </span>
+                                          </div>
+                                        </td>
+                                        <td className="px-4 py-3 text-right">
+                                          <button
+                                            type="button"
+                                            onClick={() => openClientLogin(c._id, c.email, c.name)}
+                                            className="inline-flex items-center justify-center bg-gray-900 text-white px-3 py-1.5 rounded-lg text-xs font-extrabold hover:bg-black transition-colors"
+                                            title="Open Client Dashboard (admin impersonation)"
+                                          >
+                                            <FaSignInAlt className="mr-1.5" /> Login
+                                          </button>
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
                 ))
               )}
             </tbody>
