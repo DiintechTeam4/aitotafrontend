@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { 
   FaUsers, FaUserPlus, FaSearch, FaBars, FaTimes, FaSignOutAlt, 
   FaBuilding, FaChartBar, FaAngleLeft, FaPlus, FaCheck, FaBan, FaTrash,
-  FaExternalLinkAlt, FaCog, FaEdit, FaUserCog, FaUnlockAlt, FaCheckCircle, FaTimesCircle,
+  FaExternalLinkAlt, FaCog, FaEdit, FaUserCog, FaUnlockAlt, FaCheckCircle, FaTimesCircle, FaEye,
   FaEnvelope, FaPhone, FaMapMarkerAlt, FaGlobe, FaUser
 } from "react-icons/fa";
 import { API_BASE_URL } from "../../../config";
@@ -19,6 +19,10 @@ const WorkspaceDashboard = ({ workspace, onBack }) => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingClient, setEditingClient] = useState(null);
+  const [viewingClient, setViewingClient] = useState(null);
+  const [viewClientType, setViewClientType] = useState("new");
+  const [updatingViewClientType, setUpdatingViewClientType] = useState(false);
+  const [updatingViewApproval, setUpdatingViewApproval] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [openSettingsMenu, setOpenSettingsMenu] = useState(null);
   const [showAdminDropdown, setShowAdminDropdown] = useState(false);
@@ -39,7 +43,9 @@ const WorkspaceDashboard = ({ workspace, onBack }) => {
     businessName: "", websiteUrl: "", city: "", pincode: "",
     gstNo: "", panNo: "", mobileNo: "", address: "",
     businessLogoUrl: "", businessLogoKey: "",
-    clientType: "new"
+    clientType: "new",
+    dateOfBirth: "",
+    profession: ""
   };
   const [clientData, setClientData] = useState(initialClientState);
 
@@ -100,20 +106,6 @@ const WorkspaceDashboard = ({ workspace, onBack }) => {
       else if (res.data && Array.isArray(res.data)) allData = res.data;
       else if (res.clients && Array.isArray(res.clients)) allData = res.clients;
 
-      // Frontend fallback: if workspace API returns empty in legacy mapping cases,
-      // use admin client list so Users/Client tab never appears blank.
-      if (allData.length === 0 && token) {
-        const allClientsResp = await fetch(`${API_BASE_URL}/admin/getclients`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const allClientsJson = await parseApiResponse(allClientsResp);
-        if (Array.isArray(allClientsJson?.data)) {
-          allData = allClientsJson.data;
-        } else if (Array.isArray(allClientsJson)) {
-          allData = allClientsJson;
-        }
-      }
-
       setClients(allData);
     } catch (error) {
       console.error("Error fetching clients:", error);
@@ -166,6 +158,16 @@ const WorkspaceDashboard = ({ workspace, onBack }) => {
         workspaceId: workspace._id,
         businessLogoKey: String(clientData.businessLogoKey || "").trim() || `external-logo-${Date.now()}`,
       };
+      if (isUsersTab) {
+        const suffix = Date.now().toString().slice(-6);
+        payload.businessName = String(clientData.businessName || clientData.name || workspace?.name || "User").trim();
+        payload.websiteUrl = clientData.websiteUrl || "";
+        payload.gstNo = String(clientData.gstNo || `USR${suffix}GST`).trim();
+        payload.panNo = String(clientData.panNo || `USR${suffix}PAN`).trim();
+        payload.city = String(clientData.city || workspace?.city || "NA").trim();
+        payload.pincode = String(clientData.pincode || workspace?.pincode || "000000").trim();
+        payload.address = String(clientData.address || workspace?.address || "NA").trim();
+      }
 
       const response = await fetch(`${API_BASE_URL}/client/register`, {
         method: "POST",
@@ -251,6 +253,64 @@ const WorkspaceDashboard = ({ workspace, onBack }) => {
       alert("Error updating approval");
     }
   };
+
+  const updateViewClientType = async () => {
+    if (!viewingClient?._id) return;
+    try {
+      setUpdatingViewClientType(true);
+      const response = await fetch(`${API_BASE_URL}/admin/update-client/${viewingClient._id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ clientType: viewClientType }),
+      });
+      const data = await parseApiResponse(response);
+      if (response.ok && data.success) {
+        setViewingClient((prev) => ({ ...prev, clientType: viewClientType }));
+        fetchClients();
+      } else {
+        alert(data.message || "Failed to update account type");
+      }
+    } catch (e) {
+      alert("Error updating account type");
+    } finally {
+      setUpdatingViewClientType(false);
+    }
+  };
+
+  const toggleViewClientApproval = async () => {
+    if (!viewingClient?._id) return;
+    try {
+      setUpdatingViewApproval(true);
+      const response = await fetch(`${API_BASE_URL}/admin/approve-client/${viewingClient._id}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ isApproved: !viewingClient.isApproved }),
+      });
+      const data = await parseApiResponse(response);
+      if (response.ok && data.success) {
+        setViewingClient((prev) => ({ ...prev, isApproved: !prev.isApproved }));
+        fetchClients();
+      } else {
+        alert(data.message || "Failed to update approval");
+      }
+    } catch (e) {
+      alert("Error updating approval");
+    } finally {
+      setUpdatingViewApproval(false);
+    }
+  };
+
+  useEffect(() => {
+    if (viewingClient) {
+      setViewClientType(viewingClient.clientType || "new");
+    }
+  }, [viewingClient]);
 
   const openClientLogin = async (clientId, email, name) => {
     try {
@@ -491,7 +551,7 @@ const WorkspaceDashboard = ({ workspace, onBack }) => {
                   </div>
                   <div>
                     <h1 className="text-sm font-semibold text-white">Welcome, {workspace.name}</h1>
-                    <p className="text-xs text-slate-400">Your workspace is active and currently managing {workspaceClients.length} clients.</p>
+                    <p className="text-xs text-slate-400">Your app is active and currently managing {workspaceClients.length} {isUsersTab ? "users" : "clients"}.</p>
                   </div>
                </div>
                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -652,10 +712,16 @@ const WorkspaceDashboard = ({ workspace, onBack }) => {
                                     <FaCog className="text-gray-500 text-sm" />
                                   </button>
                                   {openSettingsMenu === client._id && (
-                                    <div className="absolute right-0 mt-1 w-36 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
+                                    <div className="absolute right-0 mt-1 w-40 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
+                                      <button
+                                        onClick={() => { setViewingClient(client); setOpenSettingsMenu(null); }}
+                                        className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-t-lg"
+                                      >
+                                        <FaEye className="mr-2 text-indigo-500" /> View
+                                      </button>
                                       <button
                                         onClick={() => { setClientData({ ...client, confirmPassword: "" }); setEditingClient(client); setShowEditModal(true); setOpenSettingsMenu(null); }}
-                                        className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-t-lg"
+                                        className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                                       >
                                         <FaEdit className="mr-2 text-blue-500" /> Edit
                                       </button>
@@ -822,10 +888,16 @@ const WorkspaceDashboard = ({ workspace, onBack }) => {
                                     <FaCog className="text-gray-500 text-sm" />
                                   </button>
                                   {openSettingsMenu === client._id && (
-                                    <div className="absolute right-0 mt-1 w-36 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
+                                    <div className="absolute right-0 mt-1 w-40 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
+                                      <button
+                                        onClick={() => { setViewingClient(client); setOpenSettingsMenu(null); }}
+                                        className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-t-lg"
+                                      >
+                                        <FaEye className="mr-2 text-indigo-500" /> View
+                                      </button>
                                       <button
                                         onClick={() => { setClientData({ ...client, confirmPassword: "" }); setEditingClient(client); setShowEditModal(true); setOpenSettingsMenu(null); }}
-                                        className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-t-lg"
+                                        className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                                       >
                                         <FaEdit className="mr-2 text-blue-500" /> Edit
                                       </button>
@@ -852,6 +924,129 @@ const WorkspaceDashboard = ({ workspace, onBack }) => {
         </main>
       </div>
 
+      {viewingClient && (
+        <div className="fixed inset-0 bg-black/35 z-[110] flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="bg-gradient-to-r from-slate-800 to-slate-900 px-6 py-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                {getClientLogoUrl(viewingClient) ? (
+                  <img
+                    src={getClientLogoUrl(viewingClient)}
+                    alt="logo"
+                    className="w-10 h-10 rounded-full object-cover"
+                    onError={(e) => {
+                      e.currentTarget.style.display = "none";
+                    }}
+                  />
+                ) : (
+                  <div className="w-10 h-10 rounded-full bg-red-500 flex items-center justify-center text-white font-bold">
+                    {(viewingClient?.businessName?.[0] || viewingClient?.name?.[0] || "C").toUpperCase()}
+                  </div>
+                )}
+                <div>
+                  <h3 className="text-white font-semibold text-lg">Client Profile Review</h3>
+                  <p className="text-slate-300 text-xs">WhatsApp</p>
+                </div>
+              </div>
+              <button className="text-white hover:text-red-200" onClick={() => setViewingClient(null)}>
+                <FaTimes />
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto space-y-5">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h4 className="text-lg font-semibold text-gray-900">{viewingClient.name || "—"}</h4>
+                  <p className="text-sm text-gray-500">{viewingClient.businessName || "—"}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setClientData({ ...viewingClient, confirmPassword: "" });
+                      setEditingClient(viewingClient);
+                      setShowEditModal(true);
+                      setViewingClient(null);
+                    }}
+                    className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-700 hover:bg-blue-200"
+                  >
+                    <FaEdit className="mr-1" /> Edit Info
+                  </button>
+                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${
+                    viewingClient.isApproved ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"
+                  }`}>
+                    {viewingClient.isApproved ? "Approved" : "Pending"}
+                  </span>
+                  <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-700 capitalize">
+                    {viewingClient.clientType || "new"}
+                  </span>
+                </div>
+              </div>
+
+              <div className="border-t border-gray-100 pt-4">
+                <h5 className="text-sm font-semibold text-gray-800 mb-3">Client Information</h5>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                  <div><span className="text-gray-500">Full Name</span><p className="font-medium text-gray-800">{viewingClient.name || "—"}</p></div>
+                  <div><span className="text-gray-500">Business Name</span><p className="font-medium text-gray-800">{viewingClient.businessName || "—"}</p></div>
+                  <div><span className="text-gray-500">Mobile Number</span><p className="font-medium text-gray-800">{viewingClient.mobileNo || "—"}</p></div>
+                  <div><span className="text-gray-500">GST Number</span><p className="font-medium text-gray-800">{viewingClient.gstNo || "—"}</p></div>
+                  <div><span className="text-gray-500">PAN Number</span><p className="font-medium text-gray-800">{viewingClient.panNo || "—"}</p></div>
+                  <div><span className="text-gray-500">Email Address</span><p className="font-medium text-gray-800 break-all">{viewingClient.email || "—"}</p></div>
+                  <div className="md:col-span-2"><span className="text-gray-500">Address</span><p className="font-medium text-gray-800">{viewingClient.address || "—"}</p></div>
+                  <div><span className="text-gray-500">City</span><p className="font-medium text-gray-800">{viewingClient.city || "—"}</p></div>
+                  <div><span className="text-gray-500">Pincode</span><p className="font-medium text-gray-800">{viewingClient.pincode || "—"}</p></div>
+                  <div><span className="text-gray-500">Website</span>{viewingClient.websiteUrl ? <a href={viewingClient.websiteUrl} target="_blank" rel="noreferrer" className="font-medium text-blue-600 hover:underline break-all">{viewingClient.websiteUrl}</a> : <p className="font-medium text-gray-800">—</p>}</div>
+                  <div>
+                    <span className="text-gray-500">Account Type</span>
+                    <div className="mt-1 flex items-center gap-2">
+                      <select
+                        value={viewClientType}
+                        onChange={(e) => setViewClientType(e.target.value)}
+                        className="border border-gray-300 rounded-md px-2 py-1 text-sm"
+                      >
+                        <option value="new">New</option>
+                        <option value="prime">Prime</option>
+                        <option value="demo">Demo</option>
+                        <option value="testing">Testing</option>
+                        <option value="owned">In-house</option>
+                        <option value="rejected">Rejected</option>
+                      </select>
+                      <button
+                        type="button"
+                        onClick={updateViewClientType}
+                        disabled={updatingViewClientType}
+                        className="px-3 py-1 rounded-md text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+                      >
+                        {updatingViewClientType ? "Updating..." : "Update"}
+                      </button>
+                    </div>
+                  </div>
+                  <div><span className="text-gray-500">Profession</span><p className="font-medium text-gray-800">{viewingClient.profession || "—"}</p></div>
+                  <div><span className="text-gray-500">Date of Birth</span><p className="font-medium text-gray-800">{viewingClient.dateOfBirth ? new Date(viewingClient.dateOfBirth).toLocaleDateString("en-IN") : "—"}</p></div>
+                  <div><span className="text-gray-500">Registration Date</span><p className="font-medium text-gray-800">{viewingClient.createdAt ? new Date(viewingClient.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "long", year: "numeric" }) : "—"}</p></div>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-gray-50 px-6 py-4 flex justify-end border-t border-gray-200">
+              <button
+                className={`px-4 py-2 mr-2 rounded-lg text-white ${viewingClient.isApproved ? "bg-gray-500 hover:bg-gray-600" : "bg-green-600 hover:bg-green-700"} disabled:opacity-50`}
+                onClick={toggleViewClientApproval}
+                disabled={updatingViewApproval}
+              >
+                {updatingViewApproval ? "Please wait..." : (viewingClient.isApproved ? "Mark Pending" : "Approve")}
+              </button>
+              <button
+                className="px-6 py-2 bg-slate-800 text-white rounded-lg hover:bg-slate-900"
+                onClick={() => setViewingClient(null)}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Registration & Edit Modal */}
       {(showAddModal || showEditModal) && (
         <div className="fixed inset-0 bg-black/35 z-[100] flex items-center justify-center p-4">
@@ -863,7 +1058,7 @@ const WorkspaceDashboard = ({ workspace, onBack }) => {
                   <FaPlus className="text-sm" />
                 </div>
                 <h2 className="text-xl font-semibold text-white">
-                  {showEditModal ? "Edit Client" : "Add New Client"}
+                  {showEditModal ? (isUsersTab ? "Edit User" : "Edit Client") : (isUsersTab ? "Add New User" : "Add New Client")}
                 </h2>
               </div>
               <button
@@ -875,7 +1070,8 @@ const WorkspaceDashboard = ({ workspace, onBack }) => {
             </div>
 
             <form onSubmit={showEditModal ? handleEditClient : handleCreateClient} className="overflow-y-auto flex-1 p-6">
-              {/* Business Information */}
+              {/* Business Information (hidden in Users mode) */}
+              {!isUsersTab && (
               <div className="mb-6">
                 <h3 className="text-base font-semibold text-gray-800 mb-4 pb-2 border-b border-gray-200">Business Information</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -947,10 +1143,11 @@ const WorkspaceDashboard = ({ workspace, onBack }) => {
                   </div>
                 </div>
               </div>
+              )}
 
-              {/* Personal Information */}
+              {/* User / Personal Information */}
               <div className="mb-6">
-                <h3 className="text-base font-semibold text-gray-800 mb-4 pb-2 border-b border-gray-200">Personal Information</h3>
+                <h3 className="text-base font-semibold text-gray-800 mb-4 pb-2 border-b border-gray-200">{isUsersTab ? "User Information" : "Personal Information"}</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Full Name *</label>
@@ -981,6 +1178,25 @@ const WorkspaceDashboard = ({ workspace, onBack }) => {
                     <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
                     <input type="text" value={clientData.address} onChange={(e) => setClientData({...clientData, address: e.target.value})}
                       className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors text-sm" placeholder="Enter address" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Date of Birth</label>
+                    <input
+                      type="date"
+                      value={clientData.dateOfBirth || ""}
+                      onChange={(e) => setClientData({ ...clientData, dateOfBirth: e.target.value })}
+                      className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Profession</label>
+                    <input
+                      type="text"
+                      value={clientData.profession || ""}
+                      onChange={(e) => setClientData({ ...clientData, profession: e.target.value })}
+                      className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors text-sm"
+                      placeholder="Enter profession"
+                    />
                   </div>
                 </div>
               </div>

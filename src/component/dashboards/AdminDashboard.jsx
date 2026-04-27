@@ -741,9 +741,8 @@ const AdminDashboard = ({ user, onLogout }) => {
       all: 0, prime: 0, demo: 0, owned: 0, testing: 0, new: 0, rejected: 0,
     };
     if (Array.isArray(clients)) {
-      const nonWorkspaceClients = clients.filter(c => !c.workspaceId);
-      counts.all = nonWorkspaceClients.length;
-      nonWorkspaceClients.forEach((c) => {
+      counts.all = clients.length;
+      clients.forEach((c) => {
         const t = (c.clientType || "").toLowerCase();
         if (t === "prime") counts.prime++;
         else if (t === "demo") counts.demo++;
@@ -758,7 +757,6 @@ const AdminDashboard = ({ user, onLogout }) => {
 
   const filteredClients = clients
     ? clients
-        .filter((client) => !client.workspaceId)
         .filter((client) => {
           if (clientStatusFilter === "approved") return !!client.isApproved;
           if (clientStatusFilter === "pending") return !client.isApproved;

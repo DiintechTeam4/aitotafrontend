@@ -283,7 +283,7 @@ const WorkspaceManagement = ({ onLogin, onManageTabs }) => {
           onClick={() => handleOpenModal()}
           className="bg-purple-600 hover:bg-purple-700 text-white px-5 py-2.5 rounded-xl flex items-center transition-all shadow-md active:scale-95"
         >
-          <FaPlus className="mr-2" /> New Workspace
+          <FaPlus className="mr-2" /> New App
         </button>
       </div>
 
@@ -305,7 +305,7 @@ const WorkspaceManagement = ({ onLogin, onManageTabs }) => {
           <table className="w-full">
             <thead>
               <tr className="bg-gray-50/50 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">
-                <th className="px-6 py-4">Workspace</th>
+                <th className="px-6 py-4">App</th>
                 <th className="px-6 py-4">Contact Info</th>
                 <th className="px-6 py-4">Location</th>
                 <th className="px-6 py-4 text-center">Actions</th>
@@ -396,7 +396,7 @@ const WorkspaceManagement = ({ onLogin, onManageTabs }) => {
                           <div className="mt-3 rounded-2xl border border-gray-100 bg-gray-50/40 overflow-hidden">
                             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-white">
                               <div className="text-sm font-bold text-gray-800">
-                                Workspace Users (Clients)
+                                App Users
                               </div>
                               <button
                                 type="button"
@@ -486,7 +486,7 @@ const WorkspaceManagement = ({ onLogin, onManageTabs }) => {
             <div className="px-8 py-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
               <div>
                 <h3 className="text-2xl font-bold text-gray-800">
-                  {editingWorkspace ? "Edit Workspace" : "New Workspace"}
+                  {editingWorkspace ? "Edit App" : "New App"}
                 </h3>
                 <p className="text-xs text-gray-500 mt-1">Provide business details for the workspace</p>
               </div>
@@ -498,9 +498,9 @@ const WorkspaceManagement = ({ onLogin, onManageTabs }) => {
             <form onSubmit={handleSubmit} className="overflow-y-auto p-8">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 <div className="space-y-1">
-                  <label className="text-sm font-bold text-gray-700">Workspace Name *</label>
+                  <label className="text-sm font-bold text-gray-700">App Name *</label>
                   <input name="name" type="text" required value={formData.name} onChange={handleChange}
-                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition-all outline-none" placeholder="e.g. Sales Team" />
+                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition-all outline-none" placeholder="e.g. HelloPaai App" />
                 </div>
                 <div className="space-y-1">
                   <label className="text-sm font-bold text-gray-700">Business Name *</label>
@@ -567,7 +567,7 @@ const WorkspaceManagement = ({ onLogin, onManageTabs }) => {
                 </button>
                 <button type="submit" disabled={isSubmitting}
                   className="flex-1 px-6 py-3 bg-purple-600 text-white rounded-2xl hover:bg-purple-700 font-bold transition-all shadow-lg active:scale-95 disabled:opacity-50">
-                  {isSubmitting ? "Saving..." : (editingWorkspace ? "Update Workspace" : "Create Workspace")}
+                  {isSubmitting ? "Saving..." : (editingWorkspace ? "Update App" : "Create App")}
                 </button>
               </div>
             </form>
