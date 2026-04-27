@@ -30,32 +30,24 @@ const WorkspaceManagement = ({ onLogin, onManageTabs }) => {
   const handleWorkspaceLogin = async (workspace) => {
     try {
       setLoadingLoginId(workspace._id);
-      const response = await fetch(`${API_BASE_URL}/workspaces/${workspace._id}/token`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (!response.ok) throw new Error("Failed to get workspace token");
-      const data = await response.json();
-      if (!data.token) throw new Error("No token received");
+      if (!token) throw new Error("Admin session missing. Please login again.");
 
-      const clientData = JSON.stringify({
-        role: 'client',
-        userType: 'client',
-        name: workspace.name,
-        email: workspace.email,
-        clientId: workspace._id
-      });
+      // Workspace dashboard is an admin-only view.
+      // It expects:
+      // - `admintoken` available (localStorage or sessionStorage)
+      // - `activeWorkspace` present in localStorage
+      //
+      // NOTE: sessionStorage does not carry to new tabs, so ensure token exists in localStorage.
+      if (!localStorage.getItem("admintoken")) {
+        localStorage.setItem("admintoken", token);
+      }
+      localStorage.setItem("activeWorkspace", JSON.stringify(workspace));
 
-      const newWindow = window.open("about:blank", "_blank");
-      if (!newWindow) { alert("Popup blocked! Please allow popups."); return; }
-
-      newWindow.document.open();
-      newWindow.document.write(`<html><head><title>Loading...</title><script>
-        sessionStorage.clear();
-        sessionStorage.setItem('clienttoken', ${JSON.stringify(data.token)});
-        sessionStorage.setItem('clientData', ${JSON.stringify(clientData)});
-        window.location.replace('/client/dashboard');
-      <\/script></head><body><p>Loading...</p></body></html>`);
-      newWindow.document.close();
+      const newWindow = window.open("/workspace/dashboard", "_blank");
+      if (!newWindow) {
+        alert("Popup blocked! Please allow popups.");
+        return;
+      }
     } catch (error) {
       alert(error.message || "Failed to open workspace dashboard");
     } finally {
@@ -197,7 +189,7 @@ const WorkspaceManagement = ({ onLogin, onManageTabs }) => {
     <div className="p-4 sm:p-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
         <div>
-          <h2 className="text-2xl font-bold text-gray-800">Workspace Management</h2>
+          <h2 className="text-2xl font-bold text-gray-800">Apps Management</h2>
           <p className="text-gray-500 text-sm">Create business units to group your clients</p>
         </div>
         <button

@@ -358,9 +358,6 @@ const AdminDashboard = ({ user, onLogout }) => {
     if (activeTab === "Client") {
       setClientTypeFilter("all");
       setAppSourceFilter("all");
-    } else if (activeTab === "DialAI" || activeTab === "AiVani" || activeTab === "HelloPaAI") {
-      setClientTypeFilter("all");
-      setSearchTerm("");
     }
   }, [activeTab]);
 
@@ -625,7 +622,7 @@ const AdminDashboard = ({ user, onLogout }) => {
 
   useEffect(() => {
     console.log(activeTab);
-    if (activeTab == "Client" || activeTab == "Overview" || activeTab == "DialAI" || activeTab == "AiVani" || activeTab == "HelloPaAI") {
+    if (activeTab == "Client" || activeTab == "Overview") {
       getclients();
     }
   }, [activeTab]);
@@ -741,17 +738,12 @@ const AdminDashboard = ({ user, onLogout }) => {
 
   const clientTypeCounts = useMemo(() => {
     const counts = {
-      all: 0,
-      prime: 0,
-      demo: 0,
-      owned: 0,
-      testing: 0,
-      new: 0,
-      rejected: 0,
+      all: 0, prime: 0, demo: 0, owned: 0, testing: 0, new: 0, rejected: 0,
     };
     if (Array.isArray(clients)) {
-      counts.all = clients.length;
-      clients.forEach((c) => {
+      const nonWorkspaceClients = clients.filter(c => !c.workspaceId);
+      counts.all = nonWorkspaceClients.length;
+      nonWorkspaceClients.forEach((c) => {
         const t = (c.clientType || "").toLowerCase();
         if (t === "prime") counts.prime++;
         else if (t === "demo") counts.demo++;
@@ -766,6 +758,7 @@ const AdminDashboard = ({ user, onLogout }) => {
 
   const filteredClients = clients
     ? clients
+        .filter((client) => !client.workspaceId)
         .filter((client) => {
           if (clientStatusFilter === "approved") return !!client.isApproved;
           if (clientStatusFilter === "pending") return !client.isApproved;
@@ -796,12 +789,8 @@ const AdminDashboard = ({ user, onLogout }) => {
 
   const navItems = [
     { name: "Overview", icon: <FaChartBar /> },
+    { name: "Apps", icon: <FaBuilding /> },
     { name: "Client", icon: <FaUsers /> },
-    {
-      name: "New App Clients",
-      icon: <FaExternalLinkAlt />,
-      subItems: ["DialAI", "AiVani", "HelloPaAI"],
-    },
     // { name: "Agents", icon: <FaUserTie /> },
     {
       name: "Accounts",
@@ -814,7 +803,6 @@ const AdminDashboard = ({ user, onLogout }) => {
       icon: <FaDatabase />,
       subItems: ["Chats"],
     },
-    { name: "Workspaces", icon: <FaBuilding /> },
     { name: "User", icon: <FaUser /> },
     // { name: "Tickets", icon: <FaClipboardList /> },
   ];
@@ -2081,15 +2069,6 @@ const AdminDashboard = ({ user, onLogout }) => {
                         } else {
                           setActiveTab("Datastore"); // Open submenu with Datastore selected by default
                         }
-                      } else if (item.name === "New App Clients") {
-                        if (
-                          activeTab === item.name ||
-                          item.subItems.includes(activeTab)
-                        ) {
-                          setActiveTab("Overview"); // Close submenu if already open
-                        } else {
-                          setActiveTab("DialAI"); // Open submenu with DialAI selected by default
-                        }
                       } else {
                         // For other items with submenus, toggle the submenu
                         if (activeTab === item.name) {
@@ -2445,7 +2424,7 @@ const AdminDashboard = ({ user, onLogout }) => {
               </div>
             )}
 
-            {activeTab === "Workspaces" && (
+            {activeTab === "Apps" && (
               manageTabsWorkspaceId ? (
                 <TabManagement 
                   workspaceId={manageTabsWorkspaceId} 
@@ -2474,322 +2453,6 @@ const AdminDashboard = ({ user, onLogout }) => {
                   </button>
                 </div>
                 <ToolsManagement />
-              </div>
-            )}
-
-            {/* New App Clients Tabs */}
-            {(activeTab === "DialAI" || activeTab === "AiVani" || activeTab === "HelloPaAI") && (
-              <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
-                <div className="p-4 border-b border-gray-100">
-                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-3 sm:space-y-0">
-                    <h3 className="text-xl font-semibold text-gray-800">
-                      {activeTab} Clients
-                    </h3>
-                    <div className="flex space-x-4">
-                      <button
-                        onClick={() => setShowAddClientModal(true)}
-                        className="flex items-center px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
-                      >
-                        <FaPlus className="mr-2" />
-                        Add {activeTab} Client
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Client Type filter Button */}
-                <div className="p-4 border-b border-gray-100 flex flex-col lg:flex-row gap-3 lg:items-center lg:justify-between">
-                  <div className="flex flex-wrap gap-2 items-center">
-                    {[
-                      { key: "all", label: "All" },
-                      { key: "new", label: "New" },
-                      { key: "prime", label: "Prime" },
-                      { key: "demo", label: "Demo" },
-                      { key: "owned", label: "In-house" },
-                      { key: "testing", label: "Testing" },
-                      { key: "rejected", label: "Rejected" },
-                    ].map((btn) => {
-                      const appFilteredClients = clients ? clients.filter(c => c.appSource === activeTab.toLowerCase()) : [];
-                      const typeCount = btn.key === "all" ? appFilteredClients.length : appFilteredClients.filter(c => (c.clientType || "").toLowerCase() === btn.key).length;
-                      return (
-                        <button
-                          key={btn.key}
-                          onClick={() => setClientTypeFilter(btn.key)}
-                          className={`px-4 py-2 rounded-full text-sm font-medium border transition-colors ${
-                            clientTypeFilter === btn.key
-                              ? "bg-red-600 text-white border-red-600"
-                              : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
-                          }`}
-                        >
-                          {btn.label}
-                          <span
-                            className={`ml-2 inline-block text-xs rounded-full px-2 py-0.5 ${
-                              clientTypeFilter === btn.key
-                                ? "bg-red-500 text-white"
-                                : "bg-gray-200 text-gray-800"
-                            }`}
-                          >
-                            {typeCount}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      placeholder={`Search ${activeTab} clients...`}
-                      className="pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                    />
-                    <div className="absolute left-3 top-1/2 transform -translate-y-1/2">
-                      <FaSearch className="text-gray-400" />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Table */}
-                <div className="overflow-x-auto">
-                  {isLoading ? (
-                    <div className="p-8 text-center">
-                      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-500 mx-auto"></div>
-                      <p className="mt-2 text-gray-500">Loading {activeTab} clients...</p>
-                    </div>
-                  ) : (() => {
-                    const appFilteredClients = clients ? clients
-                      .filter(client => client.appSource === activeTab.toLowerCase())
-                      .filter((client) => {
-                        if (clientTypeFilter === "all") return true;
-                        return (client.clientType || "").toLowerCase() === clientTypeFilter;
-                      })
-                      .filter(
-                        (client) =>
-                          client.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          client.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          client.businessName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          client.mobileNo?.includes(searchTerm) ||
-                          client.city?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          client.gstNo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          client.panNo?.toLowerCase().includes(searchTerm.toLowerCase())
-                      ) : [];
-                    
-                    return appFilteredClients.length === 0 ? (
-                      <div className="p-8 text-center">
-                        <p className="text-gray-500">
-                          No {activeTab} clients found for current filters.
-                        </p>
-                      </div>
-                    ) : (
-                      <table className="w-full divide-y divide-gray-200 table-fixed">
-                        <colgroup>
-                          <col className="w-10" />
-                          <col className="w-44" />
-                          <col className="w-16" />
-                          <col className="w-40" />
-                          <col className="w-48" />
-                          <col className="w-36" />
-                          <col className="w-52" />
-                          <col className="w-24" />
-                        </colgroup>
-                        <thead className="bg-gray-50">
-                          <tr>
-                            <th className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              #
-                            </th>
-                            <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              Business
-                            </th>
-                            <th className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              Agents
-                            </th>
-                            <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              Owner
-                            </th>
-                            <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              Contact
-                            </th>
-                            <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              KYC
-                            </th>
-                            <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              Actions
-                            </th>
-                            <th className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              Settings
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
-                          {appFilteredClients.map((client, index) => (
-                            <tr
-                              key={index}
-                              className={`${
-                                index % 2 === 0 ? "bg-white" : "bg-gray-50"
-                              } hover:bg-gray-100`}
-                            >
-                              <td className="px-3 py-2 whitespace-nowrap text-center text-xs text-gray-500">
-                                {index + 1}
-                              </td>
-                              <td className="px-3 py-4">
-                                <div className="flex items-center gap-2">
-                                  {getClientLogoUrl(client) ? (
-                                    <img
-                                      src={getClientLogoUrl(client)}
-                                      alt={client.businessName || client.name}
-                                      className="flex-shrink-0 h-9 w-9 rounded-full object-cover"
-                                      onError={(e) => { e.currentTarget.src = "/AitotaLogo.png"; }}
-                                    />
-                                  ) : (
-                                    <div className="flex-shrink-0 h-9 w-9 rounded-full bg-red-100 flex items-center justify-center text-red-600 font-semibold text-sm">
-                                      {(client?.businessName?.[0] || client?.name?.[0] || "C").toUpperCase()}
-                                    </div>
-                                  )}
-                                  <div className="min-w-0">
-                                    <div className="text-sm font-medium text-gray-900 truncate" title={client.businessName}>
-                                      {client.businessName || "—"}
-                                    </div>
-                                    <div className="text-xs text-gray-400 truncate">
-                                      {formatDate(client.createdAt)}
-                                    </div>
-                                  </div>
-                                </div>
-                              </td>
-                              <td className="px-2 py-4 text-center">
-                                <span className="text-sm text-gray-500">—</span>
-                              </td>
-                              <td className="px-3 py-4">
-                                <div className="text-sm font-medium text-gray-900 truncate" title={client.name}>
-                                  {client.name || "—"}
-                                </div>
-                                {client.websiteUrl && (
-                                  <a
-                                    href={client.websiteUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="inline-flex items-center text-xs text-red-600 hover:underline mt-1"
-                                    onClick={(e) => e.stopPropagation()}
-                                  >
-                                    Website <FaExternalLinkAlt className="ml-1" />
-                                  </a>
-                                )}
-                              </td>
-                              <td className="px-3 py-4">
-                                <div className="text-xs text-gray-900 truncate" title={client.email}>{client.email || "—"}</div>
-                                <div className="text-xs text-gray-500 mt-1">{client.mobileNo || "—"}</div>
-                                <div className="text-xs text-gray-400 mt-1 truncate" title={[client.city, client.pincode].filter(Boolean).join(", ")}>
-                                  {[client.city, client.pincode].filter(Boolean).join(", ") || "—"}
-                                </div>
-                              </td>
-                              <td className="px-3 py-4">
-                                <div className="text-xs text-gray-600">GST: <span className="font-mono">{client.gstNo || "—"}</span></div>
-                                <div className="text-xs text-gray-600 mt-1">PAN: <span className="font-mono">{client.panNo || "—"}</span></div>
-                              </td>
-                              <td className="px-4 py-6 text-center">
-                                <div className="flex flex-row flex-wrap items-center gap-2 justify-center">
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      openClientLogin(
-                                        client._id,
-                                        client.email,
-                                        client.name
-                                      );
-                                    }}
-                                    className={`inline-flex items-center justify-center w-24 ${
-                                      loggedInClients.has(client._id)
-                                        ? "bg-green-600 hover:bg-green-700"
-                                        : "bg-red-600 hover:bg-red-700"
-                                    } text-white px-3 py-2 rounded-md transition-colors text-xs font-semibold`}
-                                    title={
-                                      loggedInClients.has(client._id)
-                                        ? "Client Logged In"
-                                        : "Client Login"
-                                    }
-                                  >
-                                    {loggedInClients.has(client._id)
-                                      ? "Logged In"
-                                      : "Authenticate"}
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      openEndUserProfileSetup(client);
-                                    }}
-                                    className="inline-flex items-center justify-center gap-1 px-3 py-2 rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50 text-xs font-semibold"
-                                    title="Configure end-user registration profile fields"
-                                  >
-                                    <FaUserCog className="text-sm" />
-                                    User profile
-                                  </button>
-                                </div>
-                              </td>
-                              <td className="px-4 py-6 text-center">
-                                <div className="relative inline-block">
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setOpenSettingsMenu(openSettingsMenu === client._id ? null : client._id);
-                                    }}
-                                    disabled={loadingClientId === client._id}
-                                    className="inline-flex items-center justify-center w-10 h-10 rounded-md hover:bg-gray-100 transition-colors disabled:opacity-50"
-                                    title="Settings"
-                                  >
-                                    {loadingClientId === client._id ? (
-                                      "..."
-                                    ) : (
-                                      <FaCog className="text-sm" />
-                                    )}
-                                  </button>
-                                  {openSettingsMenu === client._id && (
-                                    <div
-                                      className="absolute right-0 mt-1 w-36 bg-white border border-gray-200 rounded-lg shadow-lg z-50"
-                                      onClick={(e) => e.stopPropagation()}
-                                    >
-                                      <button
-                                        className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-t-lg"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setOpenSettingsMenu(null);
-                                          setReviewClientId(client._id);
-                                          setShowApprovalModal(true);
-                                        }}
-                                      >
-                                        <FaEye className="mr-2 text-green-500" /> View
-                                      </button>
-                                      <button
-                                        className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setOpenSettingsMenu(null);
-                                          openEditClient(client);
-                                        }}
-                                      >
-                                        <FaEdit className="mr-2 text-blue-500" /> Edit
-                                      </button>
-                                      <button
-                                        className="flex items-center w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 rounded-b-lg"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setOpenSettingsMenu(null);
-                                          confirmDelete(client._id);
-                                        }}
-                                      >
-                                        <FaTrash className="mr-2 text-red-500" /> Delete
-                                      </button>
-                                    </div>
-                                  )}
-                                </div>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    );
-                  })()
-                  }
-                </div>
               </div>
             )}
 
@@ -2876,85 +2539,40 @@ const AdminDashboard = ({ user, onLogout }) => {
                       </p>
                     </div>
                   ) : (
-                    <table className="w-full divide-y divide-gray-200 table-fixed">
-                      <colgroup>
-                        <col className="w-10" />
-                        <col className="w-44" />
-                        <col className="w-20" />
-                        <col className="w-16" />
-                        <col className="w-40" />
-                        <col className="w-48" />
-                        <col className="w-36" />
-                        <col className="w-52" />
-                        <col className="w-24" />
-                      </colgroup>
+                    <table className="w-full divide-y divide-gray-200 text-xs">
                       <thead className="bg-gray-50">
                         <tr>
-                          <th className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            #
-                          </th>
-                          <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Business
-                          </th>
-                          <th className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            App Source
-                          </th>
-                          <th className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Agents
-                          </th>
-                          <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Owner
-                          </th>
-                          <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Contact
-                          </th>
-                          <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            KYC
-                          </th>
-                          <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Actions
-                          </th>
-                          <th className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Settings
-                          </th>
+                          <th className="px-2 py-2 text-center text-xs font-medium text-gray-500 uppercase w-8">#</th>
+                          <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase">Business</th>
+                          <th className="px-2 py-2 text-center text-xs font-medium text-gray-500 uppercase">Source</th>
+                          <th className="px-2 py-2 text-center text-xs font-medium text-gray-500 uppercase">Agents</th>
+                          <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase">Owner</th>
+                          <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase">Contact</th>
+                          <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase">KYC</th>
+                          <th className="px-2 py-2 text-center text-xs font-medium text-gray-500 uppercase">Actions</th>
+                          <th className="px-2 py-2 text-center text-xs font-medium text-gray-500 uppercase">Settings</th>
                         </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
                         {filteredClients.map((client, index) => (
-                          <tr
-                            key={index}
-                            className={`${
-                              index % 2 === 0 ? "bg-white" : "bg-gray-50"
-                            } hover:bg-gray-100`}
-                          >
-                            <td className="px-3 py-2 whitespace-nowrap text-center text-xs text-gray-500">
-                              {index + 1}
-                            </td>
-                            <td className="px-3 py-4">
-                              <div className="flex items-center gap-2">
+                          <tr key={index} className={`${index % 2 === 0 ? "bg-white" : "bg-gray-50"} hover:bg-gray-100`}>
+                            <td className="px-2 py-1.5 text-center text-xs text-gray-500">{index + 1}</td>
+                            <td className="px-2 py-1.5">
+                              <div className="flex items-center gap-1.5">
                                 {getClientLogoUrl(client) ? (
-                                  <img
-                                    src={getClientLogoUrl(client)}
-                                    alt={client.businessName || client.name}
-                                    className="flex-shrink-0 h-9 w-9 rounded-full object-cover"
-                                    onError={(e) => { e.currentTarget.src = "/AitotaLogo.png"; }}
-                                  />
+                                  <img src={getClientLogoUrl(client)} alt={client.businessName || client.name} className="flex-shrink-0 h-7 w-7 rounded-full object-cover" onError={(e) => { e.currentTarget.src = "/AitotaLogo.png"; }} />
                                 ) : (
-                                  <div className="flex-shrink-0 h-9 w-9 rounded-full bg-red-100 flex items-center justify-center text-red-600 font-semibold text-sm">
+                                  <div className="flex-shrink-0 h-7 w-7 rounded-full bg-red-100 flex items-center justify-center text-red-600 font-semibold text-xs">
                                     {(client?.businessName?.[0] || client?.name?.[0] || "C").toUpperCase()}
                                   </div>
                                 )}
                                 <div className="min-w-0">
-                                  <div className="text-sm font-medium text-gray-900 truncate" title={client.businessName}>
-                                    {client.businessName || "—"}
-                                  </div>
-                                  <div className="text-xs text-gray-400 truncate">
-                                    {formatDate(client.createdAt)}
-                                  </div>
+                                  <div className="text-xs font-medium text-gray-900 truncate max-w-[120px]" title={client.businessName}>{client.businessName || "—"}</div>
+                                  <div className="text-xs text-gray-400">{formatDate(client.createdAt)}</div>
                                 </div>
                               </div>
                             </td>
-                            <td className="px-2 py-4 text-center">
+                            <td className="px-2 py-1.5 text-center">
                               {(() => {
                                 const appSource = client.appSource || 'direct';
                                 const appConfig = {
@@ -2965,85 +2583,50 @@ const AdminDashboard = ({ user, onLogout }) => {
                                 };
                                 const config = appConfig[appSource] || { label: 'Unknown', color: 'bg-gray-100 text-gray-800' };
                                 return (
-                                  <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold ${config.color}`}>
+                                  <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium ${config.color}`}>
                                     {config.label}
                                   </span>
                                 );
                               })()}
                             </td>
-                            <td className="px-2 py-4 text-center">
-                              <span className="text-sm text-gray-500">—</span>
-                            </td>
-                            <td className="px-3 py-4">
-                              <div className="text-sm font-medium text-gray-900 truncate" title={client.name}>
-                                {client.name || "—"}
-                              </div>
+                            <td className="px-2 py-1.5 text-center text-gray-500">—</td>
+                            <td className="px-2 py-1.5">
+                              <div className="text-xs font-medium text-gray-900 truncate max-w-[120px]" title={client.name}>{client.name || "—"}</div>
                               {client.websiteUrl && (
-                                <a
-                                  href={client.websiteUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="inline-flex items-center text-xs text-red-600 hover:underline mt-1"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
+                                <a href={client.websiteUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center text-xs text-red-600 hover:underline" onClick={(e) => e.stopPropagation()}>
                                   Website <FaExternalLinkAlt className="ml-1" />
                                 </a>
                               )}
                             </td>
-                            <td className="px-3 py-4">
-                              <div className="text-xs text-gray-900 truncate" title={client.email}>{client.email || "—"}</div>
-                              <div className="text-xs text-gray-500 mt-1">{client.mobileNo || "—"}</div>
-                              <div className="text-xs text-gray-400 mt-1 truncate" title={[client.city, client.pincode].filter(Boolean).join(", ")}>
-                                {[client.city, client.pincode].filter(Boolean).join(", ") || "—"}
-                              </div>
+                            <td className="px-2 py-1.5">
+                              <div className="text-xs text-gray-900 truncate max-w-[150px]" title={client.email}>{client.email || "—"}</div>
+                              <div className="text-xs text-gray-500">{client.mobileNo || "—"}</div>
+                              <div className="text-xs text-gray-400 truncate max-w-[150px]">{[client.city, client.pincode].filter(Boolean).join(", ") || "—"}</div>
                             </td>
-                            <td className="px-3 py-4">
+                            <td className="px-2 py-1.5">
                               <div className="text-xs text-gray-600">GST: <span className="font-mono">{client.gstNo || "—"}</span></div>
-                              <div className="text-xs text-gray-600 mt-1">PAN: <span className="font-mono">{client.panNo || "—"}</span></div>
+                              <div className="text-xs text-gray-600">PAN: <span className="font-mono">{client.panNo || "—"}</span></div>
                             </td>
-
-                            <td className="px-4 py-6 text-center">
-                              <div className="flex flex-row flex-wrap items-center gap-2 justify-center">
+                            <td className="px-2 py-1.5 text-center">
+                              <div className="flex flex-col items-center gap-1">
                                 <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-
-                                    openClientLogin(
-                                      client._id,
-                                      client.email,
-                                      client.name
-                                    );
-                                  }}
-                                  className={`inline-flex items-center justify-center w-24 ${
-                                    loggedInClients.has(client._id)
-                                      ? "bg-green-600 hover:bg-green-700"
-                                      : "bg-red-600 hover:bg-red-700"
-                                  } text-white px-3 py-2 rounded-md transition-colors text-xs font-semibold`}
-                                  title={
-                                    loggedInClients.has(client._id)
-                                      ? "Client Logged In"
-                                      : "Client Login"
-                                  }
+                                  onClick={(e) => { e.stopPropagation(); openClientLogin(client._id, client.email, client.name); }}
+                                  className={`inline-flex items-center justify-center px-2 py-1 rounded text-xs font-medium ${
+                                    loggedInClients.has(client._id) ? "bg-green-600 hover:bg-green-700" : "bg-red-600 hover:bg-red-700"
+                                  } text-white`}
                                 >
-                                  {loggedInClients.has(client._id)
-                                    ? "Logged In"
-                                    : "Authenticate"}
+                                  {loggedInClients.has(client._id) ? "Logged In" : "Authenticate"}
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    openEndUserProfileSetup(client);
-                                  }}
-                                  className="inline-flex items-center justify-center gap-1 px-3 py-2 rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50 text-xs font-semibold"
-                                  title="Configure end-user registration profile fields"
+                                  onClick={(e) => { e.stopPropagation(); openEndUserProfileSetup(client); }}
+                                  className="inline-flex items-center gap-1 px-2 py-1 rounded border border-slate-300 text-slate-700 hover:bg-slate-50 text-xs"
                                 >
-                                  <FaUserCog className="text-sm" />
-                                  User profile
+                                  <FaUserCog className="text-xs" /> Profile
                                 </button>
                               </div>
                             </td>
-                            <td className="px-4 py-6 text-center">
+                            <td className="px-2 py-1.5 text-center">
                               <div className="relative inline-block">
                                 <button
                                   onClick={(e) => {
@@ -3051,7 +2634,7 @@ const AdminDashboard = ({ user, onLogout }) => {
                                     setOpenSettingsMenu(openSettingsMenu === client._id ? null : client._id);
                                   }}
                                   disabled={loadingClientId === client._id}
-                                  className="inline-flex items-center justify-center w-10 h-10 rounded-md hover:bg-gray-100 transition-colors disabled:opacity-50"
+                                  className="inline-flex items-center justify-center w-7 h-7 rounded hover:bg-gray-100 transition-colors disabled:opacity-50"
                                   title="Settings"
                                 >
                                   {loadingClientId === client._id ? (

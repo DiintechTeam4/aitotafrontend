@@ -12,6 +12,8 @@ const WorkspaceDashboard = ({ workspace, onBack }) => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [clientTypeFilter, setClientTypeFilter] = useState("all");
+  const [authenticatingClientId, setAuthenticatingClientId] = useState(null);
+  const [adminUser, setAdminUser] = useState({ name: workspace?.name || "", email: workspace?.email || "" });
   
   // Modal states
   const [showAddModal, setShowAddModal] = useState(false);
@@ -19,6 +21,8 @@ const WorkspaceDashboard = ({ workspace, onBack }) => {
   const [editingClient, setEditingClient] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [openSettingsMenu, setOpenSettingsMenu] = useState(null);
+  const [showAdminDropdown, setShowAdminDropdown] = useState(false);
+  const adminDropdownRef = useRef(null);
 
   // Layout states
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -28,16 +32,25 @@ const WorkspaceDashboard = ({ workspace, onBack }) => {
 
   // Constants
   const token = localStorage.getItem("admintoken") || sessionStorage.getItem("admintoken");
-  const loggedInClients = new Set(); // This would normally be handled by a global state or parent
 
   // Form State for New/Edit Client
   const initialClientState = {
     name: "", email: "", password: "", confirmPassword: "",
     businessName: "", websiteUrl: "", city: "", pincode: "",
     gstNo: "", panNo: "", mobileNo: "", address: "",
+    businessLogoUrl: "", businessLogoKey: "",
     clientType: "new"
   };
   const [clientData, setClientData] = useState(initialClientState);
+
+  const parseApiResponse = async (response) => {
+    const contentType = response.headers.get("content-type") || "";
+    if (contentType.includes("application/json")) {
+      return response.json();
+    }
+    const text = await response.text();
+    return { success: false, message: text || `HTTP ${response.status}` };
+  };
 
   useEffect(() => {
     const handleResize = () => {
@@ -62,10 +75,22 @@ const WorkspaceDashboard = ({ workspace, onBack }) => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // Close admin dropdown when clicking outside
+  useEffect(() => {
+    if (!showAdminDropdown) return;
+    const handler = (e) => {
+      if (adminDropdownRef.current && !adminDropdownRef.current.contains(e.target)) {
+        setShowAdminDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showAdminDropdown]);
+
   const fetchClients = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${API_BASE_URL}/admin/getclients`, {
+      const response = await fetch(`${API_BASE_URL}/workspaces/${workspace._id}/clients`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       const res = await response.json();
@@ -89,6 +114,19 @@ const WorkspaceDashboard = ({ workspace, onBack }) => {
     }
   }, [workspace._id, activeTab]);
 
+  // Load clients once for Overview stats as well.
+  useEffect(() => {
+    fetchClients();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspace._id]);
+
+  const exitWorkspace = () => {
+    try {
+      localStorage.removeItem("activeWorkspace");
+    } catch {}
+    if (typeof onBack === "function") onBack();
+  };
+
   const handleCreateClient = async (e) => {
     e.preventDefault();
     if (clientData.password !== clientData.confirmPassword) {
@@ -98,16 +136,22 @@ const WorkspaceDashboard = ({ workspace, onBack }) => {
 
     setIsSubmitting(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/admin/createclient`, {
+      const payload = {
+        ...clientData,
+        workspaceId: workspace._id,
+        businessLogoKey: String(clientData.businessLogoKey || "").trim() || `external-logo-${Date.now()}`,
+      };
+
+      const response = await fetch(`${API_BASE_URL}/client/register`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ ...clientData, workspaceId: workspace._id })
+        body: JSON.stringify(payload)
       });
-      const data = await response.json();
-      if (data.success) {
+      const data = await parseApiResponse(response);
+      if (response.ok && data.success) {
         setShowAddModal(false);
         fetchClients();
         setClientData(initialClientState);
@@ -116,6 +160,7 @@ const WorkspaceDashboard = ({ workspace, onBack }) => {
       }
     } catch (error) {
       console.error("Error creating client:", error);
+      alert("Error creating client");
     } finally {
       setIsSubmitting(false);
     }
@@ -125,7 +170,7 @@ const WorkspaceDashboard = ({ workspace, onBack }) => {
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/admin/editclient/${editingClient._id}`, {
+      const response = await fetch(`${API_BASE_URL}/admin/update-client/${editingClient._id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -133,8 +178,8 @@ const WorkspaceDashboard = ({ workspace, onBack }) => {
         },
         body: JSON.stringify(clientData)
       });
-      const data = await response.json();
-      if (data.success) {
+      const data = await parseApiResponse(response);
+      if (response.ok && data.success) {
         setShowEditModal(false);
         fetchClients();
       } else {
@@ -154,16 +199,18 @@ const WorkspaceDashboard = ({ workspace, onBack }) => {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` }
       });
-      const data = await response.json();
-      if (data.success) fetchClients();
+      const data = await parseApiResponse(response);
+      if (response.ok && data.success) fetchClients();
+      else alert(data.message || "Failed to delete client");
     } catch (error) {
       console.error("Error deleting client:", error);
+      alert("Error deleting client");
     }
   };
 
   const toggleApproval = async (client) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/admin/approveclient/${client._id}`, {
+      const response = await fetch(`${API_BASE_URL}/admin/approve-client/${client._id}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -171,25 +218,56 @@ const WorkspaceDashboard = ({ workspace, onBack }) => {
         },
         body: JSON.stringify({ isApproved: !client.isApproved })
       });
-      const data = await response.json();
-      if (data.success) fetchClients();
+      const data = await parseApiResponse(response);
+      if (response.ok && data.success) fetchClients();
+      else alert(data.message || "Failed to update approval");
     } catch (error) {
       console.error("Error toggling approval:", error);
+      alert("Error updating approval");
     }
   };
 
-  const openClientLogin = (clientId, email, name) => {
-    const loginData = {
-        token: token,
-        client: {
-            _id: clientId,
-            email: email,
-            name: name
-        }
-    };
-    localStorage.setItem('clientToken', token);
-    localStorage.setItem('clientData', JSON.stringify(loginData.client));
-    window.open('/client/dashboard', '_blank');
+  const openClientLogin = async (clientId, email, name) => {
+    try {
+      if (!token) throw new Error("Admin session missing. Please login again.");
+      setAuthenticatingClientId(clientId);
+
+      // Get real client JWT from backend (admin impersonation).
+      const resp = await fetch(`${API_BASE_URL}/admin/get-client-token/${clientId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await resp.json();
+      if (!resp.ok || !data?.token) {
+        throw new Error(data?.message || "Failed to authenticate client");
+      }
+
+      const clientData = JSON.stringify({
+        role: "client",
+        userType: "client",
+        name: name || "",
+        email: email || "",
+        clientId: clientId,
+      });
+
+      const newWindow = window.open("about:blank", "_blank");
+      if (!newWindow) {
+        alert("Popup blocked! Please allow popups.");
+        return;
+      }
+
+      newWindow.document.open();
+      newWindow.document.write(`<html><head><title>Loading...</title><script>
+        sessionStorage.clear();
+        sessionStorage.setItem('clienttoken', ${JSON.stringify(data.token)});
+        sessionStorage.setItem('clientData', ${JSON.stringify(clientData)});
+        window.location.replace('/client/dashboard');
+      <\/script></head><body><p>Loading...</p></body></html>`);
+      newWindow.document.close();
+    } catch (e) {
+      alert(e?.message || "Failed to open client portal");
+    } finally {
+      setAuthenticatingClientId(null);
+    }
   };
 
   const handleAssignToWorkspace = async (clientId, alreadyAssigned) => {
@@ -210,7 +288,9 @@ const WorkspaceDashboard = ({ workspace, onBack }) => {
     }
   };
 
-  const filteredClients = clients.filter(c => {
+  const workspaceClients = clients;
+
+  const filteredClients = workspaceClients.filter(c => {
     const matchesSearch = 
       c.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       c.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -243,7 +323,7 @@ const WorkspaceDashboard = ({ workspace, onBack }) => {
     }))
   ];
 
-  const clientTypeCounts = clients.reduce((acc, c) => {
+  const clientTypeCounts = workspaceClients.reduce((acc, c) => {
     const type = (c.clientType || "new").toLowerCase();
     acc[type] = (acc[type] || 0) + 1;
     acc.all = (acc.all || 0) + 1;
@@ -251,233 +331,323 @@ const WorkspaceDashboard = ({ workspace, onBack }) => {
   }, { all: 0, new: 0, prime: 0, demo: 0, testing: 0, owned: 0, rejected: 0 });
 
   return (
-    <div className="flex h-screen bg-gray-50 overflow-hidden font-sans">
-      {/* Sidebar - Consistent with Workspace style */}
-      <aside className={`fixed lg:static inset-y-0 left-0 z-50 w-64 bg-slate-900 border-r border-white/5 transform transition-transform duration-300 ease-in-out ${isSidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
-        <div className="flex flex-col h-full">
-          <div className="p-6 flex items-center space-x-3 border-b border-white/5">
-            <div className="w-10 h-10 bg-gradient-to-br from-purple-600 to-indigo-700 rounded-xl flex items-center justify-center shadow-lg shadow-purple-900/40">
-              <FaBuilding className="text-white text-xl" />
+    <div className="min-h-screen bg-gray-50">
+      {/* Mobile overlay */}
+      {isMobile && isSidebarOpen && (
+        <div
+          className="fixed top-0 left-0 w-full h-full opacity-50 z-40 bg-black"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
+
+      {/* Sidebar - AdminDashboard style */}
+      <div
+        className={`fixed top-0 left-0 h-full bg-white shadow-xl z-50 transition-all duration-300 ease-in-out flex flex-col ${
+          isMobile
+            ? isSidebarOpen ? "w-64 translate-x-0" : "-translate-x-full w-64"
+            : isSidebarOpen ? "w-64" : "w-20"
+        }`}
+      >
+        {/* Sidebar Header */}
+        <div className="flex-shrink-0 flex justify-between items-center p-4 border-b border-gray-200 bg-gradient-to-r from-slate-800 to-slate-900">
+          {isSidebarOpen && (
+            <div className="flex items-center space-x-3">
+              <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-slate-700 font-bold">
+                {(workspace?.name?.[0] || "W").toUpperCase()}
+              </div>
+              <h4 className="m-0 font-semibold text-lg text-white truncate">
+                {workspace?.name || "Workspace"}
+              </h4>
             </div>
-            <span className="font-black text-xl text-white tracking-tighter">AiTota</span>
-          </div>
-          <nav className="flex-1 px-4 py-8 space-y-2 overflow-y-auto">
-            <p className="px-2 text-[10px] font-black text-white/30 uppercase tracking-[2px] mb-4">Workspace Menu</p>
+          )}
+          <button
+            className="text-white hover:text-gray-200 focus:outline-none"
+            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+          >
+            {isSidebarOpen ? <FaAngleLeft size={20} /> : <FaBars size={20} />}
+          </button>
+        </div>
+
+        {/* Nav Items */}
+        <div className="relative flex flex-col flex-1 min-h-0 overflow-hidden">
+          <div className="flex-1 py-4 overflow-y-auto">
             {sidebarTabs.map((tab) => (
               <button
                 key={tab.name}
                 onClick={() => { setActiveTab(tab.name); if (isMobile) setIsSidebarOpen(false); }}
-                className={`w-full flex items-center space-x-3 px-4 py-3.5 rounded-2xl transition-all duration-300 group ${activeTab === tab.name ? "bg-purple-600 shadow-xl shadow-purple-600/30 text-white" : "text-white/40 hover:bg-white/5 hover:text-white"}`}
+                className={`flex items-center w-full py-3 px-4 text-left transition-colors duration-200 ${
+                  activeTab === tab.name
+                    ? "bg-indigo-50 text-indigo-700 border-r-4 border-indigo-500"
+                    : "text-gray-600 hover:bg-gray-50"
+                }`}
               >
-                <span className={`text-lg transition-transform duration-300 group-hover:scale-110 ${activeTab === tab.name ? "text-white" : "text-purple-500"}`}>{tab.icon}</span>
-                <span className="font-bold text-sm tracking-tight">{tab.name}</span>
+                <span className="text-xl flex-shrink-0">{tab.icon}</span>
+                {(isSidebarOpen || isMobile) && (
+                  <span className="ml-3 font-medium">{tab.name}</span>
+                )}
               </button>
             ))}
-          </nav>
-          <div className="p-4 border-t border-white/5 bg-black/20">
-            <button onClick={onBack} className="w-full flex items-center space-x-3 px-4 py-4 rounded-2xl text-white/40 hover:bg-red-500 transition-all font-bold text-sm hover:text-white">
-              <FaSignOutAlt />
-              <span>Exit Dashboard</span>
+          </div>
+
+          {/* Bottom exit button */}
+          <div className="border-t-2 border-gray-200 bg-white flex-shrink-0">
+            <button
+              onClick={exitWorkspace}
+              className="flex items-center w-full py-3 px-4 text-left text-gray-600 hover:bg-red-50 hover:text-red-600 transition-colors duration-200"
+            >
+              <span className="text-xl flex-shrink-0"><FaSignOutAlt /></span>
+              {(isSidebarOpen || isMobile) && (
+                <span className="ml-3 font-medium">Exit Dashboard</span>
+              )}
             </button>
           </div>
         </div>
-      </aside>
+      </div>
 
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      {/* Main Content */}
+      <div
+        className={`${
+          isMobile ? "ml-0" : isSidebarOpen ? "ml-64" : "ml-20"
+        } transition-all duration-300 ease-in-out`}
+      >
         {/* Header */}
-        <header className="h-20 bg-white/80 backdrop-blur-md border-b border-gray-100 flex items-center justify-between px-8 z-40 sticky top-0 shadow-sm">
-          <div className="flex items-center space-x-6">
-            <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="w-10 h-10 flex items-center justify-center bg-gray-50 rounded-xl text-slate-400 hover:text-purple-600 transition-colors">
-              <FaBars className="text-lg" />
-            </button>
-            <div className="flex flex-col">
-              <div className="flex items-center space-x-3">
-                <h2 className="text-xl font-black text-slate-800 tracking-tight lowercase">/ {activeTab.toLowerCase()}</h2>
-                <span className="bg-purple-50 text-purple-600 text-[10px] font-black px-2.5 py-1 rounded-lg uppercase tracking-widest">{workspace.name}</span>
-              </div>
+        <div className="sticky top-0 z-30 bg-white border-b border-gray-200 shadow-sm">
+          <div className="flex justify-between items-center px-6 py-3">
+            <div className="flex items-center gap-3">
+              {isMobile && (
+                <button className="p-2 text-gray-600 hover:text-gray-800" onClick={() => setIsSidebarOpen(true)}>
+                  <FaBars size={20} />
+                </button>
+              )}
+              <h4 className="font-semibold text-gray-800 text-base">{activeTab}</h4>
+            </div>
+            <div className="relative" ref={adminDropdownRef}>
+              <button
+                onClick={() => setShowAdminDropdown(!showAdminDropdown)}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors"
+              >
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-slate-700 to-slate-900 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+                  {(adminUser?.name?.[0] || "A").toUpperCase()}
+                </div>
+                {!isMobile && (
+                  <div className="text-left">
+                    <p className="text-sm font-semibold text-gray-800 leading-tight">{adminUser?.name || "Admin"}</p>
+                    <p className="text-xs text-gray-500 leading-tight">{adminUser?.email || ""}</p>
+                  </div>
+                )}
+                <svg className={`w-4 h-4 text-gray-500 transition-transform ${showAdminDropdown ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              {showAdminDropdown && (
+                <div className="absolute right-0 mt-1 w-56 bg-white border border-gray-200 rounded-xl shadow-lg z-50 overflow-hidden">
+                  <div className="px-4 py-3 bg-gray-50 border-b border-gray-100">
+                    <p className="text-sm font-semibold text-gray-800 truncate">{adminUser?.name || "Admin"}</p>
+                    <p className="text-xs text-gray-500 truncate">{adminUser?.email || ""}</p>
+                  </div>
+                  <button
+                    className="flex items-center w-full px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 gap-2"
+                    onClick={() => { setShowAdminDropdown(false); exitWorkspace(); }}
+                  >
+                    <FaSignOutAlt className="text-red-500" /> Logout
+                  </button>
+                </div>
+              )}
             </div>
           </div>
-        </header>
+        </div>
 
         <main className="flex-1 overflow-y-auto p-6 lg:p-10 bg-[#f8fafc]">
           {activeTab === "Overview" ? (
              <div className="max-w-7xl mx-auto space-y-8">
-               <div className="p-10 bg-slate-900 rounded-[40px] text-white relative overflow-hidden shadow-2xl">
-                  <div className="relative z-10">
-                    <h1 className="text-4xl font-black tracking-tight">Welcome, {workspace.name}</h1>
-                    <p className="text-white/60 font-medium mt-2 max-w-md">Your workspace is active and currently managing {clients.filter(c => c.workspaceId?.toString() === workspace._id.toString()).length} clients.</p>
+               <div className="p-3 bg-gradient-to-r from-slate-800 to-slate-900 rounded-lg shadow-sm flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+                    {(workspace?.name?.[0] || "W").toUpperCase()}
                   </div>
-                  <div className="absolute top-0 right-0 p-10 opacity-10">
-                    <FaBuilding className="text-9xl" />
+                  <div>
+                    <h1 className="text-sm font-semibold text-white">Welcome, {workspace.name}</h1>
+                    <p className="text-xs text-slate-400">Your workspace is active and currently managing {workspaceClients.length} clients.</p>
                   </div>
                </div>
                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 {[
-                  { label: "Total System Clients", val: clients.length, color: "from-blue-500 to-indigo-600" },
-                  { label: "Workspace Clients", val: clients.filter(c => c.workspaceId?.toString() === workspace._id.toString()).length, color: "from-purple-500 to-pink-600" },
-                  { label: "Pending Approvals", val: clients.filter(c => !c.isApproved).length, color: "from-amber-500 to-orange-600" },
-                  { label: "Workspace Health", val: "Optimal", color: "from-emerald-500 to-teal-600" },
+                  { label: "Total Clients", val: clients.length },
+                  { label: "Pending Approval", val: clients.filter(c => !c.isApproved).length },
+                  { label: "Approved", val: clients.filter(c => c.isApproved).length },
+                  { label: "Workspace Health", val: "Optimal" },
                 ].map((stat, i) => (
-                  <div key={i} className="bg-white p-6 rounded-[32px] shadow-xl shadow-slate-200/50 border border-white">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{stat.label}</p>
-                    <h3 className={`text-3xl font-black bg-gradient-to-r ${stat.color} bg-clip-text text-transparent`}>{stat.val}</h3>
+                  <div key={i} className="bg-white rounded-lg shadow-sm border border-gray-100 p-4">
+                    <h5 className="text-sm font-medium text-gray-600">{stat.label}</h5>
+                    <h2 className="text-3xl my-2 text-red-600">{stat.val}</h2>
                   </div>
                 ))}
               </div>
              </div>
           ) : (activeTab.toLowerCase() === "clients" || activeTab.toLowerCase() === "client") ? (
-            <div className="max-w-7xl mx-auto space-y-8">
-              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-                <div>
-                  <h1 className="text-3xl font-black text-slate-800 tracking-tight">Client Hub</h1>
-                  <p className="text-slate-500 font-medium mt-1">Manage, authenticate and configure system-wide clients</p>
-                </div>
+            <div className="max-w-7xl mx-auto">
+              {/* Header */}
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
+                <h3 className="text-xl font-semibold text-gray-800">Client Management</h3>
                 <button
                   onClick={() => { setClientData(initialClientState); setShowAddModal(true); }}
-                  className="bg-slate-900 hover:bg-black text-white px-8 py-4 rounded-[22px] flex items-center transition-all shadow-xl shadow-slate-200 active:scale-95 font-black text-sm tracking-tight"
+                  className="flex items-center px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm font-medium"
                 >
-                  <FaPlus className="mr-3" /> REGISTER CLIENT
+                  <FaPlus className="mr-2" /> Add Client
                 </button>
               </div>
 
-              {/* Status Filters - Admin Style but Premium UI */}
-              <div className="flex flex-wrap gap-3 items-center bg-white/50 p-2 rounded-[28px] border border-white">
+              <div className="bg-white rounded-lg shadow-sm border border-gray-100">
+                {/* Filters */}
+                <div className="p-4 border-b border-gray-100 flex flex-wrap items-center gap-2">
                   {[
-                    { key: "all", label: "All Clients" },
-                    { key: "new", label: "New" },
-                    { key: "prime", label: "Prime" },
-                    { key: "demo", label: "Demo" },
-                    { key: "owned", label: "In-house" },
-                  ].map((btn) => (
-                    <button
-                      key={btn.key}
-                      onClick={() => setClientTypeFilter(btn.key)}
-                      className={`px-6 py-2.5 rounded-2xl text-xs font-black uppercase tracking-widest transition-all ${
-                        clientTypeFilter === btn.key
-                          ? "bg-purple-600 text-white shadow-lg shadow-purple-600/30"
-                          : "bg-white text-slate-500 border border-gray-100 hover:border-purple-200"
-                      }`}
-                    >
-                      {btn.label} <span className="ml-2 font-mono opacity-50">{clientTypeCounts[btn.key] || 0}</span>
-                    </button>
-                  ))}
-                  <div className="flex-1"></div>
-                  <div className="relative max-w-xs">
-                    <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                      { key: "all", label: "All" },
+                      { key: "new", label: "New" },
+                      { key: "prime", label: "Prime" },
+                      { key: "demo", label: "Demo" },
+                      { key: "owned", label: "In-house" },
+                      { key: "testing", label: "Testing" },
+                      { key: "rejected", label: "Rejected" },
+                    ].map((btn) => (
+                      <button
+                        key={btn.key}
+                        onClick={() => setClientTypeFilter(btn.key)}
+                        className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                          clientTypeFilter === btn.key
+                            ? "bg-red-600 text-white border-red-600"
+                            : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                        }`}
+                      >
+                        {btn.label} <span className={`ml-1 text-xs ${
+                          clientTypeFilter === btn.key ? "text-red-100" : "text-gray-400"
+                        }`}>{clientTypeCounts[btn.key] || 0}</span>
+                      </button>
+                    ))}
+                  <div className="ml-auto relative">
+                    <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs" />
                     <input
                       type="text"
-                      placeholder="Search hub..."
-                      className="w-full pl-12 pr-4 py-3 bg-white border border-gray-50 rounded-2xl focus:ring-4 focus:ring-purple-500/10 transition-all font-bold text-sm"
+                      placeholder="Search clients..."
+                      className="pl-8 pr-4 py-1.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 text-sm"
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                     />
                   </div>
-              </div>
+                </div>
 
-              <div className="bg-white rounded-[40px] shadow-2xl shadow-slate-200/40 border border-white overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="bg-slate-50/50 text-left text-[10px] font-black text-slate-400 uppercase tracking-[2px]">
-                        <th className="px-8 py-6">Business Node</th>
-                        <th className="px-8 py-6">Control Panel</th>
-                        <th className="px-8 py-6">Verification</th>
-                        <th className="px-8 py-6">Workspace</th>
-                        <th className="px-8 py-6 text-center">Settings</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-50">
-                      {loading ? (
-                        <tr><td colSpan="5" className="px-8 py-24 text-center"><div className="animate-spin h-12 w-12 border-b-2 border-purple-600 mx-auto rounded-full"></div></td></tr>
-                      ) : filteredClients.length === 0 ? (
-                        <tr><td colSpan="5" className="px-8 py-24 text-center font-bold text-slate-400">No active nodes found matching criteria</td></tr>
-                      ) : (
-                        filteredClients.map((client) => {
+                {/* Table */}
+                <div className="overflow-x-auto rounded-b-lg">
+                  {loading ? (
+                    <div className="p-8 text-center">
+                      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-500 mx-auto"></div>
+                      <p className="mt-2 text-gray-500 text-sm">Loading clients...</p>
+                    </div>
+                  ) : filteredClients.length === 0 ? (
+                    <div className="p-8 text-center">
+                      <FaUsers className="mx-auto text-4xl text-gray-200 mb-3" />
+                      <p className="text-gray-500 text-sm font-medium">No clients assigned to this workspace</p>
+                      <p className="text-gray-400 text-xs mt-1">Click "Add Client" to register a new client</p>
+                    </div>
+                  ) : (
+                    <table className="w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">#</th>
+                          <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Business</th>
+                          <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</th>
+                          <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                          <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                          <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Settings</th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {filteredClients.map((client, index) => {
                           const isThisWs = client.workspaceId?.toString() === workspace._id.toString();
                           return (
-                            <tr key={client._id} className="hover:bg-slate-50/50 transition-colors group">
-                              <td className="px-8 py-6">
-                                <div className="flex items-center space-x-4">
-                                  <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-purple-50 to-indigo-50 flex items-center justify-center p-2.5 border border-purple-100/50 group-hover:scale-105 transition-transform">
-                                    {getClientLogoUrl(client) ? (
-                                      <img src={getClientLogoUrl(client)} alt="logo" className="h-full w-full object-contain rounded-lg" />
-                                    ) : (
-                                      <span className="text-xl font-black text-purple-600">{(client.businessName?.[0] || client.name?.[0] || "C").toUpperCase()}</span>
-                                    )}
-                                  </div>
-                                  <div className="min-w-0">
-                                    <div className="font-black text-slate-800 text-sm truncate">{client.businessName}</div>
-                                    <div className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">{client.name}</div>
-                                    <div className="flex items-center mt-1 text-[10px] text-slate-400 font-medium">
-                                       <FaMapMarkerAlt className="mr-1" /> {client.city || "Remote"}
+                            <tr key={client._id} className={`${index % 2 === 0 ? "bg-white" : "bg-gray-50"} hover:bg-gray-100`}>
+                              <td className="px-3 py-3 text-center text-xs text-gray-500">{index + 1}</td>
+                              <td className="px-3 py-4">
+                                <div className="flex items-center gap-2">
+                                  {getClientLogoUrl(client) ? (
+                                    <img src={getClientLogoUrl(client)} alt="logo" className="h-9 w-9 rounded-full object-cover flex-shrink-0" />
+                                  ) : (
+                                    <div className="h-9 w-9 rounded-full bg-red-100 flex items-center justify-center text-red-600 font-semibold text-sm flex-shrink-0">
+                                      {(client?.businessName?.[0] || client?.name?.[0] || "C").toUpperCase()}
                                     </div>
+                                  )}
+                                  <div className="min-w-0">
+                                    <div className="text-sm font-medium text-gray-900 truncate">{client.businessName || "—"}</div>
+                                    <div className="text-xs text-gray-400">{formatDate(client.createdAt)}</div>
                                   </div>
                                 </div>
                               </td>
-                              <td className="px-8 py-6">
+                              <td className="px-3 py-4">
+                                <div className="text-xs text-gray-900 truncate">{client.email || "—"}</div>
+                                <div className="text-xs text-gray-500 mt-0.5">{client.mobileNo || "—"}</div>
+                                <div className="text-xs text-gray-400 mt-0.5">{client.city || "—"}</div>
+                              </td>
+                              <td className="px-3 py-4">
                                 <button
-                                  onClick={() => openClientLogin(client._id, client.email, client.name)}
-                                  className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-                                    loggedInClients.has(client._id)
-                                      ? "bg-emerald-50 text-emerald-600"
-                                      : "bg-slate-100 text-slate-600 hover:bg-purple-600 hover:text-white hover:shadow-lg hover:shadow-purple-200"
+                                  onClick={() => toggleApproval(client)}
+                                  className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                                    client.isApproved ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"
                                   }`}
                                 >
-                                  {loggedInClients.has(client._id) ? "Ghost Login" : "Authenticate"}
+                                  {client.isApproved ? <><FaCheckCircle className="mr-1" /> Approved</> : <><FaTimesCircle className="mr-1" /> Pending</>}
                                 </button>
                               </td>
-                              <td className="px-8 py-6">
-                                <div className="flex items-center space-x-4">
-                                   <div className="flex flex-col">
-                                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</span>
-                                      <button 
-                                        onClick={() => toggleApproval(client)}
-                                        className={`mt-1 flex items-center text-xs font-bold ${client.isApproved ? "text-emerald-600" : "text-amber-500"}`}
-                                      >
-                                        {client.isApproved ? <><FaCheckCircle className="mr-1.5" /> Verified</> : <><FaTimesCircle className="mr-1.5" /> Pending</>}
-                                      </button>
-                                   </div>
-                                   <div className="h-8 w-px bg-gray-100 mx-2"></div>
-                                   <div className="flex flex-col">
-                                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">KYC</span>
-                                      <span className="text-[11px] font-mono text-slate-600 mt-1">{client.gstNo ? "GST-Done" : "Empty"}</span>
-                                   </div>
-                                </div>
-                              </td>
-                              <td className="px-8 py-6">
+                              <td className="px-3 py-4 text-center">
+                                <div className="flex items-center justify-center gap-2">
                                   <button
-                                    onClick={() => handleAssignToWorkspace(client._id, isThisWs)}
-                                    className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all flex items-center ${
-                                      isThisWs ? "bg-purple-100 text-purple-600" : "bg-slate-50 text-slate-400 hover:bg-slate-200"
+                                    onClick={() => openClientLogin(client._id, client.email, client.name)}
+                                    disabled={authenticatingClientId === client._id}
+                                    className={`px-3 py-1.5 rounded-md text-xs font-semibold text-white transition-colors ${
+                                      authenticatingClientId === client._id ? "bg-gray-400 cursor-wait" : "bg-red-600 hover:bg-red-700"
                                     }`}
                                   >
-                                    {isThisWs ? <><FaCheck className="mr-2" /> Members</> : <><FaPlus className="mr-2" /> Add</>}
+                                    {authenticatingClientId === client._id ? "Loading..." : "Authenticate"}
                                   </button>
+                                  <button
+                                    onClick={() => handleAssignToWorkspace(client._id, isThisWs)}
+                                    className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${
+                                      isThisWs ? "bg-indigo-100 text-indigo-700" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                                    }`}
+                                  >
+                                    {isThisWs ? "Member" : "+ Add"}
+                                  </button>
+                                </div>
                               </td>
-                              <td className="px-8 py-6 text-center">
-                                <div className="relative inline-block text-left" ref={openSettingsMenu === client._id ? settingsMenuRef : null}>
-                                   <button 
-                                      onClick={() => setOpenSettingsMenu(openSettingsMenu === client._id ? null : client._id)}
-                                      className="h-10 w-10 flex items-center justify-center rounded-xl hover:bg-slate-100 text-slate-400 transition-colors"
-                                   >
-                                      <FaCog />
-                                   </button>
-                                   {openSettingsMenu === client._id && (
-                                     <div className="absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-2xl border border-gray-100 z-50 overflow-hidden scale-in py-2">
-                                        <button onClick={() => { setClientData({ ...client, confirmPassword: client.password }); setEditingClient(client); setShowEditModal(true); setOpenSettingsMenu(null); }} className="w-full px-4 py-2.5 text-left text-sm font-bold text-slate-700 hover:bg-slate-50 flex items-center"><FaEdit className="mr-3 text-slate-400" /> Edit Node</button>
-                                        <button onClick={() => { setOpenSettingsMenu(null); }} className="w-full px-4 py-2.5 text-left text-sm font-bold text-slate-700 hover:bg-slate-50 flex items-center"><FaUserCog className="mr-3 text-slate-400" /> End-user Profile</button>
-                                        <div className="h-px bg-gray-50 my-1"></div>
-                                        <button onClick={() => { setOpenSettingsMenu(null); handleDeleteClient(client._id); }} className="w-full px-4 py-2.5 text-left text-sm font-bold text-red-500 hover:bg-red-50 flex items-center"><FaTrash className="mr-3" /> Decommission</button>
-                                     </div>
-                                   )}
+                              <td className="px-3 py-4 text-center">
+                                <div className="relative inline-block" ref={openSettingsMenu === client._id ? settingsMenuRef : null}>
+                                  <button
+                                    onClick={() => setOpenSettingsMenu(openSettingsMenu === client._id ? null : client._id)}
+                                    className="inline-flex items-center justify-center w-8 h-8 rounded-md hover:bg-gray-100 transition-colors"
+                                  >
+                                    <FaCog className="text-gray-500 text-sm" />
+                                  </button>
+                                  {openSettingsMenu === client._id && (
+                                    <div className="absolute right-0 mt-1 w-36 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
+                                      <button
+                                        onClick={() => { setClientData({ ...client, confirmPassword: "" }); setEditingClient(client); setShowEditModal(true); setOpenSettingsMenu(null); }}
+                                        className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-t-lg"
+                                      >
+                                        <FaEdit className="mr-2 text-blue-500" /> Edit
+                                      </button>
+                                      <button
+                                        onClick={() => { setOpenSettingsMenu(null); handleDeleteClient(client._id); }}
+                                        className="flex items-center w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 rounded-b-lg"
+                                      >
+                                        <FaTrash className="mr-2 text-red-500" /> Delete
+                                      </button>
+                                    </div>
+                                  )}
                                 </div>
                               </td>
                             </tr>
                           );
-                        })
-                      )}
-                    </tbody>
-                  </table>
+                        })}
+                      </tbody>
+                    </table>
+                  )}
                 </div>
               </div>
             </div>
@@ -495,98 +665,181 @@ const WorkspaceDashboard = ({ workspace, onBack }) => {
 
       {/* Registration & Edit Modal */}
       {(showAddModal || showEditModal) && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-4">
-          <div className="bg-white rounded-[48px] w-full max-w-4xl shadow-2xl overflow-hidden max-h-[95vh] flex flex-col scale-in border-[10px] border-white">
-            <div className="px-10 py-8 flex justify-between items-center bg-gray-50/80">
-              <div>
-                <h3 className="text-3xl font-black text-slate-800 tracking-tight">{showEditModal ? "Edit Client Node" : "Node Registration"}</h3>
-                <p className="text-[11px] font-black text-purple-600 uppercase tracking-[3px] mt-1">{showEditModal ? "Modify existing system parameters" : "Initial system deployment configuration"}</p>
+        <div className="fixed inset-0 bg-black/35 z-[100] flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden relative flex flex-col">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-slate-800 to-slate-900 px-6 py-4 flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-slate-700 font-bold">
+                  <FaPlus className="text-sm" />
+                </div>
+                <h2 className="text-xl font-semibold text-white">
+                  {showEditModal ? "Edit Client" : "Add New Client"}
+                </h2>
               </div>
-              <button 
-                onClick={() => { setShowAddModal(false); setShowEditModal(false); setEditingClient(null); }} 
-                className="h-12 w-12 flex items-center justify-center rounded-[20px] bg-white text-slate-400 hover:text-red-500 transition-all shadow-sm border border-gray-100 hover:rotate-90"
+              <button
+                className="text-white hover:text-red-200 transition-colors p-1"
+                onClick={() => { setShowAddModal(false); setShowEditModal(false); setEditingClient(null); }}
               >
-                <FaTimes />
+                <FaTimes size={20} />
               </button>
             </div>
-            
-            <form onSubmit={showEditModal ? handleEditClient : handleCreateClient} className="overflow-y-auto p-10 space-y-10">
-              <div className="space-y-6">
-                <p className="text-[10px] font-black text-slate-300 uppercase tracking-[3px]">Identity & Security</p>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                  <div className="space-y-2">
-                    <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest pl-1">Primary Representative *</label>
-                    <input required value={clientData.name} onChange={(e) => setClientData({...clientData, name: e.target.value})} className="w-full px-5 py-4 bg-gray-50 border-transparent rounded-[24px] focus:bg-white focus:ring-4 focus:ring-purple-500/10 transition-all font-bold" />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest pl-1">Transmission Email *</label>
-                    <input type="email" required value={clientData.email} onChange={(e) => setClientData({...clientData, email: e.target.value})} className="w-full px-5 py-4 bg-gray-50 border-transparent rounded-[24px] focus:bg-white focus:ring-4 focus:ring-purple-500/10 transition-all font-bold" />
-                  </div>
-                  {!showEditModal && (
-                    <>
-                      <div className="space-y-2">
-                        <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest pl-1">Gateway Password *</label>
-                        <input type="password" required value={clientData.password} onChange={(e) => setClientData({...clientData, password: e.target.value})} className="w-full px-5 py-4 bg-gray-50 border-transparent rounded-[24px] focus:bg-white focus:ring-4 focus:ring-purple-500/10 transition-all font-bold" />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest pl-1">Confirm Access *</label>
-                        <input type="password" required value={clientData.confirmPassword} onChange={(e) => setClientData({...clientData, confirmPassword: e.target.value})} className="w-full px-5 py-4 bg-gray-50 border-transparent rounded-[24px] focus:bg-white focus:ring-4 focus:ring-purple-500/10 transition-all font-bold" />
-                      </div>
-                    </>
-                  )}
-                  <div className="space-y-2">
-                    <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest pl-1">Mobile Uplink *</label>
-                    <input type="tel" required value={clientData.mobileNo} onChange={(e) => setClientData({...clientData, mobileNo: e.target.value})} className="w-full px-5 py-4 bg-gray-50 border-transparent rounded-[24px] focus:bg-white focus:ring-4 focus:ring-purple-500/10 transition-all font-bold" />
-                  </div>
-                </div>
-              </div>
 
-              <div className="space-y-6">
-                <p className="text-[10px] font-black text-slate-300 uppercase tracking-[3px]">Business & Compliance</p>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                  <div className="space-y-2">
-                    <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest pl-1">Legal Entity Name *</label>
-                    <input required value={clientData.businessName} onChange={(e) => setClientData({...clientData, businessName: e.target.value})} className="w-full px-5 py-4 bg-gray-50 border-transparent rounded-[24px] focus:bg-white focus:ring-4 focus:ring-purple-500/10 transition-all font-bold" />
+            <form onSubmit={showEditModal ? handleEditClient : handleCreateClient} className="overflow-y-auto flex-1 p-6">
+              {/* Business Information */}
+              <div className="mb-6">
+                <h3 className="text-base font-semibold text-gray-800 mb-4 pb-2 border-b border-gray-200">Business Information</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Business Name *</label>
+                    <input type="text" required value={clientData.businessName} onChange={(e) => setClientData({...clientData, businessName: e.target.value})}
+                      className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors text-sm" placeholder="Enter business name" />
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest pl-1">GST/TAX ID</label>
-                    <input value={clientData.gstNo} onChange={(e) => setClientData({...clientData, gstNo: e.target.value})} className="w-full px-5 py-4 bg-gray-50 border-transparent rounded-[24px] focus:bg-white focus:ring-4 focus:ring-purple-500/10 transition-all font-bold" placeholder="Optional" />
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Website URL</label>
+                    <input type="url" value={clientData.websiteUrl} onChange={(e) => setClientData({...clientData, websiteUrl: e.target.value})}
+                      className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors text-sm" placeholder="https://example.com" />
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest pl-1">PAN Card No</label>
-                    <input value={clientData.panNo} onChange={(e) => setClientData({...clientData, panNo: e.target.value})} className="w-full px-5 py-4 bg-gray-50 border-transparent rounded-[24px] focus:bg-white focus:ring-4 focus:ring-purple-500/10 transition-all font-bold" placeholder="Optional" />
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">GST Number</label>
+                    <input type="text" value={clientData.gstNo} onChange={(e) => setClientData({...clientData, gstNo: e.target.value})}
+                      className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors text-sm" placeholder="Enter GST number" />
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest pl-1">Operating City *</label>
-                    <input required value={clientData.city} onChange={(e) => setClientData({...clientData, city: e.target.value})} className="w-full px-5 py-4 bg-gray-50 border-transparent rounded-[24px] focus:bg-white focus:ring-4 focus:ring-purple-500/10 transition-all font-bold" />
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">PAN Number</label>
+                    <input type="text" value={clientData.panNo} onChange={(e) => setClientData({...clientData, panNo: e.target.value})}
+                      className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors text-sm" placeholder="Enter PAN number" />
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest pl-1">Pincode *</label>
-                    <input required value={clientData.pincode} onChange={(e) => setClientData({...clientData, pincode: e.target.value})} className="w-full px-5 py-4 bg-gray-50 border-transparent rounded-[24px] focus:bg-white focus:ring-4 focus:ring-purple-500/10 transition-all font-bold" />
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Business Logo</label>
+                    <div className="w-full px-4 py-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-red-500 transition-colors">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-red-50 file:text-red-700 hover:file:bg-red-100"
+                        onChange={async (e) => {
+                          const file = e.target.files[0];
+                          if (!file) return;
+                          try {
+                            const res = await fetch(`${API_BASE_URL}/client/upload-url?fileName=${encodeURIComponent(file.name)}&fileType=${encodeURIComponent(file.type)}`);
+                            const data = await res.json();
+                            if (data.success && data.url && data.key) {
+                              await fetch(data.url, { method: "PUT", headers: { "Content-Type": file.type }, body: file });
+                              setClientData(prev => ({ ...prev, businessLogoUrl: data.url.split("?")[0], businessLogoKey: data.key }));
+                            } else {
+                              alert("Failed to get upload URL");
+                            }
+                          } catch {
+                            alert("Error uploading logo");
+                          }
+                        }}
+                      />
+                      {clientData.businessLogoUrl ? (
+                        <div className="mt-2 flex items-center gap-2">
+                          <img src={clientData.businessLogoUrl} alt="logo preview" className="h-10 w-10 rounded-full object-cover border border-gray-200" />
+                          <span className="text-xs text-green-600 font-medium">Logo uploaded</span>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-gray-400 mt-1">PNG, JPG up to 10MB</p>
+                      )}
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest pl-1">Node Type</label>
-                    <select value={clientData.clientType} onChange={(e) => setClientData({...clientData, clientType: e.target.value})} className="w-full px-5 py-4 bg-gray-50 border-transparent rounded-[24px] focus:bg-white focus:ring-4 focus:ring-purple-500/10 transition-all font-bold appearance-none">
-                       <option value="new">New</option>
-                       <option value="prime">Prime</option>
-                       <option value="demo">Demo</option>
-                       <option value="testing">Testing</option>
-                       <option value="owned">In-house</option>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Client Type</label>
+                    <select value={clientData.clientType} onChange={(e) => setClientData({...clientData, clientType: e.target.value})}
+                      className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors text-sm">
+                      <option value="new">New</option>
+                      <option value="prime">Prime</option>
+                      <option value="demo">Demo</option>
+                      <option value="testing">Testing</option>
+                      <option value="owned">In-house</option>
+                      <option value="rejected">Rejected</option>
                     </select>
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest pl-1">Base of Operations *</label>
-                  <textarea required value={clientData.address} onChange={(e) => setClientData({...clientData, address: e.target.value})} className="w-full px-5 py-4 bg-gray-50 border-transparent rounded-[32px] focus:bg-white focus:ring-4 focus:ring-purple-500/10 transition-all font-bold min-h-[120px]" />
+              </div>
+
+              {/* Personal Information */}
+              <div className="mb-6">
+                <h3 className="text-base font-semibold text-gray-800 mb-4 pb-2 border-b border-gray-200">Personal Information</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Full Name *</label>
+                    <input type="text" required value={clientData.name} onChange={(e) => setClientData({...clientData, name: e.target.value})}
+                      className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors text-sm" placeholder="Enter full name" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Email Address *</label>
+                    <input type="email" required value={clientData.email} onChange={(e) => setClientData({...clientData, email: e.target.value})}
+                      className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors text-sm" placeholder="Enter email" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Mobile Number *</label>
+                    <input type="tel" required value={clientData.mobileNo} onChange={(e) => setClientData({...clientData, mobileNo: e.target.value})}
+                      className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors text-sm" placeholder="Enter mobile number" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">City *</label>
+                    <input type="text" required value={clientData.city} onChange={(e) => setClientData({...clientData, city: e.target.value})}
+                      className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors text-sm" placeholder="Enter city" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Pincode *</label>
+                    <input type="text" required value={clientData.pincode} onChange={(e) => setClientData({...clientData, pincode: e.target.value})}
+                      className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors text-sm" placeholder="Enter pincode" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
+                    <input type="text" value={clientData.address} onChange={(e) => setClientData({...clientData, address: e.target.value})}
+                      className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors text-sm" placeholder="Enter address" />
+                  </div>
                 </div>
               </div>
 
-              <div className="pt-6">
-                 <button type="submit" disabled={isSubmitting} className="w-full bg-slate-900 text-white font-black py-6 rounded-[32px] hover:bg-black transition-all shadow-2xl shadow-slate-200 active:scale-[0.98] disabled:opacity-50 flex items-center justify-center space-x-3 text-sm tracking-widest uppercase">
-                   {isSubmitting ? <div className="h-5 w-5 border-3 border-white border-t-transparent rounded-full animate-spin"></div> : <><FaCheck /> <span>Commit Configuration</span></>}
-                 </button>
-              </div>
+              {/* Password - only on Add */}
+              {!showEditModal && (
+                <div className="mb-6">
+                  <h3 className="text-base font-semibold text-gray-800 mb-4 pb-2 border-b border-gray-200">Account Security</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Password *</label>
+                      <input type="password" required value={clientData.password} onChange={(e) => setClientData({...clientData, password: e.target.value})}
+                        className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors text-sm" placeholder="Enter password" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Confirm Password *</label>
+                      <input type="password" required value={clientData.confirmPassword} onChange={(e) => setClientData({...clientData, confirmPassword: e.target.value})}
+                        className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors text-sm" placeholder="Confirm password" />
+                    </div>
+                  </div>
+                </div>
+              )}
             </form>
+
+            {/* Footer */}
+            <div className="bg-gray-50 px-6 py-4 flex items-center justify-between border-t border-gray-200">
+              <p className="text-sm text-gray-500">* Required fields</p>
+              <div className="flex space-x-3">
+                <button
+                  type="button"
+                  className="px-6 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium text-sm"
+                  onClick={() => { setShowAddModal(false); setShowEditModal(false); setEditingClient(null); }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  form="clientForm"
+                  disabled={isSubmitting}
+                  onClick={(e) => { showEditModal ? handleEditClient(e) : handleCreateClient(e); }}
+                  className={`px-6 py-2 rounded-lg transition-colors font-medium text-sm shadow-sm ${
+                    isSubmitting ? "bg-gray-400 text-white cursor-not-allowed" : "bg-red-600 text-white hover:bg-red-700"
+                  }`}
+                >
+                  {isSubmitting ? "Saving..." : showEditModal ? "Save Changes" : "Submit"}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
