@@ -38,13 +38,81 @@ import DistributionTool from "./components/DistributionTool";
 const AiTotaLogo = "/AitotaLogo.png";
 import PlansBrowse from "./components/PlansBrowse";
 import Pricing from "./components/Pricing";
+import { FiUser } from "react-icons/fi";
 
-function ClientDashboard({ onLogout, clientId: propClientId }) {
+function ProfileDetails({ clientId, clientInfo }) {
+  const [profile, setProfile] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      try {
+        const token = sessionStorage.getItem("clienttoken");
+        if (!token) return;
+        const res = await fetch(`${API_BASE_URL}/client/profile`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json();
+        if (data.success && data.data) setProfile(data.data);
+      } catch (e) {
+        console.error("Error fetching profile:", e);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchProfile();
+  }, [clientId]);
+
+  if (loading) return <div className="py-8 text-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-800 mx-auto"></div></div>;
+
+  const data = profile || clientInfo || {};
+  const fields = [
+    { label: "Full Name", value: data.name },
+    { label: "Email Address", value: data.email },
+    { label: "Mobile Number", value: data.mobileNo },
+    { label: "Business Name", value: data.businessName },
+    { label: "City", value: data.city },
+    { label: "Pincode", value: data.pincode },
+    { label: "Address", value: data.address },
+    { label: "Website", value: data.websiteUrl },
+    { label: "GST Number", value: data.gstNo },
+    { label: "PAN Number", value: data.panNo },
+    { label: "Profession", value: data.profession },
+    { label: "Date of Birth", value: data.dateOfBirth ? new Date(data.dateOfBirth).toLocaleDateString("en-IN") : null },
+    { label: "Member Since", value: data.createdAt ? new Date(data.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "long", year: "numeric" }) : null },
+    { label: "Account Status", value: data.isApproved ? "✓ Approved" : "⏳ Pending" },
+  ].filter(f => f.value);
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {fields.map(({ label, value }) => (
+        <div key={label} className="bg-gray-50 rounded-xl p-4">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">{label}</p>
+          <p className="text-sm font-medium text-gray-800 break-all">{value}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ClientDashboard({ onLogout, clientId: propClientId, dashboardMode = "client" }) {
+  const isUserDashboard = dashboardMode === "user";
   // Try to get clientId from props, sessionStorage, or clientData
   const sessionClientData = sessionStorage.getItem("clientData");
   const sessionClientId = sessionClientData
     ? JSON.parse(sessionClientData).clientId
     : null;
+  const sessionWorkspaceName = sessionClientData
+    ? JSON.parse(sessionClientData).workspaceName || null
+    : null;
+  const sessionWorkspaceBusinessName = sessionClientData
+    ? JSON.parse(sessionClientData).workspaceBusinessName || null
+    : null;
+
+  // Fallback: read from pendingWorkspaceData if clientData doesn't have workspace info
+  const pendingWsRaw = sessionStorage.getItem("pendingWorkspaceData");
+  const pendingWs = pendingWsRaw ? (() => { try { return JSON.parse(pendingWsRaw); } catch { return {}; } })() : {};
+  const resolvedWorkspaceName = (sessionClientData ? JSON.parse(sessionClientData).workspaceName : null) || pendingWs.workspaceName || null;
   const [currentClient, setCurrentClient] = useState(
     propClientId || sessionClientId || ""
   );
@@ -634,6 +702,33 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
       case "mydials":
         return <MyDials />;
 
+      case "profile":
+        return (
+          <div className="h-full p-8 overflow-y-auto">
+            <div className="max-w-2xl mx-auto">
+              {/* Profile Header Card */}
+              <div className="bg-gradient-to-r from-slate-800 to-slate-900 rounded-2xl overflow-hidden mb-6 shadow-lg">
+                <div className="px-8 py-10 text-center">
+                  <div className="w-20 h-20 rounded-full bg-white/20 flex items-center justify-center text-white font-bold text-3xl mx-auto mb-4 shadow-lg">
+                    {(clientInfo?.name?.[0] || clientInfo?.businessName?.[0] || "U").toUpperCase()}
+                  </div>
+                  <h2 className="text-xl font-bold text-white">{clientInfo?.name || "User"}</h2>
+                  <p className="text-slate-300 text-sm mt-1">{clientInfo?.email || ""}</p>
+                  {clientInfo?.businessName && (
+                    <p className="text-slate-400 text-xs mt-1">{clientInfo.businessName}</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Profile Details */}
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+                <h3 className="text-base font-bold text-gray-700 mb-4 pb-2 border-b border-gray-100">Account Information</h3>
+                <ProfileDetails clientId={currentClient} clientInfo={clientInfo} />
+              </div>
+            </div>
+          </div>
+        );
+
       case "credits":
         return <CreditsOverview />;
 
@@ -831,7 +926,7 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
         console.error("Error parsing client data:", error);
       }
     }
-    return <div>Please log in as a client to view your dashboard.</div>;
+    return <div>Please log in to view your dashboard.</div>;
   }
 
   // Show loading while fetching data
@@ -914,7 +1009,7 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
               />
               <div className="flex-1 min-w-0">
                 <h1 className="text-2xl font-bold text-white leading-tight truncate">
-                  Client Portal
+                  {resolvedWorkspaceName || (isUserDashboard ? "User Portal" : "Client Portal")}
                 </h1>
               </div>
             </div>
@@ -960,7 +1055,7 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
             >
               <span className="hidden"></span>
               <FiArrowDownLeft className="text-xl w-6 text-center" />
-              <span className="flex-1 font-medium">InBound</span>
+              <span className="flex-1 font-medium">{isUserDashboard ? "AI Calls Inbound" : "InBound"}</span>
             </button>
 
             <button
@@ -974,22 +1069,24 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
             >
               <span className="hidden"></span>
               <FiArrowUpRight className="text-xl w-6 text-center" />
-              <span className="flex-1 font-medium">Outbound</span>
+              <span className="flex-1 font-medium">{isUserDashboard ? "AI Calls Outbound" : "Outbound"}</span>
             </button>
 
-            <button
-              className={`relative flex items-center w-full px-6 py-4 text-left transition-all duration-200 gap-3 ${
-                activeSection === "human_agent"
-                  ? "bg-gray-100 text-gray-900 border-r-4 border-gray-800 font-semibold"
-                  : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-              }`}
-              aria-current={activeSection === "human_agent" ? "page" : undefined}
-              onClick={() => handleSectionChange("human_agent")}
-            >
-              <span className="hidden"></span>
-              <FiUserCheck className="text-xl w-6 text-center" />
-              <span className="flex-1 font-medium">Team</span>
-            </button>
+            {!isUserDashboard && (
+              <button
+                className={`relative flex items-center w-full px-6 py-4 text-left transition-all duration-200 gap-3 ${
+                  activeSection === "human_agent"
+                    ? "bg-gray-100 text-gray-900 border-r-4 border-gray-800 font-semibold"
+                    : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                }`}
+                aria-current={activeSection === "human_agent" ? "page" : undefined}
+                onClick={() => handleSectionChange("human_agent")}
+              >
+                <span className="hidden"></span>
+                <FiUserCheck className="text-xl w-6 text-center" />
+                <span className="flex-1 font-medium">Team</span>
+              </button>
+            )}
 
             <button
               className={`relative flex items-center w-full px-6 py-4 text-left transition-all duration-200 gap-3 ${
@@ -1049,17 +1146,32 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
 
             <button
               className={`relative flex items-center w-full px-6 py-4 text-left transition-all duration-200 gap-3 ${
-                activeSection === "api-settings"
+                activeSection === "profile"
                   ? "bg-gray-100 text-gray-900 border-r-4 border-gray-800 font-semibold"
                   : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
               }`}
-              aria-current={activeSection === "api-settings" ? "page" : undefined}
-              onClick={() => handleSectionChange("api-settings")}
+              aria-current={activeSection === "profile" ? "page" : undefined}
+              onClick={() => handleSectionChange("profile")}
             >
-              <span className="hidden"></span>
-              <FiSettings className="text-xl w-6 text-center" />
-              <span className="flex-1 font-medium">API Settings</span>
+              <FiUser className="text-xl w-6 text-center" />
+              <span className="flex-1 font-medium">Profile</span>
             </button>
+
+            {!isUserDashboard && (
+              <button
+                className={`relative flex items-center w-full px-6 py-4 text-left transition-all duration-200 gap-3 ${
+                  activeSection === "api-settings"
+                    ? "bg-gray-100 text-gray-900 border-r-4 border-gray-800 font-semibold"
+                    : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                }`}
+                aria-current={activeSection === "api-settings" ? "page" : undefined}
+                onClick={() => handleSectionChange("api-settings")}
+              >
+                <span className="hidden"></span>
+                <FiSettings className="text-xl w-6 text-center" />
+                <span className="flex-1 font-medium">API Settings</span>
+              </button>
+            )}
           </nav>
 
           <div className="p-4 border-t border-gray-200">
@@ -1128,7 +1240,7 @@ function ClientDashboard({ onLogout, clientId: propClientId }) {
                       <p className="text-sm font-semibold text-gray-800 truncate">{clientInfo?.name || 'Client'}</p>
                       <p className="text-xs text-gray-500 truncate">{clientInfo?.email || ''}</p>
                       {clientInfo?.businessName && (
-                        <p className="text-xs text-gray-400 truncate mt-0.5">{clientInfo.businessName}</p>
+                        <p className="text-xs text-gray-400 truncate mt-0.5">{sessionWorkspaceBusinessName || clientInfo.businessName}</p>
                       )}
                     </div>
                     <button

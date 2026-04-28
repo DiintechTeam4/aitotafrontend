@@ -144,7 +144,10 @@ const UserDashboard = ({ onLogout }) => {
       >
         <div className="flex justify-between items-center p-4 border-b border-blue-800">
           {isSidebarOpen && (
-            <h4 className="m-0 font-semibold text-lg">User Panel</h4>
+            <div className="flex items-center gap-2">
+              <img src="/AitotaLogo.png" alt="AiTota" className="h-8 w-8 rounded-lg object-cover" />
+              <h4 className="m-0 font-semibold text-lg">User Portal</h4>
+            </div>
           )}
           <button
             className="text-white hover:text-gray-300 focus:outline-none"
@@ -266,42 +269,46 @@ const UserDashboard = ({ onLogout }) => {
 
             {activeTab === "Profile" && (
               <div className="space-y-4">
-                <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
-                  <h3 className="text-xl font-semibold text-gray-800 mb-4">
-                    Profile Information
-                  </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {user &&
-                      Object.entries(user).map(([key, value]) => (
-                        <div key={key} className="mb-2">
-                          <label className="block text-sm font-medium text-gray-700">
-                            {key}
-                          </label>
-                          <input
-                            type="text"
-                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-gray-100"
-                            value={
-                              typeof value === "object"
-                                ? JSON.stringify(value)
-                                : String(value)
-                            }
-                            readOnly
-                          />
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                  {/* Profile Header */}
+                  <div className="bg-gradient-to-r from-indigo-600 to-purple-600 px-8 py-10 text-center">
+                    <div className="w-20 h-20 rounded-full bg-white/20 flex items-center justify-center text-white font-bold text-3xl mx-auto mb-3 shadow-lg">
+                      {(user?.name?.[0] || "U").toUpperCase()}
+                    </div>
+                    <h2 className="text-xl font-bold text-white">{user?.name || "User"}</h2>
+                    <p className="text-indigo-200 text-sm mt-1">{user?.email || ""}</p>
+                    {user?.isApproved !== undefined && (
+                      <span className={`inline-block mt-2 px-3 py-1 rounded-full text-xs font-semibold ${
+                        user.isApproved ? "bg-green-400/20 text-green-100" : "bg-yellow-400/20 text-yellow-100"
+                      }`}>
+                        {user.isApproved ? "✓ Approved" : "⏳ Pending Approval"}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Profile Details */}
+                  <div className="p-8">
+                    <h3 className="text-base font-bold text-gray-700 mb-4 pb-2 border-b border-gray-100">Personal Information</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                      {[
+                        { label: "Full Name", value: user?.name },
+                        { label: "Email Address", value: user?.email },
+                        { label: "Mobile Number", value: user?.mobileNo },
+                        { label: "Business Name", value: user?.businessName },
+                        { label: "City", value: user?.city },
+                        { label: "Pincode", value: user?.pincode },
+                        { label: "Address", value: user?.address },
+                        { label: "Website", value: user?.websiteUrl },
+                        { label: "Profession", value: user?.profession },
+                        { label: "Date of Birth", value: user?.dateOfBirth ? new Date(user.dateOfBirth).toLocaleDateString("en-IN") : null },
+                        { label: "Member Since", value: user?.createdAt ? new Date(user.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "long", year: "numeric" }) : null },
+                      ].filter(f => f.value).map(({ label, value }) => (
+                        <div key={label} className="bg-gray-50 rounded-xl p-4">
+                          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">{label}</p>
+                          <p className="text-sm font-medium text-gray-800 break-all">{value}</p>
                         </div>
                       ))}
-                  </div>
-                  {/* Prompts for incomplete profiles */}
-                  <div className="mt-6 space-y-2">
-                    {user && user.isBasicProfileCompleted === false && (
-                      <button className="bg-yellow-500 text-white px-4 py-2 rounded shadow hover:bg-yellow-600">
-                        Complete Basic Profile
-                      </button>
-                    )}
-                    {user && user.isStylePreferenceCompleted === false && (
-                      <button className="bg-pink-500 text-white px-4 py-2 rounded shadow hover:bg-pink-600">
-                        Complete Style Profile
-                      </button>
-                    )}
+                    </div>
                   </div>
                 </div>
               </div>

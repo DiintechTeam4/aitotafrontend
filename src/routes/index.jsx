@@ -68,6 +68,7 @@ import AitotaBottomNav  from "../aitota-components/BottomNav";
 import AdminAuthLayout      from "../component/auth/AdminAuthLayout";
 import AuthLayout           from "../component/auth/AuthLayout";
 import SuperAdminAuthLayout from "../component/auth/SuperAdminAuthLayout";
+import UserAuthLayout       from "../component/auth/UserAuthLayout";
 
 // ── Dashboards ─────────────────────────────────────────────
 import AdminDashboard      from "../component/dashboards/AdminDashboard";
@@ -273,7 +274,7 @@ function WorkspaceRoutes() {
 // ══════════════════════════════════════════════════════════
 //  CLIENT + HUMAN AGENT ROUTES  (/client  &  /human-agents)
 // ══════════════════════════════════════════════════════════
-function UserRoutes({ loginPath, dashboardPath }) {
+function UserRoutes({ loginPath, dashboardPath, dashboardMode = "client", loginLayout: LoginLayout }) {
   const navigate = useNavigate();
   const [isAuth, setIsAuth]   = useState(false);
   const [role, setRole]       = useState(null);
@@ -345,7 +346,7 @@ function UserRoutes({ loginPath, dashboardPath }) {
     const clientData = JSON.parse(sessionStorage.getItem("clientData") || "{}");
     const userData   = JSON.parse(sessionStorage.getItem("userData")   || "{}");
     if (role === "client")
-      return <ClientDashboard onLogout={handleLogout} clientId={clientData?.clientId} />;
+      return <ClientDashboard onLogout={handleLogout} clientId={clientData?.clientId} dashboardMode={dashboardMode} />;
     if (["humanAgent","HumanAgent","executive"].includes(role))
       return <HumanAgentDashboard onLogout={handleLogout} userData={userData} />;
     return <Navigate to={loginPath} replace />;
@@ -356,7 +357,7 @@ function UserRoutes({ loginPath, dashboardPath }) {
   return (
     <Routes>
       <Route path=""          element={<Navigate to={loginPath} replace />} />
-      <Route path="login"     element={isAuth ? <Navigate to={dashboardPath} replace /> : <AuthLayout onLogin={handleLogin} />} />
+      <Route path="login"     element={isAuth ? <Navigate to={dashboardPath} replace /> : (LoginLayout ? <LoginLayout onLogin={handleLogin} /> : <AuthLayout onLogin={handleLogin} />)} />
       <Route path="register"   element={isAuth ? <Navigate to={dashboardPath} replace /> : <AuthLayout onLogin={handleLogin} defaultStep="register" />} />
       <Route path="dashboard" element={
         <ProtectedRoute isAuth={isAuth} redirectTo={loginPath}>
@@ -448,6 +449,10 @@ export default function AppRoutes() {
         {/* /client/dashboard  →  client dashboard        */}
         <Route path="/client/*" element={
           <UserRoutes loginPath="/client/login" dashboardPath="/client/dashboard" />
+        } />
+
+        <Route path="/user/*" element={
+          <UserRoutes loginPath="/user/login" dashboardPath="/user/dashboard" dashboardMode="user" loginLayout={UserAuthLayout} />
         } />
 
         {/* ── HUMAN AGENTS ────────────────────────────── */}

@@ -156,7 +156,10 @@ const WorkspaceDashboard = ({ workspace, onBack }) => {
       const payload = {
         ...clientData,
         workspaceId: workspace._id,
-        businessLogoKey: String(clientData.businessLogoKey || "").trim() || `external-logo-${Date.now()}`,
+        // Only set businessLogoKey if user actually uploaded an image
+        businessLogoKey: String(clientData.businessLogoKey || "").trim().startsWith('external-logo-') 
+          ? "" 
+          : String(clientData.businessLogoKey || "").trim(),
       };
       if (isUsersTab) {
         const suffix = Date.now().toString().slice(-6);
@@ -197,13 +200,31 @@ const WorkspaceDashboard = ({ workspace, onBack }) => {
     e.preventDefault();
     setIsSubmitting(true);
     try {
+      const payload = {
+        name: clientData.name,
+        businessName: clientData.businessName,
+        email: clientData.email,
+        mobileNo: clientData.mobileNo,
+        city: clientData.city,
+        pincode: clientData.pincode,
+        address: clientData.address,
+        websiteUrl: clientData.websiteUrl,
+        gstNo: clientData.gstNo,
+        panNo: clientData.panNo,
+        clientType: clientData.clientType,
+        dateOfBirth: clientData.dateOfBirth,
+        profession: clientData.profession,
+      };
+      // Only send businessLogoKey if it's a real R2 key (not empty, not a presigned URL)
+      const key = String(clientData.businessLogoKey || '').trim();
+      if (key && !key.includes('?') && !key.startsWith('external-logo-')) {
+        payload.businessLogoKey = key;
+      }
+
       const response = await fetch(`${API_BASE_URL}/admin/update-client/${editingClient._id}`, {
         method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify(clientData)
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify(payload)
       });
       const data = await parseApiResponse(response);
       if (response.ok && data.success) {
@@ -332,6 +353,9 @@ const WorkspaceDashboard = ({ workspace, onBack }) => {
         name: name || "",
         email: email || "",
         clientId: clientId,
+        workspaceId: workspace._id,
+        workspaceName: workspace.name,
+        workspaceBusinessName: workspace.businessName || workspace.name,
       });
 
       const newWindow = window.open("about:blank", "_blank");
@@ -341,11 +365,16 @@ const WorkspaceDashboard = ({ workspace, onBack }) => {
       }
 
       newWindow.document.open();
+      // HelloPaai, AiVani, DailAI = user dashboard | AiTota = client dashboard
+      const wsName = String(workspace.name || '').trim().toLowerCase().replace(/\s+/g, '');
+      const userWorkspaces = ['hellopaai', 'aivani', 'dailai'];
+      const targetDashboard = userWorkspaces.includes(wsName) ? '/user/dashboard' : '/client/dashboard';
       newWindow.document.write(`<html><head><title>Loading...</title><script>
         sessionStorage.clear();
         sessionStorage.setItem('clienttoken', ${JSON.stringify(data.token)});
         sessionStorage.setItem('clientData', ${JSON.stringify(clientData)});
-        window.location.replace('/client/dashboard');
+        sessionStorage.setItem('pendingWorkspaceData', ${JSON.stringify(JSON.stringify({ workspaceName: workspace.name, workspaceBusinessName: workspace.businessName || workspace.name, workspaceId: workspace._id }))});
+        window.location.replace(${JSON.stringify(targetDashboard)});
       <\/script></head><body><p>Loading...</p></body></html>`);
       newWindow.document.close();
     } catch (e) {
@@ -720,7 +749,18 @@ const WorkspaceDashboard = ({ workspace, onBack }) => {
                                         <FaEye className="mr-2 text-indigo-500" /> View
                                       </button>
                                       <button
-                                        onClick={() => { setClientData({ ...client, confirmPassword: "" }); setEditingClient(client); setShowEditModal(true); setOpenSettingsMenu(null); }}
+                                        onClick={() => { 
+                                          setClientData({ 
+                                            ...client, 
+                                            confirmPassword: "",
+                                            // Preserve the key, strip presigned URL
+                                            businessLogoKey: client.businessLogoKey || "",
+                                            businessLogoUrl: client.businessLogoUrl || ""
+                                          }); 
+                                          setEditingClient(client); 
+                                          setShowEditModal(true); 
+                                          setOpenSettingsMenu(null); 
+                                        }}
                                         className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                                       >
                                         <FaEdit className="mr-2 text-blue-500" /> Edit
@@ -896,7 +936,17 @@ const WorkspaceDashboard = ({ workspace, onBack }) => {
                                         <FaEye className="mr-2 text-indigo-500" /> View
                                       </button>
                                       <button
-                                        onClick={() => { setClientData({ ...client, confirmPassword: "" }); setEditingClient(client); setShowEditModal(true); setOpenSettingsMenu(null); }}
+                                        onClick={() => { 
+                                          setClientData({ 
+                                            ...client, 
+                                            confirmPassword: "",
+                                            businessLogoKey: client.businessLogoKey || "",
+                                            businessLogoUrl: client.businessLogoUrl || ""
+                                          }); 
+                                          setEditingClient(client); 
+                                          setShowEditModal(true); 
+                                          setOpenSettingsMenu(null); 
+                                        }}
                                         className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                                       >
                                         <FaEdit className="mr-2 text-blue-500" /> Edit
@@ -963,7 +1013,12 @@ const WorkspaceDashboard = ({ workspace, onBack }) => {
                   <button
                     type="button"
                     onClick={() => {
-                      setClientData({ ...viewingClient, confirmPassword: "" });
+                      setClientData({ 
+                        ...viewingClient, 
+                        confirmPassword: "",
+                        businessLogoKey: viewingClient.businessLogoKey || "",
+                        businessLogoUrl: viewingClient.businessLogoUrl || ""
+                      });
                       setEditingClient(viewingClient);
                       setShowEditModal(true);
                       setViewingClient(null);
@@ -1110,7 +1165,7 @@ const WorkspaceDashboard = ({ workspace, onBack }) => {
                             const data = await res.json();
                             if (data.success && data.url && data.key) {
                               await fetch(data.url, { method: "PUT", headers: { "Content-Type": file.type }, body: file });
-                              setClientData(prev => ({ ...prev, businessLogoUrl: data.url.split("?")[0], businessLogoKey: data.key }));
+                              setClientData(prev => ({ ...prev, businessLogoKey: data.key, businessLogoUrl: data.url }));
                             } else {
                               alert("Failed to get upload URL");
                             }
@@ -1122,7 +1177,7 @@ const WorkspaceDashboard = ({ workspace, onBack }) => {
                       {clientData.businessLogoUrl ? (
                         <div className="mt-2 flex items-center gap-2">
                           <img src={clientData.businessLogoUrl} alt="logo preview" className="h-10 w-10 rounded-full object-cover border border-gray-200" />
-                          <span className="text-xs text-green-600 font-medium">Logo uploaded</span>
+                          <span className="text-xs text-green-600 font-medium">Logo uploaded ✓</span>
                         </div>
                       ) : (
                         <p className="text-xs text-gray-400 mt-1">PNG, JPG up to 10MB</p>
@@ -1179,6 +1234,64 @@ const WorkspaceDashboard = ({ workspace, onBack }) => {
                     <input type="text" value={clientData.address} onChange={(e) => setClientData({...clientData, address: e.target.value})}
                       className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors text-sm" placeholder="Enter address" />
                   </div>
+                  {isUsersTab && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">User Image</label>
+                      <div className="w-full px-4 py-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-red-500 transition-colors">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-red-50 file:text-red-700 hover:file:bg-red-100"
+                          onChange={async (e) => {
+                            const file = e.target.files[0];
+                            if (!file) return;
+                            try {
+                              const res = await fetch(`${API_BASE_URL}/client/upload-url?fileName=${encodeURIComponent(file.name)}&fileType=${encodeURIComponent(file.type)}`);
+                              const data = await res.json();
+                              if (data.success && data.url && data.key) {
+                                await fetch(data.url, { method: "PUT", headers: { "Content-Type": file.type }, body: file });
+                                // Store key for saving, store full signed URL for preview only
+                                setClientData(prev => ({ 
+                                  ...prev, 
+                                  businessLogoKey: data.key,
+                                  businessLogoUrl: data.url // full signed URL for preview
+                                }));
+                              } else {
+                                alert("Failed to get upload URL");
+                              }
+                            } catch {
+                              alert("Error uploading image");
+                            }
+                          }}
+                        />
+                        {clientData.businessLogoUrl ? (
+                          <div className="mt-2 flex items-center gap-2">
+                            <img src={clientData.businessLogoUrl} alt="user preview" className="h-10 w-10 rounded-full object-cover border border-gray-200" />
+                            <span className="text-xs text-green-600 font-medium">Image uploaded ✓</span>
+                          </div>
+                        ) : (
+                          <p className="text-xs text-gray-400 mt-1">PNG, JPG up to 10MB</p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  {isUsersTab && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Account Type</label>
+                      <select
+                        value={clientData.clientType}
+                        onChange={(e) => setClientData({ ...clientData, clientType: e.target.value })}
+                        className="w-full px-4 py-2.5 rounded-lg border border-gray-300 focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors text-sm"
+                      >
+                        <option value="new">New</option>
+                        <option value="prime">Prime</option>
+                        <option value="demo">Demo</option>
+                        <option value="testing">Testing</option>
+                        <option value="owned">In-house</option>
+                        <option value="rejected">Rejected</option>
+                      </select>
+                    </div>
+                  )}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Date of Birth</label>
                     <input
