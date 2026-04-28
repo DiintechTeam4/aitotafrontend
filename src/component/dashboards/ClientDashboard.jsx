@@ -20,6 +20,7 @@ import {
   FiCopy,
   FiMenu,
   FiX,
+  FiChevronDown,
 } from "react-icons/fi";
 import AgentForm from "./components/AgentForm";
 import AgentList from "./components/AgentList";
@@ -136,6 +137,9 @@ function ClientDashboard({ onLogout, clientId: propClientId, dashboardMode = "cl
     return localStorage.getItem("clientDashboard_activeTab") || "list";
   });
   const [apiSettingsTab, setApiSettingsTab] = useState("docs");
+  const [aiCallsOpen, setAiCallsOpen] = useState(
+    activeSection === "bond" || activeSection === "outbound"
+  );
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showClientDropdown, setShowClientDropdown] = useState(false);
   const [apiKey, setApiKey] = useState("");
@@ -340,6 +344,9 @@ function ClientDashboard({ onLogout, clientId: propClientId, dashboardMode = "cl
   const handleSectionChange = (section) => {
     persistSectionChange(section);
     setIsMobileMenuOpen(false);
+    if (section === "bond" || section === "outbound") {
+      setAiCallsOpen(true);
+    }
   };
 
   // API Key functions
@@ -1044,33 +1051,47 @@ function ClientDashboard({ onLogout, clientId: propClientId, dashboardMode = "cl
               <span className="flex-1 font-medium">AI Agents</span>
             </button>
 
-            <button
-              className={`relative flex items-center w-full px-6 py-4 text-left transition-all duration-200 gap-3 ${
-                activeSection === "bond"
-                  ? "bg-gray-100 text-gray-900 border-r-4 border-gray-800 font-semibold"
-                  : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-              }`}
-              aria-current={activeSection === "bond" ? "page" : undefined}
-              onClick={() => handleSectionChange("bond")}
-            >
-              <span className="hidden"></span>
-              <FiArrowDownLeft className="text-xl w-6 text-center" />
-              <span className="flex-1 font-medium">{isUserDashboard ? "AI Calls Inbound" : "InBound"}</span>
-            </button>
-
-            <button
-              className={`relative flex items-center w-full px-6 py-4 text-left transition-all duration-200 gap-3 ${
-                activeSection === "outbound"
-                  ? "bg-gray-100 text-gray-900 border-r-4 border-gray-800 font-semibold"
-                  : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-              }`}
-              aria-current={activeSection === "outbound" ? "page" : undefined}
-              onClick={() => handleSectionChange("outbound")}
-            >
-              <span className="hidden"></span>
-              <FiArrowUpRight className="text-xl w-6 text-center" />
-              <span className="flex-1 font-medium">{isUserDashboard ? "AI Calls Outbound" : "Outbound"}</span>
-            </button>
+            {/* AI Calls Dropdown */}
+            <div>
+              <button
+                className={`relative flex items-center w-full px-6 py-4 text-left transition-all duration-200 gap-3 ${
+                  activeSection === "bond" || activeSection === "outbound"
+                    ? "bg-gray-100 text-gray-900 border-r-4 border-gray-800 font-semibold"
+                    : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                }`}
+                onClick={() => setAiCallsOpen(prev => !prev)}
+              >
+                <FiPhone className="text-xl w-6 text-center" />
+                <span className="flex-1 font-medium">AI Calls</span>
+                <FiChevronDown className={`w-4 h-4 transition-transform ${aiCallsOpen ? "rotate-180" : ""}`} />
+              </button>
+              {aiCallsOpen && (
+                <div className="bg-gray-50">
+                  <button
+                    className={`flex items-center w-full pl-14 pr-6 py-3 text-left transition-all duration-200 gap-2 ${
+                      activeSection === "bond"
+                        ? "text-gray-900 font-semibold border-r-4 border-gray-800 bg-gray-100"
+                        : "text-gray-500 hover:text-gray-900 hover:bg-gray-100"
+                    }`}
+                    onClick={() => handleSectionChange("bond")}
+                  >
+                    <FiArrowDownLeft className="w-4 h-4" />
+                    <span className="text-sm">Inbound</span>
+                  </button>
+                  <button
+                    className={`flex items-center w-full pl-14 pr-6 py-3 text-left transition-all duration-200 gap-2 ${
+                      activeSection === "outbound"
+                        ? "text-gray-900 font-semibold border-r-4 border-gray-800 bg-gray-100"
+                        : "text-gray-500 hover:text-gray-900 hover:bg-gray-100"
+                    }`}
+                    onClick={() => handleSectionChange("outbound")}
+                  >
+                    <FiArrowUpRight className="w-4 h-4" />
+                    <span className="text-sm">Outbound</span>
+                  </button>
+                </div>
+              )}
+            </div>
 
             {!isUserDashboard && (
               <button
