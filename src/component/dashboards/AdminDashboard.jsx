@@ -51,6 +51,7 @@ import WhatsAppTemplateManagement from "./components/WhatsAppTemplateManagement"
 import WorkspaceManagement from "./components/WorkspaceManagement";
 import WorkspaceDashboard from "./components/WorkspaceDashboard";
 import TabManagement from "./components/TabManagement";
+import LeadScraper from "./components/LeadScraper";
 
 const AdminDashboard = ({ user, onLogout }) => {
   const navigate = useNavigate();
@@ -795,6 +796,7 @@ const AdminDashboard = ({ user, onLogout }) => {
       icon: <FaRupeeSign />,
       subItems: ["Plans", "Credits", "Coupons", "Payments"],
     },
+    { name: "Lead Scraper", icon: <FaSearch /> },
     { name: "Tools", icon: <FaCog /> },
     {
       name: "Datastore",
@@ -2433,6 +2435,12 @@ const AdminDashboard = ({ user, onLogout }) => {
                   onManageTabs={(ws) => setManageTabsWorkspaceId(ws._id)} 
                 />
               )
+            )}
+
+            {activeTab === "Lead Scraper" && (
+              <div className="h-[calc(100vh-120px)]">
+                <LeadScraper clientId={selectedClientId} />
+              </div>
             )}
 
             {activeTab === "Tools" && (

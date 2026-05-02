@@ -21,6 +21,7 @@ import {
   FiMenu,
   FiX,
   FiChevronDown,
+  FiSearch,
 } from "react-icons/fi";
 import AgentForm from "./components/AgentForm";
 import AgentList from "./components/AgentList";
@@ -40,6 +41,7 @@ const AiTotaLogo = "/AitotaLogo.png";
 import PlansBrowse from "./components/PlansBrowse";
 import Pricing from "./components/Pricing";
 import { FiUser } from "react-icons/fi";
+import LeadScraper from "./components/LeadScraper";
 
 function ProfileDetails({ clientId, clientInfo }) {
   const [profile, setProfile] = useState(null);
@@ -736,6 +738,9 @@ function ClientDashboard({ onLogout, clientId: propClientId, dashboardMode = "cl
           </div>
         );
 
+      case "lead-scraper":
+        return <LeadScraper clientId={currentClient} />;
+
       case "credits":
         return <CreditsOverview />;
 
@@ -1149,6 +1154,18 @@ function ClientDashboard({ onLogout, clientId: propClientId, dashboardMode = "cl
               <span className="hidden"></span>
               <FiSend className="text-xl w-6 text-center" />
               <span className="flex-1 font-medium">Distribution Tool</span>
+            </button>
+
+            <button
+              className={`relative flex items-center w-full px-6 py-4 text-left transition-all duration-200 gap-3 ${
+                activeSection === "lead-scraper"
+                  ? "bg-gray-100 text-gray-900 border-r-4 border-gray-800 font-semibold"
+                  : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+              }`}
+              onClick={() => handleSectionChange("lead-scraper")}
+            >
+              <FiSearch className="text-xl w-6 text-center" />
+              <span className="flex-1 font-medium">Lead Scraper</span>
             </button>
 
             <button
