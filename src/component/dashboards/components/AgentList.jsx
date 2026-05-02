@@ -1608,11 +1608,6 @@ const AgentList = ({ agents, isLoading, onEdit, onDelete, clientId }) => {
     setCallStage("input");
     setOpenMenuId(null);
 
-    // Fetch call termination data when opening the modal
-    setTimeout(() => {
-      fetchCallTerminationData();
-    }, 100);
-
     // Fetch last 3 recent calls for quick fill
     setTimeout(() => {
       fetchRecentCalls();
@@ -1702,22 +1697,14 @@ const AgentList = ({ agents, isLoading, onEdit, onDelete, clientId }) => {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            appid: 2,
-            contact: phoneDigits,
-            caller_id: agent?.callerId,
+            contact: { phone: phoneDigits, name: contactName || "Customer" },
             agentId: agent?._id,
-            uniqueid: uniqueId,
-            custom_field: {
-              name: contactName || "",
-              uniqueId: uniqueId,
-              uniqueid: uniqueId,
-            },
           }),
         });
 
         const data = await resp.json();
         if (!resp.ok || data?.success !== true) {
-          throw new Error(data?.error || "Failed to initiate SANPBX call");
+          throw new Error(data?.error || data?.message || "Failed to initiate SANPBX call");
         }
         return { success: true, data };
       }
@@ -1906,6 +1893,14 @@ const AgentList = ({ agents, isLoading, onEdit, onDelete, clientId }) => {
   const initiateCall = async () => {
     if (!phoneNumber.trim() || !selectedAgentForCall) return;
 
+    // Prevent stale timers/pollers from previous attempts affecting a new call
+    stopLogsPolling();
+    stopCallTimer();
+    if (callTimeoutRef.current) {
+      clearTimeout(callTimeoutRef.current);
+      callTimeoutRef.current = null;
+    }
+
     setIsCallLoading(true);
 
     try {
@@ -1954,7 +1949,7 @@ const AgentList = ({ agents, isLoading, onEdit, onDelete, clientId }) => {
 
         // Fetch call termination data when call is connected
         setTimeout(() => {
-          fetchCallTerminationData();
+          fetchCallTerminationData(generatedUniqueId);
         }, 1000);
 
         // Set 40-second timeout to check for progress
@@ -2063,6 +2058,12 @@ const AgentList = ({ agents, isLoading, onEdit, onDelete, clientId }) => {
           }
         }, 60000); // Start after 1 minute
       } else {
+        stopLogsPolling();
+        stopCallTimer();
+        if (callTimeoutRef.current) {
+          clearTimeout(callTimeoutRef.current);
+          callTimeoutRef.current = null;
+        }
         setCallStage("input");
         setIsCallConnected(false);
         // Show clear error message from call initiation
@@ -2074,6 +2075,12 @@ const AgentList = ({ agents, isLoading, onEdit, onDelete, clientId }) => {
       }
     } catch (error) {
       console.error("Call initiation error:", error);
+      stopLogsPolling();
+      stopCallTimer();
+      if (callTimeoutRef.current) {
+        clearTimeout(callTimeoutRef.current);
+        callTimeoutRef.current = null;
+      }
       setCallStage("input");
       setIsCallConnected(false);
       alert(
@@ -2405,17 +2412,23 @@ const AgentList = ({ agents, isLoading, onEdit, onDelete, clientId }) => {
     // The compact "Call Ended" header will be displayed instead
   };
 
-  // Fetch call termination data from the latest call log
-  const fetchCallTerminationData = async () => {
+  // Fetch call termination data for current dial uniqueId
+  const fetchCallTerminationData = async (uniqueIdArg) => {
     try {
       if (!clientId) {
         console.error("Missing clientId for call termination");
         return { success: false, data: null };
       }
+      const activeUniqueId = uniqueIdArg || dialUniqueId;
+      if (!activeUniqueId) {
+        return { success: false, data: null };
+      }
 
-      // First try to get the most recent active call log
+      // Scope logs to active call only to avoid stale termination data from old calls
       const params = new URLSearchParams({
         clientId: String(clientId || ""),
+        customField: "uniqueid",
+        customValue: String(activeUniqueId),
         limit: "10", // Get more logs to find one with streamSid and callSid
         sortBy: "createdAt",
         sortOrder: "desc",
@@ -2609,7 +2622,7 @@ const AgentList = ({ agents, isLoading, onEdit, onDelete, clientId }) => {
   const terminateSANPBXCall = async () => {
     try {
       // First get the callSid from the latest call log
-      const result = await fetchCallTerminationData();
+      const result = await fetchCallTerminationData(dialUniqueId);
       if (!result.success || !result.data) {
         throw new Error("Unable to get call termination data");
       }
@@ -2686,7 +2699,7 @@ const AgentList = ({ agents, isLoading, onEdit, onDelete, clientId }) => {
   const terminateCzentrixCall = async () => {
     try {
       // First fetch the latest call termination data
-      const result = await fetchCallTerminationData();
+      const result = await fetchCallTerminationData(dialUniqueId);
       if (!result.success || !result.data) {
         throw new Error("Unable to get call termination data");
       }
